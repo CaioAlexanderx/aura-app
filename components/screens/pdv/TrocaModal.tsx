@@ -99,6 +99,13 @@
 //   - o payload v2 leva o customer_id escolhido quando há crédito na conta
 //     (sem crédito, o da venda, como antes); 422 CREDITO_EXIGE_CLIENTE e 404
 //     CUSTOMER_NOT_FOUND (Aura-backend#1043) viram mensagem clara.
+//
+// 17/11/2026 (p-167): "+ Novo cliente" na última linha da busca troca o miolo
+// do passo pelo formulário (troca/NovoClienteNaTroca), sem segundo modal. O
+// passo fica montado e escondido (itens, destino e escolhas no lugar), a
+// barra de passos fica, e o rodapé vira "Cancelar / Salvar cliente". Salvou:
+// o cliente fica escolhido e a troca segue no mesmo passo. Esc fecha o
+// formulário antes de fechar a Troca.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -128,6 +135,7 @@ import {
 } from "./troca/descontoDaTroca";
 import { mensagemDaConfirmacao, type DescontoManual } from "@/utils/descontoManual";
 import { CreditoPara } from "./troca/CreditoPara";
+import { NovoClienteNaTroca } from "./troca/NovoClienteNaTroca";
 import {
   clienteDaVenda, clienteEfetivo, temCreditoNaConta, erroDoClienteDaTroca,
   type EscolhaDoCliente,
@@ -233,6 +241,10 @@ export function TrocaModal({
   // crédito (undefined = segue o da venda original).
   const [destPasso3, setDestPasso3] = useState<Dest>("outro");
   const [escolhaDoCliente, setEscolhaDoCliente] = useState<EscolhaDoCliente>(undefined);
+  // 17/11/2026 (p-167): formulário "Novo cliente" aberto no lugar do passo
+  // (com o que foi digitado na busca) e o último cliente cadastrado aqui.
+  const [novoCliente, setNovoCliente] = useState<{ busca: string } | null>(null);
+  const [clienteSalvoId, setClienteSalvoId] = useState<string | null>(null);
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -335,6 +347,8 @@ export function TrocaModal({
       setDiscountValue("");
       setDestPasso3("outro");
       setEscolhaDoCliente(undefined);
+      setNovoCliente(null);
+      setClienteSalvoId(null);
       zerarConfirmacaoDoDesconto();
       valeReq.current++;
       setValeLido(null);
@@ -603,7 +617,7 @@ export function TrocaModal({
       // 17/11/2026 (p-166): cliente do crédito recusado pelo servidor.
       const doCliente = erroDoClienteDaTroca(e);
       if (doCliente) {
-        if (doCliente.limparEscolha) setEscolhaDoCliente(null);
+        if (doCliente.limparEscolha) { setEscolhaDoCliente(null); setClienteSalvoId(null); }
         toast.error(doCliente.mensagem);
         return;
       }
@@ -625,8 +639,9 @@ export function TrocaModal({
   // 17/11/2026 (p-154): Esc fecha a Troca pelo mesmo caminho do X (com troca
   // em andamento, pergunta antes). Com a pergunta na tela, Esc é "Continuar".
   // Janela de diálogo aberta por cima (Modal): o Esc é dela.
-  const escRef = useRef({ requestClose, showExitConfirm, submitting });
-  escRef.current = { requestClose, showExitConfirm, submitting };
+  const novoClienteAberto = !!novoCliente && step !== 5;
+  const escRef = useRef({ requestClose, showExitConfirm, submitting, novoClienteAberto });
+  escRef.current = { requestClose, showExitConfirm, submitting, novoClienteAberto };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof window === "undefined") return;
     function aoTecla(e: KeyboardEvent) {
@@ -634,6 +649,8 @@ export function TrocaModal({
       if (dialogoAbertoNaTela() || escRef.current.submitting) return;
       e.preventDefault();
       if (escRef.current.showExitConfirm) setShowExitConfirm(false);
+      // 17/11/2026 (p-167): com o "Novo cliente" aberto, Esc volta para a troca.
+      else if (escRef.current.novoClienteAberto) setNovoCliente(null);
       else escRef.current.requestClose();
     }
     window.addEventListener("keydown", aoTecla);
@@ -675,6 +692,10 @@ export function TrocaModal({
     footerInfo = "Confira e confirme";
   }
   const rodapeTravado = step === 4 && faltaClienteDoCredito;
+  // Valor do crédito para o texto do formulário "Novo cliente".
+  const valorDoCredito = refundSplits
+    .filter((r) => r.method === "crediario_credito")
+    .reduce((t, r) => t + (Number(r.amount) || 0), 0) || Math.max(0, -netAmount);
 
   // 17/11/2026 (p-166): a mesma linha "Crédito para" nos passos 3 e 4.
   function linhaCreditoPara(nota?: string) {
@@ -682,8 +703,11 @@ export function TrocaModal({
       <CreditoPara
         cliente={clienteDoCredito}
         daVendaOriginal={!!clienteDoCredito && !!clienteDaVendaOriginal && clienteDoCredito.id === clienteDaVendaOriginal.id}
-        onEscolher={(c) => setEscolhaDoCliente(c)}
+        onEscolher={(c) => { setEscolhaDoCliente(c); setClienteSalvoId(null); }}
         nota={nota}
+        // 17/11/2026 (p-167): "+ Novo cliente" na última linha da busca.
+        onNovoCliente={(busca) => setNovoCliente({ busca })}
+        salvoAgora={!!clienteDoCredito && clienteDoCredito.id === clienteSalvoId}
       />
     );
   }
@@ -754,8 +778,23 @@ export function TrocaModal({
           />
         )}
 
+        {novoClienteAberto && (
+          <NovoClienteNaTroca
+            companyId={companyId}
+            valorDoCredito={valorDoCredito}
+            busca={novoCliente!.busca}
+            onCancelar={() => setNovoCliente(null)}
+            onPronto={(c, criado) => {
+              setEscolhaDoCliente(c);
+              setClienteSalvoId(criado ? c.id : null);
+              setNovoCliente(null);
+            }}
+          />
+        )}
+
         <ScrollView
-          style={s.body}
+          // 17/11/2026 (p-167): escondido, não desmontado, com o formulário aberto.
+          style={[s.body, novoClienteAberto && s.escondido]}
           contentContainerStyle={s.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
@@ -852,6 +891,8 @@ export function TrocaModal({
                 setDiscountValue("");
                 setDestPasso3("outro");
                 setEscolhaDoCliente(undefined);
+                setNovoCliente(null);
+                setClienteSalvoId(null);
                 zerarConfirmacaoDoDesconto();
                 setValeLido(null);
                 setValeAviso(null);
@@ -860,7 +901,7 @@ export function TrocaModal({
           )}
         </ScrollView>
 
-        {step !== 5 && (
+        {step !== 5 && !novoClienteAberto && (
           <View style={s.footer}>
             {rodapeTravado ? (
               <View style={s.footerTravado} testID="troca-rodape-travado">
@@ -993,6 +1034,7 @@ const s = StyleSheet.create({
     marginHorizontal: 4,
   },
   body: { flex: 1 },
+  escondido: { display: "none" },
   bodyContent: { padding: 22, paddingBottom: 8 },
   footer: {
     paddingHorizontal: 22, paddingVertical: 14,

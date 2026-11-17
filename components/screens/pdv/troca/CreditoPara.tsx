@@ -11,6 +11,10 @@
 // Multi-CNPJ: a lista já vem do dono (todas as lojas); o crédito é da loja
 // ativa, e a linha "O crédito vale nesta loja" só aparece com mais de uma.
 // Sem hover-reveal: tudo que se toca está sempre na tela.
+//
+// 17/11/2026 (p-167): "+ Novo cliente" na última linha da busca
+// (onNovoCliente). O TrocaModal troca o miolo do passo pelo formulário
+// (troca/NovoClienteNaTroca) e, salvo, mostra "Cliente salvo" (salvoAgora).
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
@@ -29,10 +33,16 @@ type Props = {
   onEscolher: (c: ClienteDoCredito) => void;
   /** Nota azul do passo 3 (some com a busca aberta). */
   nota?: string;
+  /** p-167: "+ Novo cliente" na última linha da busca; recebe o que foi digitado. */
+  onNovoCliente?: (busca: string) => void;
+  /** p-167: o cliente mostrado acabou de ser cadastrado aqui. */
+  salvoAgora?: boolean;
   testID?: string;
 };
 
-export function CreditoPara({ cliente, daVendaOriginal, onEscolher, nota, testID = "troca-credito-para" }: Props) {
+export function CreditoPara({
+  cliente, daVendaOriginal, onEscolher, nota, onNovoCliente, salvoAgora, testID = "troca-credito-para",
+}: Props) {
   const { customers, isLoading } = useCustomers({ sort: "recent" });
   const { company, availableCompanies } = useAuthStore() as any;
   const [buscando, setBuscando] = useState(false);
@@ -98,7 +108,7 @@ export function CreditoPara({ cliente, daVendaOriginal, onEscolher, nota, testID
           <Text style={s.vazio}>{T.carregando}</Text>
         ) : lista.length === 0 ? (
           <Text style={s.vazio} testID={`${testID}-vazio`}>
-            {q.trim() ? T.semResultadoSemCadastro : T.semClientes}
+            {q.trim() ? (onNovoCliente ? T.semResultado : T.semResultadoSemCadastro) : T.semClientes}
           </Text>
         ) : (
           lista.map((c: any, i: number) => (
@@ -116,6 +126,20 @@ export function CreditoPara({ cliente, daVendaOriginal, onEscolher, nota, testID
               </View>
             </Pressable>
           ))
+        )}
+        {onNovoCliente && (
+          <Pressable
+            testID={`${testID}-novo`}
+            onPress={() => { const b = q; fecharBusca(); onNovoCliente(b); }}
+            style={[s.opcao, s.opcaoNovo]}
+            accessibilityRole="button"
+          >
+            <View style={[s.av, s.avPeq, s.avNovo]}><Icon name="plus" size={14} color={Colors.violet3} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[s.opNome, { color: Colors.violet3 }]}>{T.novoCliente}</Text>
+              <Text style={s.opTel}>{T.novoClienteSub}</Text>
+            </View>
+          </Pressable>
         )}
       </View>
     );
@@ -160,6 +184,12 @@ export function CreditoPara({ cliente, daVendaOriginal, onEscolher, nota, testID
             <Text style={s.btnTxt}>{T.trocar}</Text>
           </Pressable>
         </View>
+        {salvoAgora && (
+          <View style={s.salvo} testID={`${testID}-salvo`}>
+            <Icon name="check" size={14} color={Colors.green} />
+            <Text style={s.salvoTxt}>{T.clienteSalvo}</Text>
+          </View>
+        )}
         {daVendaOriginal && <Text style={s.dica}>{T.dicaPresente}</Text>}
         {linhaDaLoja}
       </View>
@@ -236,6 +266,13 @@ const s = StyleSheet.create({
   },
   opcao: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingVertical: 7, paddingHorizontal: 8, borderRadius: 9 },
   opcaoSep: { borderTopWidth: 1, borderTopColor: Colors.border },
+  opcaoNovo: { borderTopWidth: 1, borderTopColor: Colors.border2, marginTop: 4, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  avNovo: {
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet3,
+    borderStyle: Platform.OS === "web" ? ("dashed" as any) : "dashed",
+  },
+  salvo: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 8 },
+  salvoTxt: { color: Colors.green, fontSize: 12.5, fontWeight: "600", flex: 1 },
   opNome: { color: Colors.ink, fontSize: 13, fontWeight: "700" },
   opTel: { color: Colors.ink3, fontSize: 12 },
   vazio: { color: Colors.ink2, fontSize: 12.5, paddingVertical: 10, paddingHorizontal: 4 },
