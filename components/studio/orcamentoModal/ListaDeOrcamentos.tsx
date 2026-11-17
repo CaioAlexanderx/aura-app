@@ -43,7 +43,7 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
 // ─── Status config ────────────────────────────────────────────
-const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
+export const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
   draft:     "Rascunho",
   sent:      "Enviado",
   accepted:  "Aceito",
@@ -56,7 +56,7 @@ const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
 
 // Cores estáticas dos pills de status nas linhas (não dependem do theme —
 // os chips semânticos são os mesmos no light e dark).
-const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
+export const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   draft:     { bg: "#F1F5F9", text: "#64748B" },
   sent:      { bg: "#DBEAFE", text: "#1D4ED8" },
   accepted:  { bg: "#D1FAE5", text: "#065F46" },
@@ -66,7 +66,8 @@ const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   closed:    { bg: "#E2E8F0", text: "#475569" },
 };
 
-function StatusPill({ status }: { status: StudioQuoteStatus }) {
+// 17/11/2026 (p-187): exportada para a lista de todas as lojas (só leitura).
+export function StatusPill({ status }: { status: StudioQuoteStatus }) {
   const c = STATUS_COLORS[status] || STATUS_COLORS.draft;
   return (
     <View style={[pill.wrap, { backgroundColor: c.bg }]}>
