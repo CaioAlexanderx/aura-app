@@ -96,6 +96,7 @@ import { Icon } from "@/components/Icon";
 import { trocaApi } from "@/services/trocaApi";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
+import { dialogoAbertoNaTela } from "@/hooks/useAtalhosDoCaixa";
 
 import { Step1Search } from "./troca/Step1Search";
 import { Step2Returns } from "./troca/Step2Returns";
@@ -567,6 +568,24 @@ export function TrocaModal({
     if (hasProgress) setShowExitConfirm(true);
     else onClose();
   };
+
+  // 17/11/2026 (p-154): Esc fecha a Troca pelo mesmo caminho do X (com troca
+  // em andamento, pergunta antes). Com a pergunta na tela, Esc é "Continuar".
+  // Janela de diálogo aberta por cima (Modal): o Esc é dela.
+  const escRef = useRef({ requestClose, showExitConfirm, submitting });
+  escRef.current = { requestClose, showExitConfirm, submitting };
+  useEffect(() => {
+    if (!visible || !IS_WEB || typeof window === "undefined") return;
+    function aoTecla(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (dialogoAbertoNaTela() || escRef.current.submitting) return;
+      e.preventDefault();
+      if (escRef.current.showExitConfirm) setShowExitConfirm(false);
+      else escRef.current.requestClose();
+    }
+    window.addEventListener("keydown", aoTecla);
+    return () => window.removeEventListener("keydown", aoTecla);
+  }, [visible]);
 
   if (!visible) return null;
 

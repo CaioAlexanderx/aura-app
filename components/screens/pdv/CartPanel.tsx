@@ -278,6 +278,9 @@ type Props = {
   splitNote?: string | null;
   /** Preço no cartão: status nas duas línguas (substitui o de sempre). */
   splitStatusText?: string | null;
+  /** 17/11/2026 (p-154): F8 / Alt+X armou a remoção deste item (productId).
+   *  A lixeira dele fica no estado de confirmação, como no primeiro clique. */
+  remocaoArmada?: string | null;
 };
 
 const HEAD_INK = "#ffffff";
@@ -297,7 +300,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     discountConfirm, discountPending,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange, tomador, avisoNotas,
-    pricePair, subtotalLabel,
+    pricePair, subtotalLabel, remocaoArmada,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
     splitNote, splitStatusText,
@@ -503,6 +506,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onInc={() => onInc(it.productId)}
               onDec={() => onDec(it.productId)}
               onRemove={() => onRemove(it.productId)}
+              armadaPorTecla={!!remocaoArmada && remocaoArmada === it.productId}
               onQtySet={qty => onSetQty?.(it.productId, qty)}
               onPriceChange={onPriceChange ? (price => onPriceChange(it.productId, price)) : undefined}
               matconEnabled={matcon.matcon_enabled}
@@ -1201,11 +1205,15 @@ function parseCurrencyInput(raw: string): number | null {
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
   matconEnabled, roundToPackage, defaultWastePct, lotsEnabled, onLotAllocations,
+  armadaPorTecla,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
   onDec: () => void;
   onRemove: () => void;
+  /** 17/11/2026 (p-154): primeiro F8 / Alt+X. Mesma aparência do primeiro
+   *  clique na lixeira; o segundo toque (tecla ou clique) tira o item. */
+  armadaPorTecla?: boolean;
   onQtySet: (qty: number) => void;
   onPriceChange?: (price: number) => void;
   /** 22/09/2026 (Matcon M0). Opcionais com default = comportamento de hoje:
@@ -1319,7 +1327,7 @@ function CartItem({
   }
 
   function handleDeletePress() {
-    if (confirmDelete) {
+    if (confirmDelete || armadaPorTecla) {
       if (confirmTimer.current) clearTimeout(confirmTimer.current);
       setConfirmDelete(false);
       onRemove();
@@ -1362,12 +1370,13 @@ function CartItem({
         </Text>
         <Pressable
           onPress={handleDeletePress}
-          style={[s.itemTrash, confirmDelete && s.itemTrashConfirm]}
+          style={[s.itemTrash, (confirmDelete || armadaPorTecla) && s.itemTrashConfirm]}
+          testID={armadaPorTecla ? "pdv-remocao-armada" : undefined}
         >
           <Icon
-            name={confirmDelete ? "alert" : "trash"}
+            name={confirmDelete || armadaPorTecla ? "alert" : "trash"}
             size={13}
-            color={confirmDelete ? "#ef4444" : Colors.ink3}
+            color={confirmDelete || armadaPorTecla ? "#ef4444" : Colors.ink3}
           />
         </Pressable>
       </View>

@@ -42,7 +42,7 @@
 //     antes 610px até a grade (entrava meio par de produtos);
 //     agora 272px, e os cards `dense` deixam dois pares inteiros na dobra.
 // ============================================================
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
 } from "react-native";
@@ -53,7 +53,7 @@ import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 import { Pagination } from "@/components/Pagination";
 import { EmptyState } from "@/components/EmptyState";
 
-import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
+import { SaleComplete, type SaleCompleteHandle } from "@/components/screens/pdv/SaleComplete";
 import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
 import { CaixaDesignStyle, IS_WEB } from "@/components/screens/pdv/types";
 import { SearchBox, type SearchBoxHandle } from "@/components/screens/pdv/SearchBox";
@@ -73,7 +73,8 @@ import { PdvModals } from "@/components/screens/pdv/PdvModals";
 import { IndicadoPorChip, IndicadoPorPontos } from "@/components/matcon/IndicadoPorChip";
 
 import { usePdvState } from "@/hooks/usePdvState";
-import { useAtalhosDoCaixa } from "@/hooks/useAtalhosDoCaixa";
+import { useAtalhosDoCaixa, dialogoAbertoNaTela } from "@/hooks/useAtalhosDoCaixa";
+import { criarDoisToques, focoEmCampo, PAGAMENTO_DO_ATALHO } from "@/utils/atalhosDoCaixa";
 import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
 import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
@@ -167,7 +168,7 @@ function CaixaScreenInner() {
     : null;
   const enderecoDoClienteDaVenda = clienteDaUltimaVenda?.hasAddress ? clienteDaUltimaVenda.endereco : null;
 
-  // ── Atalhos do Caixa (17/11/2026, p-153) ───────────────────────────────
+  // ── Atalhos do Caixa (17/11/2026, p-153; teclas novas p-154) ───────────
   // Um listener só para a tela inteira (utils/atalhosDoCaixa), montado ANTES
   // de escolher entre o Caixa e a tela de venda concluída: as teclas do mapa
   // valem nas duas (na final o F5 não recarrega mais a página). Só um layout
@@ -176,27 +177,116 @@ function CaixaScreenInner() {
   const codigoManualRef = useRef<AlternarHandle | null>(null);
   const cupomRef = useRef<AlternarHandle | null>(null);
   const maisRef = useRef<MaisHandle | null>(null);
+  const telaFinalRef = useRef<SaleCompleteHandle | null>(null);
+  // Quando a tela final apareceu: Enter/Esc/F9 só começam a próxima venda
+  // depois de 250 ms (o Enter do troco ou o F9 segurado não pulam a tela).
+  const telaFinalDesde = useRef<number | null>(null);
+  const idDaTelaFinal = st.lastSale ? st.lastSale.id : null;
+  useEffect(() => { telaFinalDesde.current = idDaTelaFinal ? Date.now() : null; }, [idDaTelaFinal]);
+  // F8 / Alt+X: duas vezes em 2 s tiram o último item (como a lixeira).
+  const doisToques = useRef(criarDoisToques(2000)).current;
+  const [remocaoArmada, setRemocaoArmada] = useState<string | null>(null);
+  useEffect(() => {
+    if (!remocaoArmada) return;
+    const t = setTimeout(() => { doisToques.desarmar(); setRemocaoArmada(null); }, 2000);
+    return () => clearTimeout(t);
+  }, [remocaoArmada, doisToques]);
+  // F9 com o cursor na quantidade ou no preço: o campo grava no blur. Sai do
+  // campo primeiro e finaliza no tique seguinte, com o carrinho já gravado
+  // (o ref aponta para o handleFinalize do render novo).
+  const finalizarRef = useRef(cartProps.onFinalize);
+  finalizarRef.current = cartProps.onFinalize;
+
   useAtalhosDoCaixa({
-    estado: { telaFinal: !!st.lastSale, janelaAberta: st.janelaAberta },
+    estado: () => ({
+      telaFinal: !!st.lastSale,
+      // Na tela final as janelas do Caixa não estão montadas: vale o que
+      // estiver de fato aberto na página.
+      janelaAberta: st.lastSale ? dialogoAbertoNaTela() : st.janelaAberta,
+      temItens: cartProps.items.length > 0,
+      telaFinalDesde: telaFinalDesde.current,
+    }),
     executar: (acao) => {
       switch (acao) {
         case "codigoManual":
           // Estreito: o código manual mora no "Mais…".
           if (codigoManualRef.current) codigoManualRef.current.alternar();
           else maisRef.current?.abrir();
-          return;
-        case "vendedora": sellerPickerRef.current?.alternar(); return;
-        case "cliente":   customerPickerRef.current?.alternar(); return;
+          return true;
+        case "vendedora": sellerPickerRef.current?.alternar(); return true;
+        case "cliente":   customerPickerRef.current?.alternar(); return true;
         case "cupom":
           if (cupomRef.current) cupomRef.current.alternar();
           else maisRef.current?.abrir();
-          return;
+          return true;
         case "troca":
           maisRef.current?.fechar();
           st.openTroca();
-          return;
-        case "busca": buscaRef.current?.focar(); return;
+          return true;
+        case "busca": buscaRef.current?.focar(); return true;
+        case "desconto": {
+          // O campo do desconto do carrinho (DiscountSection, testID).
+          const el: any = typeof document !== "undefined" ? document.querySelector('[data-testid="desconto-campo"]') : null;
+          if (el && typeof el.focus === "function") {
+            el.focus();
+            if (typeof el.select === "function") el.select();
+            if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+          }
+          return true;
+        }
+        case "removerUltimo": {
+          const ultimo = cartProps.items[cartProps.items.length - 1];
+          if (!ultimo || cartProps.isProcessing) return true;
+          if (doisToques.tocar(ultimo.productId, Date.now()) === "confirmou") {
+            setRemocaoArmada(null);
+            cartProps.onRemove(ultimo.productId);
+          } else {
+            setRemocaoArmada(ultimo.productId);
+          }
+          return true;
+        }
+        case "finalizar":
+          // O mesmo que o botão: travado com a venda em voo, carrinho vazio
+          // ou dividido que não fecha (CartPanel.finalizeHardBlocked). O
+          // resto (caixa fechado, cliente obrigatório…) o handleFinalize
+          // explica, como no clique.
+          if (cartProps.isProcessing || cartProps.items.length === 0) return true;
+          if (cartProps.splitMode && !cartProps.splitIsBalanced) return true;
+          {
+            const ativo: any = typeof document !== "undefined" ? document.activeElement : null;
+            if (ativo && focoEmCampo(ativo) && typeof ativo.blur === "function") {
+              ativo.blur();
+              setTimeout(() => finalizarRef.current(), 0);
+            } else {
+              cartProps.onFinalize();
+            }
+          }
+          return true;
+        case "pagamento1": case "pagamento2": case "pagamento3": case "pagamento4": case "pagamento5": {
+          // Ordem de PAYMENTS; só o que o chip mostra (crediário só com o
+          // módulo) e fora do dividido (lá os chips não aparecem).
+          if (cartProps.splitMode) return true;
+          const forma = cartProps.payMethods[PAGAMENTO_DO_ATALHO[acao]];
+          if (forma && pdvPayMethods.some((m: any) => m.key === forma.key)) cartProps.onPay(forma.key);
+          return true;
+        }
+        case "fechar": {
+          // Cadastro rápido não fecha sozinho no Esc; a pergunta do desconto
+          // volta. As outras janelas cuidam do próprio Esc (Modal, Troca,
+          // abrir/fechar caixa, comandas).
+          if (st.showNewCustomer) { st.closeNewCustomer(); return true; }
+          if (cartProps.discountConfirm?.aberta) { cartProps.discountConfirm.voltar(); return true; }
+          if (st.janelaAberta) return false;
+          let fechou = false;
+          for (const h of [customerPickerRef.current, sellerPickerRef.current, cupomRef.current, codigoManualRef.current, maisRef.current]) {
+            if (h && h.fechar()) fechou = true;
+          }
+          return fechou;
+        }
+        case "novaVenda": st.newSale(); return true;
+        case "imprimir": telaFinalRef.current?.imprimir(); return true;
       }
+      return false;
     },
   });
 
@@ -269,11 +359,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
+          <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
         </View>
       );
     }
-    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
+    return <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
   }
 
   function StockToggle() {
@@ -471,7 +561,7 @@ function CaixaScreenInner() {
             { width: st.cartWidth },
             IS_WEB && ({ height: "100%" } as any),
           ]}>
-            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} fill />
+            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} remocaoArmada={remocaoArmada} fill />
           </View>
         </View>
 
@@ -583,7 +673,7 @@ function CaixaScreenInner() {
         <ProductSection columns={2} dense />
 
         <View style={{ marginTop: 20 }}>
-          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} />
+          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} remocaoArmada={remocaoArmada} />
         </View>
       </ScrollView>
 
