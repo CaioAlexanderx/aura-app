@@ -22,6 +22,8 @@
 // O plano vem do JWT e fica velho (armadilha 1 do CLAUDE.md): a tela refaz
 // /auth/me ao montar, antes de decidir.
 //
+// O cartão abre o detalhe do pedido em /personalizados/pedido/[id] (p-176).
+//
 // As cores: <TemaDoNegocio> entrega a paleta do Negócio aos componentes do
 // Studio que o quadro reusa.
 //
@@ -30,7 +32,7 @@
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useColors } from "@/constants/colors";
 import { ScreenHero } from "@/components/ScreenHero";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
@@ -71,6 +73,7 @@ export default function PersonalizadosProducao() {
 
 function Tela() {
   const C = useColors();
+  const router = useRouter();
   const company = useAuthStore((st) => st.company);
   const refreshMe = useAuthStore((st) => st.refreshMe);
   const visiveis = useVisibleModules();
@@ -101,7 +104,12 @@ function Tela() {
     <View style={st.tela} testID="personalizados-producao">
       <ScreenHero eyebrow="Personalizados" title="Fila de produção" />
       <TemaDoNegocio>
-        <QuadroDeProducao companyId={company.id} ativadoEm={dataDeAtivacao(settings)} destacarId={destacarId} />
+        <QuadroDeProducao
+          companyId={company.id}
+          ativadoEm={dataDeAtivacao(settings)}
+          destacarId={destacarId}
+          onAbrirPedido={(id) => router.push(`/personalizados/pedido/${id}` as any)}
+        />
       </TemaDoNegocio>
     </View>
   );

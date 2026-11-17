@@ -40,6 +40,7 @@ jest.mock("expo-router", () => ({
     return <View testID="redirect" accessibilityLabel={String(href)} />;
   },
   useLocalSearchParams: () => mockParams.valor,
+  // p-176: o cartão abre o detalhe do pedido.
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 jest.mock("react-native", () => {
