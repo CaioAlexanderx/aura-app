@@ -15,8 +15,9 @@
 //     NFC-e): nada aparece — a tela de hoje.
 //
 // Quem decide é o backend (GET /nfe55/venda/:saleId/trocar-nfce): o prazo é
-// o mesmo do Editar venda (editarVenda.infoNfce, um ponto só). O app só
-// compara o relógio com o cancelavel_ate que o servidor mandou.
+// o por UF de services/nfcePrazoCancelamento.js (Aura-backend#1070), o mesmo
+// com que a rota de cancelamento recusa (código NFCE_PRAZO_CANCELAMENTO_VENCIDO).
+// O app só compara o relógio com o cancelavel_ate que o servidor mandou.
 //
 // Nota fiscal é sempre manual: nada aqui cancela ou emite sem o toque e a
 // confirmação da lojista. Multi-CNPJ: companyId = loja DA VENDA.
@@ -45,6 +46,9 @@ type Props = {
   agora?: () => number;
 };
 
+// A rota de cancelamento (Aura-backend#1070) recusa fora do prazo com este código.
+const PRAZO_VENCIDO = "NFCE_PRAZO_CANCELAMENTO_VENCIDO";
+
 function erroHumano(e: any): string | null {
   return (e && e.data && e.data.error) || (e && e.message) || null;
 }
@@ -56,6 +60,8 @@ export function TrocarPorNfe({ companyId, saleId, nfceId, onCancelada, agora = D
   const [motivo, setMotivo] = useState<string>(T.motivoPadrao);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // O servidor recusou por prazo no meio do caminho (a tela estava aberta).
+  const [prazoVenceu, setPrazoVenceu] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -72,7 +78,7 @@ export function TrocarPorNfe({ companyId, saleId, nfceId, onCancelada, agora = D
   const ate = nfce.cancelavel_ate ? Date.parse(nfce.cancelavel_ate) : NaN;
   // O servidor respondeu na abertura do detalhe; o prazo pode vencer com a tela aberta.
   const venceuAgora = sit.situacao === "pode_trocar" && Number.isFinite(ate) && agora() > ate;
-  const foraDoPrazo = sit.situacao === "fora_do_prazo" || venceuAgora;
+  const foraDoPrazo = sit.situacao === "fora_do_prazo" || venceuAgora || prazoVenceu;
 
   if (foraDoPrazo) {
     return (
@@ -80,7 +86,7 @@ export function TrocarPorNfe({ companyId, saleId, nfceId, onCancelada, agora = D
         <Pressable onPress={() => setVerForaDoPrazo((v) => !v)} style={st.link} accessibilityRole="button" testID="venda-trocar-nfe-fora-link">
           <Text style={st.linkT}>{T.foraDoPrazoLink}</Text>
         </Pressable>
-        {verForaDoPrazo ? <Text style={st.fora} testID="venda-trocar-nfe-fora">{T.foraDoPrazo(nfce.numero)}</Text> : null}
+        {verForaDoPrazo ? <Text style={st.fora} testID="venda-trocar-nfe-fora">{T.foraDoPrazo(nfce.numero, nfce.prazo_minutos)}</Text> : null}
       </View>
     );
   }
@@ -106,6 +112,12 @@ export function TrocarPorNfe({ companyId, saleId, nfceId, onCancelada, agora = D
       setConfirmando(false);
       onCancelada();
     } catch (e: any) {
+      if (e && e.data && e.data.code === PRAZO_VENCIDO) {
+        setConfirmando(false);
+        setPrazoVenceu(true);
+        setVerForaDoPrazo(true);
+        return;
+      }
       const m = erroHumano(e);
       setErro(m ? T.recusada(m) : T.recusadaSemMotivo);
     } finally {

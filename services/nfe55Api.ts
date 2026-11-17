@@ -174,7 +174,11 @@ export type SituacaoEventos = {
 // "pode_trocar" e a mensagem em "fora_do_prazo"; o resto é a tela de hoje.
 export type SituacaoTrocaPorNfe = {
   situacao: "sem_nfce" | "nfce_pendente" | "ja_tem_nfe" | "fora_da_aura" | "nfe_indisponivel" | "fora_do_prazo" | "pode_trocar";
-  nfce: { id: string; numero: number | null; serie?: number | null; authorized_at: string | null; cancelavel_ate: string | null } | null;
+  // prazo_minutos e uf: o prazo por UF do backend (nfcePrazoCancelamento, #1070).
+  nfce: {
+    id: string; numero: number | null; serie?: number | null; authorized_at: string | null;
+    cancelavel_ate: string | null; prazo_minutos?: number | null; uf?: string | null;
+  } | null;
   bloqueio: { code: string; error: string } | null;
 };
 

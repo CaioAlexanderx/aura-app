@@ -8,6 +8,9 @@
 // há caminho pela Aura (duas notas contariam a mesma mercadoria duas vezes).
 // Tom gentil, sem culpa; nada de "erro" ou "expirado" para a lojista.
 // ============================================================
+// A duração do prazo vem de constants/textosPrazoNfce.ts (b-troca-prazo-nfce,
+// aura-app#1316): os minutos são os do backend, por UF.
+import { duracaoDoPrazo } from "@/constants/textosPrazoNfce";
 
 function numero(n: number | null | undefined): string {
   return n ? " nº " + n : "";
@@ -29,8 +32,9 @@ export const TEXTOS_TROCAR_POR_NFE = {
 
   // Fora do prazo: um link discreto que abre a explicação.
   foraDoPrazoLink: "Precisa de NF-e no lugar da NFC-e?",
-  foraDoPrazo: (n: number | null | undefined) =>
-    "A NFC-e" + numero(n) + " já passou do prazo de cancelamento do estado: a SEFAZ só aceita cancelar a NFC-e logo depois da autorização. "
+  foraDoPrazo: (n: number | null | undefined, minutos?: number | null) =>
+    "A NFC-e" + numero(n) + " já passou do prazo de cancelamento do estado: a SEFAZ só aceita cancelar a NFC-e "
+    + (minutos && minutos > 0 ? "até " + duracaoDoPrazo(minutos) + " depois da autorização. " : "logo depois da autorização. ")
     + "Por isso a NF-e não pode ser emitida para esta venda pela Aura. Seriam duas notas para a mesma mercadoria.",
 
   // Confirmação (janela por cima do detalhe da venda).

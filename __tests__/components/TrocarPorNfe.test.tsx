@@ -33,7 +33,7 @@ import { TEXTOS_TROCAR_POR_NFE as T } from "@/constants/textosTrocarPorNfe";
 const ATE = "2026-11-17T18:51:00Z";
 const ANTES = Date.parse("2026-11-17T18:40:00Z");
 const DEPOIS = Date.parse("2026-11-17T19:10:00Z");
-const NFCE = { id: "em-1", numero: 900, serie: 2, authorized_at: "2026-11-17T18:21:00Z", cancelavel_ate: ATE };
+const NFCE = { id: "em-1", numero: 900, serie: 2, authorized_at: "2026-11-17T18:21:00Z", cancelavel_ate: ATE, prazo_minutos: 30, uf: "SP" };
 const sit = (situacao: string, extra: any = {}) => ({ situacao, nfce: NFCE, bloqueio: null, ...extra });
 
 function texto(node: any): string {
@@ -102,6 +102,17 @@ describe("TrocarPorNfe", () => {
     expect(porId(t, "venda-trocar-nfe-confirmar-janela")).toHaveLength(1);
   });
 
+  it("a rota recusa por prazo (NFCE_PRAZO_CANCELAMENTO_VENCIDO): fecha a janela e mostra a mensagem do prazo", async () => {
+    mockCancelNfce.mockRejectedValue({ data: { code: "NFCE_PRAZO_CANCELAMENTO_VENCIDO", error: "O prazo para cancelar esta NFC-e já passou" } });
+    const { t, onCancelada } = await montar(sit("pode_trocar"));
+    act(() => { porId(t, "venda-trocar-nfe")[0].props.onPress(); });
+    await act(async () => { porId(t, "venda-trocar-nfe-confirmar")[0].props.onPress(); await flush(); });
+    expect(onCancelada).not.toHaveBeenCalled();
+    expect(porId(t, "venda-trocar-nfe-confirmar-janela")).toHaveLength(0);
+    expect(porId(t, "venda-trocar-nfe")).toHaveLength(0);
+    expect(texto(porId(t, "venda-trocar-nfe-fora")[0])).toBe(T.foraDoPrazo(900, 30));
+  });
+
   it("motivo curto: não vai à SEFAZ", async () => {
     const { t } = await montar(sit("pode_trocar"));
     act(() => { porId(t, "venda-trocar-nfe")[0].props.onPress(); });
@@ -117,7 +128,8 @@ describe("TrocarPorNfe", () => {
     expect(porId(t, "venda-trocar-nfe-fora")).toHaveLength(0);
     act(() => { porId(t, "venda-trocar-nfe-fora-link")[0].props.onPress(); });
     const m = texto(porId(t, "venda-trocar-nfe-fora")[0]);
-    expect(m).toBe(T.foraDoPrazo(900));
+    expect(m).toBe(T.foraDoPrazo(900, 30));
+    expect(m).toContain("até 30 minutos depois da autorização");
     expect(m).toContain("já passou do prazo de cancelamento do estado");
     expect(m).toContain("a NF-e não pode ser emitida para esta venda pela Aura");
     expect(mockCancelNfce).not.toHaveBeenCalled();
