@@ -352,6 +352,8 @@ export type LinhaConferida = {
   decisao: DecisaoDaLinha | null;
   /** Grade escolhida (A4b): variant_id -> quantidade. */
   variantes: Record<string, number> | null;
+  /** F2 (só ligar): o mesmo produto já está numa linha anterior (n dela). */
+  repetidaDe?: number;
 };
 
 export const MARGEM_PADRAO_DOS_NOVOS = 100;
@@ -410,16 +412,23 @@ export function conferirLinha(
     decisao?: DecisaoDaLinha | null;
     ajuste?: AjusteDaLinha | null;
     semCusto: boolean;
+    /**
+     * F2 (pendência 7, decisão do Caio): a planilha sem quantidade só LIGA os
+     * produtos ao fornecedor, com o custo dela, e não mexe no estoque. Sem
+     * quantidade, a linha não é erro; sem estoque, não há grade nem prévia.
+     */
+    soLigar?: boolean;
   },
 ): LinhaConferida {
   const ajuste = ctx.ajuste || {};
   const decisao = ctx.decisao || null;
-  const quantidade = ajuste.quantidade !== undefined ? ajuste.quantidade : item.quantidade;
+  const soLigar = !!ctx.soLigar;
+  const quantidade = soLigar ? 0 : ajuste.quantidade !== undefined ? ajuste.quantidade : item.quantidade;
   const custo = ajuste.custo !== undefined ? ajuste.custo : item.custoUnitario;
-  const variantes = ajuste.variantes && somaDaGrade(ajuste.variantes) > 0 ? ajuste.variantes : null;
+  const variantes = !soLigar && ajuste.variantes && somaDaGrade(ajuste.variantes) > 0 ? ajuste.variantes : null;
   const base = { item, quantidade, custo, decisao, variantes, par: null as ParDaLinha | null, produto: null as ProdutoDaLoja | null, previa: null as PreviaDaEntrada | null };
 
-  if (!(quantidade > 0)) return { ...base, estado: "erro", falta: false, entra: false };
+  if (!soLigar && !(quantidade > 0)) return { ...base, estado: "erro", falta: false, entra: false };
   if (decisao && decisao.tipo === "fora") return { ...base, estado: "fora", falta: false, entra: false };
   if (decisao && decisao.tipo === "novo") {
     const completo = !!decisao.nome.trim() && Number(decisao.preco) > 0;
@@ -434,6 +443,12 @@ export function conferirLinha(
     par = acharProduto(item, ctx.indice, ctx.codigos);
     if (!par) return { ...base, estado: "sem_par", falta: true, entra: false };
     produto = par.produto;
+  }
+  if (soLigar) {
+    // Ligar é por produto (não por cor e tamanho) e não mexe no estoque.
+    const custoAtual = Number(produto.cost) > 0 ? Number(produto.cost) : null;
+    const acima = !ctx.semCusto && !ajuste.custoConferido && custoMuitoAcima(custoAtual, custo);
+    return { ...base, par, produto, estado: acima ? "confere" : "pronta", falta: false, entra: true };
   }
   // Produto de cores e tamanhos: a grade escolhida manda na quantidade. Sem
   // ela, só segue quem casou pelo código de barras de UMA variante (o A7 acha
@@ -530,6 +545,56 @@ export function motivoDoRodape(linhas: LinhaConferida[], resumo: ResumoDaConfere
   if (resumo.falta > 0) return { tipo: "faltam", n: resumo.falta };
   if (resumo.entram === 0) return { tipo: "nada" };
   return { tipo: "pronto", n: resumo.entram };
+}
+
+// ── F2 · lista do fornecedor sem quantidade ("só ligar") ─────
+/**
+ * Duas linhas da lista no mesmo produto: a primeira vale; as outras ficam de
+ * fora e dizem por quê (o vínculo guarda um custo só por produto e
+ * fornecedor). Só faz sentido no modo só ligar: na entrada, o mesmo produto
+ * em duas linhas soma duas vezes, como na nota.
+ */
+export function marcarRepetidasDaLista(linhas: LinhaConferida[]): LinhaConferida[] {
+  const primeira = new Map<string, number>();
+  return linhas.map((l): LinhaConferida => {
+    if (!l.entra || !l.produto) return l;
+    const ja = primeira.get(l.produto.id);
+    if (ja === undefined) { primeira.set(l.produto.id, l.item.n); return l; }
+    return { ...l, estado: "erro", falta: false, entra: false, repetidaDe: ja };
+  });
+}
+
+/** Um produto que já existe, com o custo e o código desta lista. */
+export type ItemParaLigar = { n: number; product_id: string; cost?: number; supplier_code?: string };
+/** Um produto novo: cadastra (estoque 0) e liga. */
+export type NovoParaLigar = {
+  n: number; name: string; price: number; cost_price?: number; category?: string; barcode?: string; supplier_code?: string;
+};
+
+/** As linhas que entram, separadas em "já existe" e "cadastrar". Quem não vê custo não manda custo. */
+export function itensParaLigar(linhas: LinhaConferida[], semCusto: boolean): { existentes: ItemParaLigar[]; novos: NovoParaLigar[] } {
+  const existentes: ItemParaLigar[] = [];
+  const novos: NovoParaLigar[] = [];
+  for (const l of linhas) {
+    if (!l.entra) continue;
+    const custo = !semCusto && l.custo > 0 ? Math.round(l.custo * 10000) / 10000 : undefined;
+    const codigo = l.item.codigoFornecedor ? l.item.codigoFornecedor.trim() || undefined : undefined;
+    if (l.decisao && l.decisao.tipo === "novo") {
+      const novo: NovoParaLigar = { n: l.item.n, name: l.decisao.nome.trim(), price: Number(l.decisao.preco) };
+      if (custo !== undefined) novo.cost_price = custo;
+      if (l.decisao.categoria && l.decisao.categoria.trim()) novo.category = l.decisao.categoria.trim();
+      if (l.item.codigoBarras) novo.barcode = l.item.codigoBarras;
+      if (codigo) novo.supplier_code = codigo;
+      novos.push(novo);
+      continue;
+    }
+    if (!l.produto) continue;
+    const it: ItemParaLigar = { n: l.item.n, product_id: l.produto.id };
+    if (custo !== undefined) it.cost = custo;
+    if (codigo) it.supplier_code = codigo;
+    existentes.push(it);
+  }
+  return { existentes, novos };
 }
 
 /** Busca de produto da loja (ligar, trocar e digitar): nome, código ou código de barras. */

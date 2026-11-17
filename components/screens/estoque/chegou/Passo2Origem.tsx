@@ -49,6 +49,12 @@ type Props = {
   onPlanilha?: () => void;
   onBaixarModelo?: () => void;
   onDigitar?: () => void;
+  /**
+   * F2: veio de "Importar a lista deste fornecedor" (Fornecedores). O cartão
+   * da planilha chega marcado, com "Escolher planilha" como botão principal
+   * e a dica do modo só ligar.
+   */
+  destaquePlanilha?: { dica: string } | null;
 };
 
 export function Passo2Origem(p: Props) {
@@ -167,12 +173,19 @@ export function Passo2Origem(p: Props) {
   const cartao = (
     id: string, icone: string, cor: string, titulo: string, apoio: string, formato: string,
     botoes: Array<{ id: string; rotulo: string; onPress?: () => void; principal?: boolean }>,
+    marcado?: { dica: string } | null,
   ) => (
-    <View key={id} style={[s.origem, p.estreito && s.origemEstreita]} testID={"chegou-origem-" + id}>
+    <View
+      key={id}
+      style={[s.origem, p.estreito && s.origemEstreita, marcado ? s.origemMarcada : null]}
+      testID={"chegou-origem-" + id}
+      accessibilityState={marcado ? { selected: true } : undefined}
+    >
       <View style={[s.origemIco, { backgroundColor: cor }]}><Icon name={icone as any} size={18} color="#fff" /></View>
       <Text style={s.origemTitulo}>{titulo}</Text>
       <Text style={s.apoio}>{apoio}</Text>
       <Text style={s.formato}>{formato}</Text>
+      {marcado ? <Text style={s.dica} testID={"chegou-origem-" + id + "-dica"}>{marcado.dica}</Text> : null}
       <View style={s.acoes}>
         {botoes.map((b) => (
           <Pressable
@@ -218,12 +231,12 @@ export function Passo2Origem(p: Props) {
       <Text style={s.pergunta}>{T.pergunta2}</Text>
       <View style={[s.origens, p.estreito && { flexDirection: "column" }]}>
         {cartao("nota", "file_text", Colors.violet, T.origemNotaTitulo, T.origemNotaApoio, T.origemNotaFormato, [
-          { id: "origem-nota-botao", rotulo: T.origemNotaBotao, onPress: p.onNota, principal: true },
+          { id: "origem-nota-botao", rotulo: T.origemNotaBotao, onPress: p.onNota, principal: !p.destaquePlanilha },
         ])}
         {cartao("planilha", "grid", "#059669", T.origemPlanilhaTitulo, T.origemPlanilhaApoio, T.origemPlanilhaFormato, [
-          { id: "origem-planilha-botao", rotulo: T.origemPlanilhaBotao, onPress: p.onPlanilha },
+          { id: "origem-planilha-botao", rotulo: T.origemPlanilhaBotao, onPress: p.onPlanilha, principal: !!p.destaquePlanilha },
           { id: "origem-planilha-modelo", rotulo: T.origemPlanilhaModelo, onPress: p.onBaixarModelo },
-        ])}
+        ], p.destaquePlanilha)}
         {cartao("digitar", "edit", "#2563eb", T.origemDigitarTitulo, T.origemDigitarApoio, T.origemDigitarFormato, [
           { id: "origem-digitar-botao", rotulo: T.origemDigitarBotao, onPress: p.onDigitar },
         ])}
@@ -237,6 +250,8 @@ const s = StyleSheet.create({
   origens: { flexDirection: "row", gap: 12, alignItems: "stretch" },
   origem: { flex: 1, minWidth: 0, gap: 6, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
   origemEstreita: { flex: undefined, width: "100%" },
+  origemMarcada: { borderColor: "#059669", borderWidth: 2, backgroundColor: Colors.greenD },
+  dica: { fontSize: 12, color: Colors.ink2, lineHeight: 17, marginTop: 4, fontWeight: "600" },
   origemIco: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   origemTitulo: { fontSize: 14.5, fontWeight: "700", color: Colors.ink },
   formato: { fontSize: 11.5, fontWeight: "600", color: Colors.ink3, marginTop: 2 },

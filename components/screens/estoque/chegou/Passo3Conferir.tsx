@@ -75,6 +75,11 @@ type Props = {
   fonte?: "nota" | "planilha";
   /** A7: o que o servidor recusou em cada linha (n -> motivo). */
   errosDasLinhas?: Record<number, string>;
+  /**
+   * F2: planilha sem quantidade. Só liga os produtos ao fornecedor, com o
+   * custo dela: sem quantidade, sem estoque, sem grade, sem custo médio.
+   */
+  soLigar?: { fornecedor: string } | null;
 };
 
 export function Passo3Conferir(p: Props) {
@@ -97,6 +102,70 @@ export function Passo3Conferir(p: Props) {
       <Text style={[s.tileValor, cor ? { color: cor } : null]}>{valor}</Text>
     </View>
   );
+
+  if (p.soLigar) {
+    const problemas = p.linhas.filter((l) => l.estado === "erro").length;
+    return (
+      <View style={{ gap: 12 }} testID="chegou-passo-3">
+        <View style={s.resumo}>
+          <Text style={s.resumoNota}>{p.titulo}</Text>
+          <View style={s.faixaAzul} testID="chegou-so-ligar">
+            <Icon name="info" size={16} color={Colors.violet3} />
+            <Text style={[s.apoio, { flex: 1 }]}>{T.soLigarFaixa(p.soLigar.fornecedor)}</Text>
+          </View>
+          <View style={s.tiles}>
+            {tile(T.soLigarAchados, String(r.prontos), "achados", Colors.green)}
+            {tile(T.soLigarCadastrar, String(r.novos), "cadastrar", Colors.violet3)}
+            {tile(T.soLigarFalta, String(r.falta), "falta", r.falta ? Colors.amber : undefined)}
+            {tile(T.soLigarProblema, String(problemas), "problema", problemas ? Colors.red : undefined)}
+          </View>
+          {!p.semCusto && r.novos > 0 ? (
+            <View style={s.margem} testID="chegou-margem-dos-novos">
+              <View style={{ flex: 1, minWidth: 160 }}>
+                <Text style={s.checkTxt}>{T.margemTitulo}</Text>
+                <Text style={s.apoioPeq}>{T.margemRotulo}</Text>
+              </View>
+              <View style={s.comSufixo}>
+                <TextInput
+                  value={margemTxt}
+                  onChangeText={(t) => setMargemTxt(t.replace(/[^\d]/g, "").slice(0, 4))}
+                  keyboardType="number-pad"
+                  style={[s.input, { width: 80 }] as any}
+                  accessibilityLabel={T.margemRotulo}
+                  testID="chegou-margem-campo"
+                />
+                <Text style={s.apoio}>%</Text>
+              </View>
+              <Pressable onPress={() => p.onAplicarMargem(Number(margemTxt) || 0)} style={s.btnSec} accessibilityRole="button" testID="chegou-margem-aplicar">
+                <Text style={s.btnSecTxt}>{T.margemAplicar}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        {!p.estreito && (
+          <View style={s.cabecalho}>
+            <Text style={[s.colTxt, s.col1]}>{T.colItemDaLista}</Text>
+            {!p.semCusto && <Text style={[s.colTxt, s.col3]}>{T.colCustoDoFornecedor}</Text>}
+            <Text style={[s.colTxt, s.col4]} />
+          </View>
+        )}
+
+        <View style={{ gap: 8 }}>
+          {visiveis.map((l) => (
+            <LinhaDaConferencia key={l.item.n} l={l} {...p} />
+          ))}
+        </View>
+
+        {escondidas > 0 && (
+          <Pressable onPress={p.onMostrarTodas} style={s.mostrar} accessibilityRole="button" testID="chegou-mostrar-outros">
+            <Icon name="chevron_down" size={14} color={Colors.violet3} />
+            <Text style={s.mostrarTxt}>{T.mostrarOutros(escondidas)}</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{ gap: 12 }} testID="chegou-passo-3">
@@ -186,6 +255,7 @@ export function Passo3Conferir(p: Props) {
 
 function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
   const { l, estreito, semCusto, onDecidir, onAjustar, novoPara } = props;
+  const soLigar = !!props.soLigar;
   const [corrigindo, setCorrigindo] = useState(false);
   const [custoTxt, setCustoTxt] = useState("");
   const [dizendo, setDizendo] = useState(false);
@@ -198,7 +268,7 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
   const semDecisao = l.estado === "sem_par" || l.estado === "novo" || l.estado === "ligar"
     || (l.estado === "fora" && decisaoTipo === "fora");
   // Grade: produto de cores e tamanhos que não casou pelo código de UMA variante.
-  const usaGrade = !!l.produto && !!l.produto.has_variants
+  const usaGrade = !soLigar && !!l.produto && !!l.produto.has_variants
     && (l.estado === "grade" || ((l.estado === "pronta" || l.estado === "confere") && !(l.par && l.par.daVariante && !l.variantes)));
   const ligarAberto = trocando || (l.estado === "ligar");
 
@@ -230,14 +300,14 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
         {!semCusto && pv.margemDepois !== null ? <Text style={s.previaPeq}>{T.previaMargem(pv.margemAntes, pv.margemDepois)}</Text> : null}
       </View>
     );
-  } else if (l.estado === "novo") {
+  } else if (l.estado === "novo" && !soLigar) {
     direita = <Text style={s.previaPeq}>{T.entraCom(fmtQty(l.quantidade), semCusto ? null : brl(l.custo))}</Text>;
   }
 
   const vivo =
-    decisaoTipo === "novo" ? T.vivoNovo(fmtQty(l.quantidade), semCusto ? null : brl(l.custo))
+    decisaoTipo === "novo" ? (soLigar ? T.vivoNovoSoLigar(semCusto ? null : brl(l.custo)) : T.vivoNovo(fmtQty(l.quantidade), semCusto ? null : brl(l.custo)))
       : decisaoTipo === "ligar" ? T.vivoLigar
-        : decisaoTipo === "fora" ? T.vivoFora
+        : decisaoTipo === "fora" ? (soLigar ? T.vivoForaSoLigar : T.vivoFora)
           : T.semParTexto;
 
   const botaoDecisao = (tipo: "novo" | "ligar" | "fora", rotulo: string) => {
@@ -269,13 +339,15 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
             <Text style={s.achado} testID={"chegou-linha-" + n + "-achado"}>{T.achadoPor[l.par.como]}</Text>
           ) : null}
         </View>
-        <View style={[s.col2, estreito && s.colEstreita]}>
-          {estreito ? <Text style={s.colTxt}>{T.colChegou}</Text> : null}
-          <Text style={[s.qtd, l.estado === "erro" && { color: Colors.red }]}>{fmtQty(l.quantidade)} {un}</Text>
-        </View>
+        {soLigar ? null : (
+          <View style={[s.col2, estreito && s.colEstreita]}>
+            {estreito ? <Text style={s.colTxt}>{T.colChegou}</Text> : null}
+            <Text style={[s.qtd, l.estado === "erro" && { color: Colors.red }]}>{fmtQty(l.quantidade)} {un}</Text>
+          </View>
+        )}
         {!semCusto && (
           <View style={[s.col3, estreito && s.colEstreita]}>
-            {estreito ? <Text style={s.colTxt}>{T.colCusto}</Text> : null}
+            {estreito ? <Text style={s.colTxt}>{soLigar ? T.colCustoDoFornecedor : T.colCusto}</Text> : null}
             <Text style={s.custo}>{brl(l.custo)}</Text>
             {l.quantidade > 0 ? <Text style={s.previaPeq}>{brl(Math.round(l.quantidade * l.custo * 100) / 100)}</Text> : null}
           </View>
@@ -358,7 +430,11 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
         <PainelGrade l={l} companyId={props.companyId} produtoId={l.produto.id} onAjustar={onAjustar} />
       ) : null}
 
-      {l.estado === "erro" ? (
+      {l.estado === "erro" && soLigar ? (
+        <View style={s.acaoBloco} testID={"chegou-linha-" + n + "-erro"}>
+          <Text style={[s.avisoTxt, { color: Colors.red }]}>{T.soLigarRepetida(l.repetidaDe || 0)}</Text>
+        </View>
+      ) : l.estado === "erro" ? (
         <View style={s.acaoBloco} testID={"chegou-linha-" + n + "-erro"}>
           <Text style={[s.avisoTxt, { color: Colors.red }]}>{props.fonte === "planilha" ? T.erroQtdZeroPlanilha : T.erroQtdZero}</Text>
           {dizendo ? (
@@ -578,6 +654,10 @@ const s = StyleSheet.create({
   apoioPeq: { fontSize: 11.5, color: Colors.ink3 },
   resumo: { gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
   resumoNota: { fontSize: 13.5, fontWeight: "700", color: Colors.ink },
+  faixaAzul: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.35)", backgroundColor: Colors.violetD,
+  },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tile: { minWidth: 110, flexGrow: 1, padding: 10, borderRadius: 10, backgroundColor: Colors.bg4, gap: 2 },
   tileEstreito: { minWidth: "30%" as any },

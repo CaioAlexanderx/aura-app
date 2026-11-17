@@ -7,7 +7,9 @@
 // conferência do A4a: nome ou código, quantidade e custo. Daí em diante é a
 // mesma conferência da nota (achar o produto, novo, ligar, deixar de fora).
 //
-// A planilha sem quantidade ("só ligar ao fornecedor") é a Fase 4 (F2).
+// A planilha sem quantidade ("só ligar ao fornecedor") é a Fase 4 (F2): a
+// leitura diz `semQuantidade` e o shell entra no modo só ligar
+// (ligarAoFornecedor.ts).
 // ============================================================
 import { lerLinhasDaMatriz } from "@/utils/importPlanilha";
 import { semAcento, type ItemParaConferir } from "./chegouRegras";
@@ -47,7 +49,9 @@ export function numeroDaPlanilha(v: string | null | undefined): number {
 }
 
 export type LeituraDaPlanilhaDeEntrada =
-  | { ok: true; itens: ItemParaConferir[] }
+  /** semQuantidade (F2): a planilha não tem a coluna de quantidade. Com um
+   *  fornecedor escolhido, a conferência só liga os produtos a ele. */
+  | { ok: true; itens: ItemParaConferir[]; semQuantidade: boolean }
   | { ok: false; motivo: "ilegivel" };
 
 export function itensDaPlanilha(matriz: unknown[][]): LeituraDaPlanilhaDeEntrada {
@@ -75,7 +79,7 @@ export function itensDaPlanilha(matriz: unknown[][]): LeituraDaPlanilhaDeEntrada
       total: Math.round(quantidade * custo * 100) / 100,
     });
   });
-  return itens.length ? { ok: true, itens } : { ok: false, motivo: "ilegivel" };
+  return itens.length ? { ok: true, itens, semQuantidade: !col.quantidade } : { ok: false, motivo: "ilegivel" };
 }
 
 /** Modelo de entrada para baixar (CSV, abre no Excel). */
