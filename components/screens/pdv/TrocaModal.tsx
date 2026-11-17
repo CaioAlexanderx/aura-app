@@ -85,6 +85,27 @@
 //     split simples acompanha quando o valor muda (acertarSplits);
 //   - payload v1 e v2: new_items com item_discount e discount_type/
 //     discount_value (contrato do POST /pdv/sale). Sem desconto, payload igual.
+//
+// 17/11/2026 (p-166 — cliente do crédito dentro da troca; mockup "Caixa e
+// Troca", Parte 4): o crédito ia sempre para o cliente da venda original, e
+// venda sem cliente só dava erro no último passo. Agora (troca/CreditoPara,
+// troca/clienteDoCredito):
+//   - linha "Crédito para" no passo 3 (Crédito na conta) e no passo 4 (estorno
+//     "Crédito conta"), preenchida com o cliente da venda e com "Trocar";
+//   - o destino do passo 3 mora aqui (destPasso3), para o rodapé avisar
+//     "falta escolher o cliente do crédito" sem travar o Continuar;
+//   - no passo 4 só o Confirmar trava, com o motivo no lugar de "Confira e
+//     confirme";
+//   - o payload v2 leva o customer_id escolhido quando há crédito na conta
+//     (sem crédito, o da venda, como antes); 422 CREDITO_EXIGE_CLIENTE e 404
+//     CUSTOMER_NOT_FOUND (Aura-backend#1043) viram mensagem clara.
+//
+// 17/11/2026 (p-167): "+ Novo cliente" na última linha da busca troca o miolo
+// do passo pelo formulário (troca/NovoClienteNaTroca), sem segundo modal. O
+// passo fica montado e escondido (itens, destino e escolhas no lugar), a
+// barra de passos fica, e o rodapé vira "Cancelar / Salvar cliente". Salvou:
+// o cliente fica escolhido e a troca segue no mesmo passo. Esc fecha o
+// formulário antes de fechar a Troca.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -113,6 +134,14 @@ import {
   acertarSplits, type TipoDesconto,
 } from "./troca/descontoDaTroca";
 import { mensagemDaConfirmacao, type DescontoManual } from "@/utils/descontoManual";
+import { CreditoPara } from "./troca/CreditoPara";
+import { NovoClienteNaTroca } from "./troca/NovoClienteNaTroca";
+import {
+  clienteDaVenda, clienteEfetivo, temCreditoNaConta, erroDoClienteDaTroca,
+  type EscolhaDoCliente,
+} from "./troca/clienteDoCredito";
+import { TEXTOS_DO_CLIENTE } from "./troca/textosDoCliente";
+import type { Dest } from "./troca/Step3NewItems";
 
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
@@ -208,6 +237,14 @@ export function TrocaModal({
   // 29/10/2026: desconto R$/% da troca (mesmo seletor do Caixa).
   const [discountType, setDiscountType] = useState<TipoDesconto>("%");
   const [discountValue, setDiscountValue] = useState("");
+  // 17/11/2026 (p-166): destino do passo 3 e o cliente escolhido para o
+  // crédito (undefined = segue o da venda original).
+  const [destPasso3, setDestPasso3] = useState<Dest>("outro");
+  const [escolhaDoCliente, setEscolhaDoCliente] = useState<EscolhaDoCliente>(undefined);
+  // 17/11/2026 (p-167): formulário "Novo cliente" aberto no lugar do passo
+  // (com o que foi digitado na busca) e o último cliente cadastrado aqui.
+  const [novoCliente, setNovoCliente] = useState<{ busca: string } | null>(null);
+  const [clienteSalvoId, setClienteSalvoId] = useState<string | null>(null);
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -308,6 +345,10 @@ export function TrocaModal({
       setDevolverValor(false);
       setDiscountType("%");
       setDiscountValue("");
+      setDestPasso3("outro");
+      setEscolhaDoCliente(undefined);
+      setNovoCliente(null);
+      setClienteSalvoId(null);
       zerarConfirmacaoDoDesconto();
       valeReq.current++;
       setValeLido(null);
@@ -365,6 +406,17 @@ export function TrocaModal({
     setReturnEntries((prev) => prev.filter((e) => ids.has(e.saleId)));
   }, [selectedSales]);
 
+  // 17/11/2026 (p-166): trocou a venda original, o cliente volta a ser o dela.
+  const vendaPrincipalId = selectedSales[0]?.id || null;
+  useEffect(() => {
+    setEscolhaDoCliente(undefined);
+  }, [vendaPrincipalId]);
+
+  const clienteDoCredito = clienteEfetivo(escolhaDoCliente, selectedSales);
+  const clienteDaVendaOriginal = clienteDaVenda(selectedSales);
+  const creditoNaConta = temCreditoNaConta(refundSplits);
+  const faltaClienteDoCredito = creditoNaConta && !clienteDoCredito;
+
   // 22/09/2026 (M4) — se o cliente marcou "não vai levar nada" e depois
   // volta pro Step3 e acaba levando algo, o destino "Crédito na loja" não
   // faz mais sentido pré-selecionado; solta a flag.
@@ -399,8 +451,10 @@ export function TrocaModal({
     if (netAmount > 0.005 && (!Array.isArray(paymentSplits) || paymentSplits.length === 0)) {
       return false;
     }
+    // 17/11/2026 (p-166): crédito na conta sem cliente não confirma.
+    if (faltaClienteDoCredito) return false;
     return true;
-  }, [submitting, returnEntries.length, netAmount, paymentSplits]);
+  }, [submitting, returnEntries.length, netAmount, paymentSplits, faltaClienteDoCredito]);
 
   const next = useCallback(() => {
     setStep((s) => (Math.min(4, s + 1) as StepV3));
@@ -457,6 +511,10 @@ export function TrocaModal({
         return;
       }
     }
+    if (faltaClienteDoCredito) {
+      toast.error(TEXTOS_DO_CLIENTE.rodapeTravado);
+      return;
+    }
 
     const anyHasNfce = selectedSales.some((s) => s.has_nfce === true);
     // Garante que temos uma chave valida (caso algo tenha zerado o estado).
@@ -506,7 +564,9 @@ export function TrocaModal({
           ...desconto,
           payment_splits: netAmount > 0 ? paymentSplits : undefined,
           refund_splits: netAmount < 0 ? refundSplits : undefined,
-          customer_id: selectedSales[0]?.customer_id || undefined,
+          // 17/11/2026 (p-166): com crédito na conta, o cliente escolhido na
+          // linha "Crédito para"; sem crédito, o da venda, como antes.
+          customer_id: (creditoNaConta ? clienteDoCredito?.id : selectedSales[0]?.customer_id) || undefined,
           customer_address: undefined,
           nfce_strategy: anyHasNfce ? "per_origin" : "none",
           idempotency_key: iKey,
@@ -554,6 +614,13 @@ export function TrocaModal({
       setStep(5);
       onSuccess?.(result);
     } catch (e: any) {
+      // 17/11/2026 (p-166): cliente do crédito recusado pelo servidor.
+      const doCliente = erroDoClienteDaTroca(e);
+      if (doCliente) {
+        if (doCliente.limparEscolha) { setEscolhaDoCliente(null); setClienteSalvoId(null); }
+        toast.error(doCliente.mensagem);
+        return;
+      }
       toast.error(e?.message || "Erro ao registrar troca / devolução");
     } finally {
       setSubmitting(false);
@@ -572,8 +639,9 @@ export function TrocaModal({
   // 17/11/2026 (p-154): Esc fecha a Troca pelo mesmo caminho do X (com troca
   // em andamento, pergunta antes). Com a pergunta na tela, Esc é "Continuar".
   // Janela de diálogo aberta por cima (Modal): o Esc é dela.
-  const escRef = useRef({ requestClose, showExitConfirm, submitting });
-  escRef.current = { requestClose, showExitConfirm, submitting };
+  const novoClienteAberto = !!novoCliente && step !== 5;
+  const escRef = useRef({ requestClose, showExitConfirm, submitting, novoClienteAberto });
+  escRef.current = { requestClose, showExitConfirm, submitting, novoClienteAberto };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof window === "undefined") return;
     function aoTecla(e: KeyboardEvent) {
@@ -581,6 +649,8 @@ export function TrocaModal({
       if (dialogoAbertoNaTela() || escRef.current.submitting) return;
       e.preventDefault();
       if (escRef.current.showExitConfirm) setShowExitConfirm(false);
+      // 17/11/2026 (p-167): com o "Novo cliente" aberto, Esc volta para a troca.
+      else if (escRef.current.novoClienteAberto) setNovoCliente(null);
       else escRef.current.requestClose();
     }
     window.addEventListener("keydown", aoTecla);
@@ -612,8 +682,34 @@ export function TrocaModal({
     if (netAmount > 0) footerInfo = `Cliente paga ${fmtBRL(netAmount)}`;
     else if (netAmount < 0) footerInfo = `Loja devolve ${fmtBRL(-netAmount)}`;
     else footerInfo = "Troca par-a-par (sem diferenca)";
+    // 17/11/2026 (p-166): o passo 3 deixa seguir, mas avisa.
+    if (destPasso3 === "credito") {
+      footerInfo += " · " + (clienteDoCredito
+        ? TEXTOS_DO_CLIENTE.rodapeCreditoPara(clienteDoCredito.name)
+        : TEXTOS_DO_CLIENTE.rodapeFaltaCliente);
+    }
   } else if (step === 4) {
     footerInfo = "Confira e confirme";
+  }
+  const rodapeTravado = step === 4 && faltaClienteDoCredito;
+  // Valor do crédito para o texto do formulário "Novo cliente".
+  const valorDoCredito = refundSplits
+    .filter((r) => r.method === "crediario_credito")
+    .reduce((t, r) => t + (Number(r.amount) || 0), 0) || Math.max(0, -netAmount);
+
+  // 17/11/2026 (p-166): a mesma linha "Crédito para" nos passos 3 e 4.
+  function linhaCreditoPara(nota?: string) {
+    return (
+      <CreditoPara
+        cliente={clienteDoCredito}
+        daVendaOriginal={!!clienteDoCredito && !!clienteDaVendaOriginal && clienteDoCredito.id === clienteDaVendaOriginal.id}
+        onEscolher={(c) => { setEscolhaDoCliente(c); setClienteSalvoId(null); }}
+        nota={nota}
+        // 17/11/2026 (p-167): "+ Novo cliente" na última linha da busca.
+        onNovoCliente={(busca) => setNovoCliente({ busca })}
+        salvoAgora={!!clienteDoCredito && clienteDoCredito.id === clienteSalvoId}
+      />
+    );
   }
 
   return (
@@ -682,8 +778,23 @@ export function TrocaModal({
           />
         )}
 
+        {novoClienteAberto && (
+          <NovoClienteNaTroca
+            companyId={companyId}
+            valorDoCredito={valorDoCredito}
+            busca={novoCliente!.busca}
+            onCancelar={() => setNovoCliente(null)}
+            onPronto={(c, criado) => {
+              setEscolhaDoCliente(c);
+              setClienteSalvoId(criado ? c.id : null);
+              setNovoCliente(null);
+            }}
+          />
+        )}
+
         <ScrollView
-          style={s.body}
+          // 17/11/2026 (p-167): escondido, não desmontado, com o formulário aberto.
+          style={[s.body, novoClienteAberto && s.escondido]}
           contentContainerStyle={s.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
@@ -723,6 +834,10 @@ export function TrocaModal({
               onSkip={next}
               // 22/09/2026 (M4): botão âmbar "Não vai levar nada".
               onDevolverValor={handleDevolverValor}
+              // 17/11/2026 (p-166): destino aqui e a linha "Crédito para".
+              dest={destPasso3}
+              onChangeDest={setDestPasso3}
+              creditoPara={linhaCreditoPara(TEXTOS_DO_CLIENTE.notaPasso3)}
             />
           )}
           {step === 4 && (
@@ -750,6 +865,7 @@ export function TrocaModal({
               onChangeDiscountValue={setDiscountValue}
               discountConfirm={confirmacaoDoDesconto}
               discountPending={descontoPendente}
+              creditoPara={creditoNaConta ? linhaCreditoPara() : null}
             />
           )}
           {step === 5 && successResult && (
@@ -773,6 +889,10 @@ export function TrocaModal({
                 setSuccessResult(null);
                 setDiscountType("%");
                 setDiscountValue("");
+                setDestPasso3("outro");
+                setEscolhaDoCliente(undefined);
+                setNovoCliente(null);
+                setClienteSalvoId(null);
                 zerarConfirmacaoDoDesconto();
                 setValeLido(null);
                 setValeAviso(null);
@@ -781,9 +901,16 @@ export function TrocaModal({
           )}
         </ScrollView>
 
-        {step !== 5 && (
+        {step !== 5 && !novoClienteAberto && (
           <View style={s.footer}>
-            <Text style={s.footerInfo} numberOfLines={1}>{footerInfo}</Text>
+            {rodapeTravado ? (
+              <View style={s.footerTravado} testID="troca-rodape-travado">
+                <Icon name="alert" size={15} color={Colors.amber} />
+                <Text style={s.footerTravadoTxt} numberOfLines={2}>{TEXTOS_DO_CLIENTE.rodapeTravado}</Text>
+              </View>
+            ) : (
+              <Text style={s.footerInfo} numberOfLines={1} testID="troca-rodape-info">{footerInfo}</Text>
+            )}
             <View style={s.footerActions}>
               {step > 1 && (
                 <Pressable style={s.btnSec} onPress={prev}>
@@ -907,6 +1034,7 @@ const s = StyleSheet.create({
     marginHorizontal: 4,
   },
   body: { flex: 1 },
+  escondido: { display: "none" },
   bodyContent: { padding: 22, paddingBottom: 8 },
   footer: {
     paddingHorizontal: 22, paddingVertical: 14,
@@ -915,6 +1043,8 @@ const s = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12,
   },
   footerInfo: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: "500" },
+  footerTravado: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 8, minWidth: 0 },
+  footerTravadoTxt: { flex: 1, fontSize: 13, color: Colors.amber, fontWeight: "700", lineHeight: 18 },
   footerActions: { flexDirection: "row", gap: 8, flexShrink: 0 },
   btnPri: {
     backgroundColor: Colors.violet,

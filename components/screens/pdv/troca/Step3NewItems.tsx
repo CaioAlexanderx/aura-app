@@ -52,8 +52,14 @@
 // preço cheio riscado e o % — e no envio a diferença vira item_discount
 // (descontoDaTroca.ts). O desconto R$/% da troca fica no passo Finalizar;
 // aqui o saldo mostra a linha "− Desconto" quando houver.
+//
+// 17/11/2026 (p-166 — cliente do crédito dentro da troca): o destino pode
+// vir controlado pelo TrocaModal (dest/onChangeDest), que precisa dele para o
+// rodapé e para manter a escolha ao voltar do passo 4. Com "Crédito na
+// conta", o bloco mostra a linha "Crédito para" (creditoPara, montada pelo
+// TrocaModal) no lugar do aviso de que cliente cadastrado é obrigatório.
 // ============================================================
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, Platform, useWindowDimensions,
@@ -92,6 +98,12 @@ type Props = {
   onDevolverValor?: () => void;
   /** 29/10/2026: desconto R$/% da troca (escolhido no passo Finalizar). */
   discountAmount?: number;
+  /** 17/11/2026 (p-166): destino controlado pelo TrocaModal. Sem a prop, o
+   *  passo guarda o destino sozinho, como antes. */
+  dest?: Dest;
+  onChangeDest?: (d: Dest) => void;
+  /** 17/11/2026 (p-166): linha "Crédito para", mostrada no bloco do crédito. */
+  creditoPara?: ReactNode;
 };
 
 // Mesmo parser do lápis do Caixa (CartPanel.parseCurrencyInput).
@@ -105,19 +117,25 @@ function lerPrecoDigitado(raw: string): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 }
 
-type Dest = "outro" | "credito" | "dinheiro";
+export type Dest = "outro" | "credito" | "dinheiro";
 
 export function Step3NewItems({
   products, newEntries, onChangeEntries,
   returnedValue, newValue, netAmount,
   onSkip, onDevolverValor, discountAmount = 0,
+  dest: destProp, onChangeDest, creditoPara,
 }: Props) {
   const { company } = useAuthStore();
   // 22/09/2026 (M4): mesma leitura de pdv_settings que Step2Returns já
   // faz — sem prop nova do TrocaModal.
   const { settings: pdvSettings } = usePdvSettings();
   const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
-  const [dest, setDest] = useState<Dest>("outro");
+  const [destLocal, setDestLocal] = useState<Dest>("outro");
+  const dest = destProp ?? destLocal;
+  function setDest(d: Dest) {
+    setDestLocal(d);
+    onChangeDest?.(d);
+  }
   const [query, setQuery] = useState("");
   const [scanBuffer, setScanBuffer] = useState("");
   const [pendingProduct, setPendingProduct] = useState<any | null>(null);
@@ -560,12 +578,14 @@ export function Step3NewItems({
             <Text style={s.altSub}>
               O valor de {fmtBRL(returnedValue)} fica disponível na ficha do cliente. Ele usa quando quiser, sem prazo de vencimento.
             </Text>
-            <View style={s.altNote}>
-              <Icon name="info" size={12} color="#93c5fd" />
-              <Text style={s.altNoteTxt}>
-                Cliente cadastrado é obrigatório pro crédito. Se ele não tem cadastro, ofereça "devolver em dinheiro".
-              </Text>
-            </View>
+            {creditoPara ? creditoPara : (
+              <View style={s.altNote}>
+                <Icon name="info" size={12} color="#93c5fd" />
+                <Text style={s.altNoteTxt}>
+                  Cliente cadastrado é obrigatório pro crédito. Se ele não tem cadastro, ofereça "devolver em dinheiro".
+                </Text>
+              </View>
+            )}
           </View>
         )}
 

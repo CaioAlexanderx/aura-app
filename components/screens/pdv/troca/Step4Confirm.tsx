@@ -34,8 +34,11 @@
 //     forma de pagamento. O TrocaModal guarda o estado
 //     e recalcula o valor a pagar/devolver; o resumo mostra subtotal do
 //     carrinho, "− Desconto" e "− Crédito devolução".
+//
+// 17/11/2026 (p-166): com o estorno em "Crédito conta", a linha "Crédito
+// para" (creditoPara, montada pelo TrocaModal) aparece logo abaixo dos chips.
 // ============================================================
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import {
   View, Text, Pressable, StyleSheet, useWindowDimensions,
 } from "react-native";
@@ -78,6 +81,9 @@ type Props = {
   /** 12/11/2026: confirmação do desconto acima de 50% (TrocaModal). */
   discountConfirm?: ConfirmacaoDoDesconto;
   discountPending?: boolean;
+  /** 17/11/2026 (p-166): linha "Crédito para" — o TrocaModal só manda quando
+   *  algum estorno vai como crédito na conta. */
+  creditoPara?: ReactNode;
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
@@ -211,6 +217,7 @@ export function Step4Confirm({
   discountType = "%", discountValue = "",
   onChangeDiscountType, onChangeDiscountValue,
   discountConfirm, discountPending,
+  creditoPara,
 }: Props) {
   const subtotalCarrinho = newSubtotal ?? newValue;
   const { width } = useWindowDimensions();
@@ -403,6 +410,8 @@ export function Step4Confirm({
                 />
               </View>
             )}
+
+            {creditoPara}
           </View>
         )}
 
