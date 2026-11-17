@@ -16,8 +16,10 @@
 // app/(tabs)/personalizados leem a MESMA conta.
 //
 // Multi-CNPJ: no consolidado ("Todas as empresas") não existe uma loja só
-// para ler o interruptor. As telas da frente mostram "escolha uma loja"
-// (regra da casa: mutação só por CNPJ).
+// para ler o interruptor. A conta vale loja por loja
+// (hooks/useLojasComPersonalizados.ts): a Produção e os Orçamentos 3D
+// mostram, só para ler, as lojas com a frente ligada (p-187). Mutação só
+// por CNPJ: cada item tem "Abrir na loja".
 // ============================================================
 
 type ComStudioEnabled = { studio_enabled?: unknown } | null | undefined;
@@ -30,6 +32,11 @@ type ComStudioEnabled = { studio_enabled?: unknown } | null | undefined;
 // PR próprio, com o OK do Caio.
 export const PERSONALIZADOS_LIBERADO = false;
 
+/** A trava geral, lida por função (os testes ligam por mock, como personalizadosAtivo). */
+export function personalizadosLiberado(liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  return liberado === true;
+}
+
 export function personalizadosAtivo(
   settings: ComStudioEnabled,
   verticalActive: string | null | undefined,
@@ -38,6 +45,27 @@ export function personalizadosAtivo(
   if (!liberado) return false;
   if (!settings || settings.studio_enabled !== true) return false;
   return verticalActive == null || verticalActive === "";
+}
+
+// ── Casa no Negócio (p-189, 17/11/2026) ─────────────────────────────────
+// A virada do /studio para o shell Negócio é por empresa, pela equipe:
+// company.casa_negocio === true (vem do /auth/me; Aura-backend,
+// services/casaNegocio.js). Ao ligar, o backend já tira o vertical_active;
+// o app respeita a casa também com um vertical_active = 'studio' ainda
+// guardado (sessão aberta antes da troca, último /me do aparelho).
+// Com a trava PERSONALIZADOS_LIBERADO em false nada disto conta: o app
+// decide como sempre, só por vertical_active.
+type ComCasa = { casa_negocio?: unknown; vertical_active?: unknown } | null | undefined;
+
+export function casaNoNegocio(company: ComCasa, liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  if (!liberado) return false;
+  return !!company && company.casa_negocio === true;
+}
+
+/** A empresa abre no shell /studio? (vertical Studio e casa no Negócio desligada). */
+export function vaiParaOStudio(company: ComCasa, liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  if (!company || company.vertical_active !== "studio") return false;
+  return !casaNoNegocio(company, liberado);
 }
 
 /** As chaves de módulo da frente: primeiro os itens do menu, depois as subtelas. */

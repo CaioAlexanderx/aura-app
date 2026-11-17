@@ -62,8 +62,12 @@ const PLATFORM_LABEL: Record<string, string> = {
 // recria esse tipo de função e o React remonta a subtree inteira (perde
 // identidade do componente) — o TextInput perdia o foco a cada letra.
 // Movido pro top-level, recebendo `s`/`t` por prop em vez de closure.
+//
+// 17/11/2026 (p-176): exportado, com os estilos (estilosDoCampoDeColeta),
+// para a folha "Recolher a arte e o texto" da Fila do Negócio desenhar os
+// campos com este mesmo editor, sem cópia. Nada mudou aqui dentro.
 // ============================================================
-function CollectFieldEditor({
+export function CollectFieldEditor({
   field, value, onChange, s, t, uploading, onUpload,
 }: {
   field: CustomizationField;
@@ -568,5 +572,7 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   },
   saveTxt: { fontSize: 13, color: "#fff", fontWeight: "800" },
 });
+
+export { buildStyles as estilosDoCampoDeColeta };
 
 export default CollectCustomizationModal;
