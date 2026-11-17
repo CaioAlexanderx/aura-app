@@ -18,6 +18,9 @@ export type Supplier = {
   is_active: boolean;
   product_count?: number;
   created_at?: string;
+  /** 17/11/2026 (Aura-backend#1056, B3): última entrada de mercadoria deste
+   *  fornecedor NESTA loja. Backend antigo não manda -> undefined. */
+  last_delivery_at?: string | null;
 };
 
 export type SupplierDetail = Supplier & {
