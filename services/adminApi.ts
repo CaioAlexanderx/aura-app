@@ -247,6 +247,9 @@ export type PainelApiAlerta = {
   detalhe: string | null;
   verbo: string | null;
   bloco: string | null;
+  // 18/11/2026 (Aura-backend, verificacao_devolvida): WhatsApp da loja. Só
+  // no alerta calculado na hora; o "Falar" abre este link.
+  link?: string | null;
 };
 export type PainelApiHoje = {
   dia: string;
