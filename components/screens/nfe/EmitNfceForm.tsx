@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
@@ -88,6 +88,22 @@ function normalizePaymentMethod(pm: string | null | undefined): string {
 }
 
 const fmtBR = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// 17/11/2026: em 375 px a coluna do Subtotal sobrava com ~32 px para o texto
+// (padding de 14 de cada lado do fInput) e o valor quebrava em 3 linhas
+// ("R$ 49,0 / 0"). O valor monetário nunca quebra: uma linha só (nowrap no
+// web, numberOfLines no nativo), coluna um pouco mais larga, padding menor
+// e fonte que encolhe com o comprimento do valor. Em 375 px a caixa fica com
+// ~68 px úteis: "R$ 49,00" a 13, "R$ 1.234,56" a 12, "R$ 12.345,67" a 11.
+export function fonteDoSubtotal(texto: string): number {
+  const n = texto.length;
+  if (n <= 8) return 13;
+  if (n <= 11) return 12;
+  if (n <= 12) return 11;
+  return 10;
+}
+
+const SUBTOTAL_SEM_QUEBRA: any = Platform.OS === "web" ? { whiteSpace: "nowrap" } : null;
 
 export function EmitNfceForm({
   companyId,
@@ -288,12 +304,22 @@ export function EmitNfceForm({
                   onChangeText={v => updateItem(it._id, { unit_price: Number(v.replace(",", ".")) || 0 })}
                   placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1.5 }}>
                 <Text style={ns.fLabel}>Subtotal</Text>
-                <View style={[ns.fInput, { justifyContent: "center" }]}>
-                  <Text style={{ fontSize: 13, color: Colors.ink, fontWeight: "600" }}>
-                    {fmtBR((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}
-                  </Text>
+                <View style={[ns.fInput, { justifyContent: "center", paddingHorizontal: 6 }]}>
+                  {(() => {
+                    const subtotal = fmtBR((Number(it.quantity) || 0) * (Number(it.unit_price) || 0));
+                    return (
+                      <Text
+                        testID="nfce-item-subtotal"
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        style={[{ fontSize: fonteDoSubtotal(subtotal), color: Colors.ink, fontWeight: "600" }, SUBTOTAL_SEM_QUEBRA]}
+                      >
+                        {subtotal}
+                      </Text>
+                    );
+                  })()}
                 </View>
               </View>
             </View>

@@ -169,6 +169,19 @@ export type SituacaoEventos = {
   pode_corrigir: boolean;
 };
 
+// 17/11/2026 (Trocar por NF-e): GET .../venda/:saleId/trocar-nfce (backend
+// services/nfe55Venda.situacaoDaTrocaPorNfe). O app só mostra o botão em
+// "pode_trocar" e a mensagem em "fora_do_prazo"; o resto é a tela de hoje.
+export type SituacaoTrocaPorNfe = {
+  situacao: "sem_nfce" | "nfce_pendente" | "ja_tem_nfe" | "fora_da_aura" | "nfe_indisponivel" | "fora_do_prazo" | "pode_trocar";
+  // prazo_minutos e uf: o prazo por UF do backend (nfcePrazoCancelamento, #1070).
+  nfce: {
+    id: string; numero: number | null; serie?: number | null; authorized_at: string | null;
+    cancelavel_ate: string | null; prazo_minutos?: number | null; uf?: string | null;
+  } | null;
+  bloqueio: { code: string; error: string } | null;
+};
+
 const base = (companyId: string) => "/companies/" + companyId + "/nfe55";
 
 export const nfe55Api = {
@@ -180,6 +193,11 @@ export const nfe55Api = {
   // 30 s: a emissão espera a SEFAZ (síncrona). retry 0: nunca repetir sozinho.
   emitir: (companyId: string, saleId: string, corpo: CorpoNfe55) =>
     request<RespostaEmissao>(base(companyId) + "/venda/" + saleId + "/emitir", { method: "POST", body: corpo, retry: 0, timeout: 45000 }),
+
+  // 17/11/2026 (Trocar por NF-e): a venda com NFC-e autorizada pode trocar
+  // pela NF-e? Só lê. O cancelamento é a rota de sempre (salesApi.cancelNfce).
+  trocarNfce: (companyId: string, saleId: string) =>
+    request<SituacaoTrocaPorNfe>(base(companyId) + "/venda/" + saleId + "/trocar-nfce", { retry: 1, timeout: 20000 }),
 
   enviarEmail: (companyId: string, emissaoId: string, email?: string) =>
     request<{ enviado: boolean; para: string; enviado_em: string }>(
