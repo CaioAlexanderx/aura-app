@@ -40,6 +40,7 @@ import { productMatchesSearch } from "@/utils/productSearch";
 import { resumoValorEstoque, legendaValorEstoque } from "@/utils/valorEstoque";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
+import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { companiesApi } from "@/services/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -359,6 +360,9 @@ export default function EstoqueScreen() {
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const router = useRouter();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
+  // 17/11/2026 (Pedido, A4): "N reservado · X livres para vender" na linha.
+  // Trava do Pedido (a mesma da aba Pedidos); desligada, a linha de sempre.
+  const reservaLiberada = pedidoLiberado(useAuthStore(st => (st as any).user));
   // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
   const modulosVisiveis = useVisibleModules();
   const podeMudarDesenho = modulosVisiveis.has("configuracoes");
@@ -1263,6 +1267,7 @@ export default function EstoqueScreen() {
                     onSelect={toggleBulkSelect}
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
+                    reservaLiberada={reservaLiberada}
                   />
                 ) : (
                   <ProductGridWeb
@@ -1293,6 +1298,7 @@ export default function EstoqueScreen() {
                     isSelected={bulkSelected.has(p.id)}
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
                     emiteNfse={emiteNfseEstoque}
+                    reservaLiberada={reservaLiberada}
                   />
                 ))}
                 {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}

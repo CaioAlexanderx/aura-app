@@ -96,6 +96,10 @@ export type Product = {
   // personalização só grava no produto da própria empresa. null = backend
   // não mandou.
   ownerCompanyId?: string | null;
+  // 17/11/2026 (Pedido, A4): peças separadas em pedido do balcão (GET /products,
+  // Aura-backend#1072). Ausentes = backend sem a trava: nada muda.
+  reservedQty?: number;
+  reservedByVariant?: Record<string, number>;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];

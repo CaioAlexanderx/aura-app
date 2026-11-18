@@ -26,6 +26,7 @@ import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallme
 import { AdicionarAComandaModal, FecharComandaModal } from "@/components/screens/pdv/ComandaModals";
 import { ComandasAbertasPanel } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { PedidoModal } from "@/components/screens/pdv/pedido/PedidoModal";
+import { AvisoDeReserva, type AvisoDeReservaDados } from "@/components/screens/pdv/AvisoDeReserva";
 import type { LinhaDoCarrinho } from "@/components/screens/pdv/pedido/corpoDoPedido";
 import type { PedidoGuardado } from "@/services/pedidosApi";
 import type { Comanda } from "@/utils/comanda";
@@ -105,6 +106,10 @@ export interface PdvModalsProps {
     onGuardado: (p: PedidoGuardado) => void;
     onClose: () => void;
   } | null;
+  // ── Reserva do Pedido (17/11/2026, A4): "Não vender / Vender mesmo assim".
+  avisoReserva?: AvisoDeReservaDados | null;
+  onNaoVenderReservado?: () => void;
+  onVenderReservado?: () => void;
 }
 
 export function PdvModals({
@@ -115,6 +120,7 @@ export function PdvModals({
   showChangeModal, cashModalAmount, cashModalIsSplit, onCancelChange, onConfirmChange,
   showCrediario, customerId, customerName, saleTotal, onCrediarioConfirm, onCrediarioClose,
   comandas, cartItemCount, cartTotal, pedido,
+  avisoReserva, onNaoVenderReservado, onVenderReservado,
 }: PdvModalsProps) {
   return (
     <>
@@ -133,6 +139,9 @@ export function PdvModals({
         preselectBarcode={pendingBipe?.code || null}
         onScanAgain={onScanAgain}
       />
+      {avisoReserva && onNaoVenderReservado && onVenderReservado && (
+        <AvisoDeReserva aviso={avisoReserva} onNaoVender={onNaoVenderReservado} onVender={onVenderReservado} />
+      )}
       {pedido && (
         <PedidoModal
           visible={pedido.visible}
