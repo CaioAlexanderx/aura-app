@@ -600,9 +600,11 @@ export function TrocaModal({
           ...desconto,
           payment_method: netAmount !== 0 ? paymentMethod : undefined,
           customer_id: sale.customer_id || undefined,
-          nfce_strategy: (fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55")
-            ? fiscal.strategy
-            : "none",
+          // 17/11/2026 (b-troca-prazo-nfce): o servidor decide pelo prazo de
+          // cancelamento da UF (per_origin), igual à v2. Antes ia
+          // cancel_reissue explícito com venda de menos de 24 h e a SEFAZ
+          // recusava o cancelamento depois de 30 min.
+          nfce_strategy: anyHasNfce && fiscal.strategy !== "none" ? "per_origin" : "none",
           customer_address: undefined,
           idempotency_key: iKey,
           // 22/09/2026 (M4): ver inferSettlement acima.

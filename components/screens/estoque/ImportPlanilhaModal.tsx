@@ -25,6 +25,7 @@ import { Icon } from "@/components/Icon";
 import {
   numeroBR,
   plural,
+  tituloDaGrade,
   totalForaDaImportacao,
   type LinhaForaDaImportacao,
   type ResultadoImport,
@@ -207,7 +208,8 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
 
 function BotaoImportar({ resumo, gravando, onImportar }: { resumo: ResumoImport; gravando: boolean; onImportar: () => void }) {
   const n = resumo.aImportar;
-  const pode = n > 0 && !gravando;
+  // Passa do limite de produtos do plano: o servidor recusa a gravação inteira.
+  const pode = n > 0 && !gravando && !resumo.limitePlano;
   return (
     <Pressable
       style={[s.btnConfirm, !pode && { opacity: 0.45 }]}
@@ -267,11 +269,56 @@ function Conferencia({ resumo }: { resumo: ResumoImport }) {
         </View>
       </View>
 
+      {resumo.limitePlano && (
+        <View style={[s.card, { borderColor: Colors.red + "55" }]} testID="import-limite-plano">
+          <Text style={[s.cardTitle, { color: Colors.red }]}>A planilha passa do limite de produtos do seu plano</Text>
+          <Text style={s.cardText}>
+            O plano permite {numeroBR(resumo.limitePlano.limite)} produtos. A loja tem {numeroBR(resumo.limitePlano.atual)} e a planilha traz {numeroBR(resumo.limitePlano.a_importar)}
+            {resumo.limitePlano.disponivel > 0 ? `; cabem ${numeroBR(resumo.limitePlano.disponivel)}. Importe só essa parte da planilha.` : ". Não cabe mais nenhum."}
+          </Text>
+        </View>
+      )}
+
       <View style={s.tiles}>
         <Tile testID="import-n-entram" cor="green" numero={resumo.aImportar} texto={resumo.aImportar === 1 ? "produto vai entrar" : "produtos vão entrar"} />
         <Tile testID="import-n-repetidas" cor="amber" numero={fora} texto={fora === 1 ? "repetida não vai entrar" : "repetidas não vão entrar"} />
         <Tile testID="import-n-problemas" cor="red" numero={resumo.problemas.length} texto={resumo.problemas.length === 1 ? "linha com problema" : "linhas com problema"} />
       </View>
+
+      {resumo.grade && resumo.grade.modelos > 0 && (
+        <View style={s.card} testID="import-grade">
+          <Text style={s.cardTitle}>{tituloDaGrade(resumo.grade)}</Text>
+          <Text style={s.cardText}>
+            Linhas com o mesmo código (ou o mesmo nome, quando não há código) e cores ou tamanhos diferentes entram como um produto só, com as variações. Cada variação ganha o seu código de barras.
+          </Text>
+          {resumo.grade.itens.slice(0, 8).map((m, i) => (
+            <View key={`${m.nome}-${i}`} style={s.amostraLinha}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.amostraNome} numberOfLines={1}>{m.nome}</Text>
+                <Text style={s.amostraSub} numberOfLines={2}>{[m.detalhe, m.linhas].filter(Boolean).join(" · ")}</Text>
+              </View>
+              <Text style={s.amostraPreco}>{plural(m.variacoes, "variação", "variações")}</Text>
+            </View>
+          ))}
+          {resumo.grade.itens.length > 8 && (
+            <Text style={[s.cardText, { marginTop: 6 }]}>e mais {plural(resumo.grade.modelos - 8, "modelo", "modelos")}</Text>
+          )}
+        </View>
+      )}
+
+      {resumo.grade && resumo.grade.avisos.length > 0 && (
+        <View style={[s.card, s.cardAmber]} testID="import-avisos-grade">
+          <Text style={s.cardTitle}>Confira antes de importar</Text>
+          {resumo.grade.avisos.slice(0, 20).map((a, i) => (
+            <Text key={i} style={[s.cardText, { marginTop: i ? 6 : 2 }]}>
+              {a.mensagem}{a.linhas ? ` (${a.linhas})` : ""}
+            </Text>
+          ))}
+          {resumo.grade.avisos.length > 20 && (
+            <Text style={[s.cardText, { marginTop: 6 }]}>e mais {plural(resumo.grade.avisos.length - 20, "aviso", "avisos")}</Text>
+          )}
+        </View>
+      )}
 
       {resumo.amostra.length > 0 && (
         <View style={s.card} testID="import-amostra">
@@ -299,11 +346,20 @@ function Conferencia({ resumo }: { resumo: ResumoImport }) {
 function Resultado({ resultado }: { resultado: ResultadoImport }) {
   const fora = resultado.repetidasNaPlanilha.length + resultado.jaExistem.length;
   return (
-    <View style={s.tiles}>
-      <Tile testID="import-n-entraram" cor="green" numero={resultado.gravados} texto={resultado.gravados === 1 ? "produto entrou" : "produtos entraram"} />
-      <Tile testID="import-n-repetidas" cor="amber" numero={fora} texto={fora === 1 ? "repetida ficou de fora" : "repetidas ficaram de fora"} />
-      <Tile testID="import-n-problemas" cor="red" numero={resultado.problemas.length} texto={resultado.problemas.length === 1 ? "linha com problema" : "linhas com problema"} />
-    </View>
+    <>
+      <View style={s.tiles}>
+        <Tile testID="import-n-entraram" cor="green" numero={resultado.gravados} texto={resultado.gravados === 1 ? "produto entrou" : "produtos entraram"} />
+        <Tile testID="import-n-repetidas" cor="amber" numero={fora} texto={fora === 1 ? "repetida ficou de fora" : "repetidas ficaram de fora"} />
+        <Tile testID="import-n-problemas" cor="red" numero={resultado.problemas.length} texto={resultado.problemas.length === 1 ? "linha com problema" : "linhas com problema"} />
+      </View>
+      {resultado.grade && resultado.grade.modelos > 0 && (
+        <View style={s.card} testID="import-grade-gravada">
+          <Text style={s.cardText}>
+            Entre eles, {tituloDaGrade(resultado.grade)}. Confira cores, tamanhos e estoque em cada produto.
+          </Text>
+        </View>
+      )}
+    </>
   );
 }
 

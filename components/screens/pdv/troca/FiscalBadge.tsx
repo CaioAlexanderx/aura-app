@@ -3,22 +3,23 @@
 // Comunica AO OPERADOR no Step 4 (antes de confirmar) qual estratégia
 // fiscal o backend vai usar. Quatro estados visuais:
 //
-//   - cancel_reissue: NFC-e original <24h → cancela e reemite
-//   - devolucao_55:   NFC-e >24h ou ausente → emite NF-e 55 devolução
+//   - cancel_reissue: NFC-e original no prazo de cancelamento da UF → cancela
+//   - devolucao_55:   NFC-e fora do prazo → emite NF-e 55 devolução
 //                     (exige endereço — AddressForm aparece junto)
 //   - per_origin:     multi-venda com idades mistas — cada origem segue
 //                     sua regra (cancel_reissue + devolucao_55 misto)
 //   - none:           sem emissão fiscal (caso não-fiscal)
 //
-// A heurística de qual estratégia mostrar é feita pelo Step4Confirm
-// baseado em SelectedSaleRow.created_at (>24h → old). É indicação,
-// não decisão final — o backend é a autoridade.
+// 17/11/2026 (b-troca-prazo-nfce): a estratégia vem da prévia do backend
+// (sale.nfce_troca_estrategia, prazo por UF). Componente fora de uso hoje;
+// textos alinhados para não guardar a regra antiga de 24 h.
 //
 // 17/05/2026 (FASE A — UI Redesign)
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import type { FiscalStrategy } from "./types";
+import { TEXTOS_PRAZO_NFCE } from "@/constants/textosPrazoNfce";
 
 type Props = {
   strategy: FiscalStrategy;
@@ -30,7 +31,7 @@ const STRATEGY_CONFIG = {
   cancel_reissue: {
     emoji: "✓",
     title: "Cancelamento + reemissão de NFC-e",
-    desc: "NFC-e original está dentro da janela de 24h. Será cancelada na SEFAZ e uma nova NFC-e cobre a venda substituta. Cliente leva um cupom só.",
+    desc: TEXTOS_PRAZO_NFCE.badgeCancelaDesc,
     accent: "#34d399",
     bg: "rgba(52,211,153,0.08)",
     border: "rgba(52,211,153,0.3)",
@@ -38,7 +39,7 @@ const STRATEGY_CONFIG = {
   devolucao_55: {
     emoji: "📄",
     title: "NF-e modelo 55 de devolução",
-    desc: "NFC-e original tem mais de 24h, fora da janela de cancelamento SEFAZ. Será emitida NF-e 55 cobrindo a devolução. Endereço do cliente é obrigatório.",
+    desc: TEXTOS_PRAZO_NFCE.badgeDevolucaoDesc,
     accent: "#fbbf24",
     bg: "rgba(251,191,36,0.08)",
     border: "rgba(251,191,36,0.3)",
