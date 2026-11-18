@@ -5,8 +5,10 @@ import { useQueries } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
+import { Pagination } from "@/components/Pagination";
 import { useAuthStore } from "@/stores/auth";
 import { caixaApi, type CaixaSessaoHistorico } from "@/services/caixaApi";
+import { montarPagina, totalDePaginas, TAMANHO_DA_PAGINA } from "@/utils/fechamentosPaginados";
 
 // ============================================================
 // AURA. — FechamentosTab (Vendas › Fechamentos de Caixa)
@@ -22,6 +24,12 @@ import { caixaApi, type CaixaSessaoHistorico } from "@/services/caixaApi";
 // Endpoint: GET /companies/:id/caixa/historico — já existente, sem
 // novas rotas no backend. KPIs computados client-side a partir das
 // sessões retornadas.
+//
+// 18/11/2026: a tabela anda de 50 em 50 com "Anterior" / "Próxima" (o
+// Pagination de sempre). Antes só as 50 sessões mais recentes de cada loja
+// apareciam. Regras da página em utils/fechamentosPaginados.ts. Os números do
+// topo (mês corrente) continuam da primeira consulta de cada loja, como antes:
+// a página não mexe neles.
 // ============================================================
 
 type Row = CaixaSessaoHistorico & {
@@ -104,8 +112,47 @@ export function FechamentosTab() {
     }),
   });
 
-  const isLoading = queries.some(function(q) { return q.isLoading; });
-  const isError = queries.some(function(q) { return q.isError; });
+  // ── Página da tabela (18/11/2026) ──
+  // Pilha dos offsets de cada loja: o topo é a página aberta; "Próxima"
+  // empilha, "Anterior" desempilha. Trocar de loja ou de modo volta à 1.
+  const lojasDaPagina = companiesToFetch.map(function(c) { return c.id; }).join("|");
+  const [pilha, setPilha] = useState<Array<Record<string, number>>>([{}]);
+  const [pilhaDasLojas, setPilhaDasLojas] = useState(lojasDaPagina);
+  if (pilhaDasLojas !== lojasDaPagina) {
+    setPilhaDasLojas(lojasDaPagina);
+    setPilha([{}]);
+  }
+  const offsets = pilha[pilha.length - 1] || {};
+
+  // Na página 1 a consulta é a mesma de cima (mesma chave): nenhuma ida a mais.
+  const paginaQueries = useQueries({
+    queries: companiesToFetch.map(function(c) {
+      const offset = offsets[c.id] || 0;
+      return {
+        queryKey: offset === 0 ? ["fechamentos-historico", c.id] : ["fechamentos-historico", c.id, "offset", offset],
+        queryFn: function() { return caixaApi.historico(c.id, { limit: TAMANHO_DA_PAGINA, offset }); },
+        staleTime: 60_000,
+        retry: 1,
+      };
+    }),
+  });
+
+  const isLoading = paginaQueries.some(function(q) { return q.isLoading; });
+  const isError = paginaQueries.some(function(q) { return q.isError; });
+
+  const pagina = montarPagina<CaixaSessaoHistorico>(
+    companiesToFetch.map(function(c, idx) {
+      const d = paginaQueries[idx] && paginaQueries[idx].data;
+      return { companyId: c.id, companyName: c.name, sessoes: (d && d.sessoes) || [], total: (d && d.total) || 0 };
+    }),
+    offsets,
+  );
+  const pageRows: Row[] = pagina.linhas;
+  const numeroDaPagina = pilha.length;
+  const irParaPagina = function(p: number) {
+    if (p > numeroDaPagina) setPilha(function(atual) { return atual.concat([pagina.proximos]); });
+    else if (p < numeroDaPagina && numeroDaPagina > 1) setPilha(function(atual) { return atual.slice(0, -1); });
+  };
 
   // Merge: tagueia cada sessão com company_id + company_name e ordena desc por data
   const allRows: Row[] = useMemo(function() {
@@ -127,13 +174,12 @@ export function FechamentosTab() {
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const filtered = useMemo(function() {
-    return allRows.filter(function(r) {
-      if (companyFilter !== "all" && r.company_id !== companyFilter) return false;
-      if (statusFilter === "all") return true;
-      return statusOf(r.diferenca) === statusFilter;
-    });
-  }, [allRows, companyFilter, statusFilter]);
+  // Filtros e contagens valem para a página aberta.
+  const filtered = pageRows.filter(function(r) {
+    if (companyFilter !== "all" && r.company_id !== companyFilter) return false;
+    if (statusFilter === "all") return true;
+    return statusOf(r.diferenca) === statusFilter;
+  });
 
   // KPIs do mês corrente (independem dos filtros — sempre o agregado total)
   const kpis = useMemo(function() {
@@ -172,10 +218,10 @@ export function FechamentosTab() {
       <View style={s.filterBar}>
         {companiesToFetch.length > 1 && (
           <>
-            <FilterChip label="Todas as empresas" count={allRows.length} active={companyFilter === "all"}
+            <FilterChip label="Todas as empresas" count={pageRows.length} active={companyFilter === "all"}
               onPress={function() { setCompanyFilter("all"); }} />
             {companiesToFetch.map(function(c) {
-              const cnt = allRows.filter(function(r) { return r.company_id === c.id; }).length;
+              const cnt = pageRows.filter(function(r) { return r.company_id === c.id; }).length;
               return (
                 <FilterChip key={c.id} label={c.name} count={cnt} active={companyFilter === c.id}
                   onPress={function() { setCompanyFilter(c.id); }} />
@@ -184,13 +230,13 @@ export function FechamentosTab() {
             <View style={s.filterDivider} />
           </>
         )}
-        <FilterChip label="Todos" count={allRows.length} active={statusFilter === "all"}
+        <FilterChip label="Todos" count={pageRows.length} active={statusFilter === "all"}
           onPress={function() { setStatusFilter("all"); }} />
-        <FilterChip label="Sem divergência" count={allRows.filter(function(r) { return statusOf(r.diferenca) === "ok"; }).length}
+        <FilterChip label="Sem divergência" count={pageRows.filter(function(r) { return statusOf(r.diferenca) === "ok"; }).length}
           active={statusFilter === "ok"} onPress={function() { setStatusFilter("ok"); }} />
-        <FilterChip label="Com sobra" count={allRows.filter(function(r) { return statusOf(r.diferenca) === "sobra"; }).length}
+        <FilterChip label="Com sobra" count={pageRows.filter(function(r) { return statusOf(r.diferenca) === "sobra"; }).length}
           active={statusFilter === "sobra"} onPress={function() { setStatusFilter("sobra"); }} />
-        <FilterChip label="Com falta" count={allRows.filter(function(r) { return statusOf(r.diferenca) === "falta"; }).length}
+        <FilterChip label="Com falta" count={pageRows.filter(function(r) { return statusOf(r.diferenca) === "falta"; }).length}
           active={statusFilter === "falta"} onPress={function() { setStatusFilter("falta"); }} />
       </View>
 
@@ -223,6 +269,16 @@ export function FechamentosTab() {
           onRowClick={setSelected}
         />
       )}
+
+      {!isLoading && !isError ? (
+        <Pagination
+          page={numeroDaPagina}
+          totalPages={totalDePaginas(pagina.total)}
+          total={pagina.total}
+          pageSize={TAMANHO_DA_PAGINA}
+          onPage={irParaPagina}
+        />
+      ) : null}
 
       <DrawerModal row={selected} onClose={function() { setSelected(null); }} />
     </View>
