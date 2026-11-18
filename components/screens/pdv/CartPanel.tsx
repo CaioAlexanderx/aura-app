@@ -189,6 +189,9 @@ type Props = {
   payMethods: PayChip[];
   /** Garantia de produto (caixa acima das modalidades). Só com a OS ligada. */
   warrantySlot?: ReactNode;
+  /** 17/11/2026 (INC-2026-11-17-03): caixa "Crédito da cliente", logo acima
+   *  das modalidades. Ausente = carrinho de sempre. */
+  creditoSlot?: ReactNode;
   activePay: string;
   onPay: (k: string) => void;
   onInc: (id: string) => void;
@@ -312,7 +315,7 @@ const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
     orderNumber, items, subtotal, discountAmount, total,
-    payMethods, activePay, onPay, warrantySlot,
+    payMethods, activePay, onPay, warrantySlot, creditoSlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
     onScan,
@@ -573,6 +576,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {/* ── Pagamento / divisão / resumo / CPF (rolam junto) ─────────── */}
         <View style={s.checkoutBlock}>
           {warrantySlot}
+          {creditoSlot}
           {/* Payment chips — só quando NÃO está em modo split */}
           {!splitOn && (
             <View style={s.payGrid}>

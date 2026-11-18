@@ -66,6 +66,7 @@ import {
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid, type GridProduct } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
+import { CreditoDaClienteBox } from "@/components/screens/pdv/CreditoDaClienteBox";
 import { WarrantyBox } from "@/components/screens/pdv/WarrantyBox";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
@@ -163,6 +164,9 @@ function CaixaScreenInner() {
       onPickCustomer={st.clientesEnabled ? () => st.customerPickerRef.current?.open() : undefined}
     />
   ) : null;
+  // 17/11/2026 (INC-2026-11-17-03): o crédito a favor da cliente escolhida,
+  // nesta loja, com o jeito de abater na venda. null = sem caixa.
+  const creditoSlot = st.credito ? <CreditoDaClienteBox credito={st.credito} disabled={st.isProcessing} onScan={cartProps.onScan} /> : null;
   const pdvPayMethods = crediarioEnabled
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
@@ -595,7 +599,7 @@ function CaixaScreenInner() {
             { width: st.cartWidth },
             IS_WEB && ({ height: "100%" } as any),
           ]}>
-            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} remocaoArmada={remocaoArmada} fill />
+            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} creditoSlot={creditoSlot} compact={vp.compact} remocaoArmada={remocaoArmada} fill />
           </View>
         </View>
 
@@ -711,7 +715,7 @@ function CaixaScreenInner() {
         <ProductSection {...gradeProps} columns={2} dense />
 
         <View style={{ marginTop: 20 }}>
-          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} remocaoArmada={remocaoArmada} />
+          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} creditoSlot={creditoSlot} compact={vp.compact} remocaoArmada={remocaoArmada} />
         </View>
       </ScrollView>
 
