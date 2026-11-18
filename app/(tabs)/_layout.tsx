@@ -17,6 +17,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
 import { personalizadosAtivo } from "@/utils/personalizados";
+import { usePersonalizadosLiberado } from "@/hooks/usePersonalizadosLiberado";
 import { useLojasComPersonalizados } from "@/hooks/useLojasComPersonalizados";
 import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
@@ -562,7 +563,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
-  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
+  // p-188: trava geral OU empresa de teste (reage quando o /auth/me chega).
+  const personalizadosLiberadoNav = usePersonalizadosLiberado();
+  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical, personalizadosLiberadoNav);
   // 17/11/2026 (p-187): no consolidado não há loja ativa para ler o
   // interruptor; a seção aparece quando alguma loja do grupo tem a frente
   // (hooks/useLojasComPersonalizados.ts). Com a trava desligada, vazio.
@@ -839,7 +842,9 @@ function MBar() {
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
-  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
+  // p-188: trava geral OU empresa de teste (reage quando o /auth/me chega).
+  const personalizadosLiberadoNav = usePersonalizadosLiberado();
+  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical, personalizadosLiberadoNav);
   // 17/11/2026 (p-187): no consolidado não há loja ativa para ler o
   // interruptor; a seção aparece quando alguma loja do grupo tem a frente
   // (hooks/useLojasComPersonalizados.ts). Com a trava desligada, vazio.

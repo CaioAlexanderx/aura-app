@@ -145,7 +145,8 @@ describe("NAV: seção Personalizados, um mod por item", () => {
   });
 
   test("Sidebar e MBar fazem a mesma conta e passam para o buildRawNav", () => {
-    const contas = LAYOUT.match(/const personalizadosOn = personalizadosAtivo\(pdvSettingsNav, activeVertical\);/g) || [];
+    // p-188: a trava vem do hook reativo (constante OU empresa de teste).
+    const contas = LAYOUT.match(/const personalizadosOn = personalizadosAtivo\(pdvSettingsNav, activeVertical, personalizadosLiberadoNav\);/g) || [];
     expect(contas.length).toBe(2);
     // p-187: no consolidado, a seção aparece quando alguma loja do grupo tem a frente.
     const noMenu = LAYOUT.match(/const personalizadosNoMenu = personalizadosOn \|\| lojasComPersonalizados\.ligadas\.size > 0;/g) || [];
@@ -234,7 +235,7 @@ describe("permissão do membro", () => {
 
   test("MembersSection: a linha existe e só aparece com a frente ligada", () => {
     expect(MEMBROS).toMatch(/\{ key: "personalizados\.access", label: "Personalizados", hint: "Orçamentos 3D, Produção e Insumos", onlyWhen: "personalizados" as const \}/);
-    expect(MEMBROS).toContain("const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva);");
+    expect(MEMBROS).toContain("const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva, personalizadosLiberadoAqui);");
     expect(MEMBROS).toContain("personalizados: personalizadosOn }");
   });
 });

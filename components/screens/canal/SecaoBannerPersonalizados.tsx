@@ -24,7 +24,7 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useVisibleModules, useVisibleModulesProntos } from "@/hooks/useVisibleModules";
 import { useAccent } from "@/contexts/AccentTheme";
-import { PERSONALIZADOS_LIBERADO, personalizadosAtivo } from "@/utils/personalizados";
+import { PERSONALIZADOS_LIBERADO, personalizadosAtivo, testeDaFrenteNaSessao } from "@/utils/personalizados";
 import {
   situacaoDoBanner, bannerDaResposta, corpoDoPut, textoFinal, pecaDaCapa, capaDoBanner, textoSobre,
   PADRAO_DO_BANNER, LIMITES_DO_BANNER, BANNER_VAZIO, TEXTOS_DO_BANNER,
@@ -50,8 +50,11 @@ const CAMPOS: Array<{ campo: CampoDeTexto; rotulo: string; multiline?: boolean }
 const rota = (cid: string) => `/companies/${cid}/digital-channel/banner-personalizados`;
 
 export function SecaoBannerPersonalizados(props: { corDaLoja?: string | null }) {
-  // A trava antes de qualquer hook: desligada, nada roda e nada aparece.
-  if (!PERSONALIZADOS_LIBERADO) return null;
+  // A trava antes de qualquer outro hook: desligada, nada roda e nada
+  // aparece. p-188: a empresa de teste (personalizados_teste do /auth/me)
+  // também liga; o seletor é um booleano, sem ler mais nada do store.
+  const teste = useAuthStore((st: any) => testeDaFrenteNaSessao(st));
+  if (!(PERSONALIZADOS_LIBERADO || teste === true)) return null;
   return <Secao {...props} />;
 }
 

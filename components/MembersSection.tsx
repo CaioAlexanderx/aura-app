@@ -15,6 +15,7 @@ import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
 import { alternarPermissao, custosPorPadrao } from "@/utils/estoqueConsulta";
 import { personalizadosAtivo } from "@/utils/personalizados";
+import { usePersonalizadosLiberado } from "@/hooks/usePersonalizadosLiberado";
 import { ContratarAcessoBotao } from "@/components/ContratarAcessoBotao";
 
 // ============================================================
@@ -243,7 +244,9 @@ function ModuleGroupSelector({ value, onChange }: {
   const matconOn = pdvSettings.matcon_enabled === true;
   // 16/11/2026 (p-128) — Personalizados: a mesma conta do menu.
   const verticalAtiva = useAuthStore((st) => (st.company as any)?.vertical_active as string | null | undefined);
-  const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva);
+  // p-188: trava geral OU empresa de teste (reage quando o /auth/me chega).
+  const personalizadosLiberadoAqui = usePersonalizadosLiberado();
+  const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva, personalizadosLiberadoAqui);
   const TOGGLE_ON: Record<string, boolean> = { otica: oticaOn, matcon: matconOn, personalizados: personalizadosOn };
   return (
     <View style={{ gap: 12 }}>
