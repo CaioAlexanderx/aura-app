@@ -29,8 +29,15 @@ import { guardarDestino, consumirDestino, limparDestino } from "@/utils/destinoD
 import { versoDoCadastroAberto } from "@/utils/versoDoCadastro";
 import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
 import { ehEquipeAura } from "@/utils/equipeAura";
+import { guardarOrigemDaEntrada } from "@/utils/origemDoCadastro";
 
 const queryClient = new QueryClient();
+
+// b-mk-33 (17/11/2026): origem do cadastro guardada ANTES de o router montar.
+// O AuthGuard troca "/" pelo login com router.replace e a query (utm_* e
+// origem_* que o site põe no "Entrar") se perde. Só no web e só nas telas de
+// entrada ("/", "/login", "/register"); nunca lança.
+guardarOrigemDaEntrada();
 
 // URL do app administrativo (login/painel da federação). O microsite
 // ({slug}.getaura.com.br) é PÚBLICO-only e manda admin/login pra cá.

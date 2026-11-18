@@ -39,6 +39,7 @@ import { greeting } from "@/utils/saudacao";
 import { lerPrimeiroNome, guardarPrimeiroNome } from "@/utils/primeiroNomeNoAparelho";
 import { lerDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
 import { MSG_LOGIN_FALTA_DADO } from "@/utils/mensagensDoApp";
+import { guardarOrigemDaEntrada } from "@/utils/origemDoCadastro";
 
 const isWeb = Platform.OS === "web";
 // DESIGN-29: animação de login Shoji é exibida só quando o vertical é karatê.
@@ -71,6 +72,11 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuthStore();
   // Sorteada uma vez por visita: re-render não troca a frase na cara da pessoa.
   const [saudacao] = useState(() => greeting(new Date(), lerPrimeiroNome()));
+  // b-mk-33 (17/11): a origem (link do site com utm/origem_*, ou visita
+  // direta) fica guardada já aqui, para o "Criar conta grátis" não perder.
+  // O app/_layout.tsx já guarda antes do router; isto cobre o login aberto
+  // por navegação interna. Primeiro toque: não troca o que já está guardado.
+  useState(() => { guardarOrigemDaEntrada(); return null; });
 
   const orb = (mood: OrbMood) => setOrbSignal((p) => ({ mood, n: (p?.n || 0) + 1 }));
 
