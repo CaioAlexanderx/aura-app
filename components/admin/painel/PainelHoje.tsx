@@ -10,7 +10,7 @@
 // erro com "tentar de novo", vazio (nenhum bloco calculado) e o conteúdo.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Dimensions, ActivityIndicator, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -277,7 +277,18 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados; podeLanc
                   <Text style={s.alertaTitulo}>{a.titulo}</Text>
                   <Text style={s.alertaDetalhe}>{a.detalhe}</Text>
                 </View>
-                {a.company_id && ehVerboDeContato(a.verbo) ? (
+                {a.link ? (
+                  // 18/11/2026: alerta com link (e-mail de confirmação que
+                  // voltou): o verbo abre o WhatsApp da loja.
+                  <Pressable
+                    testID={"verbo-do-alerta-" + i}
+                    onPress={function() { Linking.openURL(a.link as string).catch(function() {}); }}
+                    accessibilityRole="link"
+                    accessibilityLabel={a.verbo}
+                  >
+                    <Text style={s.alertaVerbo}>{a.verbo} →</Text>
+                  </Pressable>
+                ) : a.company_id && ehVerboDeContato(a.verbo) ? (
                   // O verbo do alerta de uma loja registra o contato direto.
                   <Pressable
                     testID={"verbo-do-alerta-" + i}
