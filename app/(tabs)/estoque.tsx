@@ -240,6 +240,12 @@ function AggregatedView() {
     [filtered, ordemVista],
   );
 
+  // 18/11/2026 (INC-2026-11-18-01): o agregado deixou de cortar em 500
+  // (Aura-backend#1085) e um grupo tem ~1.500 produtos. Página de 20 como a
+  // lista de uma empresa, para não desenhar tudo de uma vez.
+  const { paginated: paginaAgg, page: pagAgg, totalPages: totPagAgg, total: totAgg, goTo: irAgg } =
+    usePagination(ordenados, PAGE_SIZE, search + "|" + ordemVista + "|loja:" + lojaConsolidado);
+
   const linkedCount = groups.filter((g: AggregatedProduct) => g.is_linked).length;
   const totalUnits = groups.reduce((acc: number, g: AggregatedProduct) => acc + g.total_stock, 0);
 
@@ -299,8 +305,8 @@ function AggregatedView() {
       )}
 
       <View style={s.listCard}>
-        {ordenados.map((g: AggregatedProduct) => (
-          <View key={g.group_key} style={agg.row}>
+        {paginaAgg.map((g: AggregatedProduct) => (
+          <View key={g.group_key} style={agg.row} testID={"estoque-consolidado-item-" + g.group_key}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={agg.nameLine}>
                 <Text style={agg.name} numberOfLines={1}>{g.name}</Text>
@@ -345,6 +351,7 @@ function AggregatedView() {
           </View>
         ))}
       </View>
+      <Pagination page={pagAgg} totalPages={totPagAgg} total={totAgg} pageSize={PAGE_SIZE} onPage={irAgg} />
     </View>
   );
 }
