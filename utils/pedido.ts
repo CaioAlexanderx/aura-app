@@ -13,19 +13,33 @@
 // cancelamento (A7) no ar.
 //
 // Módulo: a mesma chave "vendas.pedidos" (MODULO_PEDIDOS), Essencial, em
-// hooks/useVisibleModules.ts. No Caixa ela vem pela permissão pdv.
+// hooks/useVisibleModules.ts: o plano e o override dela valem aqui também.
+//
+// Permissão do membro (decisão do Caio, 18/11/2026): o GUARDAR vale com pdv
+// OU vendas. Quem opera o Caixa (só pdv) guarda o pedido; a aba Pedidos em
+// Vendas continua só com vendas (PERM_TO_MODULES não muda). O backend aceita
+// o POST /companies/:id/pedidos de qualquer membro da loja (só
+// requireCompanyAccess + a trava), então nada muda lá.
 //
 // Multi-CNPJ: o pedido é de UMA loja. Guardar no consolidado não existe (o
 // Caixa já exige uma loja, RequireCompanyScope); a leitura consolidada é da
 // aba Pedidos (GET /me/pedidos).
 // ============================================================
 import { pedidoLiberado, MODULO_PEDIDOS } from "@/utils/pedidoLiberado";
+import { computeVisibleModules } from "@/hooks/useVisibleModules";
+
+/** Permissões do membro que dão o "Guardar > Pedido" (basta uma). */
+export const PERMISSOES_DO_GUARDAR = ["pdv", "vendas"] as const;
 
 type Contexto = {
   /** Usuário da sessão (o is_staff vem do backend). */
   user: unknown;
-  /** Conjunto de useVisibleModules (plano + override + permissão do membro). */
-  modulos: Set<string> | null | undefined;
+  /** Plano da empresa ativa (company.plan). */
+  plano: string | null | undefined;
+  /** module_overrides da empresa ativa. */
+  overrides: Record<string, boolean> | null | undefined;
+  /** Resposta de /auth/my-permissions (a mesma do menu). */
+  permissoes: any;
   /** Empresa ativa do Caixa (null no consolidado). */
   companyId: string | null | undefined;
   consolidado?: boolean;
@@ -35,9 +49,19 @@ type Contexto = {
   liberado?: boolean;
 };
 
+/**
+ * Plano + override de vendas.pedidos (como o menu) e, para membro, pdv OU
+ * vendas. Dono (ou sem restrição gravada) passa pela permissão.
+ */
+export function podeGuardarPedido(plano: string | null | undefined, overrides: Record<string, boolean> | null | undefined, permissoes: any): boolean {
+  if (!computeVisibleModules(plano, overrides, null).has(MODULO_PEDIDOS)) return false;
+  if (!permissoes || permissoes.is_owner || !permissoes.permissions) return true;
+  return PERMISSOES_DO_GUARDAR.some((k) => !!permissoes.permissions[k]);
+}
+
 /** O "Guardar > Pedido" aparece no Caixa? Desligado = o rodapé de sempre. */
-export function pedidoNoCaixa({ user, modulos, companyId, consolidado, isDemo, liberado }: Contexto): boolean {
+export function pedidoNoCaixa({ user, plano, overrides, permissoes, companyId, consolidado, isDemo, liberado }: Contexto): boolean {
   if (!pedidoLiberado(user, liberado)) return false;
   if (!companyId || consolidado || isDemo) return false;
-  return !!modulos && modulos.has(MODULO_PEDIDOS);
+  return podeGuardarPedido(plano, overrides, permissoes);
 }
