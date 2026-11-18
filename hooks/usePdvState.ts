@@ -103,7 +103,6 @@ import { IS_WEB } from "@/components/screens/pdv/types";
 // 03/11/2026 — cadastrar vendedora pelo Caixa (utils/vendedoraNoCaixa.ts).
 import { podeCadastrarVendedora } from "@/utils/vendedoraNoCaixa";
 import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
-import { computeVisibleModules } from "@/hooks/useVisibleModules";
 import { pedidoNoCaixa } from "@/utils/pedido";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { reservadoDoProduto, vendaInvadeReserva, camposDaReserva } from "@/utils/reservaDoPedido";
@@ -253,14 +252,16 @@ export function usePdvState() {
   // ── Pedido separado de venda (17/11/2026, A1) ───────────────────────────
   // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada (ou a
   // equipe Aura, a mesma regra da aba Pedidos, utils/pedidoLiberado.ts), o
-  // módulo próprio vendas.pedidos (plano, override e permissão do membro, a
-  // mesma conta do menu, com a mesma permData acima), uma loja escolhida e
+  // módulo próprio vendas.pedidos no plano e no override, o membro com pdv
+  // OU vendas (18/11/2026, com a mesma permData acima), uma loja escolhida e
   // fora da demonstração (utils/pedido.ts). Desligado: cartProps.pedido =
   // null e o rodapé é o de sempre. O Essencial tem o módulo, então o plano
   // guardado no JWT não muda a resposta (sem refetch de /auth/me aqui).
   const pedidoAtivo = pedidoNoCaixa({
     user,
-    modulos: computeVisibleModules(company?.plan, moduleOverrides, permData),
+    plano: company?.plan,
+    overrides: moduleOverrides,
+    permissoes: permData,
     companyId: company?.id,
     consolidado: !!consolidatedView,
     isDemo,
