@@ -41,6 +41,7 @@ import { useAuthStore } from "@/stores/auth";
 import type { Customer } from "./types";
 import { fmt } from "./types";
 import { CORTES_DIAS, CORTE_PADRAO, diasSemComprar } from "./diasSemComprar";
+import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 const MAX_DIAS = 999;
 
@@ -76,7 +77,10 @@ export function ReativacaoEntrada({
 
   // Essencial não conecta o número da Meta: chama com um toque, pelo wa.me.
   // Não é bloqueio nem upgrade — é o caminho do plano.
-  const semMeta = String(plan || "").toLowerCase() === "essencial";
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // até a Meta aprovar, ninguém dispara cupom pela Meta, então o Negócio
+  // também vê o caminho do wa.me (a tela da Reativação mostra o "Chamar").
+  const semMeta = String(plan || "").toLowerCase() === "essencial" || !WHATSAPP_OFICIAL_LIBERADO;
 
   const { quantos, total } = useMemo(() => {
     const agora = Date.now();

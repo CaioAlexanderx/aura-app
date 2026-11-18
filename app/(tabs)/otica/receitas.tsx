@@ -37,6 +37,7 @@ import {
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
 import { RxEditor, emptyRxDraft, validateRxDraft, type RxDraft } from "@/components/otica/RxEditor";
+import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 type Chip = "todas" | "vencendo" | "vencidas" | "mes";
 const CHIPS: { key: Chip; label: string }[] = [
@@ -257,9 +258,12 @@ export default function OticaReceitasScreen() {
         </View>
       )}
 
+      {/* 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado). */}
+      {WHATSAPP_OFICIAL_LIBERADO && (
       <Text style={[st.hint, { marginTop: 16 }]}>
         O lembrete de revisão (30 dias antes de vencer) sai pelo WhatsApp oficial como mensagem de marketing, com consentimento e cota, e diz "revise sua receita com seu oftalmologista". Ligue em Configurações › Ótica.
       </Text>
+      )}
 
       <NovaReceitaSheet
         visible={sheet}

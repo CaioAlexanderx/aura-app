@@ -34,6 +34,7 @@ import {
   type LabStatus, type OpticalOrder, fmtIsoDate, daysUntil,
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
+import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 const fmt = (n: number | string | null | undefined) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -143,7 +144,10 @@ export default function OticaOsDetailScreen() {
       setNotify(r);
       invalidate();
       if (r.queued) toast.success("Aviso enfileirado no WhatsApp oficial");
-      else if (r.wa_link) toast.info("WhatsApp oficial indisponível — abrindo o wa.me com o texto pronto");
+      // 18/11/2026 — trava do WhatsApp oficial: desligada, nenhuma ótica tem
+      // o número, e o aviso de "indisponível" só lembraria uma promessa. O
+      // botão "Abrir no WhatsApp" (wa.me) aparece igual.
+      else if (r.wa_link && WHATSAPP_OFICIAL_LIBERADO) toast.info("WhatsApp oficial indisponível — abrindo o wa.me com o texto pronto");
     } catch (err: any) {
       toast.error(err?.data?.error || "Não deu para avisar o cliente");
     } finally {
@@ -279,7 +283,7 @@ export default function OticaOsDetailScreen() {
                 )}
               </View>
             )}
-            {notify && !notify.queued && (
+            {notify && !notify.queued && WHATSAPP_OFICIAL_LIBERADO && (
               <Text style={st.hint}>Fila do WhatsApp oficial pulou ({notify.skip_reason || "sem motivo"}). O wa.me abre a conversa no seu celular ou WhatsApp Web com o texto pronto.</Text>
             )}
           </View>

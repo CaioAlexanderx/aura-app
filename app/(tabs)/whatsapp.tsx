@@ -18,7 +18,8 @@
 // ============================================================
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
-import { router } from "expo-router";
+import { router, Redirect } from "expo-router";
+import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -91,6 +92,15 @@ export default function WhatsAppScreen() {
       </>
     )
     : "Número da loja ainda não conectado — conecte na aba Conexão.";
+
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // até a Meta aprovar, só a loja que já tem o número conectado abre esta
+  // tela. O menu já não mostra o item; quem chega pela URL volta ao Painel,
+  // depois de o status responder (sem status, a tela fica vazia).
+  if (!whatsappOficialVisivel(wa.status)) {
+    if (!demo && wa.statusLoading) return null;
+    return <Redirect href={"/" as any} />;
+  }
 
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>

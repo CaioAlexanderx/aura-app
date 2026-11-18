@@ -16,6 +16,7 @@ import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisib
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
+import { MODULO_WHATSAPP_OFICIAL, WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 import { personalizadosAtivo } from "@/utils/personalizados";
 import { usePersonalizadosLiberado } from "@/hooks/usePersonalizadosLiberado";
 import { useLojasComPersonalizados } from "@/hooks/useLojasComPersonalizados";
@@ -317,6 +318,10 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // baseNav do SidebarEditor, que assim nao oferece ao cliente uma
       // tela que o menu nao mostra.
       if (moduloEstaOculto(item.mod)) return false;
+      // 18/11/2026 — o WhatsApp oficial (Cloud API da Meta) fica fora do
+      // menu até a Meta aprovar o app (utils/whatsappOficialLiberado). O
+      // menu não tem o status da conexão à mão; a tela guarda a rota.
+      if (item.mod === MODULO_WHATSAPP_OFICIAL && !WHATSAPP_OFICIAL_LIBERADO) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
   })).filter(section => section.i.length > 0);

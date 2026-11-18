@@ -55,6 +55,7 @@ import { SummaryCard } from "@/components/SummaryCard";
 import { ChamarSumidos } from "@/components/screens/clientes/ChamarSumidos";
 import { openWhatsApp } from "@/utils/whatsapp";
 import { criarMarcasDeChamado, mensagemDeChamado, rotuloDeChamado } from "@/utils/chamarSumidos";
+import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 
 /** Teto do backend por disparo. Repetido aqui só para avisar ANTES do clique. */
 const MAX_POR_DISPARO = 50;
@@ -295,6 +296,12 @@ function ReativacaoMeta() {
 
   const autoTravado = !auto && (waLoading || blockers.length > 0);
 
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // até a Meta aprovar, o disparo pago (bloqueios, "Enviar cupom", prévia,
+  // seleção) e a reativação automática semanal só aparecem para a loja que
+  // já tem o número conectado. Fica a lista com o "Chamar" pelo wa.me.
+  const waOficial = whatsappOficialVisivel(waStatus);
+
   // 403 = o backend só libera esta tela a Negócio/Expansão. Chegar aqui
   // com 403 quer dizer que o plano do login está desatualizado (o wrapper
   // da rota ainda leu "negócio" do JWT, mas a empresa é Essencial). Nada
@@ -322,9 +329,13 @@ function ReativacaoMeta() {
         title="Reativação"
         subtitle={
           <>
-            {metrics.at_risk ?? 0} em risco · {metrics.dormant ?? 0} inativos · {metrics.lost ?? 0} perdidos —
-            {" "}um cupom com prazo curto para quem parou de comprar. Mensagem de marketing: custa mais
-            que a cobrança e cada pessoa recebe no máximo uma a cada 7 dias.
+            {metrics.at_risk ?? 0} em risco · {metrics.dormant ?? 0} inativos · {metrics.lost ?? 0} perdidos
+            {waOficial && (
+              <>
+                {" "}—{" "}um cupom com prazo curto para quem parou de comprar. Mensagem de marketing: custa mais
+                que a cobrança e cada pessoa recebe no máximo uma a cada 7 dias.
+              </>
+            )}
           </>
         }
       />
@@ -345,7 +356,7 @@ function ReativacaoMeta() {
           inteira em dois cards; agora é uma linha de checklist só.
           Os demais motivos (token, consentimento, cota…) continuam
           com a frase inteira: cada um pede uma ação diferente. */}
-      {!waLoading && blockers.length > 0 && (
+      {waOficial && !waLoading && blockers.length > 0 && (
         <View style={st.blockBox} testID="reativacao-bloqueios">
           {blockersConfigurar.length > 0 && (
             <View style={st.blockRow}>
@@ -396,8 +407,10 @@ function ReativacaoMeta() {
         )}
         <Text style={st.hint}>
           {ALVOS.find((a) => a.key === alvo)?.desc}. A lista abaixo é a prioritária: os que mais
-          gastaram entre os que sumiram. Sem marcar ninguém, o envio vale para o segmento inteiro
-          (no máximo {MAX_POR_DISPARO} por disparo).
+          gastaram entre os que sumiram.{waOficial && (
+            <> Sem marcar ninguém, o envio vale para o segmento inteiro
+          (no máximo {MAX_POR_DISPARO} por disparo).</>
+          )}
         </Text>
 
         {carregando && <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>}
@@ -426,15 +439,17 @@ function ReativacaoMeta() {
               return (
                 <Pressable
                   key={c.id}
-                  onPress={() => alternarSelecao(c.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: marcado }}
+                  onPress={waOficial ? () => alternarSelecao(c.id) : undefined}
+                  accessibilityRole={waOficial ? "checkbox" : undefined}
+                  accessibilityState={waOficial ? { checked: marcado } : undefined}
                   style={[st.linha, marcado && st.linhaOn]}
                   testID={`reativacao-cliente-${c.id}`}
                 >
-                  <View style={[st.box, marcado && st.boxOn]}>
-                    {marcado && <Icon name="check" size={12} color="#fff" />}
-                  </View>
+                  {waOficial && (
+                    <View style={[st.box, marcado && st.boxOn]}>
+                      {marcado && <Icon name="check" size={12} color="#fff" />}
+                    </View>
+                  )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={st.nome} numberOfLines={1}>{c.name}</Text>
                     <Text style={st.meta} numberOfLines={1}>
@@ -471,6 +486,7 @@ function ReativacaoMeta() {
           </View>
         )}
 
+        {waOficial && (
         <Pressable
           onPress={() => { setErroEnvio(null); setResultado(null); setPreviaEnvio(true); }}
           disabled={!podeEnviar || quantidadeEnvio === 0 || enviando}
@@ -485,12 +501,15 @@ function ReativacaoMeta() {
               : "Enviar cupom de reativação por WhatsApp"}
           </Text>
         </Pressable>
+        )}
 
         {!!resultado && <Text style={st.resultado} testID="reativacao-resultado">{resultado}</Text>}
         {!!erroEnvio && <Text style={st.errTxt} testID="reativacao-erro">{erroEnvio}</Text>}
       </View>
 
       {/* ── Automático semanal ── */}
+      {waOficial && (
+      <>
       <Text style={st.sectionTitle}>Reativação automática</Text>
       <View style={st.card}>
         <View style={st.autoHead}>
@@ -552,6 +571,8 @@ function ReativacaoMeta() {
         onConfirm={() => salvarAuto(true)}
         idBase="reativacao-auto-previa"
       />
+      </>
+      )}
     </ScrollView>
   );
 }

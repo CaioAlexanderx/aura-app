@@ -10,6 +10,7 @@ import { toast } from "@/components/Toast";
 import { waApi, WA_CREDIARIO_TEMPLATES, type WaStatus } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal";
+import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
@@ -352,6 +353,12 @@ export default function CrediarioSettingsScreen() {
     },
   });
   const waTravado = !waAuto && (waLoading || waBlockers.length > 0);
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // até a Meta aprovar, o bloco do envio automático só aparece para a loja
+  // que já tem o número conectado. Escondido, a régua fala do wa.me, que é
+  // o que de fato sai. O whatsapp_auto gravado não muda (o PUT ecoa waAuto).
+  const waOficial = whatsappOficialVisivel(waStatus);
+  const waAutoNaTela = waOficial && waAuto;
 
   /**
    * Salva SÓ o interruptor: manda de volta a régua persistida (não o
@@ -617,6 +624,7 @@ export default function CrediarioSettingsScreen() {
             </View>
 
             {/* ── Fase 6: envio automático pelo WhatsApp oficial ── */}
+            {waOficial && (
             <View style={st.waBox} testID="crediario-wa-bloco">
               <View style={st.waHead}>
                 <View style={{ flex: 1 }}>
@@ -675,10 +683,11 @@ export default function CrediarioSettingsScreen() {
 
               {!!waErr && <Text style={st.waErr} testID="crediario-wa-erro">{waErr}</Text>}
             </View>
+            )}
 
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
             <Text style={st.reguaSub}>
-              Mensagens por etapa. {waAuto
+              Mensagens por etapa. {waAutoNaTela
                 ? "As etapas de WhatsApp saem sozinhas pelo número oficial da loja; o texto enviado é o template aprovado pela Meta, não o rascunho abaixo."
                 : "Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em \"Cobrar\"."} Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.
             </Text>
@@ -690,9 +699,9 @@ export default function CrediarioSettingsScreen() {
                     <View style={st.stageNameRow}>
                       <Text style={st.stageName}>{r.name}</Text>
                       {r.channel === "whatsapp" && (
-                        <View style={[st.canalChip, waAuto && st.canalChipAuto]} testID={`crediario-canal-${r.id}`}>
-                          <Text style={[st.canalChipTxt, waAuto && st.canalChipTxtAuto]}>
-                            {waAuto ? "automático" : "manual (wa.me)"}
+                        <View style={[st.canalChip, waAutoNaTela && st.canalChipAuto]} testID={`crediario-canal-${r.id}`}>
+                          <Text style={[st.canalChipTxt, waAutoNaTela && st.canalChipTxtAuto]}>
+                            {waAutoNaTela ? "automático" : "manual (wa.me)"}
                           </Text>
                         </View>
                       )}
@@ -722,7 +731,7 @@ export default function CrediarioSettingsScreen() {
         </>
       )}
 
-      {!!company?.id && (
+      {!!company?.id && waOficial && (
         <PreviaCrediarioModal
           visible={previewOpen}
           companyId={company.id}

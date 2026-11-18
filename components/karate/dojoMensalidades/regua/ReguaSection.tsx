@@ -73,6 +73,7 @@ import { CompetenceSelector } from "../CompetenceSelector";
 import { OffsetsEditor } from "./OffsetsEditor";
 import { ReminderLogList } from "./ReminderLogList";
 import { WhatsAppQueueSection } from "./WhatsAppQueueSection";
+import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 
 const DEFAULT_CONFIG: DojoReminderConfig = {
   enabled: false, offsets: [-3, 0, 3], send_email: true, send_whatsapp_auto: false, updated_at: null,
@@ -185,6 +186,10 @@ export function ReguaSection() {
   // SEM_STATUS e o switch fica travado. É o lado certo do erro.
   const waBlockers = waAutoBlockers(waStatus);
   const waAutoTravado = !waAuto && (waLoading || waBlockers.length > 0);
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // o "Enviar também por WhatsApp (automático)" só aparece para o dojô que
+  // já tem o número conectado (o Kondei). send_whatsapp_auto gravado não muda.
+  const waOficial = whatsappOficialVisivel(waStatus);
 
   /**
    * `waAutoValue` existe porque a ativação pela prévia salva ANTES do
@@ -304,6 +309,7 @@ export function ReguaSection() {
             <Text style={styles.label}>Quando enviar</Text>
             <OffsetsEditor offsets={offsets} onChange={setOffsets} />
 
+            {waOficial && (
             <View style={styles.subToggle} testID="regua-wa-auto">
               <View style={styles.subToggleHead}>
                 <View style={styles.subToggleTitleRow}>
@@ -346,6 +352,7 @@ export function ReguaSection() {
                 </View>
               )}
             </View>
+            )}
           </View>
         )}
 
@@ -394,7 +401,7 @@ export function ReguaSection() {
         {!logLoading && !logErr && <ReminderLogList items={log} />}
       </View>
 
-      {!!companyId && (
+      {!!companyId && waOficial && (
         <WaPreviewModal
           visible={previewOpen}
           companyId={companyId}
