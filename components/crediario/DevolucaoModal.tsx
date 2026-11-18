@@ -25,6 +25,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, type RefundResult } from "@/services/creditApi";
+import { avisoDoPagoFora } from "./avisoDoPagoFora";
 import { toast } from "@/components/Toast";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { ConfirmGate } from "@/components/ConfirmGate";
@@ -464,6 +465,14 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
                   </View>
                 </View>
 
+                {/* 18/11/2026 (Aura-backend#1081): parte paga fora do crediário. */}
+                {avisoDoPagoFora(result) ? (
+                  <View testID="devolucao-pago-fora" style={s.avisoPagoFora}>
+                    <Icon name="alert" size={14} color={Colors.amber} />
+                    <Text style={s.avisoPagoForaTxt}>{avisoDoPagoFora(result)}</Text>
+                  </View>
+                ) : null}
+
                 {/* Parcelas abatidas */}
                 {result.abated_installments.length > 0 && (
                   <>
@@ -526,6 +535,11 @@ export function DevolucaoModal({ visible, onClose, companyId, sale, onDone }: Pr
 
 // ─── Estilos ────────────────────────────────────
 const s = StyleSheet.create({
+  avisoPagoFora: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, marginBottom: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: "rgba(217,119,6,0.45)", backgroundColor: "rgba(217,119,6,0.10)",
+  },
+  avisoPagoForaTxt: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.ink },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
