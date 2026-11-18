@@ -85,6 +85,17 @@ function montar() {
   return tree;
 }
 
+// 18/11/2026: relógio fixo no dia em que o teste foi escrito (17/11). Com o
+// relógio de verdade o "atrasado 3 dias" (data prometida 14/11) virou
+// "atrasado 4 dias" no dia seguinte e a suíte quebrou em todo PR.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: new Date("2026-11-17T15:00:00-03:00"),
+    doNotFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate", "nextTick", "queueMicrotask"],
+  });
+});
+afterAll(() => { jest.useRealTimers(); });
+
 beforeEach(() => {
   mockLargura = 1280;
   mockUsePedidos.mockClear();
