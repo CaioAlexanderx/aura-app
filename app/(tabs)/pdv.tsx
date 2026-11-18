@@ -410,6 +410,7 @@ function CaixaScreenInner() {
       comandas={st.comandas}
       cartItemCount={cartProps.items.length}
       cartTotal={cartProps.subtotal}
+      pedido={st.pedidoModal}
     />
     </>
   );
