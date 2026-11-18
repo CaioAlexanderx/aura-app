@@ -59,6 +59,12 @@ export type LoginResponse = {
     // o front NUNCA inferir filiação a partir de federation_id — quem preenche
     // é o ACEITE da federação, nunca o cadastro.
     karate_dojo_linked_at?: string | null;
+    /**
+     * 18/11/2026 (p-188): frente Personalizados ligada só nesta empresa, antes
+     * da virada (utils/personalizados.ts, travaGeral). Vem só no /auth/me e
+     * só quando true; ausente para todas as outras empresas.
+     */
+    personalizados_teste?: boolean;
   } | null;
   code_applied?: { type: string; plan: string; discount_pct: number; trial_days: number } | null;
 };
