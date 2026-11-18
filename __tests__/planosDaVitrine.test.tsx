@@ -45,6 +45,18 @@ jest.mock("@/stores/auth", () => ({
 jest.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: null }) }));
 jest.mock("@/services/api", () => ({ billingApi: { status: jest.fn() } }));
 
+// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+// desligada, as linhas do WhatsApp oficial saem da vitrine. Os testes do
+// item 2 acima ligam a trava; os de baixo seguram a vitrine desligada.
+var mockLiberado = false;
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  const m: any = { ...real, whatsappOficialVisivel: (s: any) => real.whatsappOficialVisivel(s, mockLiberado) };
+  // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
+  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
+  return m;
+});
+
 import PlanosScreen from "@/app/(tabs)/planos";
 
 async function flush() {
@@ -75,7 +87,7 @@ async function montar() {
 }
 
 describe("planos na vitrine", () => {
-  beforeEach(() => { mockPlanoAtual = "essencial"; });
+  beforeEach(() => { mockPlanoAtual = "essencial"; mockLiberado = false; });
 
   it("mostra Essencial e Negócio, e não mostra Expansão", async () => {
     const tree = await montar();
@@ -91,7 +103,8 @@ describe("planos na vitrine", () => {
     expect(temTestId(tree, "plano-card-negocio")).toBe(true);
   });
 
-  it("o Negócio anuncia a cobrança inclusa e a cota de 100 promocionais", async () => {
+  it("trava ligada: o Negócio anuncia a cobrança inclusa e a cota de 100 promocionais", async () => {
+    mockLiberado = true;
     const tree = await montar();
     const txt = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
     expect(txt).toContain("Cobranças automáticas pelo WhatsApp oficial da sua loja: inclusas");
@@ -101,12 +114,26 @@ describe("planos na vitrine", () => {
     expect(txt).not.toContain("WhatsApp Business com templates");
   });
 
-  it("a reativação aparece no Negócio, que é onde o gate a libera", async () => {
+  it("trava ligada: a reativação aparece no Negócio, que é onde o gate a libera", async () => {
+    mockLiberado = true;
     const tree = await montar();
     const negocio = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
     expect(negocio).toContain("Reativação automática de clientes inativos");
     const essencial = textoDe(tree.root.findAllByProps({ testID: "plano-card-essencial" })[0]);
     expect(essencial).not.toContain("Reativação");
+  });
+
+  it("trava desligada: nada de WhatsApp oficial no Negócio nem nos adicionais", async () => {
+    const tree = await montar();
+    const negocio = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
+    expect(negocio).not.toContain("WhatsApp oficial");
+    expect(negocio).not.toContain("Reativação automática");
+    expect(negocio).not.toContain("mensagens promocionais");
+    const tudo = textoDe(tree.toJSON());
+    expect(tudo).not.toContain("Mensagens promocionais extras");
+    expect(tudo).toContain("Acesso de funcionário adicional");
+    // O resto do Negócio fica.
+    expect(negocio).toContain("Crediário (fiado) por cliente");
   });
 
   it("o Essencial diz a verdade: cobrança por WhatsApp é manual (wa.me)", async () => {

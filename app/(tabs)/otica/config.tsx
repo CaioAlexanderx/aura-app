@@ -22,6 +22,7 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { oticaApi, OTICA_SETTINGS_DEFAULTS, type OpticalLab, type OticaSettings } from "@/services/oticaApi";
+import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 type LabDraft = { name: string; contact_name: string; phone: string; email: string; portal_url: string; lead_days: string; notes: string };
 const EMPTY_LAB: LabDraft = { name: "", contact_name: "", phone: "", email: "", portal_url: "", lead_days: "7", notes: "" };
@@ -122,7 +123,7 @@ export default function OticaConfigScreen() {
         <Text style={st.backText}>Voltar</Text>
       </Pressable>
       <Text style={st.pageTitle}>Ótica · configurações<Text style={{ color: Colors.violet }}>.</Text></Text>
-      <Text style={st.pageSubtitle}>Laboratórios, validade da receita, garantia de adaptação, responsável técnico e as mensagens automáticas do WhatsApp.</Text>
+      <Text style={st.pageSubtitle}>Laboratórios, validade da receita, garantia de adaptação, responsável técnico{WHATSAPP_OFICIAL_LIBERADO ? " e as mensagens automáticas do WhatsApp" : ""}.</Text>
 
       {!enabled && (
         <View style={st.warn}><Text style={st.warnText}>O módulo Ótica está desligado. Ligue em Configurações › Vendas para o menu mostrar Laboratório e Receitas.</Text></View>
@@ -212,7 +213,12 @@ export default function OticaConfigScreen() {
         <Text style={st.hint}>Por CNPJ: o mesmo óptico não pode responder por dois estabelecimentos (Decreto 24.492, art. 11). Sai na impressão da OS.</Text>
       </View>
 
-      {/* ══ WHATSAPP ══ */}
+      {/* ══ WHATSAPP ══
+          18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+          os três avisos automáticos só aparecem quando a Meta aprovar. A tela
+          não tem o status da conexão, e nenhuma ótica tem o número ligado. */}
+      {WHATSAPP_OFICIAL_LIBERADO && (
+      <>
       <Text style={st.sectionTitle}>WhatsApp automático</Text>
       <View style={st.card}>
         <ToggleRow
@@ -239,6 +245,8 @@ export default function OticaConfigScreen() {
         />
         <Text style={st.hint}>Os três precisam dos templates otica_pronta, otica_adaptacao e otica_revisao aprovados no WhatsApp oficial. Sem eles, a fila pula e a tela da OS oferece o wa.me.</Text>
       </View>
+      </>
+      )}
 
       <Pressable onPress={saveSettings} style={[st.saveBtn, (!dirty || saving) && { opacity: 0.6 }]} disabled={!dirty || saving} testID="otica-cfg-salvar">
         {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={st.saveText}>{dirty ? "Salvar configurações" : "Tudo salvo"}</Text>}

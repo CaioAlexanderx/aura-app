@@ -19,7 +19,25 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+  Redirect: ({ href }: any) => {
+    const R = require("react");
+    return R.createElement("Redirect", { testID: "redirect", href });
+  },
+}));
+
+// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado).
+// A loja daqui está conectada (a exceção da trava); a maquete do modo
+// demonstração só aparece com a trava ligada.
+var mockLiberado = false;
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  const m: any = { ...real, whatsappOficialVisivel: (s: any) => real.whatsappOficialVisivel(s, mockLiberado) };
+  // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
+  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
+  return m;
+});
 
 // As abas da maquete puxam componentes pesados e sem interesse aqui.
 jest.mock("@/components/screens/whatsapp/TabConversas", () => ({ TabConversas: () => null }));
@@ -112,6 +130,7 @@ function acharPorTestId(tree: any, id: string): any {
 describe("aba WhatsApp do varejo", () => {
   beforeEach(() => {
     mockDemo = false;
+    mockLiberado = false;
     mockOutbox = { data: [] };
   });
 
@@ -128,7 +147,20 @@ describe("aba WhatsApp do varejo", () => {
     tree.unmount();
   });
 
-  it("modo demonstração continua com a maquete", async () => {
+  it("trava desligada e loja sem número: a rota volta ao Painel", async () => {
+    const antes = mockStatus;
+    mockStatus = { ...antes, connected: false };
+    let tree: any;
+    await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
+    await flush();
+    expect(temTestId(tree, "wa-varejo-real")).toBe(false);
+    expect(acharPorTestId(tree, "redirect").props.href).toBe("/");
+    tree.unmount();
+    mockStatus = antes;
+  });
+
+  it("modo demonstração (trava ligada) continua com a maquete", async () => {
+    mockLiberado = true;
     mockDemo = true;
     let tree: any;
     await act(async () => { tree = renderer.create(<WhatsAppScreen />); });

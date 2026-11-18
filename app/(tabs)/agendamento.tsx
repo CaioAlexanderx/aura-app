@@ -178,12 +178,10 @@ function ScheduleConfig() {
         <View style={cfg.row}><Text style={cfg.label}>Intervalo mínimo</Text><Text style={cfg.value}>{WORK_HOURS.interval} min</Text></View>
         <View style={cfg.row}><Text style={cfg.label}>Dia de folga</Text><Text style={cfg.value}>Domingo</Text></View>
       </HoverCard>
-      <HoverCard style={cfg.card}>
-        <Text style={cfg.title}>Notificações</Text>
-        <View style={cfg.row}><Text style={cfg.label}>Lembrete para o cliente</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo - 24h antes</Text></View>
-        <View style={cfg.row}><Text style={cfg.label}>Confirmação automática</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo via WhatsApp</Text></View>
-        <View style={cfg.row}><Text style={cfg.label}>Aviso de cancelamento</Text><Text style={[cfg.value, { color: Colors.green }]}>Ativo</Text></View>
-      </HoverCard>
+      {/* 18/11/2026 — saiu o cartão "Notificações" (lembrete 24h antes,
+          confirmação automática via WhatsApp, aviso de cancelamento): os três
+          eram texto fixo "Ativo", sem nada por trás — nem o app nem o backend
+          (routes/appointments.js) mandam aviso do agendamento do varejo. */}
     </View>
   );
 }
