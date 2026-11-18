@@ -9,18 +9,21 @@
 //   · Separar (Aguardando → Separando) e Pronto (Separando → Pronto), pelo
 //     PATCH do B3 (Aura-backend#1073), que só anda para a frente, sem
 //     e-mail nem baixa.
+//   · Nova data (todo pedido aberto): abre o diálogo NovaDataDoPedido, por
+//     cima da lista ou da gaveta (JanelaEmpilhada), e grava pelo
+//     PATCH /pedidos/:oid/data (Aura-backend#1077).
 //   · Na linha, "Mais ações" abre a gaveta do pedido.
 //
-// Ficam de fora até os cards deles: "Concluir e cobrar" (A6a), "Cancelar
-// pedido" (A7) e "Nova data" (o B3 não tem rota para mudar a data
-// prometida). Nenhum aparece, nem desligado.
+// Ficam de fora até os cards deles: "Concluir e cobrar" (A6a) e "Cancelar
+// pedido" (A7). Nenhum aparece, nem desligado.
 // ============================================================
-import React from "react";
+import React, { useState } from "react";
 import { View, Linking, StyleSheet } from "react-native";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { useMudarSituacaoDoPedido } from "@/hooks/usePedidos";
 import { TEXTOS_DOS_PEDIDOS as T, estaAtrasado, linkDoAviso, proximaAcao, situacaoAberta } from "./regrasDosPedidos";
+import { NovaDataDoPedido } from "./NovaDataDoPedido";
 
 export type PedidoParaAcao = {
   id: string;
@@ -54,6 +57,8 @@ export function AcoesDoPedido({ pedido: p, hoje, onMais, cheio }: Props) {
   const atrasado = estaAtrasado(p.status, p.promised_date, hoje);
   const proxima = proximaAcao(p.status);
   const esteMudando = mudando && !!emQual && emQual.orderId === p.id;
+  const [novaData, setNovaData] = useState(false);
+  const aberto = situacaoAberta(p.status);
 
   async function mudar() {
     if (!proxima || mudando) return;
@@ -92,6 +97,18 @@ export function AcoesDoPedido({ pedido: p, hoje, onMais, cheio }: Props) {
           testID={"pedido-" + proxima.status + "-" + p.id}
         />
       )}
+      {aberto && (
+        <Button
+          title={T.novaData}
+          icon="calendar"
+          size="sm"
+          variant="ghost"
+          full={cheio}
+          onPress={() => setNovaData(true)}
+          accessibilityLabel={T.novaData + " do pedido " + p.order_number}
+          testID={"pedido-nova-data-" + p.id}
+        />
+      )}
       {!!onMais && (
         <Button
           title="…"
@@ -101,6 +118,9 @@ export function AcoesDoPedido({ pedido: p, hoje, onMais, cheio }: Props) {
           accessibilityLabel={"Mais ações do pedido " + p.order_number}
           testID={"pedido-mais-" + p.id}
         />
+      )}
+      {novaData && aberto && (
+        <NovaDataDoPedido pedido={p} hoje={hoje} onClose={() => setNovaData(false)} />
       )}
     </View>
   );

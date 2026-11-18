@@ -8,7 +8,8 @@
 //   3. Avisar abre o wa.me com o texto do mockup; atrasado vira
 //      "Lembrar a cliente"; sem telefone, sem botão;
 //   4. "Mais ações" abre a gaveta com peças, pagamento e "O que aconteceu";
-//   5. nada de Concluir, Cancelar nem Nova data (A6a, A7 e sem rota no B3);
+//   5. nada de Concluir nem Cancelar (A6a e A7); "Nova data" tem teste
+//      próprio (pedidosNovaData.test.tsx);
 //   6. pedido concluído na gaveta: sem ações;
 //   7. erro do servidor no Separar vira toast com a frase dele.
 // ============================================================
@@ -25,6 +26,7 @@ jest.mock("@/services/api", () => ({ request: (...a: any[]) => mockRequest(...a)
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { error: (...a: any[]) => mockToastError(...a), success: jest.fn() } }));
 jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null) }));
+jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 jest.mock("@/stores/auth", () => ({
   useAuthStore: (sel?: any) => {
@@ -194,16 +196,15 @@ describe("Vendas › Pedidos: ações e gaveta", () => {
     expect(t).toContain("Vem buscar");
   });
 
-  it("5. nada de Concluir, Cancelar nem Nova data, na lista e na gaveta", async () => {
+  it("5. nada de Concluir nem Cancelar, na lista e na gaveta", async () => {
     const tree = await montar();
     await act(async () => { porId(tree, "pedido-mais-o1")[0].props.onPress(); });
     await esperar();
     const titulos = tree.root.findAll((n: any) => n.props && typeof n.props.title === "string").map((n: any) => n.props.title);
-    expect(titulos.some((x: string) => /Concluir|Cancelar|Nova data/.test(x))).toBe(false);
+    expect(titulos.some((x: string) => /Concluir|Cancelar/.test(x))).toBe(false);
     const t = texto(tree);
     expect(t).not.toContain("Concluir e cobrar");
     expect(t).not.toContain("Cancelar pedido");
-    expect(t).not.toContain("Nova data");
   });
 
   it("6. pedido concluído: a gaveta não tem ações", async () => {
