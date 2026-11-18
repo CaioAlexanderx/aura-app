@@ -344,6 +344,31 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
+  it("alerta de e-mail de confirmação que voltou: 'Falar' abre o WhatsApp da loja (18/11/2026)", async () => {
+    api.hoje.mockImplementation(async () => {
+      const h = fx("hoje");
+      h.alertas = [{
+        tipo: "verificacao_devolvida", company_id: LOJA_AURORA,
+        titulo: "Loja Nova: e-mail de confirmação voltou",
+        detalhe: "Cadastro de 12/10 · não confirmou · falar no WhatsApp",
+        verbo: "Falar", bloco: "cadastros", link: "https://wa.me/5512988880001",
+      }, {
+        tipo: "verificacao_devolvida", company_id: MERCADO, titulo: "Outra: e-mail de confirmação voltou",
+        detalhe: "x", verbo: "Falar", bloco: "cadastros", link: "javascript:alert(1)",
+      }];
+      return h;
+    });
+    const tree = await mount();
+    const out = text(tree);
+    expect(out).toContain("Loja Nova: e-mail de confirmação voltou");
+    expect(out).toContain("Cadastro de 12/10 · não confirmou · falar no WhatsApp");
+    await press(tree, "verbo-do-alerta-0");
+    expect(abrirUrl).toHaveBeenCalledWith("https://wa.me/5512988880001");
+    expect(api.ficha).not.toHaveBeenCalled();
+    // link que não é https é ignorado: o verbo não vira link
+    expect(byTestId(tree, "verbo-do-alerta-1")).toHaveLength(0);
+  });
+
   it("nome de loja numa lista abre a ficha pela API", async () => {
     const tree = await mount();
     await press(tree, "bloco-expandir-pagantes");

@@ -5,6 +5,7 @@ import * as tempos from "@/services/temposDaVenda";
 import { baixarEstoqueNoCache, produtosComVarianteVendida, FOLGA_MS } from "@/utils/estoqueAposVenda";
 import { esquecerVariacoes } from "@/utils/cacheDeVariacoes";
 import type { PdvSaleResponse } from "@/services/salesApi";
+import { METODO_CREDITO, pagamentosComCredito } from "@/components/screens/pdv/creditoDaCliente";
 import type { MatconDaVenda } from "@/components/screens/pdv/matconDaVenda";
 import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
@@ -354,6 +355,12 @@ export function useCart(
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
 
+  // 17/11/2026 (INC-2026-11-17-03): quanto do crédito da cliente a venda usa
+  // (a caixa "Crédito da cliente" do Caixa). O teto no saldo é do pai
+  // (usePdvState, que lê o saldo); aqui o teto é o total da venda. Zero =
+  // venda de sempre: nada abaixo muda e o POST sai idêntico.
+  const [creditoPedido, setCreditoPedido] = useState(0);
+
   // tq-15: a chave da venda em andamento (ver novaChaveDaVenda). O ref é o
   // que o POST lê: o mesmo valor da tela no momento de finalizar.
   const [chaveDaVenda, setChaveDaVenda] = useState<string>(novaChaveDaVenda);
@@ -651,10 +658,14 @@ export function useCart(
     () => round2(splitPayments.reduce((s, p) => s + (Number(p.value) || 0), 0)),
     [splitPayments],
   );
-  // Restante = totalAfterCoupon + frete − soma dos splits. Pode ser negativo (overpay).
+  // INC-2026-11-17-03: o crédito que vale (só com cliente; teto no total).
+  const creditoUsado = selectedCustomerId && creditoPedido > 0
+    ? round2(Math.min(creditoPedido, Math.max(0, totalAfterCoupon + frete)))
+    : 0;
+  // Restante = totalAfterCoupon + frete − crédito − soma dos splits. Pode ser negativo (overpay).
   const splitRemainingLegado = useMemo(
-    () => round2(totalAfterCoupon + frete - splitTotalLegado),
-    [totalAfterCoupon, frete, splitTotalLegado],
+    () => round2(totalAfterCoupon + frete - creditoUsado - splitTotalLegado),
+    [totalAfterCoupon, frete, creditoUsado, splitTotalLegado],
   );
 
   // ── Preço no cartão: a regra do dividido (tela 4 do mockup) ──────
@@ -665,8 +676,15 @@ export function useCart(
   // Desligada: null, e o dividido é o de sempre (valores digitados).
   // O frete entra nos dois totais que o dividido reparte (vale o mesmo no
   // dinheiro e no cartão); `precoNoCartao` continua só dos produtos.
+  // INC-2026-11-17-03: o crédito da cliente abate da base pelo valor, como o
+  // dinheiro — entra na conta como uma linha fixa na frente e sai da vista.
+  const dividirComCredito = (entradas: PaymentEntry[], C: number, K: number) => {
+    if (!(creditoUsado > 0)) return resolverDividido(entradas, C, K);
+    const dv = resolverDividido([{ method: METODO_CREDITO, value: creditoUsado }, ...entradas], C, K);
+    return { ...dv, entradas: dv.entradas.slice(1) };
+  };
   const dividido = cartaoOn && precoNoCartao
-    ? resolverDividido(splitPayments, r2(precoNoCartao.totalDinheiro + frete), r2(precoNoCartao.totalCartao + frete))
+    ? dividirComCredito(splitPayments, r2(precoNoCartao.totalDinheiro + frete), r2(precoNoCartao.totalCartao + frete))
     : null;
   const splitTotal = dividido ? dividido.total : splitTotalLegado;
   const splitRemaining = dividido ? dividido.falta : splitRemainingLegado;
@@ -716,7 +734,7 @@ export function useCart(
       const C = r2(precoNoCartao.totalDinheiro + frete);
       const K = r2(precoNoCartao.totalCartao + frete);
       setSplitPayments(prev => {
-        const fixas = resolverDividido(prev, C, K).entradas.map(p => ({ method: p.method, value: round2(p.value), change: p.change }));
+        const fixas = dividirComCredito(prev, C, K).entradas.map(p => ({ method: p.method, value: round2(p.value), change: p.change }));
         const method = entry?.method || (prev.length === 0 ? payment : "cartao");
         if (entry?.value !== undefined) return [...fixas, { method: method, value: round2(entry.value), change: entry.change }];
         return [...fixas, { method: method, value: 0, auto: true }];
@@ -730,7 +748,7 @@ export function useCart(
         // Se nada informado, sugere o restante (até 0).
         value: entry?.value !== undefined
           ? round2(entry.value)
-          : round2(Math.max(0, totalAfterCoupon + frete - prev.reduce((s, p) => s + p.value, 0))),
+          : round2(Math.max(0, totalAfterCoupon + frete - creditoUsado - prev.reduce((s, p) => s + p.value, 0))),
         change: entry?.change,
       },
     ]);
@@ -770,7 +788,7 @@ export function useCart(
         // cartão ela é "o que falta" (se preenche pelo método escolhido).
         setSplitPayments(cartaoOn
           ? [{ method: payment, value: 0, auto: true }]
-          : [{ method: payment, value: round2(totalAfterCoupon + frete) }]);
+          : [{ method: payment, value: round2(totalAfterCoupon + frete - creditoUsado) }]);
       } else {
         setSplitPayments([]);
       }
@@ -1032,6 +1050,8 @@ export function useCart(
     var paymentsSnapshot: PaymentEntry[] | undefined = splitMode && entradasDaVenda.length > 0
       ? entradasDaVenda.map(p => ({ method: p.method, value: round2(p.value), change: p.change ? round2(p.change) : undefined }))
       : undefined;
+    // O rateio do preço no cartão é só do dividido (os pagamentos digitados).
+    var pagamentosDoDividido = paymentsSnapshot;
 
     // Preço no cartão + dividido: o acréscimo da parte no cartão é rateado
     // no preço de cada item (resíduo de centavos na última linha), e a soma
@@ -1039,9 +1059,10 @@ export function useCart(
     // nota (SaleComplete/NfceActions usam items[].price) e que a troca
     // devolve. Venda toda num método = exatamente o preço daquele método.
     var linhasDoPayload: LinhaDoPayload[] | null = null;
-    if (dividido && paymentsSnapshot) {
-      // O frete está nos pagamentos, mas não nas linhas dos produtos.
-      var alvo = round2(paymentsSnapshot.reduce(function(s, p) { return s + p.value; }, 0) - frete);
+    if (dividido && pagamentosDoDividido) {
+      // O frete está nos pagamentos, mas não nas linhas dos produtos. O
+      // crédito da cliente (INC-2026-11-17-03) também paga os produtos.
+      var alvo = round2(pagamentosDoDividido.reduce(function(s, p) { return s + p.value; }, 0) + creditoUsado - frete);
       linhasDoPayload = linhasRateadas(precosDasLinhas, alvo, descontosDaVenda);
       var rateadas = linhasDoPayload;
       cartSnapshot = cartSnapshot.map(function(i, idx) {
@@ -1113,6 +1134,16 @@ export function useCart(
     Object.assign(saleData, camposDaEntregaNaVenda(entrega, { frete: frete, customerId: selectedCustomerId, dispensada: entregaDispensada }));
     var entregaDaVenda = entregaValeParaACliente(entrega, selectedCustomerId) ? entrega : null;
 
+    // INC-2026-11-17-03: o crédito da cliente vai como a primeira forma
+    // (credito_cliente) e o resto na forma escolhida. A forma principal da
+    // venda continua a de dinheiro de hoje; só a venda toda no crédito leva
+    // credito_cliente. Sem crédito: nada muda.
+    if (creditoUsado > 0) {
+      var restoDaVenda = round2(totalDaVenda - creditoUsado);
+      paymentsSnapshot = pagamentosComCredito(creditoUsado, paymentsSnapshot, payment, restoDaVenda);
+      if (!(restoDaVenda > 0.005)) primaryPayment = METODO_CREDITO;
+      saleData.payment_method = primaryPayment;
+    }
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
     if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
@@ -1256,6 +1287,7 @@ export function useCart(
           setSellerName("");
           setCpfNaNota("");
           setNomeNaNota("");
+          setCreditoPedido(0);
           // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
           // sem dividido e no PIX (antes herdava "0× SPLIT" e o método).
           voltarAoPagamentoInicial();
@@ -1299,6 +1331,7 @@ export function useCart(
       setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
       setFreteValor("");
       setEntrega(null);
+      setCreditoPedido(0);
       voltarAoPagamentoInicial();
     }
   }
@@ -1330,6 +1363,7 @@ export function useCart(
     setSellerName("");
     setCpfNaNota("");
     setNomeNaNota("");
+    setCreditoPedido(0);
     clearCoupon(); clearDiscount();
     // QA 23/09/2026: não herda mais o dividido nem o método da venda
     // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
@@ -1385,6 +1419,10 @@ export function useCart(
     splitMode, toggleSplitMode, dividirPagamento,
     splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
     splitTotal, splitRemaining, splitIsBalanced,
+    // INC-2026-11-17-03: crédito da cliente na venda (o pedido e o que vale)
+    // e o que falta pagar fora dele.
+    creditoPedido, setCreditoPedido, creditoUsado,
+    aPagar: round2(Math.max(0, totalDaVenda - creditoUsado)),
     // Preço no cartão: a conta do dividido numa frase só, nas duas línguas
     // (null com a opção desligada).
     splitStatus,

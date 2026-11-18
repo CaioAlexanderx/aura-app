@@ -32,6 +32,12 @@
 // desativada pelo backend; a confirmação reabre. Como o login foi feito
 // sem empresa, ao confirmar a tela renova o token e relê o /me antes de
 // liberar a entrada (utils/empresaAoConfirmar). Conta comum: nada muda.
+//
+// 18/11/2026: e-mail que voltou (utils/emailDevolvido). Com devolução
+// PERMANENTE (sinal do /me ou reenvio que o servidor segurou) a espera vira
+// o aviso "Esse e-mail voltou", com "Corrigir meu e-mail" e o WhatsApp em
+// destaque (status "devolvido"). Com devolução TEMPORÁRIA a espera continua,
+// com o aviso em cima e o reenvio de sempre. Sem sinal: nada muda.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import {
@@ -52,10 +58,14 @@ import {
   normalizarEmailDigitado, erroAoCorrigir, MSG_EMAIL_INCOMPLETO, MSG_EMAIL_IGUAL,
   TEXTO_WHATSAPP_CORRIGIR_EMAIL, type ErroAoCorrigir,
 } from "@/utils/corrigirEmail";
+import {
+  lerSinalDaDevolucao, sinalDoEnvio, textoDaDevolucao, TITULO_DEVOLUCAO_PERMANENTE,
+  type SinalDaDevolucao,
+} from "@/utils/emailDevolvido";
 
 const isWeb = Platform.OS === "web";
 
-type Status = "sending" | "waiting" | "sendfail" | "expired" | "done";
+type Status = "sending" | "waiting" | "sendfail" | "expired" | "done" | "devolvido";
 
 // Backoff do polling: 3× 5s → 3× 10s → 30s em diante.
 function pollDelay(attempt: number): number {
@@ -86,6 +96,8 @@ export default function VerifyEmailScreen() {
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState<ErroAoCorrigir | null>(null);
   const [corrigido, setCorrigido] = useState(false);
+  // E-mail que voltou (null = sem sinal)
+  const [devolvido, setDevolvido] = useState<SinalDaDevolucao | null>(null);
 
   const didInit = useRef(false);            // guard StrictMode/duplo mount
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,6 +154,9 @@ export default function VerifyEmailScreen() {
         pollFails.current = 0;
         setConnIssue(false);
         if ((res.user as any)?.email_verified) { markVerified(); return; }
+        const sinal = lerSinalDaDevolucao((res.user as any)?.email_devolvido);
+        setDevolvido(sinal);
+        if (sinal && sinal.tipo === "permanente") { setStatus("devolvido"); return; }
       } catch (e: any) {
         pollFails.current += 1;
         if (pollFails.current >= 2) setConnIssue(true);
@@ -182,11 +197,14 @@ export default function VerifyEmailScreen() {
       const res = await authApi.sendEmailVerification();
       if (res.already_verified) { markVerified(); return; }
       if (res.sent === false) {
+        const sinal = sinalDoEnvio(res);
+        if (sinal) { setDevolvido(sinal); setStatus("devolvido"); return; }
         setSendReason(res.reason || "send_failed");
         setStatus("sendfail");
         return;
       }
       if (res.otp_available === false) setOtpAvailable(false);
+      setDevolvido(null);
       setLinkError(null);
       setStatus("waiting");
       setCooldown(Math.max(15, res.retry_after ?? 60));
@@ -315,7 +333,10 @@ export default function VerifyEmailScreen() {
       setLinkError(null);
       setEditing(false);
       if (res.otp_available === false) setOtpAvailable(false);
+      setDevolvido(null);
       if (res.sent === false) {
+        const sinal = sinalDoEnvio(res);
+        if (sinal) { setDevolvido(sinal); setStatus("devolvido"); return; }
         setSendReason(res.reason || "send_failed");
         setStatus("sendfail");
         return;
@@ -397,6 +418,39 @@ export default function VerifyEmailScreen() {
         </Pressable>
       </>
     );
+  } else if (status === "devolvido") {
+    body = (
+      <>
+        <View style={s.bannerRed} testID="devolvido-permanente">
+          <Icon name="alert_triangle" size={16} color={Colors.red} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.bannerTitle}>{TITULO_DEVOLUCAO_PERMANENTE}</Text>
+            <Text style={s.bannerTxt}>{textoDaDevolucao("permanente", emailAtual)}</Text>
+          </View>
+        </View>
+        <Pressable
+          style={s.btn}
+          {...(isWeb ? { className: "v2-btn" } as any : {})}
+          onPress={abrirCorrecao}
+          testID="devolvido-corrigir"
+          accessibilityRole="button"
+        >
+          <Text style={s.btnText}>Corrigir meu e-mail</Text>
+        </Pressable>
+        <Pressable
+          style={s.btnWhats}
+          onPress={() => { Linking.openURL(waAura(TEXTO_WHATSAPP_CORRIGIR_EMAIL)).catch(() => {}); }}
+          testID="devolvido-whatsapp"
+          accessibilityRole="link"
+        >
+          <Icon name="message_circle" size={16} color={Colors.violet3} />
+          <Text style={s.btnWhatsText}>Falar com a gente no WhatsApp</Text>
+        </Pressable>
+        <Pressable onPress={() => { logout(); }} style={s.logoutBtn} testID="verify-sair" accessibilityRole="button">
+          <Text style={s.logoutText}>Sair</Text>
+        </Pressable>
+      </>
+    );
   } else if (status === "sending") {
     body = (
       <>
@@ -462,6 +516,14 @@ export default function VerifyEmailScreen() {
     // waiting
     body = (
       <>
+        {devolvido && devolvido.tipo === "temporaria" && (
+          <View style={s.bannerAmber} testID="devolvido-temporaria">
+            <Icon name="clock" size={16} color={Colors.amber} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.bannerTxt}>{textoDaDevolucao("temporaria", emailAtual)}</Text>
+            </View>
+          </View>
+        )}
         <View style={s.mailbox}>
           <View style={s.mailIcon}><Icon name="mail" size={18} color={Colors.violet3} /></View>
           <View style={{ flex: 1 }}>
@@ -571,6 +633,8 @@ const s = StyleSheet.create({
 
   btn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 15, alignItems: "center", width: "100%", marginTop: 4 },
   btnText: { fontSize: 14.5, fontWeight: "700", color: "#fff", letterSpacing: 0.3 },
+  btnWhats: { flexDirection: "row", gap: 8, borderWidth: 1.5, borderColor: Colors.violet3, borderRadius: 12, paddingVertical: 13, alignItems: "center", justifyContent: "center", width: "100%", marginTop: 10 },
+  btnWhatsText: { fontSize: 14, fontWeight: "700", color: Colors.violet3 },
 
   doneCircle: {
     width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: Colors.green,

@@ -33,6 +33,8 @@ export function normalizarMetodo(m: string | null | undefined): Metodo | null {
 
 const ROTULO_EXTRA: Record<string, string> = {
   crediario_credito: "Crédito da troca",
+  // INC-2026-11-17-03: crédito da cliente usado numa venda do Caixa.
+  credito_cliente: "Crédito da cliente",
   voucher: "Voucher",
   vale: "Vale",
   sinal: "Sinal",

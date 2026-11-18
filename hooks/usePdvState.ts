@@ -79,6 +79,9 @@ import { clientesNoCaixaHabilitado } from "@/utils/clientesNoCaixa";
 import { couponsApi, employeesApi, pdvApi, request } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { creditApi } from "@/services/creditApi";
+// 17/11/2026 (INC-2026-11-17-03): crédito da cliente abatido na venda.
+import { useCreditoDaCliente, CHAVE_DO_CREDITO } from "@/hooks/useCreditoDaCliente";
+import { creditoQueVale, creditoSugerido } from "@/components/screens/pdv/creditoDaCliente";
 import { readMatconSettings } from "@/constants/matcon";
 import { useMatconQuote, type MatconQuoteEditing } from "@/hooks/useMatconQuote";
 import { useMatconReferral } from "@/hooks/useMatconReferral";
@@ -103,7 +106,6 @@ import { IS_WEB } from "@/components/screens/pdv/types";
 // 03/11/2026 — cadastrar vendedora pelo Caixa (utils/vendedoraNoCaixa.ts).
 import { podeCadastrarVendedora } from "@/utils/vendedoraNoCaixa";
 import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
-import { computeVisibleModules } from "@/hooks/useVisibleModules";
 import { pedidoNoCaixa } from "@/utils/pedido";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { reservadoDoProduto, vendaInvadeReserva, camposDaReserva } from "@/utils/reservaDoPedido";
@@ -253,14 +255,16 @@ export function usePdvState() {
   // ── Pedido separado de venda (17/11/2026, A1) ───────────────────────────
   // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada (ou a
   // equipe Aura, a mesma regra da aba Pedidos, utils/pedidoLiberado.ts), o
-  // módulo próprio vendas.pedidos (plano, override e permissão do membro, a
-  // mesma conta do menu, com a mesma permData acima), uma loja escolhida e
+  // módulo próprio vendas.pedidos no plano e no override, o membro com pdv
+  // OU vendas (18/11/2026, com a mesma permData acima), uma loja escolhida e
   // fora da demonstração (utils/pedido.ts). Desligado: cartProps.pedido =
   // null e o rodapé é o de sempre. O Essencial tem o módulo, então o plano
   // guardado no JWT não muda a resposta (sem refetch de /auth/me aqui).
   const pedidoAtivo = pedidoNoCaixa({
     user,
-    modulos: computeVisibleModules(company?.plan, moduleOverrides, permData),
+    plano: company?.plan,
+    overrides: moduleOverrides,
+    permissoes: permData,
     companyId: company?.id,
     consolidado: !!consolidatedView,
     isDemo,
@@ -333,12 +337,39 @@ export function usePdvState() {
     splitStatus,
     vendaRecuperada, dispensarVendaRecuperada,
     itensDaProximaVenda,
+    creditoPedido, setCreditoPedido, creditoUsado, aPagar,
   } = useCart(cardCfg, {
     recuperar: !quoteRouteParams.quote,
     // 09/11/2026: 422 DELIVERY_ADDRESS_REQUIRED — o cadastro não tinha o
     // endereço que a lista mostrava. A próxima tentativa pergunta.
     aoFaltarEntrega: (id) => { if (id) setCadastroSemEndereco(id); },
   });
+
+  // ── Crédito da cliente (INC-2026-11-17-03) ───────────────────────────
+  // O saldo a favor da cliente escolhida, NESTA loja. Vale em qualquer plano
+  // e com o crediário desligado (o crédito da troca existe sem ele). Trocar
+  // de cliente zera o que estava em uso; saldo menor que o pedido (outra
+  // venda gastou) baixa o pedido para o saldo.
+  const { saldo: saldoDoCredito } = useCreditoDaCliente(company?.id, selectedCustomerId, !isDemo);
+  useEffect(() => { setCreditoPedido(0); }, [selectedCustomerId, setCreditoPedido]);
+  useEffect(() => {
+    if (creditoPedido > saldoDoCredito + 0.005) setCreditoPedido(Math.max(0, saldoDoCredito));
+  }, [saldoDoCredito, creditoPedido, setCreditoPedido]);
+  // Venda registrada: o saldo da cliente mudou (ou pode ter mudado).
+  useEffect(() => {
+    if (!lastSale) return;
+    qc.invalidateQueries({ queryKey: [CHAVE_DO_CREDITO] });
+  }, [lastSale, qc]);
+  const credito = saldoDoCredito > 0 && !!selectedCustomerId && cart.length > 0
+    ? {
+        saldo: saldoDoCredito,
+        usado: creditoUsado,
+        aPagar,
+        usar: () => setCreditoPedido(creditoSugerido(saldoDoCredito, totalAfterCoupon)),
+        mudar: (valor: number) => setCreditoPedido(creditoQueVale(valor, saldoDoCredito, totalAfterCoupon)),
+        naoUsar: () => setCreditoPedido(0),
+      }
+    : null;
 
   // Venda com serviço numa loja que emite NFS-e (automática ou só pelo
   // botão): o "CPF ou CNPJ de quem contratou (opcional)". Sempre opcional
@@ -934,6 +965,13 @@ export function usePdvState() {
       return;
     }
 
+    // INC-2026-11-17-03: a venda toda no crédito da cliente não tem o que
+    // cobrar hoje (nem crediário, nem troco).
+    if (creditoUsado > 0 && !(aPagar > 0.005)) {
+      finalizeSale();
+      return;
+    }
+
     // Crediário Parcelado — intercepta antes do modal de troco.
     if (payment === "crediario" && !splitMode) {
       if (!selectedCustomerId) {
@@ -967,7 +1005,7 @@ export function usePdvState() {
       ? splitPayments
           .filter(p => p.method === "dinheiro")
           .reduce((s, p) => s + (Number(p.value) || 0), 0)
-      : (payment === "dinheiro" ? totalAfterCoupon : 0);
+      : (payment === "dinheiro" ? aPagar : 0);
     if (cashTenderEnabled && cashAmount > 0 && splitOk) {
       setCashModalAmount(cashAmount);
       setCashModalIsSplit(splitMode);
@@ -1043,7 +1081,7 @@ export function usePdvState() {
         account_id:    payload.unify.account_id,
         installments:  payload.unify.installments,
         first_due_date: payload.unify.first_due_date,
-        amount:        totalAfterCoupon, // valor da nova compra
+        amount:        aPagar, // valor da nova compra no crediário (sem o crédito da cliente)
       };
       // 10/10/2026 (Aura-backend#803): a venda já nasce NAQUELE carnê
       // (credit_account_id) — sem isso o backend novo criaria um carnê só
@@ -1253,7 +1291,7 @@ export function usePdvState() {
   ) / 100;
   const crediarioModalAmount = splitMode && crediarioSplitAmount > 0
     ? crediarioSplitAmount
-    : totalFinal;
+    : aPagar;
   const discountLabel  = couponApplied?.code
     ? couponApplied.code
     : manualDiscountAmount > 0
@@ -1512,6 +1550,8 @@ export function usePdvState() {
     cpfNaNota, setCpfNaNota,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     toggleSplitMode, addSplitPayment, updateSplitPayment, removeSplitPayment,
+    // INC-2026-11-17-03: a caixa "Crédito da cliente" (null = nada a mostrar).
+    credito,
     // Viewport
     vp, wide, productCols, cartWidth,
     // Produtos / busca

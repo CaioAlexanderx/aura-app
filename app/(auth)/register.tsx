@@ -26,8 +26,10 @@
 //   - lead parcial (POST /auth/signup-lead, backend#886) nas etapas 1 e 2,
 //     SEM await na navegação: qualquer falha segue em frente, sem token e
 //     sem aviso (utils/leadDoCadastro). O lead_token vai no register;
-//   - origem do cadastro (utm, referrer de fora, ref) lida da URL uma vez
-//     (utils/origemDoCadastro), no lead da etapa 1 e no register.
+//   - origem do cadastro (utm, referrer de fora, ref) lida uma vez
+//     (utils/origemDoCadastro), no lead da etapa 1 e no register. Desde o
+//     b-mk-33 (17/11) é o primeiro toque guardado no aparelho: o que o site
+//     passou no link e o login já guardou, ou a visita direta.
 //
 // tq-69 (26/10/2026), porta de entrada 4/6 — etapa 3 e verso:
 //   - um campo só, "Seu WhatsApp" (o telefone da empresa saiu da tela; o da
@@ -67,7 +69,7 @@ import { AuthStage, OrbSvg, type OrbMood } from "@/components/auth/AuthStage";
 import { maskCnpj, maskCpf } from "@/utils/masks";
 import { cpfDoCadastroValido, documentoDoCadastro, conflitoDoCadastro } from "@/utils/documentoEmpresa";
 import { regGreeting } from "@/utils/saudacao";
-import { lerOrigemDoNavegador, codigoDoLink } from "@/utils/origemDoCadastro";
+import { origemParaOCadastro, codigoDoLink } from "@/utils/origemDoCadastro";
 import { gravarLeadSemTravar, linhaDoCarimbo } from "@/utils/leadDoCadastro";
 import { QrCode } from "@/components/QrCode";
 import {
@@ -229,7 +231,7 @@ export default function RegisterScreen() {
 
   // Lidos UMA vez: o Expo Router pode limpar a query depois.
   const [codigoDaUrl] = useState(() => codigoDoLink(params.ref) || codigoDoLink(params.codigo));
-  const [origem] = useState(() => lerOrigemDoNavegador());
+  const [origem] = useState(() => origemParaOCadastro());
   const [saudacao] = useState(() => regGreeting(new Date()));
 
   const [step, setStep] = useState(0);

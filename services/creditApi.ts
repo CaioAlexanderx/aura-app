@@ -354,7 +354,7 @@ export type FinancialReceivables = {
 // ─── B1 (DESIGN-38): Histórico unificado (timeline paginada) ──────
 export type CreditHistoryEvent = {
   id: string;
-  type: "purchase" | "manual_debit" | "payment" | "exchange_credit" | "refund";
+  type: "purchase" | "manual_debit" | "payment" | "exchange_credit" | "refund" | "credit_use";
   occurred_at: string;
   /** centavos/decimal; débito > 0, pagamento/crédito < 0 (convenção do ledger). */
   amount: number;

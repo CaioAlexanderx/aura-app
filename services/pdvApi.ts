@@ -66,4 +66,13 @@ export var pdvApi = {
   getSale: function(companyId: string, saleId: string) {
     return request<PdvSaleDetail>("/companies/" + companyId + "/pdv/sale/" + saleId);
   },
+  // 17/11/2026 (INC-2026-11-17-03): saldo a favor da cliente NESTA loja (o
+  // crédito de troca, de devolução ou sobra de pagamento), para o Caixa
+  // mostrar e abater na venda. Mora no /pdv: vale no Essencial e com o
+  // crediário desligado.
+  creditoDaCliente: function(companyId: string, customerId: string) {
+    return request<{ customer_id: string; saldo_a_favor: number }>(
+      "/companies/" + companyId + "/pdv/clientes/" + encodeURIComponent(customerId) + "/credito",
+    );
+  },
 };

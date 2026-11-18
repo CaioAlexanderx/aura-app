@@ -199,6 +199,8 @@ export function TabHistorico({
         manual_debit: "Débito manual",
         payment: "Pagamento",
         exchange_credit: "Crédito de troca",
+        // INC-2026-11-17-03: crédito usado numa venda do Caixa.
+        credit_use: "Crédito usado na compra",
         refund: "Devolução",
       };
       const typeLabel = typeLabels[ev.type] ?? ev.type;

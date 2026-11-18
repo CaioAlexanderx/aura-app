@@ -59,6 +59,8 @@ export type Alerta = {
   detalhe: string;
   verbo: string;
   bloco: BlocoId | null;
+  /** 18/11/2026: o verbo abre este link (WhatsApp da loja), quando vem. */
+  link?: string | null;
 };
 
 // Faixa do topo. Fora do contrato original: sem ela a tela só esconde a faixa.
