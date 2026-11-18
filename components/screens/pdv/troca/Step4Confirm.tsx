@@ -37,6 +37,12 @@
 //
 // 17/11/2026 (p-166): com o estorno em "Crédito conta", a linha "Crédito
 // para" (creditoPara, montada pelo TrocaModal) aparece logo abaixo dos chips.
+//
+// 17/11/2026 (b-troca-prazo-nfce): o card fiscal mostra o que o SERVIDOR vai
+// fazer (sale.nfce_troca_estrategia, prazo de cancelamento por UF — 30 min
+// em SP, AP, RJ e MG). Antes adivinhava por created_at < 24 h e prometia um
+// cancelamento que a SEFAZ recusava depois de 30 min. Textos novos em
+// constants/textosPrazoNfce.ts.
 // ============================================================
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import {
@@ -53,6 +59,8 @@ import type {
   PaymentMethod, RefundMethod,
 } from "./types";
 import { fmtBRL } from "./types";
+import { estrategiaDaVenda, minutosDoPrazoDaTroca } from "@/utils/prazoNfce";
+import { TEXTOS_PRAZO_NFCE } from "@/constants/textosPrazoNfce";
 
 type Props = {
   selectedSales: SelectedSaleRow[];
@@ -101,12 +109,16 @@ export function inferFiscalStrategy(
   if (involved.length === 0) {
     return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
-  const now = Date.now();
+  // 17/11/2026: a prévia do backend (prazo da UF), não a idade da venda.
   let recent = 0;
   let old = 0;
   for (const s of involved) {
-    const ageHours = (now - new Date(s.created_at).getTime()) / 3600000;
-    if (ageHours < 24) recent += 1; else old += 1;
+    const e = estrategiaDaVenda(s);
+    if (e === "cancel_reissue") recent += 1;
+    else if (e === "devolucao_55") old += 1;
+  }
+  if (recent === 0 && old === 0) {
+    return { strategy: "none", cancelReissueCount: 0, devolucao55Count: 0 };
   }
   if (recent > 0 && old === 0) {
     return { strategy: "cancel_reissue", cancelReissueCount: recent, devolucao55Count: 0 };
@@ -149,7 +161,7 @@ export function canConfirmStep4(args: {
 
 // ─── Label do card fiscal por estrategia ─────────────────────
 // Helper no escopo do modulo — nunca injetar dentro de .map().
-function getFiscalCardInfo(strategy: FiscalStrategy): {
+function getFiscalCardInfo(strategy: FiscalStrategy, prazoMin: number): {
   title: string;
   sub: string;
   color: string;
@@ -160,7 +172,7 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
     case "cancel_reissue":
       return {
         title: "NFC-e original será cancelada",
-        sub: "Venda foi feita ha menos de 24h — cancelamos sem precisar emitir devolução",
+        sub: TEXTOS_PRAZO_NFCE.trocaCancelaSub(prazoMin),
         color: "#6ee7b7",
         borderColor: "rgba(16,185,129,0.3)",
         iconBg: "#10b981",
@@ -176,7 +188,7 @@ function getFiscalCardInfo(strategy: FiscalStrategy): {
     case "per_origin":
       return {
         title: "Fiscal por origem (misto)",
-        sub: "Vendas recentes serão canceladas; antigas terão NF-e de devolução",
+        sub: TEXTOS_PRAZO_NFCE.trocaMistaSub,
         color: "#fde68a",
         borderColor: "rgba(251,191,36,0.3)",
         iconBg: "#d97706",
@@ -228,7 +240,7 @@ export function Step4Confirm({
     [selectedSales, returnEntries]
   );
 
-  const fiscalCard = getFiscalCardInfo(fiscal.strategy);
+  const fiscalCard = getFiscalCardInfo(fiscal.strategy, minutosDoPrazoDaTroca(selectedSales));
 
   const isCrossFilial = useMemo(() => {
     return selectedSales.some((s) => s.is_cross_filial);
