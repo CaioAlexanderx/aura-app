@@ -103,6 +103,10 @@ import { IS_WEB } from "@/components/screens/pdv/types";
 // 03/11/2026 — cadastrar vendedora pelo Caixa (utils/vendedoraNoCaixa.ts).
 import { podeCadastrarVendedora } from "@/utils/vendedoraNoCaixa";
 import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
+import { pedidoNoCaixa } from "@/utils/pedido";
+import { pedidoLiberado } from "@/utils/pedidoLiberado";
+import { reservadoDoProduto, vendaInvadeReserva, camposDaReserva } from "@/utils/reservaDoPedido";
+import type { AvisoDeReservaDados } from "@/components/screens/pdv/AvisoDeReserva";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
@@ -157,6 +161,8 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 
 export function usePdvState() {
   const { company, isDemo, token, consolidatedView } = useAuthStore();
+  // 17/11/2026 (Pedido): o is_staff do backend libera o Pedido para a equipe Aura.
+  const user = useAuthStore(s => (s as any).user);
   const qc = useQueryClient();
   const companyLogo = useAuthStore(s => s.companyLogo);
   const perfilDaEmpresa = useCompanyProfile();
@@ -243,6 +249,32 @@ export function usePdvState() {
     staleTime: 5 * 60_000,
     retry: 1,
   });
+  // ── Pedido separado de venda (17/11/2026, A1) ───────────────────────────
+  // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada (ou a
+  // equipe Aura, a mesma regra da aba Pedidos, utils/pedidoLiberado.ts), o
+  // módulo próprio vendas.pedidos no plano e no override, o membro com pdv
+  // OU vendas (18/11/2026, com a mesma permData acima), uma loja escolhida e
+  // fora da demonstração (utils/pedido.ts). Desligado: cartProps.pedido =
+  // null e o rodapé é o de sempre. O Essencial tem o módulo, então o plano
+  // guardado no JWT não muda a resposta (sem refetch de /auth/me aqui).
+  const pedidoAtivo = pedidoNoCaixa({
+    user,
+    plano: company?.plan,
+    overrides: moduleOverrides,
+    permissoes: permData,
+    companyId: company?.id,
+    consolidado: !!consolidatedView,
+    isDemo,
+  });
+  const [showPedido, setShowPedido] = useState(false);
+  // ── Reserva do Pedido (17/11/2026, A4) ────────────────────────────────
+  // Selo "N reservado" no cartão e o aviso ao vender peça separada. Só com a
+  // trava (a mesma da aba Pedidos) e com os campos de reserva na resposta do
+  // servidor; sem eles a reserva é 0 e o toque e o bipe são os de sempre.
+  const reservaLiberada = pedidoLiberado(user);
+  const [avisoReserva, setAvisoReserva] = useState<(AvisoDeReservaDados & { vender: () => void }) | null>(null);
+  useEffect(() => { if (!pedidoAtivo && showPedido) setShowPedido(false); }, [pedidoAtivo, showPedido]);
+
   const employees = useMemo(
     () => ((empData?.employees || []) as any[]).map(e => ({
       id: e.id, name: e.name || "", subtitle: e.role || undefined,
@@ -691,6 +723,26 @@ export function usePdvState() {
     [],
   );
 
+  // 17/11/2026 (Pedido, A4): lançar esta peça invade a reserva? Pergunta
+  // "Não vender / Vender mesmo assim" e devolve true (quem chama para e o
+  // aviso lança se ela quiser). Sem reserva devolve false e nada muda. Nunca
+  // trava a venda.
+  function perguntarSeReservado(
+    produto: { id: string; name?: string; reservedQty?: number; reservedByVariant?: Record<string, number> } | null | undefined,
+    variantId: string | null,
+    estoque: number,
+    vender: () => void,
+  ): boolean {
+    if (!produto) return false;
+    const reservado = reservadoDoProduto(produto, reservaLiberada, variantId);
+    if (!(reservado > 0)) return false;
+    const chave = variantId ? produto.id + "__" + variantId : produto.id;
+    const noCarrinho = cart.filter(i => i.productId === chave).reduce((t, i) => t + (Number(i.qty) || 0), 0);
+    if (!vendaInvadeReserva({ estoque, reservado, noCarrinho })) return false;
+    setAvisoReserva({ nome: produto.name || "", estoque, reservado, vender });
+    return true;
+  }
+
   // Devolve true quando o código lançou algo (item no carrinho ou seletor de
   // variante aberto); false quando virou busca.
   async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
@@ -750,6 +802,10 @@ export function usePdvState() {
         const parent: any  = parentLocal || {
           id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard,
           ...(promoPai ? { emPromocao: true, precoEfetivo: promoPai.por } : {}),
+          // A4: a reserva da variante bipada (só vem com a trava do Pedido).
+          ...((result as any).variant_reserved_qty !== undefined
+            ? { reservedByVariant: { [result.variant_id]: Number((result as any).variant_reserved_qty) || 0 } }
+            : {}),
         };
         // Não lança direto: o seletor abre com este tamanho marcado.
         abrirVendaNova();
@@ -783,8 +839,10 @@ export function usePdvState() {
           return true;
         }
         abrirVendaNova();
-        addToCart(bp);
-        toast.success(bp.name);
+        // A4: peça separada em pedido pergunta antes (o bipe devolve reserved_qty).
+        const lancarBp = () => { addToCart(bp); toast.success(bp.name); };
+        if (perguntarSeReservado({ ...bp, ...camposDaReserva(cru) }, null, parseFloat(cru.stock_qty) || 0, lancarBp)) return true;
+        lancarBp();
         return true;
       }
       return naoAchou();
@@ -821,6 +879,8 @@ export function usePdvState() {
   ) {
     marcarEntrada(origem); // p-152
     if (p.has_variants) { setPendingBipe(null); setPendingProduct(p); return; }
+    // 17/11/2026 (Pedido, A4): peça separada em pedido pergunta antes.
+    if (perguntarSeReservado(p, null, p.stock, () => addToCart(p))) return;
     addToCart(p);
     if (evt && cartHeadRef.current && IS_WEB) {
       const target = cartHeadRef.current.getBoundingClientRect?.();
@@ -837,10 +897,13 @@ export function usePdvState() {
 
   function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
     if (!pendingProduct) return;
-    if (!variant.id) { addToCart(pendingProduct); }
-    else             { addToCart(pendingProduct, variant); }
+    const produto = pendingProduct;
     setPendingProduct(null);
     setPendingBipe(null);
+    // 17/11/2026 (Pedido, A4): o tamanho separado em pedido pergunta antes.
+    if (variant.id && perguntarSeReservado(produto, variant.id, variant.stock, () => addToCart(produto, variant))) return;
+    if (!variant.id) { addToCart(produto); }
+    else             { addToCart(produto, variant); }
   }
 
   function handleFinalize() {
@@ -1115,6 +1178,9 @@ export function usePdvState() {
     !showChangeModal &&
     !showNewCustomer &&
     !showCrediario &&
+    // 17/11/2026 (Pedido, A2): a busca de cliente do Novo pedido é digitada.
+    !showPedido &&
+    !avisoReserva &&
     // Número de comanda é digitado: o leitor não pode engolir as teclas.
     !comandas.showAdicionar &&
     !comandas.showFechar &&
@@ -1144,7 +1210,9 @@ export function usePdvState() {
     !!confirmacaoDoDesconto?.aberta ||
     !!comandas.showAdicionar ||
     !!comandas.showFechar ||
-    !!comandas.showPainel;
+    !!comandas.showPainel ||
+    showPedido ||
+    !!avisoReserva;
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
   // 22/09/2026 (Matcon M0): unit/purchaseUnit/purchaseFactor descem pro
@@ -1333,6 +1401,8 @@ export function usePdvState() {
           faltaEndereco: !!selectedCustomerId && !clienteTemEndereco && !entregaValeParaACliente(entrega, selectedCustomerId),
         }
       : null,
+    // Pedido (A1): null com a trava desligada ou sem o módulo = rodapé de sempre.
+    pedido: pedidoAtivo ? { onNovoPedido: () => setShowPedido(true) } : null,
     // Comandas: null com a chave desligada = rodapé de sempre.
     comanda: comandaEnabled
       ? {
@@ -1468,6 +1538,33 @@ export function usePdvState() {
     valeTroca,
     openTroca:  () => { setValeTroca(null); setShowTroca(true); },
     closeTroca: () => { setShowTroca(false); setValeTroca(null); },
+    // Pedido separado de venda (A1): o Novo pedido abre pelo Guardar.
+    pedidoAtivo, showPedido,
+    // A4: selo no cartão e o aviso "Não vender / Vender mesmo assim".
+    reservaLiberada,
+    avisoReserva,
+    naoVenderReservado: () => setAvisoReserva(null),
+    venderReservado: () => { const a = avisoReserva; setAvisoReserva(null); a?.vender(); },
+    closePedido: () => setShowPedido(false),
+    // A2: o que o Novo pedido recebe (PdvModals). null = nada montado.
+    pedidoModal: pedidoAtivo
+      ? {
+          visible: showPedido,
+          itens: cart,
+          // Mesmo desconto do orçamento do Matcon: cupom + manual, no preço do dinheiro.
+          desconto: matconQuoteDiscount,
+          clienteDoCarrinho: selectedCustomerId
+            ? { id: selectedCustomerId, name: selectedCustomerName || "", phone: selectedCustomerPhone || null }
+            : null,
+          // O servidor guardou: o carrinho volta vazio para a próxima venda. Só aqui.
+          onGuardado: () => {
+            newSale();
+            // A4: a reserva nova aparece na grade (GET /products devolve reserved_qty).
+            if (company?.id) qc.invalidateQueries({ queryKey: ["products", company.id] });
+          },
+          onClose: () => setShowPedido(false),
+        }
+      : null,
     // Handlers
     handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,

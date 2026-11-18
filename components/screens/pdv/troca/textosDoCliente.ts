@@ -59,3 +59,11 @@ export const TEXTOS_DO_CLIENTE = {
   erroCreditoExigeCliente: "Para deixar o valor como crédito, escolha o cliente que vai ficar com ele.",
   erroClienteNaoEncontrado: "Não achamos esse cliente nas suas lojas. Escolha o cliente de novo.",
 } as const;
+
+/** 17/11/2026 (Novo pedido, A2): CreditoPara e NovoClienteNaTroca aceitam
+ *  outras palavras (as do pedido) sem mudar as da troca. */
+export type TextosDoCliente = {
+  [K in keyof typeof TEXTOS_DO_CLIENTE]: (typeof TEXTOS_DO_CLIENTE)[K] extends (...args: any[]) => any
+    ? (typeof TEXTOS_DO_CLIENTE)[K]
+    : string;
+};

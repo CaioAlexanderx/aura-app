@@ -187,7 +187,14 @@ function adaptarAlerta(a: PainelApiAlerta): Alerta {
     detalhe: a.detalhe || "",
     verbo: a.verbo || "Ver",
     bloco: (a.bloco as BlocoId) || null,
+    ...(linkSeguro(a.link) ? { link: linkSeguro(a.link) } : {}),
   };
+}
+
+// Só https (o wa.me da loja). Qualquer outra coisa é ignorada.
+function linkSeguro(v: string | null | undefined): string | null {
+  var s = String(v || "").trim();
+  return /^https:\/\//i.test(s) ? s : null;
 }
 
 export function adaptarHoje(raw: PainelApiHoje): PainelHoje {

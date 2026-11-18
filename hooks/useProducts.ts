@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
 import { lerNotaFiscal } from "@/utils/notaDoItem";
+import { camposDaReserva } from "@/utils/reservaDoPedido";
 
 async function deleteBatched(
   ids: string[],
@@ -23,7 +24,7 @@ async function deleteBatched(
   return { succeeded, failed };
 }
 
-function mapApiProduct(p: any): Product {
+export function mapApiProduct(p: any): Product {
   // 19/05/2026: depois da migration que move estoque pras variants
   // (zera products.stock_qty no pai), o stock exibido pra produtos
   // com variantes precisa vir da soma das variant.stock_qty —
@@ -119,6 +120,9 @@ function mapApiProduct(p: any): Product {
     isGroupShared: p.is_group_shared === true,
     // 17/11/2026 (p-173): a loja dona do item (products.company_id).
     ownerCompanyId: p.company_id ? String(p.company_id) : null,
+    // 17/11/2026 (Pedido, A4): reserva do pedido do balcão. Só entra quando o
+    // backend mandou (trava ligada); ausente, o objeto é o de antes.
+    ...camposDaReserva(p),
   };
 }
 

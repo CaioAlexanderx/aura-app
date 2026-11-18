@@ -27,7 +27,7 @@ import { maskPhone } from "@/utils/masks";
 import { erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { validarCadastroRapido, nomeValido } from "@/utils/cadastroRapidoCliente";
 import { acharClienteRepetido } from "@/utils/clienteRepetido";
-import { TEXTOS_DO_CLIENTE as T } from "./textosDoCliente";
+import { TEXTOS_DO_CLIENTE, type TextosDoCliente } from "./textosDoCliente";
 import type { ClienteDoCredito } from "./clienteDoCredito";
 import { fmtBRL } from "./types";
 
@@ -44,6 +44,8 @@ type Props = {
   /** criado = true quando o cliente acabou de ser cadastrado; false quando
    *  a vendedora escolheu um parecido que já existia. */
   onPronto: (c: ClienteDoCredito, criado: boolean) => void;
+  /** 17/11/2026 (Novo pedido, A2): as palavras do pedido. Ausente = as da troca. */
+  textos?: Partial<TextosDoCliente>;
 };
 
 const soDigitos = (v: string) => String(v || "").replace(/\D/g, "");
@@ -55,7 +57,8 @@ export function camposDaBusca(busca: string): { nome: string; tel: string } {
   return { nome: b, tel: "" };
 }
 
-export function NovoClienteNaTroca({ companyId, valorDoCredito, busca, onCancelar, onPronto }: Props) {
+export function NovoClienteNaTroca({ companyId, valorDoCredito, busca, onCancelar, onPronto, textos }: Props) {
+  const T: TextosDoCliente = textos ? { ...TEXTOS_DO_CLIENTE, ...textos } : TEXTOS_DO_CLIENTE;
   const qc = useQueryClient();
   const inicial = camposDaBusca(busca);
   const [nome, setNome] = useState(inicial.nome);

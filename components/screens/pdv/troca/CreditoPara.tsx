@@ -22,7 +22,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useAuthStore } from "@/stores/auth";
-import { TEXTOS_DO_CLIENTE as T } from "./textosDoCliente";
+import { TEXTOS_DO_CLIENTE, type TextosDoCliente } from "./textosDoCliente";
 import { filtrarClientes, iniciais, type ClienteDoCredito } from "./clienteDoCredito";
 
 type Props = {
@@ -38,14 +38,24 @@ type Props = {
   /** p-167: o cliente mostrado acabou de ser cadastrado aqui. */
   salvoAgora?: boolean;
   testID?: string;
+  /** 17/11/2026 (Novo pedido, A2): os mesmos blocos com as palavras do pedido.
+   *  Ausente = os textos da troca, como antes. */
+  textos?: Partial<TextosDoCliente>;
+  /** A2: abre já com a busca na tela (pedido sem cliente escolhido). */
+  buscaInicial?: boolean;
+  /** A2: linha "Seguir sem cliente" depois do "+ Novo cliente"; recebe o que foi digitado. */
+  onSemCliente?: (busca: string) => void;
+  textoSemCliente?: { nome: string; sub: string };
 };
 
 export function CreditoPara({
   cliente, daVendaOriginal, onEscolher, nota, onNovoCliente, salvoAgora, testID = "troca-credito-para",
+  textos, buscaInicial, onSemCliente, textoSemCliente,
 }: Props) {
+  const T: TextosDoCliente = textos ? { ...TEXTOS_DO_CLIENTE, ...textos } : TEXTOS_DO_CLIENTE;
   const { customers, isLoading } = useCustomers({ sort: "recent" });
   const { company, availableCompanies } = useAuthStore() as any;
-  const [buscando, setBuscando] = useState(false);
+  const [buscando, setBuscando] = useState(!!buscaInicial);
   const [q, setQ] = useState("");
 
   const lista = useMemo(
@@ -138,6 +148,20 @@ export function CreditoPara({
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[s.opNome, { color: Colors.violet3 }]}>{T.novoCliente}</Text>
               <Text style={s.opTel}>{T.novoClienteSub}</Text>
+            </View>
+          </Pressable>
+        )}
+        {onSemCliente && textoSemCliente && (
+          <Pressable
+            testID={`${testID}-sem-cliente`}
+            onPress={() => { const b = q; fecharBusca(); onSemCliente(b); }}
+            style={[s.opcao, s.opcaoSep]}
+            accessibilityRole="button"
+          >
+            <View style={[s.av, s.avPeq, s.avFalta]}><Icon name="user" size={14} color={Colors.amber} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.opNome}>{textoSemCliente.nome}</Text>
+              <Text style={s.opTel}>{textoSemCliente.sub}</Text>
             </View>
           </Pressable>
         )}

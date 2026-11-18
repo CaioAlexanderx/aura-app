@@ -25,7 +25,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
-import { Colors, Glass } from "@/constants/colors";
+import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
 import { usaPecasNoMilheiro, milheiroParaUnidades } from "./matconQty";
@@ -34,6 +34,7 @@ import { promoDoItem } from "@/utils/precoEfetivo";
 import { useTemTeclado } from "@/hooks/useTemTeclado";
 import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 import { TEXTOS_DOS_ATALHOS } from "./textosDosAtalhos";
+import { reservadoDoProduto, TEXTOS_DA_RESERVA } from "@/utils/reservaDoPedido";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -76,6 +77,8 @@ export type GridProduct = {
   /** De/Por (hooks/useProducts): `price` segue o normal; o servidor diz se está em promoção. */
   emPromocao?: boolean;
   precoEfetivo?: number | null;
+  /** 17/11/2026 (Pedido, A4): peças separadas em pedido (GET /products, B2). */
+  reservedQty?: number;
 };
 
 type Props = {
@@ -98,6 +101,9 @@ type Props = {
   matconEnabled?: boolean;
   /** 22/09/2026 (preço no cartão): preço no cartão do card. Ausente = card de sempre. */
   cardPriceFor?: (p: GridProduct) => number | null;
+  /** 17/11/2026 (Pedido, A4): trava do Pedido (utils/pedidoLiberado.ts). Sem ela
+   *  (padrão), o cartão é o de sempre mesmo com reservedQty no produto. */
+  reservaLiberada?: boolean;
 };
 
 // 17/11/2026 (p-148): a cascata de entrada (0,5 s por cartão, 40 ms de
@@ -111,7 +117,7 @@ export function __reiniciarEntradaDaGrade() { gradeJaEntrou = false; }
 // O anel do destaque só aparece com mouse e teclado (no toque não há Enter).
 // 17/11/2026 (p-155): a mesma leitura das etiquetas (hooks/useTemTeclado).
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null }: Props) {
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null, reservaLiberada = false }: Props) {
   const teclado = useTemTeclado();
   // true só no primeiro render da primeira grade; o cartão guarda o valor de
   // quando montou (ProdCard), então a cascata da entrada termina inteira.
@@ -143,13 +149,14 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           matconEnabled={matconEnabled}
           cardPrice={cardPriceFor ? cardPriceFor(p) : null}
           destacado={teclado && !!destaqueId && destaqueId === p.id}
+          reservado={reservadoDoProduto(p, reservaLiberada)}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null, destacado = false }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null; destacado?: boolean }) {
+function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null, destacado = false, reservado = 0 }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null; destacado?: boolean; reservado?: number }) {
   // Decidido na montagem: o cartão da entrada anima até o fim mesmo que a
   // grade redesenhe no meio; o que monta depois não anima.
   const animarAoEntrar = useRef(animar).current;
@@ -290,9 +297,18 @@ function ProdCard({ product, qty, index, animar = false, onAdd, compact = false,
       ) : (
         <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
       )}
-      {(product.stock != null || product.unit) && (
+      {(product.stock != null || product.unit) && (reservado > 0 ? (
+        // 17/11/2026 (Pedido, A4): selo azul "N reservado" ao lado do estoque.
+        // A quantidade continua a da prateleira. Sem reserva, a linha de sempre.
+        <View style={s.stockComReserva}>
+          <Text style={[s.stock, { marginTop: 0 }]}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>
+          <View style={s.reserva} testID={"grid-reservado-" + product.id}>
+            <Text style={s.reservaTxt}>{TEXTOS_DA_RESERVA.selo(reservado)}</Text>
+          </View>
+        </View>
+      ) : (
         <Text style={s.stock}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>
-      )}
+      ))}
 
       <View style={s.foot}>
         {promo ? (
@@ -399,6 +415,9 @@ const s = StyleSheet.create({
   },
   // Frase, não etiqueta de sistema: sem monoespaçado, sem caixa alta, e no
   // ink2 pra ficar legível (o ink3 em 10px era quase invisível).
+  stockComReserva: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 3 },
+  reserva: { paddingHorizontal: 7, paddingVertical: 1, borderRadius: 99, backgroundColor: "rgba(37,99,235,0.16)" },
+  reservaTxt: { fontSize: 11, fontWeight: "700", color: IS_DARK_MODE ? "#93c5fd" : "#1e40af" },
   stock: {
     fontSize: 11,
     color: Colors.ink2,

@@ -6,7 +6,9 @@ export type VerticalKey = "odonto" | "barber" | "food" | "studio" | "estetica" |
 
 export type LoginResponse = {
   token: string;
-  user: { id: string; name: string; email: string; role: string; is_staff?: boolean; email_verified?: boolean };
+  // 18/11/2026: email_devolvido vem só no /auth/me de quem não confirmou e
+  // cujo e-mail de confirmação voltou (utils/emailDevolvido).
+  user: { id: string; name: string; email: string; role: string; is_staff?: boolean; email_verified?: boolean; email_devolvido?: { tipo: "permanente" | "temporaria"; em?: string | null } };
   company: {
     id: string;
     name: string;
@@ -94,7 +96,7 @@ export type RegisterBody = {
   company_phone?: string;
 };
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
-export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };
+export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean; email_devolvido?: { tipo: "permanente" | "temporaria"; em?: string | null } };
 
 // 26/10/2026: POST /auth/corrigir-email (Aura-backend). Usuario com o e-mail
 // novo (o JWT nao carrega e-mail; nao ha token novo) + o resultado do envio
