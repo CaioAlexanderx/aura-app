@@ -17,6 +17,8 @@
 //
 // Só aparece com a trava PEDIDO_LIBERADO e o módulo vendas.pedidos
 // (hooks/usePedidos.ts, useAbaPedidos); quem decide é app/(tabs)/vendas.tsx.
+//
+// A5b (p-63f): ações na linha (AcoesDoPedido) e a gaveta (GavetaDoPedido).
 // ============================================================
 import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from "react-native";
@@ -26,6 +28,8 @@ import { Icon } from "@/components/Icon";
 import { brl } from "@/components/screens/vendas/editarVendaUtils";
 import { usePedidos, type ChipDosPedidos, type LinhaDoPedido as Pedido } from "@/hooks/usePedidos";
 import { LinhaDoPedido, CabecalhoDaLista } from "./LinhaDoPedido";
+import { AcoesDoPedido } from "./AcoesDoPedido";
+import { GavetaDoPedido } from "./GavetaDoPedido";
 import {
   TEXTOS_DOS_PEDIDOS as T, TEXTOS_FORA_DO_MOCKUP as F, chipsDosPedidos, hojeEmSaoPaulo,
   pecasReservadas, porLoja,
@@ -34,19 +38,14 @@ import {
 /** Abaixo disto a lista vira cartões (celular e tablet em pé). */
 export const LARGURA_DA_TABELA = 900;
 
-type Props = {
-  /** Botões de cada linha (A5b). */
-  acoesDaLinha?: (p: Pedido) => React.ReactNode;
-  /** Toque na linha (A5b abre a gaveta). */
-  onAbrir?: (p: Pedido) => void;
-};
-
-export function AbaPedidos({ acoesDaLinha, onAbrir }: Props) {
+export function AbaPedidos() {
   const { width } = useWindowDimensions();
   const largo = width >= LARGURA_DA_TABELA;
   const [chip, setChip] = useState<ChipDosPedidos>("abertos");
   const [texto, setTexto] = useState("");
   const [busca, setBusca] = useState("");
+  // A5b: a gaveta do pedido (a linha aberta; null = fechada).
+  const [aberto, setAberto] = useState<Pedido | null>(null);
 
   // A busca sai 300 ms depois da última tecla (uma ida ao servidor, não uma por letra).
   useEffect(() => {
@@ -60,6 +59,21 @@ export function AbaPedidos({ acoesDaLinha, onAbrir }: Props) {
   const mostrarLoja = consolidado && lojas > 1;
   const chips = chipsDosPedidos(contagem);
   const nenhumPedido = !!contagem && contagem.todos === 0;
+
+  // A5b: as ações ficam sempre na linha (Avisar, Separar/Pronto, Mais ações).
+  const acoesDaLinha = (p: Pedido) => (
+    <AcoesDoPedido
+      pedido={{
+        id: p.id, company_id: p.company_id, order_number: p.order_number, status: String(p.status),
+        customer_name: p.customer_name, customer_phone: p.customer_phone, promised_date: p.promised_date,
+        pecas: p.pecas,
+      }}
+      hoje={hoje}
+      cheio={!largo}
+      onMais={() => setAberto(p)}
+    />
+  );
+  const onAbrir = (p: Pedido) => setAberto(p);
 
   const subAbertos = mostrarLoja
     ? porLoja(porEmpresa.map((e) => ({ company_name: e.company_name, valor: e.abertos })))
@@ -123,7 +137,7 @@ export function AbaPedidos({ acoesDaLinha, onAbrir }: Props) {
         <Vazio chip={chip} buscando={!!busca} nenhumPedido={nenhumPedido} />
       ) : largo ? (
         <View style={s.tabela}>
-          <CabecalhoDaLista comAcoes={!!acoesDaLinha} />
+          <CabecalhoDaLista comAcoes />
           {pedidos.map((p) => (
             <LinhaDoPedido
               key={p.id}
@@ -131,8 +145,8 @@ export function AbaPedidos({ acoesDaLinha, onAbrir }: Props) {
               hoje={hoje}
               largo
               mostrarLoja={mostrarLoja}
-              acoes={acoesDaLinha ? acoesDaLinha(p) : undefined}
-              onAbrir={onAbrir ? () => onAbrir(p) : undefined}
+              acoes={acoesDaLinha(p)}
+              onAbrir={() => onAbrir(p)}
             />
           ))}
         </View>
@@ -145,12 +159,14 @@ export function AbaPedidos({ acoesDaLinha, onAbrir }: Props) {
               hoje={hoje}
               largo={false}
               mostrarLoja={mostrarLoja}
-              acoes={acoesDaLinha ? acoesDaLinha(p) : undefined}
-              onAbrir={onAbrir ? () => onAbrir(p) : undefined}
+              acoes={acoesDaLinha(p)}
+              onAbrir={() => onAbrir(p)}
             />
           ))}
         </View>
       )}
+
+      <GavetaDoPedido linha={aberto} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberto(null)} />
     </View>
   );
 }

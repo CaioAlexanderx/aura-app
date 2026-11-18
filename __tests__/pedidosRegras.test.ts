@@ -94,20 +94,21 @@ describe("textos da linha", () => {
 });
 
 describe("WhatsApp", () => {
-  it("o texto do mockup, com o primeiro nome e a peça", () => {
-    expect(textoDoLembrete("Carla Menezes", "Jaqueta")).toBe(
-      "Oi, Carla! Sua jaqueta está separada aqui na loja esperando por você. Quando fica bom passar?"
+  it("o texto do mockup, com o primeiro nome; uma peça e várias", () => {
+    expect(textoDoLembrete("Carla Menezes", 1)).toBe(
+      "Oi, Carla! Sua peça está separada aqui na loja esperando por você. Quando fica bom passar?"
     );
-  });
-  it("a variação fica fora da mensagem", () => {
-    expect(textoDoLembrete("Carla", "Jaqueta Sarja Preta · G")).toBe(
-      "Oi, Carla! Sua jaqueta Sarja Preta está separada aqui na loja esperando por você. Quando fica bom passar?"
+    expect(textoDoLembrete("Marina", 3)).toBe(
+      "Oi, Marina! Suas peças estão separadas aqui na loja esperando por você. Quando fica bom passar?"
+    );
+    expect(textoDoLembrete(null, 1)).toBe(
+      "Oi! Sua peça está separada aqui na loja esperando por você. Quando fica bom passar?"
     );
   });
   it("wa.me com DDI; sem telefone, sem link", () => {
-    const l = linkDoAviso("(12) 98114-2210", "Carla", "Jaqueta");
+    const l = linkDoAviso("(12) 98114-2210", "Carla", 1);
     expect(l).toMatch(/^https:\/\/wa\.me\/5512981142210\?text=Oi%2C%20Carla!/);
-    expect(linkDoAviso(null, "Carla", "Jaqueta")).toBeNull();
-    expect(linkDoAviso("123", "Carla", "Jaqueta")).toBeNull();
+    expect(linkDoAviso(null, "Carla", 1)).toBeNull();
+    expect(linkDoAviso("123", "Carla", 1)).toBeNull();
   });
 });

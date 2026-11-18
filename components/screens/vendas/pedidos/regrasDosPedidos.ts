@@ -221,24 +221,23 @@ export function diaEHora(iso: string | null | undefined): string {
  * O texto do mockup (parte 7): "Oi, [nome]! Sua [peça] está separada aqui na
  * loja esperando por você. Quando fica bom passar?". O mockup dá esse texto
  * para "Lembrar a cliente"; "Avisar" usa o mesmo (o mockup não traz outro).
+ *
+ * [peça] fica "peça", e não o nome do produto: com o nome, o "Sua" erra o
+ * gênero ("Sua vestido", "Sua cinto"). Com mais de uma peça, o plural
+ * ("Suas peças estão separadas", fora do mockup).
  */
-export function textoDoLembrete(nome: string | null | undefined, peca: string | null | undefined): string {
+export function textoDoLembrete(nome: string | null | undefined, pecas: number): string {
   const pn = primeiroNome(nome);
   const oi = pn ? "Oi, " + pn + "!" : "Oi!";
-  // Só o nome do produto: a variação ("· G") fica fora da mensagem.
-  const nomeDaPeca = String(peca || "").split(" · ")[0].trim();
-  const sua = nomeDaPeca ? "Sua " + minusculaInicial(nomeDaPeca) : "Sua peça";
-  return oi + " " + sua + " está separada aqui na loja esperando por você. Quando fica bom passar?";
-}
-
-function minusculaInicial(s: string): string {
-  const t = String(s || "").trim();
-  return t ? t.charAt(0).toLocaleLowerCase("pt-BR") + t.slice(1) : t;
+  const meio = (Number(pecas) || 0) > 1
+    ? " Suas peças estão separadas aqui na loja esperando por você."
+    : " Sua peça está separada aqui na loja esperando por você.";
+  return oi + meio + " Quando fica bom passar?";
 }
 
 /** Link wa.me pronto, ou null sem telefone que dê para usar. */
-export function linkDoAviso(telefone: string | null | undefined, nome: string | null | undefined, peca: string | null | undefined): string | null {
-  return linkDoWhatsapp(telefone, textoDoLembrete(nome, peca));
+export function linkDoAviso(telefone: string | null | undefined, nome: string | null | undefined, pecas: number): string | null {
+  return linkDoWhatsapp(telefone, textoDoLembrete(nome, pecas));
 }
 
 /** Situação para o selo (cor). */
