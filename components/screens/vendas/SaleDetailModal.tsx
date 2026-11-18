@@ -26,9 +26,14 @@ import { Nfe55Wizard } from "@/components/nfe55/Nfe55Wizard";
 import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
 import { nfe55Api } from "@/services/nfe55Api";
 import { AcoesDeEventosNfe } from "@/components/nfe55/EventosNfe";
+// 17/11/2026: "Trocar por NF-e" na venda com NFC-e autorizada.
+import { TrocarPorNfe } from "@/components/nfe55/TrocarPorNfe";
 import {
   brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
 } from "./editarVendaUtils";
+// 17/11/2026 (b-troca-prazo-nfce): a nota no cancelar venda.
+import { prazoDaNota } from "@/utils/prazoNfce";
+import { TEXTOS_PRAZO_NFCE } from "@/constants/textosPrazoNfce";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -58,6 +63,20 @@ import {
 //   - sem cor fixa: o laranja #fb923c e o #fbbf24 viraram Colors.amber;
 //   - ícones de verdade: fechar é Icon x; recibo, nota e 2ª via têm ícone
 //     próprio (antes tudo era "info").
+//
+// 17/11/2026 (b-troca-prazo-nfce) — cancelar venda com nota autorizada:
+//   - dentro do prazo da UF (30 min na NFC-e de SP, AP, RJ e MG; 24 h na
+//     NF-e): a confirmação oferece "Cancelar a nota junto" (marcado, a
+//     lojista pode desmarcar). O backend cancela na SEFAZ depois de cancelar
+//     a venda e conta o resultado em result.nota;
+//   - fora do prazo: aviso gentil com o caminho (devolução no Caixa, que
+//     emite a NF-e de devolução). Cancelar só a venda continua liberado.
+//   Textos novos em constants/textosPrazoNfce.ts.
+//
+// 17/11/2026 — "Trocar por NF-e" (card aprovado pelo Caio): abaixo da NFC-e
+// autorizada da venda comum, dentro do prazo de cancelamento, cancela a
+// NFC-e (com confirmação) e abre o assistente da NF-e da mesma venda, na
+// loja da venda. Fora do prazo, uma explicação gentil. Ver TrocarPorNfe.tsx.
 // ============================================================
 
 const FISCAL_STATUS_LABELS: Record<string, string> = {
@@ -106,6 +125,8 @@ export function SaleDetailModal({
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // 17/11/2026: "Cancelar a nota junto" (só aparece dentro do prazo).
+  const [cancelarNotaJunto, setCancelarNotaJunto] = useState(true);
   const [editando, setEditando] = useState(false);
   const [printingReceipt, setPrintingReceipt] = useState(false);
   const [showDevolucao, setShowDevolucao] = useState(false);
@@ -130,9 +151,19 @@ export function SaleDetailModal({
   async function handleConfirmCancel() {
     if (!saleId) return;
     try {
-      const result = await cancelSale({ saleId: saleId, reason: cancelReason.trim() });
+      const result = await cancelSale({
+        saleId: saleId, reason: cancelReason.trim(),
+        cancelarNota: !!(prazoDaNotaDaVenda && prazoDaNotaDaVenda.dentro && cancelarNotaJunto),
+      });
       // 16/09/2026: devolução cancelada é desfeita no backend (#718).
       toast.success(mensagemCancelamento(result as any));
+      // 17/11/2026: o que aconteceu com a nota (texto vem do backend).
+      const nota = (result as any)?.nota;
+      if (nota && nota.mensagem) {
+        if (nota.situacao === "cancelada") toast.success(nota.mensagem);
+        else if (nota.situacao === "nao_cancelada") toast.error(nota.mensagem);
+        else toast.info(nota.mensagem);
+      }
       const warns = (result as any)?.fiscal_warnings;
       if ((result as any)?.type === "troca" && Array.isArray(warns) && warns.length) {
         toast.error("Atenção fiscal: " + warns[0]);
@@ -313,6 +344,9 @@ export function SaleDetailModal({
   const fiscalEnabled = !!((nfceCfg as any)?.config?.is_active);
   const fiscalAmbiente = (nfceCfg as any)?.config?.ambiente || null;
   const fiscalHomolog = fiscalEnabled && fiscalAmbiente === "homologacao";
+  // 17/11/2026: nota autorizada da venda comum e o prazo dela para cancelar.
+  const notaDaVendaComum = !isTroca && !isDevolucao && !isCancelled ? authorizedEmission : null;
+  const prazoDaNotaDaVenda = notaDaVendaComum ? prazoDaNota(notaDaVendaComum as any) : null;
 
   const titulo = isTroca ? "Detalhes da troca" : isDevolucao ? "Detalhes da devolução"
     : (sale?.sale_number ? "Venda #" + sale.sale_number : "Detalhes da venda");
@@ -576,6 +610,11 @@ export function SaleDetailModal({
                       onPress={function() { handlePrint2Via(authorizedEmission.id); }} />
                   )}
                 </View>
+                {/* 17/11/2026: "Trocar por NF-e" (NFC-e da venda comum; o backend diz se pode). */}
+                {!isTroca && authorizedEmission.tipo === "nfce" && fiscalEnabled && effectiveCompanyId && saleId ? (
+                  <TrocarPorNfe companyId={effectiveCompanyId} saleId={saleId} nfceId={authorizedEmission.id}
+                    onCancelada={function() { setNfeAberta(true); if (saleDetail.refetch) saleDetail.refetch(); }} />
+                ) : null}
                 {/* CP5 (14/11/2026): prazo à vista, carta de correção e cancelar da NF-e de venda. */}
                 {nfeDeVenda && effectiveCompanyId ? (
                   <AcoesDeEventosNfe companyId={effectiveCompanyId} nota={authorizedEmission as any}
@@ -652,7 +691,7 @@ export function SaleDetailModal({
           )}
           <View style={s.footerMain}>
             {!isCancelled ? (
-              <Pressable onPress={function() { setConfirmCancel(true); }} disabled={isCancelling} style={s.cancelLink} testID="venda-cancelar" accessibilityRole="button">
+              <Pressable onPress={function() { setCancelarNotaJunto(true); setConfirmCancel(true); }} disabled={isCancelling} style={s.cancelLink} testID="venda-cancelar" accessibilityRole="button">
                 <Text style={s.cancelLinkTxt}>{cancelLabel}</Text>
               </Pressable>
             ) : <View />}
@@ -676,6 +715,36 @@ export function SaleDetailModal({
               ? "A peça devolvida sai de novo do estoque e o valor volta a ser dívida do cliente, nas mesmas parcelas de antes."
               : "Os " + items.length + " produto(s) voltam para o estoque e o valor sai da receita. Não dá para desfazer."}
           </Text>
+          {/* 17/11/2026 (b-troca-prazo-nfce): a nota da venda. */}
+          {notaDaVendaComum && prazoDaNotaDaVenda && prazoDaNotaDaVenda.dentro && (
+            <View style={s.notaBox} testID="venda-cancelar-nota-dentro">
+              <Text style={s.notaTitle}>{TEXTOS_PRAZO_NFCE.cancelarNotaTitulo(prazoDaNotaDaVenda.rotulo, notaDaVendaComum.numero)}</Text>
+              <Text style={s.notaText}>{TEXTOS_PRAZO_NFCE.cancelarNotaDentro(prazoDaNotaDaVenda.rotulo, prazoDaNotaDaVenda.ate)}</Text>
+              <Pressable
+                testID="venda-cancelar-nota-junto"
+                style={s.notaCheckRow}
+                onPress={function() { setCancelarNotaJunto(function(v) { return !v; }); }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: cancelarNotaJunto }}
+                accessibilityLabel={TEXTOS_PRAZO_NFCE.cancelarNotaOpcao}
+                disabled={isCancelling}
+              >
+                <View style={[s.notaCheckBox, cancelarNotaJunto && s.notaCheckBoxOn]}>
+                  {cancelarNotaJunto && <Icon name="check" size={13} color="#fff" />}
+                </View>
+                <Text style={s.notaCheckTxt}>{TEXTOS_PRAZO_NFCE.cancelarNotaOpcao}</Text>
+              </Pressable>
+            </View>
+          )}
+          {notaDaVendaComum && prazoDaNotaDaVenda && !prazoDaNotaDaVenda.dentro && (
+            <View style={[s.notaBox, s.notaBoxAmber]} testID="venda-cancelar-nota-fora">
+              <Text style={s.notaTitle}>{TEXTOS_PRAZO_NFCE.notaForaDoPrazoTitulo(prazoDaNotaDaVenda.rotulo, notaDaVendaComum.numero)}</Text>
+              <Text style={s.notaText}>{TEXTOS_PRAZO_NFCE.notaForaDoPrazo(prazoDaNotaDaVenda.rotulo, prazoDaNotaDaVenda.minutos)}</Text>
+              <Button testID="venda-ir-devolucao" title={TEXTOS_PRAZO_NFCE.irParaDevolucao} icon="repeat" size="sm" variant="secondary"
+                style={{ alignSelf: "flex-start", marginTop: 8 }}
+                onPress={function() { setConfirmCancel(false); onClose(); router.push(ROTA_TROCA_PDV as any); }} />
+            </View>
+          )}
           <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
           <TextInput
             style={s.confirmInput}
@@ -688,7 +757,9 @@ export function SaleDetailModal({
           />
           <View style={s.confirmActions}>
             <Button title="Voltar" variant="ghost" full disabled={isCancelling} onPress={function() { setConfirmCancel(false); setCancelReason(""); }} />
-            <Button title={isTroca ? "Sim, cancelar troca" : isDevolucao ? "Sim, desfazer" : "Sim, cancelar venda"} variant="danger" full loading={isCancelling} onPress={handleConfirmCancel} />
+            <Button testID="venda-cancelar-confirmar" title={isTroca ? "Sim, cancelar troca" : isDevolucao ? "Sim, desfazer"
+              : prazoDaNotaDaVenda ? (prazoDaNotaDaVenda.dentro && cancelarNotaJunto ? TEXTOS_PRAZO_NFCE.botaoCancelarVendaENota : TEXTOS_PRAZO_NFCE.botaoCancelarSoVenda)
+              : "Sim, cancelar venda"} variant="danger" full loading={isCancelling} onPress={handleConfirmCancel} />
           </View>
         </View>
       </ResponsiveSheet>
@@ -834,6 +905,14 @@ const s = StyleSheet.create({
   confirmFieldLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 },
   confirmInput: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, minHeight: 60, textAlignVertical: "top", marginBottom: 14 },
   confirmActions: { flexDirection: "row", gap: 8 },
+  notaBox: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
+  notaBoxAmber: { backgroundColor: Colors.amberD, borderColor: Colors.amber },
+  notaTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700", marginBottom: 4 },
+  notaText: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
+  notaCheckRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10, minHeight: 40 },
+  notaCheckBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg3 },
+  notaCheckBoxOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  notaCheckTxt: { fontSize: 13, color: Colors.ink, fontWeight: "600", flexShrink: 1 },
 });
 
 export default SaleDetailModal;

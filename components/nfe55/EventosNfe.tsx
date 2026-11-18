@@ -1,8 +1,15 @@
 // ============================================================
 // AURA. — Cancelar e corrigir texto da NF-e 55 (CP5, 14/11/2026).
 // Mockup aprovado P9huGndnYF4tSPPXTykpdf, tela "Notas · cancelar /
-// corrigir". Diálogos dentro do app (nada de window.confirm), no WebPortal
-// na web; botões de 44 px, sem hover.
+// corrigir". Diálogos dentro do app (nada de window.confirm), numa
+// JanelaEmpilhada; botões de 44 px, sem hover.
+//
+// 17/11/2026 (mesmo defeito do INC-2026-11-17-01): os diálogos abrem de
+// dentro do detalhe da venda (Vendas), que é um ResponsiveSheet, ou seja,
+// um Modal do react-native-web. No WebPortal eles ficavam fora da armadilha
+// de foco desse Modal: cada clique no campo do motivo (ou do texto da carta)
+// devolvia o foco para a janela de baixo e não dava para digitar. A
+// JanelaEmpilhada entra na pilha de Modais e fica com a armadilha de foco.
 //
 //   AcoesDeEventosNfe   o prazo à vista ("Pode cancelar até amanhã, 15:51
 //                       (faltam 23 h)"), "Corrigir texto" e "Cancelar".
@@ -15,7 +22,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
-import { WebPortal } from "@/components/WebPortal";
+import { JanelaEmpilhada } from "@/components/JanelaEmpilhada";
 import { toast } from "@/components/Toast";
 import { nfe55Api } from "@/services/nfe55Api";
 import {
@@ -30,12 +37,12 @@ function erroHumano(e: any, padrao: string): string {
 
 function Moldura({ children, onFechar, testID }: { children: React.ReactNode; onFechar: () => void; testID: string }) {
   return (
-    <WebPortal active>
+    <JanelaEmpilhada onRequestClose={onFechar}>
       <View style={d.overlay} testID={testID}>
         <Pressable style={d.backdrop} onPress={onFechar} accessibilityLabel="Fechar" />
         <View style={d.card}>{children}</View>
       </View>
-    </WebPortal>
+    </JanelaEmpilhada>
   );
 }
 
