@@ -103,6 +103,7 @@ import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
 import { rotuloDaComanda } from "@/utils/comanda";
+import { GuardarMenu } from "./GuardarMenu";
 import { contarProdutosDoCarrinho } from "@/utils/contarProdutosDoCarrinho";
 import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
 import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
@@ -237,6 +238,14 @@ type Props = {
    *  entrega" no resumo e, com valor, a linha "Frete" entre Desconto e
    *  Total. null/ausente (chave desligada) = carrinho de sempre. */
   frete?: (FreteProps & { open: boolean; onToggle: () => void }) | null;
+  /** 17/11/2026 (Pedido separado de venda, A1). Com ele o botão do meio vira
+   *  "Guardar" com o menu Pedido / Orçamento (GuardarMenu); o Orçamento faz
+   *  o mesmo de antes. Com a Comanda ligada, "Comandas (N)" sobe para a
+   *  linha de atalhos, como na loja Matcon (pendência 2 do mockup).
+   *  null/ausente (trava PEDIDO_LIBERADO desligada, sem o módulo
+   *  vendas.pedidos, consolidado, demonstração) = rodapé de sempre, botão a
+   *  botão (__tests__/components/CartPanelRodapeIgual.test.tsx). */
+  pedido?: { onNovoPedido: () => void } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
   discountType?: "%" | "R$";
@@ -307,7 +316,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
     onScan,
-    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete, pedido,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     discountConfirm, discountPending,
@@ -331,8 +340,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   // "Orçamento" fica no rodapé e o "Comandas (N)" vira o atalho da linha
   // de "Adicionar à comanda" (abre o mesmo painel). Sem Matcon, o rodapé
   // das comandas continua o de 09/10: "Comandas" no lugar do "Orçamento".
-  const comandasNoRodape = !!comanda && !matcon.matcon_enabled;
-  const comandasNoAtalho = !!comanda && matcon.matcon_enabled;
+  // 17/11/2026 (Pedido, pendência 2): com o "Guardar" no rodapé a Comanda
+  // faz como no Matcon — "Comandas (N)" vai para o atalho. Sem o Pedido
+  // (pedido nulo) as duas contas são as de antes.
+  const comandasNoRodape = !!comanda && !matcon.matcon_enabled && !pedido;
+  const comandasNoAtalho = !!comanda && (matcon.matcon_enabled || !!pedido);
   const showCpfInput = onCpfNaNotaChange !== undefined;
   const splitAvailable = onToggleSplit !== undefined; // fica off quando o pai não wireou
   const splitOn = !!splitMode && splitAvailable;
@@ -946,7 +958,21 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           // abre o painel das abertas; sem nenhuma aberta, sem contagem.
           // 27/10: só SEM Matcon (comandasNoRodape) — com Matcon o
           // "Orçamento" fica e as comandas vão para o atalho lá em cima.
-          const quoteBtn = comandasNoRodape && comanda ? (
+          // 17/11/2026 (Pedido, A1): o "Guardar" abre Pedido / Orçamento. O
+          // Orçamento chama a MESMA ação do botão de antes (salvar no Matcon
+          // ou imprimir). Editando um orçamento do Matcon o botão continua
+          // "Salvar orçamento" direto: ali o carrinho já é o orçamento.
+          const acaoDoOrcamento = quoteSaveMode ? (onSaveQuote || null) : (showOrcamento && onGenerateQuote ? onGenerateQuote : null);
+          const quoteBtn = pedido && !(quoteSaveMode && editingQuote) ? (
+            <GuardarMenu
+              onPedido={pedido.onNovoPedido}
+              onOrcamento={acaoDoOrcamento}
+              disabled={items.length === 0 || !!isProcessing}
+              busy={quoteSaveMode && !!savingQuote}
+              style={s.ctaAlt}
+              textStyle={s.ctaAltTxt}
+            />
+          ) : comandasNoRodape && comanda ? (
             <Pressable
               testID="cta-comandas"
               onPress={comanda.onList}
