@@ -16,7 +16,15 @@
 // Funções puras, sem import de componente nem de store — é o que permite
 // testar (ver memória "testar render no aura-app": Icon e stores/auth não
 // carregam no Jest).
+//
+// 18/11/2026 (INC-2026-11-18-02): serviço (unit "srv") nasce com saldo 0 e
+// nunca tem estoque. Ele sumia do Caixa (só com "Mostrar zerados"), contava
+// como zerado e travava no "Estoque insuficiente". Regra: serviço nunca é
+// escondido nem barrado por saldo. Só o TIPO conta (ehUnidadeServico): item
+// que sai em NFS-e com unidade de mercadoria segue controlando estoque.
 // ============================================================
+
+import { ehUnidadeServico } from "@/utils/notaDoItem";
 
 type ComAChave = { allow_sale_without_stock?: unknown } | null | undefined;
 
@@ -31,8 +39,17 @@ function saldoDe(p: any): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Produto com variantes sempre conta como "em estoque": o saldo está na variante. */
+/** O item controla saldo? Serviço (unit "srv") não: nunca é barrado nem escondido. */
+export function controlaEstoque(p: any): boolean {
+  return !ehUnidadeServico(p?.unit);
+}
+
+/**
+ * Produto com variantes sempre conta como "em estoque": o saldo está na variante.
+ * Serviço também: não tem saldo.
+ */
 export function produtoTemEstoque(p: any): boolean {
+  if (!controlaEstoque(p)) return true;
   if (p?.has_variants === true) return true;
   return saldoDe(p) > 0;
 }
