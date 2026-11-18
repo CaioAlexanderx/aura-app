@@ -44,6 +44,33 @@ export type DuplicataImport = {
 
 export type ErroImport = { index: number; error: string; row?: Record<string, string> };
 
+// b-import-grade (17/11/2026): linhas do mesmo SKU (ou do mesmo nome, sem
+// SKU) com cores/tamanhos diferentes viram UM produto com variações. O
+// backend manda o resumo só quando há grade.
+export type ModeloDaGrade = {
+  nome: string;
+  sku?: string | null;
+  categoria?: string | null;
+  preco?: number | null;
+  estoque?: number;
+  variacoes: number;
+  cores?: string[];
+  tamanhos?: string[];
+  /** índices em rows */
+  linhas?: number[];
+};
+
+export type AvisoGradeImport = {
+  tipo: "preco_diferente" | "custo_diferente" | "categoria_diferente" | "nome_diferente"
+    | "combinacao_repetida" | "cor_sem_amostra" | "codigo_repetido" | string;
+  modelo?: string;
+  sku?: string | null;
+  linhas?: number[];
+  mensagem: string;
+};
+
+export type LimitePlanoImport = { limite: number; atual: number; a_importar: number; disponivel: number };
+
 export type ProdutoDaPrevia = {
   name: string;
   price: number | null;
@@ -63,6 +90,10 @@ export type RespostaImport = {
   duplicate_count?: number;
   duplicatas?: DuplicataImport[];
   unidades_desconhecidas?: { total?: number; valores?: string[] } | null;
+  grade?: { modelos: number; variacoes: number; linhas?: number; itens?: ModeloDaGrade[] } | null;
+  avisos_grade?: AvisoGradeImport[];
+  /** Só quando a planilha passa do limite de produtos do plano. */
+  limite_plano?: LimitePlanoImport | null;
   /** Só na importação de verdade. */
   saved?: number;
   duplicates_skipped?: number;
@@ -88,6 +119,9 @@ export type ContextoLeitura = {
 export type ColunaReconhecida = { coluna: string; campo: string; rotulo: string };
 export type AmostraProduto = { linha: number | null; nome: string; preco: string; precoCartao: string | null; unidade: string; marca: string | null };
 export type LinhaForaDaImportacao = { linha: number; nome: string; motivo: string };
+export type ModeloNaPrevia = { nome: string; variacoes: number; detalhe: string; linhas: string };
+export type AvisoNaPrevia = { mensagem: string; linhas: string };
+export type ResumoGrade = { modelos: number; variacoes: number; itens: ModeloNaPrevia[]; avisos: AvisoNaPrevia[] };
 
 export type ResumoImport = {
   aba: string | null;
@@ -107,6 +141,10 @@ export type ResumoImport = {
   /** suggested_map do backend, mandado de volta no import de verdade para
    *  gravar exatamente o que a prévia mostrou. */
   mapaColunas: Record<string, string>;
+  /** Produtos com grade ("N modelos com M variações"). Ausente sem grade. */
+  grade?: ResumoGrade | null;
+  /** A planilha passa do limite de produtos do plano: nada pode ser gravado. */
+  limitePlano?: LimitePlanoImport | null;
 };
 
 export type ResultadoImport = {
@@ -117,6 +155,7 @@ export type ResultadoImport = {
   problemas: LinhaForaDaImportacao[];
   unidadesDesconhecidas: { total: number; valores: string[] };
   precoCartaoIgnorado: boolean;
+  grade?: { modelos: number; variacoes: number } | null;
 };
 
 // ── Campos do backend -> português de balcão ──
@@ -244,6 +283,46 @@ function listasFora(resp: RespostaImport, ctx: ContextoLeitura, mapa: Record<str
   return { problemas, repetidasNaPlanilha, jaExistem };
 }
 
+/** Índices (em rows) -> "linha 4" / "linhas 4 a 6" / "linhas 4, 7 e 9". */
+export function textoDasLinhas(indices: number[] | undefined, ctx: ContextoLeitura): string {
+  const ls = [...new Set((indices || []).map(i => linhaDoArquivo(i, ctx.linhas, ctx.linhaCabecalho)))].sort((a, b) => a - b);
+  if (ls.length === 0) return "";
+  if (ls.length === 1) return `linha ${ls[0]}`;
+  const seguidas = ls.every((l, i) => i === 0 || l === ls[i - 1] + 1);
+  if (seguidas) return `linhas ${ls[0]} a ${ls[ls.length - 1]}`;
+  if (ls.length > 6) return `linhas ${ls.slice(0, 5).join(", ")} e mais ${ls.length - 5}`;
+  return `linhas ${ls.slice(0, -1).join(", ")} e ${ls[ls.length - 1]}`;
+}
+
+function gradeDe(resp: RespostaImport, ctx: ContextoLeitura): ResumoGrade | null {
+  const g = resp.grade;
+  const avisos = Array.isArray(resp.avisos_grade) ? resp.avisos_grade : [];
+  if (!g && avisos.length === 0) return null;
+  const itens: ModeloNaPrevia[] = (Array.isArray(g?.itens) ? g!.itens! : []).map(m => {
+    const partes: string[] = [];
+    if (m.cores && m.cores.length) partes.push(m.cores.length === 1 ? `cor ${m.cores[0]}` : `cores ${m.cores.join(", ")}`);
+    if (m.tamanhos && m.tamanhos.length) partes.push(m.tamanhos.length === 1 ? `tamanho ${m.tamanhos[0]}` : `tamanhos ${m.tamanhos.join(", ")}`);
+    if (typeof m.estoque === "number") partes.push(plural(m.estoque, "peça", "peças"));
+    return {
+      nome: String(m.nome || "").trim() || "(sem nome)",
+      variacoes: Number(m.variacoes) || 0,
+      detalhe: partes.join(" · "),
+      linhas: textoDasLinhas(m.linhas, ctx),
+    };
+  });
+  return {
+    modelos: Number(g?.modelos) || 0,
+    variacoes: Number(g?.variacoes) || 0,
+    itens,
+    avisos: avisos.map(a => ({ mensagem: String(a.mensagem || ""), linhas: textoDasLinhas(a.linhas, ctx) })),
+  };
+}
+
+/** Título do bloco da grade: "3 modelos com 14 variações". */
+export function tituloDaGrade(g: { modelos: number; variacoes: number }): string {
+  return `${plural(g.modelos, "modelo", "modelos")} com ${plural(g.variacoes, "variação", "variações")}`;
+}
+
 function unidadesDe(resp: RespostaImport) {
   const u = resp.unidades_desconhecidas;
   const valores = Array.isArray(u?.valores) ? u!.valores!.map(String) : [];
@@ -315,6 +394,8 @@ export function montarResumoImport(resp: RespostaImport, ctx: ContextoLeitura): 
     problemas,
     unidadesDesconhecidas: unidadesDe(resp),
     mapaColunas: mapa,
+    grade: gradeDe(resp, ctx),
+    limitePlano: resp.limite_plano && typeof resp.limite_plano === "object" ? resp.limite_plano : null,
   };
 }
 
@@ -333,6 +414,9 @@ export function montarResultadoImport(resp: RespostaImport, previa: ResumoImport
     problemas: errosCompletos || !Array.isArray(resp.errors) ? previa.problemas : listas.problemas,
     unidadesDesconhecidas: resp.unidades_desconhecidas ? unidadesDe(resp) : previa.unidadesDesconhecidas,
     precoCartaoIgnorado: resp.card_price_ignorado === true,
+    grade: resp.grade && Number(resp.grade.modelos) > 0
+      ? { modelos: Number(resp.grade.modelos) || 0, variacoes: Number(resp.grade.variacoes) || 0 }
+      : null,
   };
 }
 

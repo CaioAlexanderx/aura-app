@@ -9,6 +9,8 @@
 //   GET   /companies/:id/pedidos/:oid       detalhe com itens, sinal e falta
 //   PATCH /companies/:id/pedidos/:oid/status  "Separar" (preparing) e
 //                                           "Pronto" (ready), só para a frente
+//   PATCH /companies/:id/pedidos/:oid/data    "Nova data" (Aura-backend#1077):
+//                                           { promised_date }, só pedido aberto
 //
 // Multi-CNPJ: no consolidado a lista vem de /me/pedidos (todas as lojas que
 // a pessoa vê, números somados). O detalhe e as ações vão sempre para a loja
@@ -144,6 +146,11 @@ export const pedidosApi = {
       method: "PATCH",
       body: { status },
     }),
+  mudarData: (cid: string, oid: string, promised_date: string | null) =>
+    request<{ order: DetalheDoPedido; ja_estava?: boolean }>(`/companies/${cid}/pedidos/${oid}/data`, {
+      method: "PATCH",
+      body: { promised_date },
+    }),
 };
 
 /**
@@ -243,4 +250,34 @@ export function useMudarSituacaoDoPedido() {
     },
   });
   return { mudarSituacao: m.mutateAsync, mudando: m.isPending, emQual: m.isPending ? m.variables : null };
+}
+
+/**
+ * "Nova data". Atualiza a lista (o atrasado sai do topo quando a data nova é
+ * futura: a ordem vem do backend) e o detalhe. Só depois de gravar: no erro
+ * o diálogo fica aberto com o que a pessoa escolheu.
+ */
+export function useMudarDataDoPedido() {
+  const qc = useQueryClient();
+  const m = useMutation({
+    mutationFn: function(v: { companyId: string; orderId: string; promised_date: string | null }) {
+      return pedidosApi.mudarData(v.companyId, v.orderId, v.promised_date);
+    },
+    onSuccess: function(_d, v) {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["pedido-detalhe", v.companyId, v.orderId] });
+    },
+    // Recusa do servidor (409: o pedido foi concluído ou cancelado enquanto
+    // isso): a lista e o detalhe se atualizam. Sem resposta (rede), nada é
+    // recarregado: uma lista que falha poderia tirar a linha (e o diálogo)
+    // da tela.
+    onError: function(err: any, v) {
+      const st = Number(err && err.status);
+      if (st >= 400 && st < 500) {
+        qc.invalidateQueries({ queryKey: ["pedidos"] });
+        qc.invalidateQueries({ queryKey: ["pedido-detalhe", v.companyId, v.orderId] });
+      }
+    },
+  });
+  return { mudarData: m.mutateAsync, salvando: m.isPending };
 }
