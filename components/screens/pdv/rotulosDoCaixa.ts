@@ -13,6 +13,8 @@ export const NOME_DO_PAGAMENTO: Record<string, string> = {
   debito: "Débito",
   cartao: "Crédito",
   crediario: "Crediário",
+  // INC-2026-11-17-03: o crédito da cliente abatido na venda.
+  credito_cliente: "Crédito da cliente",
 };
 
 export function nomeDoPagamento(key: string | null | undefined): string {

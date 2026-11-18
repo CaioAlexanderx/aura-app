@@ -68,6 +68,7 @@ import { copyText } from "@/utils/clipboard";
 import { pluralize } from "@/utils/plural";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
+import { METODO_CREDITO, TEXTOS_DO_CREDITO } from "./creditoDaCliente";
 import { type NfceActionsItem } from "./NfceActions";
 import { NotaDeProdutosDaVenda } from "@/components/nfe55/NotaDeProdutosDaVenda";
 import { OsActions } from "./OsActions";
@@ -101,6 +102,8 @@ import {
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 function paymentLabel(key: string): string {
+  // INC-2026-11-17-03: o crédito da cliente usado na venda.
+  if (key === METODO_CREDITO) return TEXTOS_DO_CREDITO.forma;
   return PAYMENTS.find(p => p.key === key)?.label || key;
 }
 
