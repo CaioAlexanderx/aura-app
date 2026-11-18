@@ -404,7 +404,12 @@ export type RefundResult = {
   credit_generated: number;
   new_balance: number;
   stock_restored: Array<{ product_id: string; variant_id: string | null; quantity: number }>;
+  /** 18/11/2026 (Aura-backend#1081): parte da venda paga fora do crediário
+   *  (dinheiro, Pix, cartão). A devolução não devolve nem vira crédito; só
+   *  vem quando há. Backend antigo: ausente. */
+  pago_fora_do_crediario?: number;
 };
+
 
 // ─── Unify (13/06/2026): Unificação de carnê existente + nova compra ──────
 /**
