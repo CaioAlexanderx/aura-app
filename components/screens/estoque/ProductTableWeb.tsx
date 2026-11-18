@@ -29,6 +29,7 @@ import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
 import { ReservaNaLinha } from "./ReservaNaLinha";
 import { reservadoDoProduto } from "@/utils/reservaDoPedido";
+import { SeloDaLoja } from "./FiltroDeLoja";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -53,9 +54,11 @@ type Props = {
   emiteNfse?: boolean;
   // 17/11/2026 (Pedido, A4): trava do Pedido. Sem ela, a coluna de sempre.
   reservaLiberada?: boolean;
+  // 18/11/2026 (INC-2026-11-18-01): loja dona no grupo. Ausente = sem selo.
+  nomeDaLojaDe?: (p: Product) => string | null;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false, nomeDaLojaDe }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -178,6 +181,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                             border: "1px solid rgba(251,191,36,0.35)",
                           } as any}>{SELO_FALTA_NFSE}</span>
                         )}
+                        {nomeDaLojaDe ? <SeloDaLoja nome={nomeDaLojaDe(p)} testID={"estoque-loja-do-" + p.id} /> : null}
                       </div>
                       {p.brand && (
                         <div style={{ fontSize: 11, color: C.ink3, marginTop: 2 } as any}>{p.brand}</div>
