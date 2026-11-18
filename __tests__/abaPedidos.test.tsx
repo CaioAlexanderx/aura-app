@@ -22,7 +22,12 @@ jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a) } }));
 jest.mock("@/hooks/usePedidos", () => ({
   usePedidos: (...a: any[]) => { mockUsePedidos(...a); return mockResposta; },
+  // A5b: ações e gaveta (testadas em pedidosGaveta.test.tsx).
+  useMudarSituacaoDoPedido: () => ({ mudarSituacao: jest.fn(), mudando: false, emQual: null }),
+  usePedidoDetalhe: () => ({ pedido: null, isLoading: false, error: null, refetch: jest.fn() }),
 }));
+jest.mock("@/components/Toast", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
+jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null) }));
 jest.mock("react-native", () => {
   const rn = jest.requireActual("react-native");
   return new Proxy(rn, {
