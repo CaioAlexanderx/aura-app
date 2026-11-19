@@ -40,7 +40,7 @@ import { Icon } from "@/components/Icon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { isFractionalUnit, parseQtyInput, fmtQty } from "@/utils/matconUnits";
-import { restockDeDevolucao, creditoDaDevolucao, fraseCaixaFechada, fraseCaixaAberta } from "./devolucaoUtil";
+import { restockDeDevolucao, creditoDaDevolucao, fraseCaixaFechada, fraseCaixaAberta, valorUnitDevolvido } from "./devolucaoUtil";
 import type { SelectedSaleRow, ReturnEntry } from "./types";
 import { fmtBRL } from "./types";
 import { isPedidoOnline } from "./pedidoOnline";
@@ -167,6 +167,8 @@ export function Step2Returns({
         // 04/08/2026: passthrough — necessário pro cálculo de desconto
         // por item (effectiveUnitPrice) quando o backend enviar o campo.
         total_price: (item as any).total_price,
+        // 19/11/2026 (INC-2026-11-19-01): o que a cliente pagou por unidade.
+        valor_pago_unit: (item as any).valor_pago_unit,
         // 22/09/2026 (M4): passthrough — lote de origem + unidade/fator de
         // compra do produto, usados pelo campo decimal e por
         // restockDeDevolucao logo abaixo. Undefined em venda sem Matcon.
@@ -211,6 +213,8 @@ export function Step2Returns({
             unit_price: item.unit_price,
             // 04/08/2026: passthrough — ver setQty acima.
             total_price: (item as any).total_price,
+            // 19/11/2026 (INC-2026-11-19-01): o que a cliente pagou por unidade.
+            valor_pago_unit: (item as any).valor_pago_unit,
             // 22/09/2026 (M4): passthrough — ver setQty acima.
             lot_code: (item as any).lot_code ?? null,
             lot_id: (item as any).lot_id ?? null,
@@ -244,9 +248,9 @@ export function Step2Returns({
     const factor = e.item.purchase_factor;
     if (matcon.matcon_enabled && isFractionalUnit(e.item.unit) && factor) {
       const { restockQty } = restockDeDevolucao(e.returnQty, factor);
-      return creditoDaDevolucao(restockQty, Number(e.item.unit_price));
+      return creditoDaDevolucao(restockQty, valorUnitDevolvido(e.item, Number(e.item.unit_price)));
     }
-    return e.returnQty * Number(e.item.unit_price);
+    return e.returnQty * valorUnitDevolvido(e.item, Number(e.item.unit_price));
   }
 
   const filterQ = filter.trim().toLowerCase();
@@ -367,7 +371,7 @@ export function Step2Returns({
                               </Text>
                               <View style={s.itemMetaRow}>
                                 <Text style={s.itemMeta}>
-                                  {fmtBRL(Number(item.unit_price))} · qtd. orig.: {isFrac ? fmtQty(maxQty, itemUnit || "") : maxQty}
+                                  {fmtBRL(valorUnitDevolvido(item, Number(item.unit_price)))} · qtd. orig.: {isFrac ? fmtQty(maxQty, itemUnit || "") : maxQty}
                                   {lotCode ? ` · lote ${lotCode}` : ""}
                                 </Text>
                                 {hasPrev && (
@@ -423,7 +427,7 @@ export function Step2Returns({
                                   restockQty: restock.restockQty,
                                   unit: itemUnit || "",
                                   lotCode,
-                                  credito: creditoDaDevolucao(restock.restockQty, Number(item.unit_price)),
+                                  credito: creditoDaDevolucao(restock.restockQty, valorUnitDevolvido(item, Number(item.unit_price))),
                                 })}
                               </Text>
                             </View>

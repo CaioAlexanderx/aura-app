@@ -59,6 +59,7 @@ import type {
   PaymentMethod, RefundMethod,
 } from "./types";
 import { fmtBRL } from "./types";
+import { valorUnitDevolvido } from "./devolucaoUtil";
 import { estrategiaDaVenda, minutosDoPrazoDaTroca } from "@/utils/prazoNfce";
 import { TEXTOS_PRAZO_NFCE } from "@/constants/textosPrazoNfce";
 
@@ -499,7 +500,7 @@ export function Step4Confirm({
                   <Text style={s.summaryRowLabel} numberOfLines={1}>
                     {e.returnQty}x {e.item.product_name_snapshot || (e.item as any).product_name}
                   </Text>
-                  <Text style={s.summaryRowValue}>{fmtBRL(e.returnQty * Number(e.item.unit_price))}</Text>
+                  <Text style={s.summaryRowValue}>{fmtBRL(e.returnQty * valorUnitDevolvido(e.item, Number(e.item.unit_price)))}</Text>
                 </View>
               ))}
             </>
