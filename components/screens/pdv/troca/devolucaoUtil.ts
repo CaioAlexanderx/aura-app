@@ -66,6 +66,23 @@ export function creditoDaDevolucao(restockQty: number, unitPrice: number): numbe
   return round2((Number(restockQty) || 0) * (Number(unitPrice) || 0));
 }
 
+// 19/11/2026 (INC-2026-11-19-01): o item devolvido vale o que a cliente
+// PAGOU por unidade — o backend calcula e manda em `valor_pago_unit` na busca
+// da troca (total da linha com o desconto do item, menos a parte do desconto
+// da venda inteira, a mesma regra que o POST /pdv/troca grava). Antes a tela
+// usava o preço de tabela: blusa de R$ 79,90 com R$ 25,00 de desconto na
+// venda aparecia (e virava crédito) como R$ 79,90 em vez de R$ 54,90.
+// Backend antigo (sem o campo): `fallback`, o cálculo que cada tela já fazia.
+export function valorUnitDevolvido(
+  item: { valor_pago_unit?: number | string | null } | null | undefined,
+  fallback: number
+): number {
+  const raw = item ? item.valor_pago_unit : undefined;
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
 // Linha verde — caixa(s) fechada(s) que voltam ao estoque + crédito.
 // "✓ 2 caixas fechadas — 4,64 m² voltam ao estoque, no lote 27B.
 //  Crédito de R$ 254,74." (mockup docs/mockups/matcon-m4-profundidade.html)
