@@ -156,6 +156,9 @@ export type CaixaSessaoHistorico = {
   total_outros:         number | null;
   total_geral:          number | null;
   obs_fechamento:       string | null;
+  /** Retiradas e reforços da sessão (migration 422); ausentes em backend antigo. */
+  total_sangrias?:      number | null;
+  total_suprimentos?:   number | null;
 };
 
 export type CaixaHistoricoResponse = {

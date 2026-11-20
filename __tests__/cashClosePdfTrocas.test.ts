@@ -86,8 +86,8 @@ describe("com troca", () => {
   });
 
   test("o rodapé dos KPIs troca para o texto do mockup", () => {
-    expect(html).toContain("A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não e falta no caixa.");
-    expect(html).not.toContain("Trocas e crediário fazem os dois números diferirem");
+    expect(html).toContain("A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário e venda com data anterior paga nesta sessão também fazem os dois números diferirem — isso não e falta no caixa.");
+    expect(html).not.toContain("Trocas, crediário e venda com data anterior paga nesta sessão fazem os dois números diferirem");
   });
 
   test("a seção das trocas vem depois das formas de pagamento, com os 4 totais", () => {

@@ -829,7 +829,7 @@ function TrocasDoFechamento({ vendas, entradas, trocas, resumo }: {
         </View>
       </View>
       <Text style={s.helpTxt}>
-        A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não é falta no caixa.
+        A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário e venda com data anterior paga nesta sessão também fazem os dois números diferirem — isso não é falta no caixa.
       </Text>
 
       <Text style={[s.sectionTitle, { marginTop: 12 }]} testID="fechamento-trocas">
