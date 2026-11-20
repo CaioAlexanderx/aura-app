@@ -81,7 +81,7 @@ jest.mock("@/services/lojasDoProdutoApi", () => ({
 
 import { ItemFormModal } from "@/components/screens/estoque/ItemFormModal";
 import {
-  campoDeLojas, fraseDoRodape, pedidoDeCopia, idsDasVariantes, linhaDoResultado, rotuloSalvarNasLojas,
+  campoDeLojas, fraseDoRodape, pedidoDeCopia, idsDasVariantes, linhaDoResultado, rotuloSalvarNasLojas, linhasDeFalhaGeral,
 } from "@/components/screens/estoque/item-form/lojasDoCadastro";
 
 const MATRIZ = { company_id: "matriz", nome: "Matriz", ativa: true, regime: "simples", limite: { usados: 1, maximo: null } };
@@ -183,7 +183,7 @@ describe("lojasDoCadastro — regras", () => {
     expect(falta.faltouVariante).toBe(true);
   });
 
-  test("resultado: código em uso não oferece 'Tentar de novo'; o resto sim", () => {
+  test("resultado: código em uso e limite do plano não oferecem 'Tentar de novo'; erro inesperado sim", () => {
     const uso = linhaDoResultado({
       company_id: "filial", nome: "Filial Centro", status: "erro", product_id: null, stock_qty: 0,
       erro: { code: "BARCODE_EM_USO", message: "O código 7891234567895 já está no produto \"Vestido linho bege\" desta loja." },
@@ -191,9 +191,22 @@ describe("lojasDoCadastro — regras", () => {
     expect(uso.podeTentar).toBe(false);
     expect(uso.texto).toContain("Vestido linho bege");
     const limite = linhaDoResultado({ company_id: "filial", nome: "F", status: "erro", product_id: null, stock_qty: 0, erro: { code: "LIMITE_PLANO", message: "" } });
-    expect(limite.podeTentar).toBe(true);
+    expect(limite.podeTentar).toBe(false);
     expect(limite.texto).toBe("Não deu para criar nesta loja. Tente de novo.");
     expect(linhaDoResultado({ company_id: "filial", nome: "F", status: "criado", product_id: "x", stock_qty: 1 }).texto).toBe("Criado com 1 peça");
+    // Contrato (Mudanças de 20/11): código interno em uso, sem acesso e limite também não repetem.
+    ["CODIGO_EM_USO", "SEM_ACESSO", "LIMITE_PLANO", "MESMA_LOJA"].forEach((code) => {
+      expect(linhaDoResultado({ company_id: "f", nome: "F", status: "erro", product_id: null, stock_qty: 0, erro: { code, message: "m" } }).podeTentar).toBe(false);
+    });
+    expect(linhaDoResultado({ company_id: "f", nome: "F", status: "erro", product_id: null, stock_qty: 0, erro: { code: "ERRO_AO_CRIAR", message: "m" } }).podeTentar).toBe(true);
+  });
+
+  test("falha do pedido inteiro: rede repete; recusa com código mostra o texto do servidor e não repete", () => {
+    const lojas = [{ company_id: "filial", nome: "Filial Centro" }];
+    expect(linhasDeFalhaGeral(lojas, new Error("rede"))[0]).toMatchObject({ podeTentar: true, texto: "Não deu para criar nesta loja. Tente de novo." });
+    expect(linhasDeFalhaGeral(lojas, { status: 409, code: "TENTE_DE_NOVO", message: "x" })[0].podeTentar).toBe(true);
+    const compart = linhasDeFalhaGeral(lojas, { status: 409, code: "PRODUTO_COMPARTILHADO", message: "Este produto já aparece em todas as lojas." })[0];
+    expect(compart).toMatchObject({ podeTentar: false, texto: "Este produto já aparece em todas as lojas." });
   });
 });
 

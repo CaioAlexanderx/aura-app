@@ -124,6 +124,12 @@ export function textoDeCriado(pecas: number | null): string {
   return pecas == null ? "Criado" : "Criado com " + pecasTxt(pecas);
 }
 
+// Contrato, "Mudanças" de 20/11 (B1): repetir não resolve estes. Os outros
+// (ERRO_AO_CRIAR, ou um código que o app ainda não conhece) têm "Tentar de novo".
+const SEM_REPETIR_NA_LOJA = ["BARCODE_EM_USO", "CODIGO_EM_USO", "MESMA_LOJA", "SEM_ACESSO", "LIMITE_PLANO"];
+// Erros do pedido inteiro (nada gravado): só estes valem repetir.
+const REPETIR_O_PEDIDO = ["TENTE_DE_NOVO", "SCHEMA_PENDENTE"];
+
 export function linhaDoResultado(r: ResultadoDaCopia): LinhaDoResultado {
   const avisoFiscal = Array.isArray(r.avisos) && r.avisos.indexOf("fiscal_conferir") >= 0;
   if (r.status === "criado") {
@@ -136,16 +142,25 @@ export function linhaDoResultado(r: ResultadoDaCopia): LinhaDoResultado {
   return {
     company_id: r.company_id, nome: r.nome, estado: "erro",
     texto: (r.erro?.message || "").trim() || TEXTO_FALHA_GERAL,
-    podeTentar: code !== "BARCODE_EM_USO",
+    podeTentar: SEM_REPETIR_NA_LOJA.indexOf(code) < 0,
     avisoFiscal,
   };
 }
 
-/** Falha da chamada inteira (rede, 5xx): cada loja pedida vira erro com "Tentar de novo". */
-export function linhasDeFalhaGeral(lojas: Array<{ company_id: string; nome: string }>): LinhaDoResultado[] {
+/**
+ * Falha da chamada inteira: cada loja pedida vira erro. Sem resposta (rede,
+ * 5xx) ou com TENTE_DE_NOVO: "Tentar de novo" e o texto geral. Recusa com
+ * código (PRODUTO_COMPARTILHADO, VARIANTE_INVALIDA, SEM_ACESSO...): o texto
+ * do servidor, sem repetir.
+ */
+export function linhasDeFalhaGeral(lojas: Array<{ company_id: string; nome: string }>, erro?: any): LinhaDoResultado[] {
+  const code = String((erro && (erro.code || (erro.data && erro.data.code))) || "");
+  const status = Number(erro && erro.status) || 0;
+  const recusa = !!code && REPETIR_O_PEDIDO.indexOf(code) < 0 && status >= 400 && status < 500;
+  const msg = recusa ? String((erro.data && erro.data.error) || erro.message || "").trim() : "";
   return lojas.map((l) => ({
     company_id: l.company_id, nome: l.nome, estado: "erro" as const,
-    texto: TEXTO_FALHA_GERAL, podeTentar: true, avisoFiscal: false,
+    texto: msg || TEXTO_FALHA_GERAL, podeTentar: !recusa, avisoFiscal: false,
   }));
 }
 

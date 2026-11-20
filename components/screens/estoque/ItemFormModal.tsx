@@ -906,8 +906,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         .map((r) => linhaDoResultado({ ...r, company_id: String(r.company_id), nome: r.nome || nomes[String(r.company_id)] }));
       const semResposta = alvos.filter((l) => !voltaram.some((x) => x.company_id === l.company_id));
       aplicarNoResultado(copia.pid, [...voltaram, ...linhasDeFalhaGeral(semResposta)]);
-    } catch (_) {
-      aplicarNoResultado(copia.pid, linhasDeFalhaGeral(alvos));
+    } catch (e: any) {
+      aplicarNoResultado(copia.pid, linhasDeFalhaGeral(alvos, e));
     }
     qc.invalidateQueries({ queryKey: ["products"] });
   }
