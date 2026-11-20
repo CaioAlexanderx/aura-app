@@ -61,7 +61,7 @@ import { Passo3Conferir } from "./Passo3Conferir";
 // 20/11/2026 (A2, D14, mockup d): os produtos novos também nas outras lojas.
 import { useLojasDoLote } from "@/hooks/useLojasDoLote";
 import { LojasDoChegou } from "../LojasDoLote";
-import { porLojaDaResposta, textoPorLoja } from "../item-form/lojasDoCadastro";
+import { porLojaDaResposta, toastDaLojaComErro } from "../item-form/lojasDoCadastro";
 import { Passo4Pronto, ProntoDaLista } from "./Passo4Pronto";
 import { ligarListaAoFornecedor } from "./ligarAoFornecedor";
 import { productsBatchApi } from "@/services/productsBatchApi";
@@ -454,7 +454,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     // A2: loja que não recebeu algum produto novo avisa; a entrada fica.
     for (const resp of r.respostas) {
       for (const p of porLojaDaResposta(resp)) {
-        if (p.erros && p.erros.length > 0) toast.error(p.nome + ": " + textoPorLoja(p));
+        if (p.erros && p.erros.length > 0) toast.error(toastDaLojaComErro(p));
       }
     }
     if (r.ok) {

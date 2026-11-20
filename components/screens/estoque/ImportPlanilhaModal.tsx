@@ -36,7 +36,7 @@ import { BaixarModelo } from "./BaixarModelo";
 // 20/11/2026 (A2, D14, mockup d): em quais lojas o lote entra.
 import { EscolhaDeLojasDoLote } from "./LojasDoLote";
 import type { LojasDoLote } from "@/hooks/useLojasDoLote";
-import { rodapeDoLote, rotuloImportarNasLojas, textoPorLoja, type PorLojaDoLote } from "./item-form/lojasDoCadastro";
+import { rodapeDoLote, rotuloImportarNasLojas, textoPorLoja, primeiroErroDaLoja, type PorLojaDoLote } from "./item-form/lojasDoCadastro";
 
 const IS_WEB = Platform.OS === "web";
 const LOTE_LISTA = 50;
@@ -151,7 +151,7 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
                   {porLoja.map((p) => (
                     <Text key={p.company_id} style={s.colunaLinha}>
                       <Text style={s.colunaNome}>{p.nome}</Text>
-                      {"  ·  " + textoPorLoja(p)}
+                      {"  ·  " + textoPorLoja(p) + (primeiroErroDaLoja(p) ? ". " + primeiroErroDaLoja(p) : "")}
                     </Text>
                   ))}
                 </View>

@@ -49,8 +49,15 @@ const mockAddProduct = jest.fn();
 jest.mock("@/hooks/useProducts", () => ({
   useProducts: () => ({ products: [], addProduct: mockAddProduct, updateProduct: jest.fn() }),
 }));
+const mockAssign = jest.fn();
+const mockAssignAsync = jest.fn();
 jest.mock("@/hooks/useCategories", () => ({
-  useCategories: () => ({ byId: {}, assignProductCategories: jest.fn(), flattened: [], tree: [] }),
+  useCategories: () => ({
+    byId: { "cat-1": { id: "cat-1", name: "Vestidos" } },
+    assignProductCategories: (...a: any[]) => mockAssign(...a),
+    assignProductCategoriesAsync: (...a: any[]) => mockAssignAsync(...a),
+    flattened: [], tree: [],
+  }),
 }));
 jest.mock("@/hooks/useProductCategories", () => ({ useProductCategories: () => ({ categories: [] }) }));
 
@@ -141,6 +148,8 @@ beforeEach(() => {
   mockUpload.mockReset().mockResolvedValue({});
   mockSaveVariations.mockReset().mockResolvedValue({});
   mockVariants.mockReset();
+  mockAssign.mockReset();
+  mockAssignAsync.mockReset().mockResolvedValue({});
   mockCopiar.mockReset().mockResolvedValue({
     master_sku: "AURA-1",
     resultados: [{ company_id: "filial", nome: "Filial Centro", status: "criado", product_id: "p-filial", stock_qty: 0, avisos: [] }],
@@ -344,6 +353,37 @@ describe("duas lojas no grupo", () => {
     expect(res).toContain("Criado com 12 peças");
     expect(res).toContain("Filial Centro");
     expect(res).toContain("Criado com 0 peças");
+    tree.unmount();
+  });
+
+  test("com categoria e sem foto nem grade: a cópia espera o vínculo da categoria terminar", async () => {
+    let soltarVinculo: () => void = () => {};
+    mockAssignAsync.mockImplementation(() => new Promise((r) => { soltarVinculo = () => r({}); }));
+    const tree = montar();
+    preencher(tree);
+    // Categoria escolhida pela folha (o mesmo callback que o CategoriaSheet chama).
+    act(() => { botao(tree, "Escolher").props.onPress(); });
+    act(() => { comProp(tree, "onChangeSelecao").props.onChangeSelecao({ primaryCategoryId: "cat-1", alsoInIds: [] }); });
+    act(() => { porTestID(tree, "loja-opcao-filial").props.onPress(); });
+    await salvarCom("Salvar nas 2 lojas", tree);
+    expect(mockAssignAsync).toHaveBeenCalledWith("p-novo", { primary_category_id: "cat-1", also_in: [] });
+    expect(mockAssign).not.toHaveBeenCalled();
+    expect(mockCopiar).not.toHaveBeenCalled();
+    await act(async () => { soltarVinculo(); await new Promise((r) => setTimeout(r, 0)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockCopiar).toHaveBeenCalledTimes(1);
+    tree.unmount();
+  });
+
+  test("uma loja só: o vínculo da categoria é o de hoje (mutate, sem esperar)", async () => {
+    const tree = montar();
+    preencher(tree);
+    act(() => { botao(tree, "Escolher").props.onPress(); });
+    act(() => { comProp(tree, "onChangeSelecao").props.onChangeSelecao({ primaryCategoryId: "cat-1", alsoInIds: [] }); });
+    await salvarCom("Salvar produto", tree);
+    expect(mockAssign).toHaveBeenCalledWith("p-novo", { primary_category_id: "cat-1", also_in: [] });
+    expect(mockAssignAsync).not.toHaveBeenCalled();
+    expect(mockCopiar).not.toHaveBeenCalled();
     tree.unmount();
   });
 

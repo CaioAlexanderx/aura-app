@@ -199,7 +199,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const qc = useQueryClient();
   const { company, consolidatedView, isDemo } = useAuthStore();
   const { products, addProduct, updateProduct } = useProducts();
-  const { byId: categoriaPorId, assignProductCategories } = useCategories();
+  const { byId: categoriaPorId, assignProductCategories, assignProductCategoriesAsync } = useCategories() as ReturnType<typeof useCategories>;
   const breadcrumbLabel = useBreadcrumbLabel();
   const { semCusto } = useEstoqueConsulta();
   // 22/09/2026 (Matcon M0): única leitura das configs do módulo neste
@@ -896,6 +896,20 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     } catch (_) { /* o produto já existe; o vínculo vira pendência */ }
   }
 
+  // A1: com cópia para outras lojas, a cópia espera o vínculo da categoria
+  // (a outra loja recebe a categoria da origem). Falha não trava a cópia:
+  // o toast do vínculo já avisa.
+  async function vincularCategoriaEsperando(id: string): Promise<void> {
+    if (!selecao.primaryCategoryId) return;
+    if (typeof assignProductCategoriesAsync !== "function") { vincularCategoria(id); return; }
+    try {
+      await assignProductCategoriesAsync(id, {
+        primary_category_id: selecao.primaryCategoryId,
+        also_in: selecao.alsoInIds,
+      });
+    } catch (_) { /* o produto já existe; o vínculo vira pendência */ }
+  }
+
   // A fila roda a partir do ref: fechar o modal no meio não cancela nada,
   // e uma foto que falha não derruba as outras — o toast conta no fim.
   async function subirFila(id: string) {
@@ -1078,8 +1092,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // corpo acima é o de sempre; a cópia é uma chamada à parte).
       const copia = montarCopia(String(criado.id), Number(corpo.stock) || 0);
 
-      // Vínculo da árvore: só existe depois que a linha existe.
-      vincularCategoria(criado.id);
+      // Vínculo da árvore: só existe depois que a linha existe. Com cópia,
+      // a promessa entra na espera da cópia (junto com a fila de fotos).
+      const vinculo: Promise<void> | null = copia ? vincularCategoriaEsperando(String(criado.id)) : null;
+      if (!copia) vincularCategoria(criado.id);
       // Fornecedores: idem. Falhar não desfaz o produto (já avisa). Com
       // cópia, espera: a outra loja recebe os fornecedores da origem.
       if (fornLinhas.length) {
@@ -1103,7 +1119,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           onSaved?.();
           // A1: as outras lojas esperam a grade (a cópia leva as variantes).
           copiaPendenteRef.current = copia;
-          filaEmCursoRef.current = subirFila(criado.id);
+          filaEmCursoRef.current = Promise.all([subirFila(criado.id), vinculo]).then(() => undefined);
           return;
         }
       }
@@ -1120,7 +1136,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // ou começar o próximo item não espera o upload nem é atropelado por
       // ele — o fim só avisa por toast (auditoria 10/09).
       const fila = subirFila(criado.id);
-      filaEmCursoRef.current = fila;
+      // A1: a cópia espera a última foto E o vínculo da categoria.
+      const espera = vinculo ? Promise.all([fila, vinculo]).then(() => undefined) : fila;
+      filaEmCursoRef.current = espera;
 
       if (copia) {
         // A1: o modal fica aberto com o resultado por loja (D15). A cópia
@@ -1133,7 +1151,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             legado: categoriaEscolhida || "",
           },
         };
-        mostrarResultadoECopiar(copia, fila);
+        mostrarResultadoECopiar(copia, espera);
         return;
       }
 

@@ -27,6 +27,7 @@ import { productsBatchApi } from "@/services/productsBatchApi";
 import { montarCorpos, type ItemDaEntrada } from "@/components/screens/estoque/chegou/gravarEntrada";
 import {
   campoDeLojas, corpoDasLojasDoLote, rodapeDoLote, textoPorLoja, textoDaLojaNoChegou, porLojaDaResposta,
+  primeiroErroDaLoja, toastDaLojaComErro,
 } from "@/components/screens/estoque/item-form/lojasDoCadastro";
 import type { LojasDoLote } from "@/hooks/useLojasDoLote";
 import type { ResumoImport } from "@/utils/importPrevia";
@@ -73,6 +74,36 @@ describe("regras do lote", () => {
     expect(textoDaLojaNoChegou(6, "Filial Centro")).toBe("Cadastrar os 6 produtos novos também na Filial Centro");
     expect(textoPorLoja({ company_id: "f", nome: "F", criados: 46, ja_existiam: 2, erros: [{ message: "x" }] })).toBe("46 criados · 2 já existiam · 1 com erro");
     expect(porLojaDaResposta({})).toEqual([]);
+  });
+
+  test("loja com erro no lote: a contagem e o motivo do primeiro erro, como o servidor mandou", () => {
+    const p = porLojaDaResposta({ por_loja: [{
+      company_id: "filial", nome: "Filial Centro", criados: 46, ja_existiam: 0,
+      erros: [{ message: "O código 7891234567895 já está no produto \"Vestido linho bege\" desta loja." }, { message: "outro" }],
+    }] })[0];
+    expect(primeiroErroDaLoja(p)).toBe("O código 7891234567895 já está no produto \"Vestido linho bege\" desta loja.");
+    expect(toastDaLojaComErro(p)).toBe("Filial Centro: 46 criados · 2 com erro" + ". O código 7891234567895 já está no produto \"Vestido linho bege\" desta loja.");
+    // Formatos aceitos: texto puro, { erro: { message } } e { error }; sem motivo, só a contagem.
+    expect(primeiroErroDaLoja({ ...p, erros: ["Limite do plano"] })).toBe("Limite do plano");
+    expect(primeiroErroDaLoja({ ...p, erros: [{ erro: { message: "Sem acesso" } } as any] })).toBe("Sem acesso");
+    expect(primeiroErroDaLoja({ ...p, erros: [{ error: "Falhou" }] })).toBe("Falhou");
+    expect(toastDaLojaComErro({ ...p, erros: [{}] as any })).toBe("Filial Centro: 46 criados · 1 com erro");
+  });
+
+  test("relatório da planilha mostra o motivo do primeiro erro da loja", () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <ImportPlanilhaModal
+          fase="pronto" resumo={RESUMO} erro={null} nomeArquivo="a.xlsx"
+          resultado={{ ...RESUMO, gravados: 46 } as any}
+          onImportar={jest.fn()} onFechar={jest.fn()} onBaixarProblemas={jest.fn()}
+          porLoja={[{ company_id: "filial", nome: "Filial Centro", criados: 46, ja_existiam: 0, erros: [{ message: "Limite do plano da Filial." }] }]}
+        />
+      );
+    });
+    expect(texto(porTestID(tree, "import-por-loja"))).toContain("Filial Centro  ·  46 criados · 1 com erro. Limite do plano da Filial.");
+    tree.unmount();
   });
 });
 

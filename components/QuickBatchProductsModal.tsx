@@ -11,7 +11,7 @@ import { corDigitada } from "@/utils/corDigitada";
 // 20/11/2026 (A2, D14, mockup d): em quais lojas o lote entra.
 import { useLojasDoLote } from "@/hooks/useLojasDoLote";
 import { EscolhaDeLojasDoLote } from "@/components/screens/estoque/LojasDoLote";
-import { porLojaDaResposta, rotuloImportarNasLojas, textoPorLoja } from "@/components/screens/estoque/item-form/lojasDoCadastro";
+import { porLojaDaResposta, rotuloImportarNasLojas, toastDaLojaComErro } from "@/components/screens/estoque/item-form/lojasDoCadastro";
 
 // ============================================================
 // AURA. -- QuickBatchProductsModal (lote de produtos gerais)
@@ -411,7 +411,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories, onVol
     onSuccess: function(res) {
       // A2: loja com erro avisa; as outras ficam (o lote não é desfeito).
       porLojaDaResposta(res).forEach(function(p) {
-        if (p.erros && p.erros.length > 0) toast.error(p.nome + ": " + textoPorLoja(p));
+        if (p.erros && p.erros.length > 0) toast.error(toastDaLojaComErro(p));
       });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["products", company?.id] });
