@@ -43,6 +43,7 @@ import {
 import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
 import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade } from "@/utils/matconUnits";
 import { dividirTamanhos, juntarTamanhos } from "@/utils/dividirTamanhos";
+import { rotuloDaLojaNaGrade, rotuloDoMinimo } from "./lojasDoCadastro";
 
 
 // RN Web transforma em data-enter-local="1" (ver cabeçalho).
@@ -84,6 +85,22 @@ type Props = {
   lotes?: LinhaDeLote[]; onLotes?: (v: LinhaDeLote[]) => void;
   // 14/11/2026 (CP4b): para a prévia "como sai" do editor de cor.
   nomeDoProduto?: string;
+  // 20/11/2026 (em qual loja o produto entra, mockup b e f): com 2 ou mais
+  // lojas marcadas, "Quantidade atual" vira uma linha por loja e a grade
+  // ganha o seletor "Quantidades de qual loja?". Ausente (o caso de quase
+  // todo mundo): a seção é a de hoje, sem mudar nada.
+  lojas?: EstoqueDasLojas | null;
+};
+
+export type EstoqueDasLojas = {
+  /** A loja ativa primeiro. `qtd` é o texto do campo daquela loja. */
+  linhas: Array<{ id: string; nome: string; ativa: boolean; qtd: string }>;
+  onQtd: (id: string, v: string) => void;
+  /** De qual loja a grade mostra as quantidades. */
+  gradeDe: string;
+  onGradeDe: (id: string) => void;
+  /** Total da grade de cada loja, para o "Matriz · 12" do seletor. */
+  totais: Record<string, number>;
 };
 
 export function SecaoEstoque(p: Props) {
@@ -91,6 +108,7 @@ export function SecaoEstoque(p: Props) {
   const [novoTam, setNovoTam] = useState("");
   const [abrirBarras, setAbrirBarras] = useState(false);
   const perfil = p.perfil || PERFIL_PADRAO;
+  const lojas = p.lojas && p.lojas.linhas.length >= 2 ? p.lojas : null;
 
   // 18/10/2026 (p-35): "P, M, G" vira três tamanhos (regra de divisão em
   // utils/dividirTamanhos), mesclados sem duplicar e na ordem PP, P, M,
@@ -224,6 +242,76 @@ export function SecaoEstoque(p: Props) {
     />
   );
 
+  // 20/11/2026 (mockup b e f): uma linha por loja marcada; o mínimo é um
+  // só e vale para todas (D3). Matcon com unidade fracionada aceita vírgula
+  // aqui também (filtroQtd).
+  function estoquePorLoja(l: EstoqueDasLojas) {
+    return (
+      <View style={{ marginBottom: 12 }} testID="estoque-por-loja">
+        <Campo label="Quantas peças em cada loja?">
+          <View style={{ gap: 8 }}>
+            {l.linhas.map((linha) => (
+              <View key={linha.id} style={st.lojaLinha}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={st.lojaNome} numberOfLines={2}>{linha.nome}</Text>
+                  {!linha.ativa ? <Text style={st.lojaDica}>Pode deixar 0 e transferir depois</Text> : null}
+                </View>
+                <Entrada
+                  testID={"estoque-loja-" + linha.id}
+                  value={linha.qtd}
+                  onChangeText={(v: string) => l.onQtd(linha.id, filtroQtd(v))}
+                  onSubmitEditing={p.onSubmit}
+                  placeholder="0"
+                  keyboardType={tecladoQtd}
+                  selectTextOnFocus
+                  accessibilityLabel={"Peças na " + linha.nome}
+                  style={st.lojaQtd}
+                />
+              </View>
+            ))}
+          </View>
+        </Campo>
+        <Campo label={rotuloDoMinimo(l.linhas.length)} style={{ marginBottom: 0 }}>
+          <Entrada
+            value={p.minimo}
+            onChangeText={(v: string) => p.onMinimo(filtroQtd(v))}
+            onSubmitEditing={p.onSubmit}
+            placeholder="0"
+            keyboardType={tecladoQtd}
+            accessibilityLabel="Estoque mínimo"
+            style={{ maxWidth: 120 }}
+          />
+        </Campo>
+      </View>
+    );
+  }
+
+  // 20/11/2026 (mockup b): a grade é uma só (mesmas cores e tamanhos) e o
+  // seletor escolhe de qual loja são as quantidades na tela.
+  const seletorDaGrade = lojas && (matriz || umEixo) ? (
+    <Campo label="Quantidades de qual loja?">
+      <View style={st.seg} testID="grade-seletor-de-loja">
+        {lojas.linhas.map((linha) => {
+          const on = lojas.gradeDe === linha.id;
+          return (
+            <Pressable
+              key={linha.id}
+              testID={"grade-da-loja-" + linha.id}
+              onPress={() => lojas.onGradeDe(linha.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={[st.segBtn, on && st.segBtnOn]}
+            >
+              <Text style={[st.segTxt, on && { color: "#fff" }]} numberOfLines={1}>
+                {rotuloDaLojaNaGrade(linha.nome, lojas.totais[linha.id] || 0)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </Campo>
+  ) : null;
+
   return (
     <Secao
       icon="box"
@@ -351,7 +439,7 @@ export function SecaoEstoque(p: Props) {
           </Text>
         </View>
       ) : p.stockMode === "single" ? (
-        matcon ? (
+        lojas ? estoquePorLoja(lojas) : matcon ? (
           // Perfil Matcon: a frase do mockup em qualquer unidade — com
           // vírgula nas fracionadas (m², kg…), inteira no saco e na barra.
           <View style={{ marginBottom: 12 }}>
@@ -470,6 +558,8 @@ export function SecaoEstoque(p: Props) {
               )}
             </Campo>
           </View>
+
+          {seletorDaGrade}
 
           {matriz && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.grade} contentContainerStyle={{ minWidth: "100%" }}>
@@ -624,6 +714,11 @@ export function SecaoEstoque(p: Props) {
             {"Preço é o mesmo para todas. " +
               (p.modoEdicao ? "A grade vai junto no Salvar." : "A grade é criada junto com o produto.")}
           </Text>
+          {lojas ? (
+            <Text style={s.hint} testID="grade-nota-das-lojas">
+              {"As cores e os tamanhos são os mesmos " + (lojas.linhas.length === 2 ? "nas duas lojas" : "nas " + lojas.linhas.length + " lojas") + ". Só a quantidade muda."}
+            </Text>
+          ) : null}
         </View>
       )}
     </Secao>
@@ -631,6 +726,22 @@ export function SecaoEstoque(p: Props) {
 }
 
 const st = {
+  // 20/11/2026 (em qual loja o produto entra): linha por loja, 44 px no toque.
+  lojaLinha: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 10, minHeight: 44,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3,
+  },
+  lojaNome: { fontSize: 13.5, fontWeight: "600" as const, color: Colors.ink },
+  lojaDica: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  lojaQtd: { width: 84, textAlign: "center" as const, fontWeight: "600" as const, flexShrink: 0 },
+  seg: {
+    flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 2, padding: 2, borderRadius: 9,
+    alignSelf: "flex-start" as const, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
+  },
+  segBtn: { minHeight: 44, justifyContent: "center" as const, borderRadius: 7, paddingHorizontal: 12 },
+  segBtnOn: { backgroundColor: Colors.violet },
+  segTxt: { fontSize: 12.5, fontWeight: "600" as const, color: Colors.ink3 },
   // 22/09/2026 (Matcon M4 no cadastro) — tabela de lotes. A frase e as
   // opções de rádio moraram aqui e foram para ui.tsx (`fr`, `Radio`).
   loteMeia: { width: "46%" as any, flexGrow: 1 },
