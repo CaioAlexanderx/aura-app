@@ -120,6 +120,9 @@ export function mapApiProduct(p: any): Product {
     isGroupShared: p.is_group_shared === true,
     // 17/11/2026 (p-173): a loja dona do item (products.company_id).
     ownerCompanyId: p.company_id ? String(p.company_id) : null,
+    // 18/11/2026 (INC-2026-11-18-01): a listagem manda a loja dona como
+    // stock_company_id (products.company_id). Só o filtro/selo "Loja" lê.
+    lojaDonaId: p.stock_company_id ? String(p.stock_company_id) : (p.company_id ? String(p.company_id) : null),
     // 17/11/2026 (Pedido, A4): reserva do pedido do balcão. Só entra quando o
     // backend mandou (trava ligada); ausente, o objeto é o de antes.
     ...camposDaReserva(p),

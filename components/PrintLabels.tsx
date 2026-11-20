@@ -46,6 +46,11 @@ import {
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
 } from "@/utils/etiquetasFiltro";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
+// 18/11/2026 (INC-2026-11-18-01): filtro "Loja" e selo da loja dona quando a
+// lista mistura lojas do grupo. Só a lista muda; a etiqueta impressa não.
+import { contextoDeLojas, filtrarPorLoja, nomeDaLojaDona, lojaDonaDoProduto, TODAS_AS_LOJAS } from "@/utils/lojaDona";
+import { useFiltroDeLoja } from "@/hooks/useFiltroDeLoja";
+import { FiltroDeLoja, SeloDaLoja } from "@/components/screens/estoque/FiltroDeLoja";
 import type { OrdemEstoque } from "@/utils/productSort";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
@@ -166,7 +171,7 @@ export function acharVagaDaBarraNoCelular(el: any): { pai: HTMLElement; antes: N
 }
 
 export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelectionChange, podeMudarDesenho, marcarAoAbrir }: Props) {
-  var { company, token } = useAuthStore();
+  var { company, token, availableCompanies } = useAuthStore() as any;
   // 30/10/2026 (card p-75): codigo gerado aqui entra na hora (produto ->
   // barcode); a lista do Estoque pega o mesmo valor do cadastro ao recarregar.
   var [codigosGerados, setCodigosGerados] = useState<Record<string, string>>({});
@@ -450,10 +455,17 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
 
+  // 18/11/2026 (INC-2026-11-18-01): "Loja" só existe quando a lista mistura
+  // lojas do grupo; "Todas as lojas" devolve a mesma lista de sempre.
+  var ctxLojas = useMemo(function() {
+    return contextoDeLojas(availableCompanies, company?.id, produtosDoEstoque.map(lojaDonaDoProduto));
+  }, [availableCompanies, company?.id, produtosDoEstoque]);
+  var [lojaFiltro, setLojaFiltro] = useFiltroDeLoja("etiquetas", company?.id, ctxLojas);
+
   var filtroAtual = { busca: search, ordem: ordem, periodo: periodo, dia: dia, categoria: categoria, soComEstoque: soComEstoque };
   var filtered = useMemo(function() {
-    return filtrarEtiquetas(productsWithCode, filtroAtual);
-  }, [productsWithCode, search, ordem, periodo, dia, categoria, soComEstoque]);
+    return filtrarEtiquetas(filtrarPorLoja(productsWithCode, ctxLojas, lojaFiltro, lojaDonaDoProduto), filtroAtual);
+  }, [productsWithCode, search, ordem, periodo, dia, categoria, soComEstoque, ctxLojas, lojaFiltro]);
   var categorias = useMemo(function() { return categoriasDe(productsWithCode); }, [productsWithCode]);
   var diasCadastro = useMemo(function() { return diasComCadastro(productsWithCode); }, [productsWithCode]);
   var nFiltros = filtrosAtivos(filtroAtual);
@@ -783,6 +795,7 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
   function mostrarTudo() {
     setSearch(""); setPeriodo("todos"); setCategoria(null); setMenuFiltro(null);
     setSoComEstoqueState(false);
+    if (lojaFiltro !== TODAS_AS_LOJAS) setLojaFiltro(TODAS_AS_LOJAS);
   }
 
   // Modal aberto (para o JSX nao perder o tipo dentro das funcoes).
@@ -1190,6 +1203,10 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
         </Pressable>
       </View>
 
+      {ctxLojas && (
+        <FiltroDeLoja ctx={ctxLojas} value={lojaFiltro} onChange={setLojaFiltro} testIDBase="etiquetas" style={{ marginBottom: 0 }} />
+      )}
+
       {filtrosAbertos && (
         <View style={s.filtros} testID="etiquetas-filtros">
         <View style={[s.filtroGrupo, { zIndex: 2 }]} testID="etiquetas-grupo-cadastrados">
@@ -1329,7 +1346,7 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
       <ScrollView style={s.list} nestedScrollEnabled>
         {filtered.length === 0 && (
           <View style={s.empty} testID="etiquetas-lista-vazia">
-            <Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : soComEstoque && !search && nFiltros === 0 ? "Nenhum produto com estoque." : "Nenhum produto encontrado."}</Text>
+            <Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : soComEstoque && !search && nFiltros === 0 && lojaFiltro === TODAS_AS_LOJAS ? "Nenhum produto com estoque." : "Nenhum produto encontrado."}</Text>
             {productsWithCode.length > 0 && soComEstoque && (
               <Pressable onPress={function() { setSoComEstoque(false); }} style={s.emptyBtn} testID="etiquetas-mostrar-sem-estoque">
                 <Text style={s.emptyBtnTxt}>Mostrar também os sem estoque</Text>
@@ -1346,14 +1363,16 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
             var cardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
             var semCod = produtoSemCodigo(p);
+            var nomeLoja = nomeDaLojaDona(ctxLojas, lojaDonaDoProduto(p));
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
                 <Pressable onPress={function() { if (!semCod || sel) toggleSelect(p.id); }} style={s.itemLeft} testID={"etiquetas-marcar-" + p.id} accessibilityRole="checkbox" accessibilityState={{ checked: sel, disabled: semCod && !sel }}>
                   <View style={[s.checkbox, sel && s.checkboxSelected, semCod && !sel && s.checkboxDesligado]}>{sel && <Icon name="check" size={10} color="#fff" />}</View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
+                      <Text style={[s.itemName, !!nomeLoja && s.nomeQueEncolhe]} numberOfLines={1}>{labelPreview}</Text>
                       {p.has_variants && <Text style={s.varBadge}>V</Text>}
+                      <SeloDaLoja nome={nomeLoja} testID={"etiquetas-loja-do-" + p.id} />
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
                       {semCod
@@ -1402,6 +1421,7 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
           var estado: "none" | "some" | "all" = !sel ? "none" : !carregado ? "all" : nMarcadas === 0 ? (parentChecked ? "some" : "none") : nMarcadas >= visiveis.length ? "all" : "some";
           var aberto = !!abertos[p.id];
           var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
+          var nomeLojaPai = nomeDaLojaDona(ctxLojas, lojaDonaDoProduto(p));
           var parentQty = getQty(p.id);
           var parentCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
           var acoesDoPai = (
@@ -1433,9 +1453,10 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
                 <Pressable onPress={function() { alternarAberto(p.id); }} style={{ flex: 1, minWidth: 0 }} testID={"etiquetas-nome-" + p.id} accessibilityRole="button" accessibilityLabel={(aberto ? "Fechar as variantes de " : "Ver as variantes de ") + p.name}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {renderColorIndicator(p.color)}
-                    <Text style={[s.itemName, estreita && s.nomeQueEncolhe]} numberOfLines={1}>{parentLabelPreview}</Text>
+                    <Text style={[s.itemName, (estreita || !!nomeLojaPai) && s.nomeQueEncolhe]} numberOfLines={1}>{parentLabelPreview}</Text>
                     <Text style={s.varBadge}>V</Text>
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                    <SeloDaLoja nome={nomeLojaPai} testID={"etiquetas-loja-do-" + p.id} />
                   </View>
                   <Text style={s.variantHint} numberOfLines={1}>
                     {produtoSemCodigo(p) ? "Sem código" : productCode}{carregado ? " · " + visiveis.length + (visiveis.length === 1 ? " variante" : " variantes") : ""}{sel && carregado ? " · " + nMarcadas + (nMarcadas === 1 ? " marcada" : " marcadas") + (parentChecked ? " + etiqueta do pai" : "") : ""}
