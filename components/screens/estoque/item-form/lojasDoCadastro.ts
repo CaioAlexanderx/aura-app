@@ -328,6 +328,21 @@ export function textoPorLoja(p: PorLojaDoLote): string {
   return partes.join(" · ");
 }
 
+/** O motivo do primeiro erro da loja, como o servidor mandou (erro.message). "" sem motivo. */
+export function primeiroErroDaLoja(p: PorLojaDoLote): string {
+  const e = Array.isArray(p.erros) && p.erros.length ? p.erros[0] : null;
+  if (!e) return "";
+  if (typeof e === "string") return e.trim();
+  const msg = (e as any).message || ((e as any).erro && (e as any).erro.message) || (e as any).error || "";
+  return String(msg).trim();
+}
+
+/** Toast da loja com erro no lote: a contagem e, depois, o motivo do servidor. */
+export function toastDaLojaComErro(p: PorLojaDoLote): string {
+  const motivo = primeiroErroDaLoja(p);
+  return p.nome + ": " + textoPorLoja(p) + (motivo ? ". " + motivo : "");
+}
+
 export function porLojaDaResposta(resp: any): PorLojaDoLote[] {
   const lista = resp && Array.isArray(resp.por_loja) ? resp.por_loja : [];
   return lista.filter((p: any) => p && p.company_id).map((p: any) => ({
