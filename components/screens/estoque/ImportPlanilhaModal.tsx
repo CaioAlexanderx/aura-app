@@ -33,6 +33,10 @@ import {
 } from "@/utils/importPrevia";
 import type { FaseImport } from "@/hooks/useImportProdutos";
 import { BaixarModelo } from "./BaixarModelo";
+// 20/11/2026 (A2, D14, mockup d): em quais lojas o lote entra.
+import { EscolhaDeLojasDoLote } from "./LojasDoLote";
+import type { LojasDoLote } from "@/hooks/useLojasDoLote";
+import { rodapeDoLote, rotuloImportarNasLojas, textoPorLoja, type PorLojaDoLote } from "./item-form/lojasDoCadastro";
 
 const IS_WEB = Platform.OS === "web";
 const LOTE_LISTA = 50;
@@ -46,9 +50,12 @@ type Props = {
   onImportar: () => void;
   onFechar: () => void;
   onBaixarProblemas: () => void;
+  /** A2: ausente (ou 1 loja só) = o modal de hoje. */
+  lojas?: LojasDoLote | null;
+  porLoja?: PorLojaDoLote[];
 };
 
-export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo, onImportar, onFechar, onBaixarProblemas }: Props) {
+export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo, onImportar, onFechar, onBaixarProblemas, lojas, porLoja }: Props) {
   if (fase === "fechado") return null;
 
   const pronto = fase === "pronto" && !!resultado;
@@ -76,6 +83,10 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
   else if (pronto) rodape = `${plural(resultado!.gravados, "produto entrou", "produtos entraram")} no estoque`;
   else if (gravando) rodape = `Importando ${plural(resumo!.aImportar, "produto", "produtos")}…`;
   else rodape = "Nada foi gravado ainda";
+  // A2: com 2 ou mais lojas, o rodapé e o botão dizem em quantas.
+  const nLojas = lojas && lojas.campo.modo === "escolha" ? lojas.escolhidas.length : 0;
+  const lojaDoEstoque = nLojas >= 2 ? (lojas!.escolhidas.find((l) => String(l.company_id) === lojas!.estoqueEm) || lojas!.escolhidas[0]).nome : "";
+  const fraseDoLote = nLojas >= 2 && !lendo && !pronto && !gravando && resumo ? rodapeDoLote(resumo.aImportar, nLojas, lojaDoEstoque) : null;
 
   return (
     <View style={s.overlay} testID="import-previa">
@@ -130,7 +141,21 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
                 </View>
               )}
 
+              {!pronto && lojas ? <EscolhaDeLojasDoLote lojas={lojas} quantos={resumo!.aImportar} origem="planilha" /> : null}
+
               {pronto ? <Resultado resultado={resultado!} /> : <Conferencia resumo={resumo!} />}
+
+              {pronto && porLoja && porLoja.length > 0 ? (
+                <View style={s.card} testID="import-por-loja">
+                  <Text style={s.cardTitle}>Em cada loja</Text>
+                  {porLoja.map((p) => (
+                    <Text key={p.company_id} style={s.colunaLinha}>
+                      <Text style={s.colunaNome}>{p.nome}</Text>
+                      {"  ·  " + textoPorLoja(p)}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
 
               <SecaoLista
                 id="import-repetidas-planilha"
@@ -175,7 +200,15 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
         </ScrollView>
 
         <View style={s.footer}>
-          <Text style={s.footerInfo} numberOfLines={2} testID="import-rodape">{rodape}</Text>
+          <Text style={s.footerInfo} numberOfLines={2} testID="import-rodape">
+            {fraseDoLote ? (
+              <>
+                {fraseDoLote.antes}
+                <Text style={{ fontWeight: "700", color: Colors.ink }}>{fraseDoLote.forte}</Text>
+                {fraseDoLote.depois}
+              </>
+            ) : rodape}
+          </Text>
           <View style={s.footerActions}>
             {pronto ? (
               <>
@@ -195,7 +228,7 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
                   <Text style={s.btnSecTxt}>Cancelar</Text>
                 </Pressable>
                 {!lendo && (
-                  <BotaoImportar resumo={resumo!} gravando={gravando} onImportar={onImportar} />
+                  <BotaoImportar resumo={resumo!} gravando={gravando} onImportar={onImportar} nLojas={nLojas} />
                 )}
               </>
             )}
@@ -206,7 +239,7 @@ export function ImportPlanilhaModal({ fase, resumo, resultado, erro, nomeArquivo
   );
 }
 
-function BotaoImportar({ resumo, gravando, onImportar }: { resumo: ResumoImport; gravando: boolean; onImportar: () => void }) {
+function BotaoImportar({ resumo, gravando, onImportar, nLojas = 0 }: { resumo: ResumoImport; gravando: boolean; onImportar: () => void; nLojas?: number }) {
   const n = resumo.aImportar;
   // Passa do limite de produtos do plano: o servidor recusa a gravação inteira.
   const pode = n > 0 && !gravando && !resumo.limitePlano;
@@ -222,7 +255,7 @@ function BotaoImportar({ resumo, gravando, onImportar }: { resumo: ResumoImport;
         : (
           <>
             <Icon name="check" size={14} color="#fff" />
-            <Text style={s.btnPriTxt}>{n > 0 ? `Importar ${plural(n, "produto", "produtos")}` : "Nenhum produto para importar"}</Text>
+            <Text style={s.btnPriTxt}>{n > 0 ? (nLojas >= 2 ? rotuloImportarNasLojas(nLojas) : `Importar ${plural(n, "produto", "produtos")}`) : "Nenhum produto para importar"}</Text>
           </>
         )}
     </Pressable>

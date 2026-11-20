@@ -237,3 +237,104 @@ export function pedidoDeCopia(
   });
   return { pedido: { lojas: out }, faltouVariante: faltou };
 }
+
+// ── cadastro em massa (A2, D14) ───────────────────────────────
+//
+// Planilha e lista: uma escolha para o lote inteiro, com a loja ativa
+// marcada, e "O estoque da planilha entra em qual loja?" (as outras nascem
+// com 0). Chegou mercadoria: a entrada é sempre na loja ativa; os produtos
+// NOVOS podem nascer também nas outras lojas, sem estoque.
+// Com 1 loja escolhida (ou sem o campo), nada vai no corpo: o pedido é o
+// de hoje, byte a byte.
+
+export type CorpoDasLojasDoLote = { lojas: string[]; estoque_em?: string };
+
+export function corpoDasLojasDoLote(
+  campo: CampoDeLojas,
+  marcadas: string[],
+  ativaId: string,
+  estoqueEm: string | null | undefined,
+  comEstoque: boolean
+): CorpoDasLojasDoLote | null {
+  const escolhidas = lojasEscolhidas(campo, [ativaId, ...marcadas]);
+  if (escolhidas.length < 2) return null;
+  const lojas = escolhidas.map((l) => String(l.company_id));
+  if (!comEstoque) return { lojas };
+  const em = estoqueEm && lojas.indexOf(String(estoqueEm)) >= 0 ? String(estoqueEm) : ativaId;
+  return { lojas, estoque_em: em };
+}
+
+/** "Em quais lojas estes 48 produtos entram?" (mockup d). */
+export function tituloDoLote(n: number): string {
+  return n === 1 ? "Em quais lojas este produto entra?" : "Em quais lojas estes " + n + " produtos entram?";
+}
+
+/** "48 produtos em **2 lojas**. Estoque na Matriz." (mockup d). */
+export function rodapeDoLote(n: number, nLojas: number, lojaDoEstoque: string): FraseDoRodape {
+  return {
+    antes: (n === 1 ? "1 produto" : n + " produtos") + " em ",
+    forte: nLojas + " lojas",
+    depois: ". Estoque na " + lojaDoEstoque + ".",
+  };
+}
+
+/** "Importar nas 2 lojas" (mockup d). */
+export function rotuloImportarNasLojas(nLojas: number): string {
+  return "Importar nas " + nLojas + " lojas";
+}
+
+/** Dica embaixo da escolha do estoque (mockup d; plural para 3 ou mais lojas). */
+export function textoDasOutrasComZero(nOutras: number): string {
+  return nOutras <= 1
+    ? "A outra loja recebe os produtos com estoque 0. Depois, use \"Transferir\" para mandar as peças."
+    : "As outras lojas recebem os produtos com estoque 0. Depois, use \"Transferir\" para mandar as peças.";
+}
+
+/** "Cadastrar os 6 produtos novos também na Filial Centro" (mockup d, Chegou). */
+export function textoDaLojaNoChegou(nNovos: number, nome: string): string {
+  return nNovos === 1
+    ? "Cadastrar o produto novo também na " + nome
+    : "Cadastrar os " + nNovos + " produtos novos também na " + nome;
+}
+
+/** "A entrada é na **Matriz**, onde a mercadoria chegou. 6 produtos são novos." */
+export function avisoDoChegou(nomeDaAtiva: string, nNovos: number): FraseDoRodape {
+  return {
+    antes: "A entrada é na ",
+    forte: nomeDaAtiva,
+    depois: ", onde a mercadoria chegou. " + (nNovos === 1 ? "1 produto é novo." : nNovos + " produtos são novos."),
+  };
+}
+
+export const TEXTO_CHEGOU_SEM_ESTOQUE = "Sem estoque. O custo e o fornecedor ficam na ";
+
+export type PorLojaDoLote = {
+  company_id: string;
+  nome: string;
+  criados: number;
+  ja_existiam: number;
+  erros?: Array<{ message?: string; error?: string } | string>;
+};
+
+/** "48 criados · 2 já existiam · 1 com erro" — uma linha por loja, no resultado. */
+export function textoPorLoja(p: PorLojaDoLote): string {
+  const partes: string[] = [];
+  const c = Number(p.criados) || 0;
+  const j = Number(p.ja_existiam) || 0;
+  const e = Array.isArray(p.erros) ? p.erros.length : 0;
+  partes.push(c === 1 ? "1 criado" : c + " criados");
+  if (j > 0) partes.push(j === 1 ? "1 já existia" : j + " já existiam");
+  if (e > 0) partes.push(e === 1 ? "1 com erro" : e + " com erro");
+  return partes.join(" · ");
+}
+
+export function porLojaDaResposta(resp: any): PorLojaDoLote[] {
+  const lista = resp && Array.isArray(resp.por_loja) ? resp.por_loja : [];
+  return lista.filter((p: any) => p && p.company_id).map((p: any) => ({
+    company_id: String(p.company_id),
+    nome: String(p.nome || ""),
+    criados: Number(p.criados) || 0,
+    ja_existiam: Number(p.ja_existiam) || 0,
+    erros: Array.isArray(p.erros) ? p.erros : [],
+  }));
+}

@@ -8,6 +8,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { productsBatchApi, type BatchProductInput } from "@/services/productsBatchApi";
 import { nameToHex } from "@/utils/colorNames";
 import { corDigitada } from "@/utils/corDigitada";
+// 20/11/2026 (A2, D14, mockup d): em quais lojas o lote entra.
+import { useLojasDoLote } from "@/hooks/useLojasDoLote";
+import { EscolhaDeLojasDoLote } from "@/components/screens/estoque/LojasDoLote";
+import { porLojaDaResposta, rotuloImportarNasLojas, textoPorLoja } from "@/components/screens/estoque/item-form/lojasDoCadastro";
 
 // ============================================================
 // AURA. -- QuickBatchProductsModal (lote de produtos gerais)
@@ -367,6 +371,8 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories, onVol
     name: "", price: "", size: "", color: "", stock: ""
   });
   const textRef = useRef<TextInput | null>(null);
+  const lojas = useLojasDoLote(company?.id, visible);
+  const nLojas = lojas.campo.modo === "escolha" ? lojas.escolhidas.length : 0;
 
   const markup = useMemo(function() { return parseMarkup(markupInput); }, [markupInput]);
   const parsed = useMemo(function() { return text.trim() ? parseRows(text, category, markup) : []; }, [text, category, markup]);
@@ -399,9 +405,15 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories, onVol
         if (r.cost > 0) item.cost_price = r.cost;
         return item;
       });
-      return productsBatchApi.batchCreate(company.id, payload);
+      // A2: só com 2 ou mais lojas escolhidas; senão o corpo é o de hoje.
+      return productsBatchApi.batchCreate(company.id, payload, lojas.corpo(true));
     },
     onSuccess: function(res) {
+      // A2: loja com erro avisa; as outras ficam (o lote não é desfeito).
+      porLojaDaResposta(res).forEach(function(p) {
+        if (p.erros && p.erros.length > 0) toast.error(p.nome + ": " + textoPorLoja(p));
+      });
+      qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["products", company?.id] });
       qc.invalidateQueries({ queryKey: ["duplicateGroups", company?.id] });
       const dup = res.duplicates > 0
@@ -893,6 +905,12 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories, onVol
               </View>
             )}
 
+            {validRows.length > 0 && (
+              <View style={{ marginTop: 12 }}>
+                <EscolhaDeLojasDoLote lojas={lojas} quantos={validRows.length} origem="lista" />
+              </View>
+            )}
+
             {exceedsMax && (
               <View style={s.errorBanner}>
                 <Icon name="alert" size={14} color={Colors.red} />
@@ -915,7 +933,9 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories, onVol
                 <>
                   <Icon name="plus" size={13} color="#fff" />
                   <Text style={s.submitText}>
-                    Adicionar {validRows.length > 0 ? validRows.length : ""} produto{validRows.length === 1 ? "" : "s"}
+                    {nLojas >= 2 && validRows.length > 0
+                      ? rotuloImportarNasLojas(nLojas)
+                      : <>Adicionar {validRows.length > 0 ? validRows.length : ""} produto{validRows.length === 1 ? "" : "s"}</>}
                   </Text>
                 </>
               )}

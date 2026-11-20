@@ -53,26 +53,17 @@ export function SecaoLojas({ campo, marcadas, onAlternar, narrow }: PropsSecao) 
           const id = String(l.company_id);
           const marcada = set.has(id);
           // A1: a loja em que estou é a de origem do cadastro — fica fixa.
-          const fixa = !!l.ativa;
+          // campoDeLojas a põe primeiro, achada pelo id (não pelo `ativa`).
+          const fixa = id === String(campo.lojas[0].company_id);
           return (
-            <Pressable
+            <CaixaDeLoja
               key={id}
               testID={"loja-opcao-" + id}
-              onPress={fixa ? undefined : () => onAlternar(id)}
-              disabled={fixa}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: marcada, disabled: fixa }}
-              accessibilityLabel={l.nome + (fixa ? ", você está aqui" : "")}
-              style={[st.loja, marcada && st.lojaOn]}
-            >
-              <View style={[st.ck, marcada && st.ckOn]}>
-                {marcada ? <Icon name="check" size={13} color="#fff" /> : null}
-              </View>
-              <Text style={st.nome} numberOfLines={2}>{l.nome}</Text>
-              {fixa ? (
-                <View style={st.tag}><Text style={st.tagTxt}>Você está aqui</Text></View>
-              ) : null}
-            </Pressable>
+              nome={l.nome}
+              marcada={marcada}
+              fixa={fixa}
+              onPress={() => onAlternar(id)}
+            />
           );
         })}
       </View>
@@ -90,6 +81,40 @@ export function SecaoLojas({ campo, marcadas, onAlternar, narrow }: PropsSecao) 
         <Text style={ui.hint}>Cada loja tem o seu estoque. Marque outra loja para o produto nascer nela também.</Text>
       )}
     </Secao>
+  );
+}
+
+// Uma loja para marcar: 44 px, sem hover. Também serve aos lotes (A2).
+export function CaixaDeLoja({ nome, sub, marcada, fixa, onPress, testID }: {
+  nome: string;
+  sub?: string | null;
+  marcada: boolean;
+  /** A loja de origem: marcada e sem toque, com "Você está aqui". */
+  fixa?: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={fixa ? undefined : onPress}
+      disabled={!!fixa}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: marcada, disabled: !!fixa }}
+      accessibilityLabel={nome + (fixa ? ", você está aqui" : "")}
+      style={[st.loja, marcada && st.lojaOn]}
+    >
+      <View style={[st.ck, marcada && st.ckOn]}>
+        {marcada ? <Icon name="check" size={13} color="#fff" /> : null}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={st.nome} numberOfLines={2}>{nome}</Text>
+        {sub ? <Text style={st.resTxt}>{sub}</Text> : null}
+      </View>
+      {fixa ? (
+        <View style={st.tag}><Text style={st.tagTxt}>Você está aqui</Text></View>
+      ) : null}
+    </Pressable>
   );
 }
 
