@@ -103,7 +103,7 @@ export function CompanyPickerModal({
           <ScrollView style={s.list} contentContainerStyle={{ gap: 6 }}>
             {availableCompanies.map((c: any) => {
               const isSelected = selectedId === c.id;
-              const displayName = c.legal_name || c.trade_name || c.name || "Empresa";
+              const displayName = c.trade_name || c.name || c.legal_name || "Empresa";
               const cnpj = c.cnpj || null;
               return (
                 <Pressable

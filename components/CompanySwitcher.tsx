@@ -64,7 +64,7 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
 
   const currentName = consolidatedView
     ? "Todas as empresas"
-    : company?.name || company?.legal_name || (companiesLoading ? "Carregando…" : "Sem empresa");
+    : (company as any)?.trade_name || company?.name || company?.legal_name || (companiesLoading ? "Carregando…" : "Sem empresa");
   const currentPlan = consolidatedView ? "Consolidado" : company?.plan ? planLabel(company.plan) : "—";
   const currentBadgeColor = consolidatedView ? "#7c3aed" : planBadgeColor(company?.plan || "");
   const crestLetter = consolidatedView ? "T" : (currentName || "?").charAt(0).toUpperCase();
@@ -530,7 +530,7 @@ function DropdownModal({
                         style={{ fontSize: 13, fontWeight: "600", color: C.ink, flexShrink: 1 }}
                         numberOfLines={1}
                       >
-                        {c.name || c.legal_name}
+                        {(c as any).trade_name || c.name || c.legal_name}
                       </Text>
                       {c.is_primary && (
                         <View
