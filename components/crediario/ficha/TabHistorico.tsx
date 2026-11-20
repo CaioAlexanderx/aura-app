@@ -242,7 +242,8 @@ export function TabHistorico({
                   <View key={idx} style={lc.itemRow}>
                     <Text style={lc.itemQty}>{it.quantity}×</Text>
                     <Text style={lc.itemName} numberOfLines={1}>{it.product_name}</Text>
-                    <Text style={lc.itemTotal}>{fmt(it.total / 100)}</Text>
+                    {/* INC-2026-11-20-01: o backend manda o total em reais (sale_items.total_price), nao em centavos. */}
+                    <Text style={lc.itemTotal}>{fmt(it.total)}</Text>
                   </View>
                 ))}
               </View>
