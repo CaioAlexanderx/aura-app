@@ -108,6 +108,16 @@ import { avisoDePromocaoNoCadastro } from "@/components/screens/blackfriday/dePo
 // "Cadastrar vários" no cadastro novo de produto. Só existe quando o pai
 // passa `cadastrarVarios` (hoje, só o Estoque).
 import { CadastrarVariosEscolha, FaixaCadastrarVarios, type AcoesCadastrarVarios } from "./CadastrarVarios";
+// 20/11/2026 (plano empresa-do-produto, A1): "Em quais lojas este produto
+// entra?". Só com 2 ou mais lojas no grupo em que a pessoa mexe no estoque;
+// para o resto, o modal e o corpo do POST são os de hoje.
+import { lojasDoProdutoApi } from "@/services/lojasDoProdutoApi";
+import { SecaoLojas, ResultadoPorLoja } from "./item-form/SecaoLojas";
+import {
+  campoDeLojas, lojasEscolhidas, fraseDoRodape, rotuloSalvarNasLojas, textoDeCriado,
+  linhaDoResultado, linhasCriando, linhasDeFalhaGeral, mesclarResultado, idsDasVariantes, pedidoDeCopia,
+  type EstoqueDaLojaNaCopia, type LinhaDoResultado,
+} from "./item-form/lojasDoCadastro";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
   lerDuracaoDoServico, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
@@ -141,6 +151,17 @@ const VAZIO: CategorySelection = { primaryCategoryId: null, alsoInIds: [] };
 
 // A categoria que o "Salvar e cadastrar outro" leva para o próximo item.
 type CategoriaHerdada = { selecao: CategorySelection; legado: string };
+
+// 20/11/2026 (A1): o que vai para as outras lojas depois que tudo estiver
+// gravado na loja ativa. Fica num ref: a grade que falha deixa a cópia
+// esperando o próximo Salvar (já como edição do mesmo produto).
+type CopiaPendente = {
+  origem: string;
+  pid: string;
+  comGrade: boolean;
+  lojas: Array<{ company_id: string; nome: string; estoque: EstoqueDaLojaNaCopia }>;
+  linhaDaOrigem: LinhaDoResultado;
+};
 
 // A largura manda no layout inteiro: duas colunas no desktop, uma coluna
 // em folha de baixo abaixo de 900 (e sempre no nativo).
@@ -177,7 +198,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const qc = useQueryClient();
   const { company, consolidatedView, isDemo } = useAuthStore();
   const { products, addProduct, updateProduct } = useProducts();
-  const { byId: categoriaPorId, assignProductCategories } = useCategories();
+  const { byId: categoriaPorId, assignProductCategories, assignProductCategoriesAsync } = useCategories() as ReturnType<typeof useCategories>;
   const breadcrumbLabel = useBreadcrumbLabel();
   const { semCusto } = useEstoqueConsulta();
   // 22/09/2026 (Matcon M0): única leitura das configs do módulo neste
@@ -277,6 +298,18 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [saidaParaVarios, setSaidaParaVarios] = useState(false);
   // p-178: a ficha técnica (composição) aberta por cima do cadastro.
   const [composicaoAberta, setComposicaoAberta] = useState(false);
+  // 20/11/2026 (A1): lojas marcadas além da ativa (a ativa está sempre),
+  // a quantidade e a grade de cada outra loja, de qual loja a grade mostra
+  // as quantidades e, depois do Salvar, o resultado por loja (D15).
+  const [lojasMarcadas, setLojasMarcadas] = useState<string[]>([]);
+  const [qtdPorLoja, setQtdPorLoja] = useState<Record<string, string>>({});
+  const [celulasPorLoja, setCelulasPorLoja] = useState<Record<string, Record<string, string>>>({});
+  const [gradeDe, setGradeDe] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<{ pid: string; linhas: LinhaDoResultado[] } | null>(null);
+  const copiaPendenteRef = useRef<CopiaPendente | null>(null);
+  const copiaFeitaRef = useRef<CopiaPendente | null>(null);
+  const filaEmCursoRef = useRef<Promise<void> | null>(null);
+  const proximoRef = useRef<{ manter: Manter | null; herdar: CategoriaHerdada } | null>(null);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
   // 10/11/2026 (fix estoque preso): tirar da grade cor/tamanho que ainda
@@ -331,6 +364,40 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // "Por lote e tonalidade": perfil Matcon + lote ligado na config + m²/m³,
   // e só no cadastro (depois, o lote entra pela nota do fornecedor).
   const lotesDisponiveis = isProduto && !modoEdicao && perfil.estoque.lotes && usaLote(matcon, unidade);
+
+  // ── em quais lojas o produto entra (20/11/2026, A1) ──────
+  // A lista vem do servidor a cada abertura do cadastro (staleTime 0), nunca
+  // do token. Só no cadastro novo de produto, fora do consolidado e do demo.
+  // Sem resposta, com erro ou com menos de 2 lojas: o campo não existe e o
+  // Salvar é o de hoje.
+  const ativaId = company?.id ? String(company.id) : "";
+  const consultaLojas = visible && !!ativaId && !alvo && !consolidatedView && !isDemo;
+  const { data: lojasResp } = useQuery({
+    queryKey: ["lojas-para-cadastro", ativaId],
+    queryFn: () => lojasDoProdutoApi.lojasParaCadastro(ativaId),
+    enabled: consultaLojas,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const campo = campoDeLojas(consultaLojas && isProduto ? lojasResp : null, ativaId);
+  // A ativa está sempre marcada (A1: fixa).
+  const escolhidas = lojasEscolhidas(campo, [ativaId, ...lojasMarcadas]);
+  const variasLojas = escolhidas.length >= 2;
+  const gradeDaLoja = variasLojas && gradeDe && gradeDe !== ativaId && escolhidas.some((l) => String(l.company_id) === gradeDe)
+    ? gradeDe
+    : ativaId;
+  const estoqueFracionadoNasLojas = matcon.matcon_enabled && estoqueEmDecimal(unidade);
+  function lerQtdDaLoja(txt: string): number {
+    return estoqueFracionadoNasLojas ? (parseQtyInput(txt || "") ?? 0) : (parseInt(txt || "", 10) || 0);
+  }
+  function celulasDaLoja(id: string): Record<string, string> {
+    return id === ativaId ? celulas : (celulasPorLoja[id] || {});
+  }
+  function alternarLoja(id: string) {
+    if (id === ativaId) return;
+    setLojasMarcadas((m) => (m.indexOf(id) >= 0 ? m.filter((x) => x !== id) : [...m, id]));
+  }
 
   const filaRef = useRef<FotoPendente[]>([]);
   const panelRef = useRef<any>(null);
@@ -500,6 +567,12 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setCatSheet(false);
     setConfirmarSaida(false);
     setDupPendente(null);
+    setLojasMarcadas([]);
+    setQtdPorLoja({});
+    setCelulasPorLoja({});
+    setGradeDe(null);
+    setResultado(null);
+    copiaPendenteRef.current = null;
 
     if (prod) {
       setSelecao(VAZIO);
@@ -743,6 +816,20 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     } catch (_) { /* o produto já existe; o vínculo vira pendência */ }
   }
 
+  // A1: com cópia para outras lojas, a cópia espera o vínculo da categoria
+  // (a outra loja recebe a categoria da origem). Falha não trava a cópia:
+  // o toast do vínculo já avisa.
+  async function vincularCategoriaEsperando(id: string): Promise<void> {
+    if (!selecao.primaryCategoryId) return;
+    if (typeof assignProductCategoriesAsync !== "function") { vincularCategoria(id); return; }
+    try {
+      await assignProductCategoriesAsync(id, {
+        primary_category_id: selecao.primaryCategoryId,
+        also_in: selecao.alsoInIds,
+      });
+    } catch (_) { /* o produto já existe; o vínculo vira pendência */ }
+  }
+
   // A fila roda a partir do ref: fechar o modal no meio não cancela nada,
   // e uma foto que falha não derruba as outras — o toast conta no fim.
   async function subirFila(id: string) {
@@ -770,6 +857,79 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         ? "Uma foto não subiu. Abra o item e tente de novo."
         : falhas + " fotos não subiram. Abra o item e tente de novo.");
     }
+  }
+
+  // ── cópia para as outras lojas (20/11/2026, A1) ──────────
+  // O que cada outra loja recebe, lido da tela no momento do Salvar.
+  function montarCopia(pid: string, pecasDaOrigem: number): CopiaPendente | null {
+    if (!variasLojas || !ativaId) return null;
+    const comGrade = isProduto && stockMode === "variants" && (cores.length > 0 || tamanhos.length > 0);
+    const outras = escolhidas.filter((l) => String(l.company_id) !== ativaId);
+    if (!outras.length) return null;
+    const daOrigem = escolhidas.find((l) => String(l.company_id) === ativaId);
+    return {
+      origem: ativaId,
+      pid,
+      comGrade,
+      lojas: outras.map((l) => {
+        const id = String(l.company_id);
+        const estoque: EstoqueDaLojaNaCopia = comGrade
+          ? { tipo: "grade", matriz: matrizDaGrade(cores, tamanhos, celulasPorLoja[id] || {}, null, matrixKey) }
+          : (stockMode === "lots" ? { tipo: "zero" } : { tipo: "simples", qtd: lerQtdDaLoja(qtdPorLoja[id] || "") });
+        return { company_id: id, nome: l.nome, estoque };
+      }),
+      linhaDaOrigem: {
+        company_id: ativaId, nome: daOrigem ? daOrigem.nome : "",
+        estado: "criado", texto: textoDeCriado(pecasDaOrigem), podeTentar: false, avisoFiscal: false,
+      },
+    };
+  }
+
+  function aplicarNoResultado(pid: string, linhas: LinhaDoResultado[]) {
+    setResultado((r) => (r && r.pid === pid ? { ...r, linhas: mesclarResultado(r.linhas, linhas) } : r));
+  }
+
+  // Só sai depois da última foto da fila (a outra loja nasce com as fotos)
+  // e, com grade, com o id de cada variante da origem. Falha de rede vira
+  // "Tentar de novo" em cada loja pedida; o produto da origem fica.
+  async function executarCopia(copia: CopiaPendente, espera: Promise<void> | null, so?: string[]) {
+    const alvos = so ? copia.lojas.filter((l) => so.indexOf(l.company_id) >= 0) : copia.lojas;
+    if (!alvos.length) return;
+    aplicarNoResultado(copia.pid, linhasCriando(alvos));
+    if (espera) { try { await espera; } catch (_) { /* a fila já avisa por toast */ } }
+    let ids: Record<string, string> | null = null;
+    if (copia.comGrade) {
+      try {
+        const v: any = await companiesApi.variants(copia.origem, copia.pid);
+        ids = idsDasVariantes(v?.variants);
+      } catch (_) {
+        ids = null;
+      }
+    }
+    const { pedido, faltouVariante } = pedidoDeCopia(alvos.map((l) => ({ company_id: l.company_id, estoque: l.estoque })), ids);
+    if ((copia.comGrade && !ids) || faltouVariante) {
+      aplicarNoResultado(copia.pid, linhasDeFalhaGeral(alvos));
+      return;
+    }
+    try {
+      const resp = await lojasDoProdutoApi.copiarParaLojas(copia.origem, copia.pid, pedido);
+      const nomes: Record<string, string> = {};
+      alvos.forEach((l) => { nomes[l.company_id] = l.nome; });
+      const voltaram = (resp?.resultados || [])
+        .filter((r) => r && r.company_id && nomes[String(r.company_id)] !== undefined)
+        .map((r) => linhaDoResultado({ ...r, company_id: String(r.company_id), nome: r.nome || nomes[String(r.company_id)] }));
+      const semResposta = alvos.filter((l) => !voltaram.some((x) => x.company_id === l.company_id));
+      aplicarNoResultado(copia.pid, [...voltaram, ...linhasDeFalhaGeral(semResposta)]);
+    } catch (e: any) {
+      aplicarNoResultado(copia.pid, linhasDeFalhaGeral(alvos, e));
+    }
+    qc.invalidateQueries({ queryKey: ["products"] });
+  }
+
+  function mostrarResultadoECopiar(copia: CopiaPendente, espera: Promise<void> | null) {
+    copiaFeitaRef.current = copia;
+    setResultado({ pid: copia.pid, linhas: [copia.linhaDaOrigem, ...linhasCriando(copia.lojas)] });
+    void executarCopia(copia, espera);
   }
 
   async function salvar(cadastrarOutro: boolean) {
@@ -814,13 +974,21 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           const coresVivasEd = stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
           filaRef.current = pendentes.filter((f) => f.corHex != null && coresVivasEd.indexOf(chaveDaCor(f.corHex)) >= 0);
           setPendentes([]);
-          void subirFila(alvo!.id);
+          filaEmCursoRef.current = subirFila(alvo!.id);
         }
         if (categoriaSuja) vincularCategoria(alvo!.id);
         setSujo(false);
         setGradeSuja(false);
         setCategoriaSuja(false);
         onSaved?.();
+        // A1: o cadastro em várias lojas cuja grade falhou no primeiro Salvar
+        // copia agora, com a grade gravada, e mostra o resultado por loja.
+        const pendente = copiaPendenteRef.current;
+        if (pendente && pendente.pid === String(alvo!.id)) {
+          copiaPendenteRef.current = null;
+          mostrarResultadoECopiar(pendente, filaEmCursoRef.current);
+          return;
+        }
         onClose();
         return;
       }
@@ -832,11 +1000,20 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       };
       const criado: any = await addProduct(corpo);
       if (!criado?.id) return;
+      // A1: com 2 ou mais lojas, o que vai para as outras, lido agora (o
+      // corpo acima é o de sempre; a cópia é uma chamada à parte).
+      const copia = montarCopia(String(criado.id), Number(corpo.stock) || 0);
 
-      // Vínculo da árvore: só existe depois que a linha existe.
-      vincularCategoria(criado.id);
-      // Fornecedores: idem. Falhar não desfaz o produto (já avisa).
-      if (fornLinhas.length) void salvarFornecedores(String(criado.id));
+      // Vínculo da árvore: só existe depois que a linha existe. Com cópia,
+      // a promessa entra na espera da cópia (junto com a fila de fotos).
+      const vinculo: Promise<void> | null = copia ? vincularCategoriaEsperando(String(criado.id)) : null;
+      if (!copia) vincularCategoria(criado.id);
+      // Fornecedores: idem. Falhar não desfaz o produto (já avisa). Com
+      // cópia, espera: a outra loja recebe os fornecedores da origem.
+      if (fornLinhas.length) {
+        if (copia) await salvarFornecedores(String(criado.id));
+        else void salvarFornecedores(String(criado.id));
+      }
 
       // Foto de uma cor que saiu da grade antes do Salvar não sobe órfã.
       const coresVivas = isProduto && stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
@@ -852,7 +1029,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           setAlvo({ ...corpo, id: String(criado.id) });
           setGradeSuja(true);
           onSaved?.();
-          void subirFila(criado.id);
+          // A1: as outras lojas esperam a grade (a cópia leva as variantes).
+          copiaPendenteRef.current = copia;
+          filaEmCursoRef.current = Promise.all([subirFila(criado.id), vinculo]).then(() => undefined);
           return;
         }
       }
@@ -868,7 +1047,25 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // O Salvar termina aqui. As fotos sobem soltas a partir do ref: fechar
       // ou começar o próximo item não espera o upload nem é atropelado por
       // ele — o fim só avisa por toast (auditoria 10/09).
-      void subirFila(criado.id);
+      const fila = subirFila(criado.id);
+      // A1: a cópia espera a última foto E o vínculo da categoria.
+      const espera = vinculo ? Promise.all([fila, vinculo]).then(() => undefined) : fila;
+      filaEmCursoRef.current = espera;
+
+      if (copia) {
+        // A1: o modal fica aberto com o resultado por loja (D15). A cópia
+        // sai depois da última foto. "Cadastrar outro" leva a categoria
+        // (e, no Matcon, o que o perfil manda manter), como o botão de hoje.
+        proximoRef.current = {
+          manter: perfil.manterNoProximo ? { unidade, purchaseUnit, purchaseFactorTxt, ncm, cest, icmsStPaid, origem } : null,
+          herdar: {
+            selecao: { primaryCategoryId: selecao.primaryCategoryId, alsoInIds: selecao.alsoInIds },
+            legado: categoriaEscolhida || "",
+          },
+        };
+        mostrarResultadoECopiar(copia, espera);
+        return;
+      }
 
       if (cadastrarOutro) {
         // A categoria passa para o próximo produto em qualquer perfil (em
@@ -923,9 +1120,33 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
   function pedirFechar() {
     if (varios) { onClose(); return; }
+    // A1: com o resultado por loja na tela, fechar é "Concluir" — e espera
+    // a cópia terminar (sem isso a loja que falhou some sem aviso).
+    if (resultado) {
+      if (resultado.linhas.some((l) => l.estado === "criando")) return;
+      concluirResultado();
+      return;
+    }
     setSaidaParaVarios(false);
     if (temProgresso) setConfirmarSaida(true);
     else onClose();
+  }
+
+  // ── A1: depois do Salvar em várias lojas ─────────────────
+  function concluirResultado() {
+    setResultado(null);
+    copiaFeitaRef.current = null;
+    onClose();
+  }
+  function cadastrarOutroDoResultado() {
+    const prox = proximoRef.current;
+    copiaFeitaRef.current = null;
+    semear(null, "product", prox ? prox.manter : null, prox ? prox.herdar : null);
+  }
+  function tentarDeNovo(companyId: string) {
+    const copia = copiaFeitaRef.current;
+    if (!copia) return;
+    void executarCopia(copia, null, [companyId]);
   }
 
   // ── E2: "Cadastrar vários" ───────────────────────────────
@@ -963,7 +1184,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       else pedirFechar();
     },
     fecharSheet: () => setCatSheet(false),
-    edicao: modoEdicao, pode: podeSalvar, sheet: catSheet, ficha: fichaAberta || composicaoAberta,
+    edicao: modoEdicao, pode: podeSalvar && !resultado, sheet: catSheet, ficha: fichaAberta || composicaoAberta,
   };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof document === "undefined") return;
@@ -1041,13 +1262,28 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           abreviacaoDoTamanho: perfil.estoque.abreviacaoDoTamanho,
         }));
   const atalho = modoEdicao ? "Ctrl+Enter" : "Enter";
+  // A1 (mockup a, b e f): com o campo de lojas à vista, o rodapé diz em
+  // quais lojas o produto entra, e quantas peças em cada uma.
+  function pecasNaLoja(id: string): number | null {
+    if (stockMode === "lots") return null;
+    if (stockMode === "variants") {
+      if (!(cores.length > 0 || tamanhos.length > 0)) return 0;
+      return totalDaMatriz(matrizDaGrade(cores, tamanhos, celulasDaLoja(id), null, matrixKey));
+    }
+    return lerQtdDaLoja(id === ativaId ? estoqueTxt : (qtdPorLoja[id] || ""));
+  }
+  const fraseDasLojas = campo.modo === "escolha" && !modoEdicao && !progressoTxt && !bloqueioTxt
+    ? fraseDoRodape(escolhidas.map((l) => ({ nome: l.nome, qtd: pecasNaLoja(String(l.company_id)) })), narrow)
+    : null;
+  const rotuloDoSalvar = variasLojas && !modoEdicao ? rotuloSalvarNasLojas(escolhidas.length) : rotuloDoBotaoSalvar(type, modoEdicao);
 
   // Devolve JSX, não um componente: um componente declarado aqui dentro
   // seria um tipo novo a cada render e remontaria o botão no meio do
   // clique.
   function tipoBtn(alvoTipo: ItemType, icone: string, rotulo: string) {
     const ativo = type === alvoTipo;
-    const travado = modoEdicao && !ativo;
+    // A1: com o resultado por loja na tela, o tipo também não muda.
+    const travado = (modoEdicao || !!resultado) && !ativo;
     return (
       <Pressable
         key={alvoTipo}
@@ -1086,6 +1322,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       perfil={perfil}
     />
   );
+
+  // A1: logo depois do Item, como no mockup (a). Fora do campo, nada.
+  const secLojas = !modoEdicao && campo.modo !== "nenhum" ? (
+    <SecaoLojas campo={campo} marcadas={[ativaId, ...lojasMarcadas]} onAlternar={alternarLoja} narrow={narrow} />
+  ) : null;
 
   // Trocar a unidade: se o estoque estava "por lote" e a unidade nova não
   // tem lote (só m²/m³), volta para a quantidade única — as linhas de lote
@@ -1172,7 +1413,16 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       minimo={minimoTxt} onMinimo={(v) => { setMinimoTxt(v); setSujo(true); }}
       cores={cores} onCores={(v) => { setCores(v); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       tamanhos={tamanhos} onTamanhos={(v) => { setTamanhos(v); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
-      celulas={celulas} onCelula={(k, v) => { setCelulas((c) => ({ ...c, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
+      celulas={celulasDaLoja(gradeDaLoja)} onCelula={(k, v) => {
+        // A1: com outra loja escolhida no seletor, a célula é dela; a grade
+        // da loja ativa (a do PUT /variations) não muda.
+        if (gradeDaLoja !== ativaId) {
+          setCelulasPorLoja((m) => ({ ...m, [gradeDaLoja]: { ...(m[gradeDaLoja] || {}), [k]: v } }));
+          setSujo(true);
+          return;
+        }
+        setCelulas((c) => ({ ...c, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true);
+      }}
       barras={barras} onBarra={(k, v) => { setBarras((b) => ({ ...b, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
       perfil={perfil}
@@ -1180,6 +1430,23 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       purchaseFactor={purchaseFactorTxt}
       lotesDisponiveis={lotesDisponiveis}
       lotes={lotes} onLotes={(v) => { setLotes(v); setSujo(true); }}
+      lojas={variasLojas ? {
+        linhas: escolhidas.map((l) => {
+          const id = String(l.company_id);
+          return { id, nome: l.nome, ativa: id === ativaId, qtd: id === ativaId ? estoqueTxt : (qtdPorLoja[id] ?? "") };
+        }),
+        onQtd: (id, v) => {
+          if (id === ativaId) setEstoqueTxt(v);
+          else setQtdPorLoja((m) => ({ ...m, [id]: v }));
+          setSujo(true);
+        },
+        gradeDe: gradeDaLoja,
+        onGradeDe: (id) => setGradeDe(id),
+        totais: Object.fromEntries(escolhidas.map((l) => {
+          const id = String(l.company_id);
+          return [id, totalDaMatriz(matrizDaGrade(cores, tamanhos, celulasDaLoja(id), null, matrixKey))];
+        })),
+      } : null}
     />
   ) : null;
 
@@ -1391,7 +1658,17 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         </View>
 
         {/* corpo — as seções nunca desmontam; a ScrollView é uma só */}
-        <ScrollView style={[s.body, varios && s.oculto]} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
+        {resultado && (
+          <ResultadoPorLoja
+            linhas={resultado.linhas}
+            progressoTxt={progressoTxt}
+            onTentar={tentarDeNovo}
+            onConcluir={concluirResultado}
+            onCadastrarOutro={cadastrarOutroDoResultado}
+            narrow={narrow}
+          />
+        )}
+        <ScrollView style={[s.body, (varios || !!resultado) && s.oculto]} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
           {mostraFaixaVarios ? <FaixaCadastrarVarios narrow={narrow} onPress={irParaVarios} /> : null}
           {perfil.notaFiscalSeparada ? (
             // Perfil Matcon: o que é do balcão vem antes do que é da vitrine.
@@ -1399,6 +1676,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               <View style={s.cols}>
                 <View style={s.colEsq}>
                   {secItem}
+                  {secLojas}
                   {secPrecoComAviso}
                   {secFornecedores}
                   {secEstoque}
@@ -1418,6 +1696,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             ) : (
               <View style={{ gap: 12 }}>
                 {secItem}
+                {secLojas}
                 {secPrecoComAviso}
                 {secFornecedores}
                 {secEstoque}
@@ -1436,6 +1715,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             <View style={s.cols}>
               <View style={s.colEsq}>
                 {secItem}
+                {secLojas}
                 {secPrecoComAviso}
                 {secFornecedores}
                 {secEstoque}
@@ -1453,6 +1733,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           ) : (
             <View style={{ gap: 12 }}>
               {secItem}
+              {secLojas}
               {secPrecoComAviso}
               {secFornecedores}
               {secEstoque}
@@ -1468,14 +1749,20 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         </ScrollView>
 
         {/* rodapé */}
-        <View style={[s.footer, narrow && s.footerNarrow, varios && s.oculto]}>
+        <View style={[s.footer, narrow && s.footerNarrow, (varios || !!resultado) && s.oculto]}>
           <View style={s.footerInfoBox}>
             {!!bloqueioTxt && !progressoTxt && <Icon name="alert" size={13} color={Colors.amber} />}
             <Text
               style={[s.footerInfo, !!bloqueioTxt && !progressoTxt && { color: Colors.amber }]}
               numberOfLines={narrow ? 2 : 1}
             >
-              {info}
+              {fraseDasLojas ? (
+                <Text testID="rodape-lojas">
+                  {fraseDasLojas.antes}
+                  <Text style={{ fontWeight: "700", color: Colors.ink }}>{fraseDasLojas.forte}</Text>
+                  {fraseDasLojas.depois}
+                </Text>
+              ) : info}
             </Text>
             {!narrow && !progressoTxt && (
               <View style={s.kbd}><Text style={s.kbdTxt}>{atalho + " salva"}</Text></View>
@@ -1488,7 +1775,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 <Text style={s.btnSecTxt}>Cancelar</Text>
               </Pressable>
             )}
-            {!modoEdicao && (
+            {!modoEdicao && !variasLojas && (
               <Pressable
                 style={[s.btnSec, !podeSalvar && { opacity: 0.45 }, narrow && { alignItems: "center" }]}
                 onPress={podeSalvar ? () => salvar(true) : undefined}
@@ -1511,7 +1798,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               ) : (
                 <>
                   <Icon name="check" size={14} color="#fff" />
-                  <Text style={s.btnPriTxt}>{rotuloDoBotaoSalvar(type, modoEdicao)}</Text>
+                  <Text style={s.btnPriTxt}>{rotuloDoSalvar}</Text>
                 </>
               )}
             </Pressable>
