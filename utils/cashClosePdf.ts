@@ -329,12 +329,12 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     (trocas ? contaHtml(data.grossRevenue, entradas, trocas, data.trocasResumo) : "") +
     '<div style="font-size:10px; color:#6a608e; margin-top:8px; line-height:1.5;">' +
     (trocas
-      ? "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não e falta no caixa."
+      ? "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário e venda com data anterior paga nesta sessão também fazem os dois números diferirem — isso não e falta no caixa."
       : "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). Entradas no caixa = o que entrou por forma de pagamento nesta sessao" +
         (data.devolucoes && data.devolucoes > 0
           ? ", ja descontados " + fmt(data.devolucoes) + " devolvidos ao cliente em trocas"
           : "") +
-        ". Trocas e crediário fazem os dois números diferirem — isso não e falta no caixa.") +
+        ". Trocas, crediário e venda com data anterior paga nesta sessão fazem os dois números diferirem — isso não e falta no caixa.") +
     "</div>" +
     '<div class="s-title">Conferencia de caixa</div>' +
     '<div class="summary">' +

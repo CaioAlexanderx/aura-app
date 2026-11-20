@@ -504,6 +504,15 @@ function DrawerModal(props: { row: Row | null; onClose: () => void }) {
             <DrawerRow k="Total geral" v={fmt(row.total_geral)} mono bold />
 
             <View style={s.drawerSep} />
+            {/* 20/11/2026 (TEKMO): retirada e reforço entram no esperado; sem
+                as linhas, R$ 210 vendidos e "esperado R$ 250" pareciam erro.
+                Mesmos rótulos do PDF do fechamento. */}
+            {Number(row.total_suprimentos) > 0 && (
+              <DrawerRow k="Reforços de troco" v={"+ " + fmt(row.total_suprimentos)} mono />
+            )}
+            {Number(row.total_sangrias) > 0 && (
+              <DrawerRow k="Retiradas (sangrias)" v={"- " + fmt(row.total_sangrias)} mono />
+            )}
             <DrawerRow k="Esperado em dinheiro" v={fmt(row.dinheiro_esperado)} mono />
             <DrawerRow k="Contado" v={fmt(row.dinheiro_contado)} mono />
             <View style={s.drawerDifBox}>
