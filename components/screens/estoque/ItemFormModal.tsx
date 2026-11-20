@@ -111,11 +111,12 @@ import { CadastrarVariosEscolha, FaixaCadastrarVarios, type AcoesCadastrarVarios
 // 20/11/2026 (plano empresa-do-produto, A1): "Em quais lojas este produto
 // entra?". Só com 2 ou mais lojas no grupo em que a pessoa mexe no estoque;
 // para o resto, o modal e o corpo do POST são os de hoje.
-import { lojasDoProdutoApi } from "@/services/lojasDoProdutoApi";
-import { SecaoLojas, ResultadoPorLoja } from "./item-form/SecaoLojas";
+import { lojasDoProdutoApi, lojasDoProdutoEdicaoApi, type CampoParaAplicar } from "@/services/lojasDoProdutoApi";
+import { SecaoLojas, ResultadoPorLoja, LojasDaEdicao } from "./item-form/SecaoLojas";
 import {
   campoDeLojas, lojasEscolhidas, fraseDoRodape, rotuloSalvarNasLojas, textoDeCriado,
   linhaDoResultado, linhasCriando, linhasDeFalhaGeral, mesclarResultado, idsDasVariantes, pedidoDeCopia,
+  camposParaAplicar, tituloDaOferta, textoDaOferta,
   type EstoqueDaLojaNaCopia, type LinhaDoResultado,
 } from "./item-form/lojasDoCadastro";
 import {
@@ -310,6 +311,13 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const copiaFeitaRef = useRef<CopiaPendente | null>(null);
   const filaEmCursoRef = useRef<Promise<void> | null>(null);
   const proximoRef = useRef<{ manter: Manter | null; herdar: CategoriaHerdada } | null>(null);
+  // 20/11/2026 (A4, D13): na edição, "Levar para outra loja" e, ao salvar
+  // preço ou nome de um produto que está em outras lojas, a oferta de
+  // aplicar lá também.
+  const [levando, setLevando] = useState<string | null>(null);
+  const [levados, setLevados] = useState<Record<string, LinhaDoResultado>>({});
+  const [oferta, setOferta] = useState<{ pid: string; campos: CampoParaAplicar[]; lojas: Array<{ company_id: string; nome: string }> } | null>(null);
+  const [aplicando, setAplicando] = useState(false);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
   // 10/11/2026 (fix estoque preso): tirar da grade cor/tamanho que ainda
@@ -394,6 +402,74 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   function celulasDaLoja(id: string): Record<string, string> {
     return id === ativaId ? celulas : (celulasPorLoja[id] || {});
   }
+  // A4: na edição, em quais lojas o par existe. Só produto próprio da loja
+  // (o compartilhado já aparece em todas). Uma loja só, erro ou backend sem
+  // a rota: a seção não existe e o Salvar é o de hoje.
+  const consultaDaEdicao = visible && !!ativaId && !!alvo?.id && !consolidatedView && !isDemo
+    && alvo?.unit !== "srv" && !alvo?.isGroupShared;
+  const { data: lojasDoAlvo } = useQuery({
+    queryKey: ["lojas-do-produto", ativaId, alvo?.id],
+    queryFn: () => lojasDoProdutoEdicaoApi.lojasDoProduto(ativaId, String(alvo!.id)),
+    enabled: consultaDaEdicao,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const emLojas = consultaDaEdicao && lojasDoAlvo && Array.isArray(lojasDoAlvo.em) ? lojasDoAlvo.em : [];
+  const podeLevarPara = consultaDaEdicao && lojasDoAlvo && Array.isArray(lojasDoAlvo.pode_levar_para) ? lojasDoAlvo.pode_levar_para : [];
+  const ativaNaEdicao = emLojas.some((l) => String(l.company_id) === ativaId);
+  const mostraLojasDaEdicao = modoEdicao && ativaNaEdicao && (emLojas.length >= 2 || podeLevarPara.length > 0);
+  // As outras lojas onde o par existe (a oferta de aplicar o preço e o nome).
+  const outrasDoAlvo = emLojas.filter((l) => String(l.company_id) !== ativaId);
+
+  async function levarPara(companyId: string) {
+    if (!alvo?.id || levando) return;
+    const loja = podeLevarPara.find((l) => String(l.company_id) === companyId);
+    if (!loja) return;
+    setLevando(companyId);
+    try {
+      const resp = await lojasDoProdutoApi.copiarParaLojas(ativaId, String(alvo.id), { lojas: [{ company_id: companyId, stock_qty: 0 }] });
+      const r = (resp?.resultados || []).find((x) => String(x.company_id) === companyId);
+      const linha = r
+        ? linhaDoResultado({ ...r, company_id: companyId, nome: r.nome || loja.nome })
+        : linhasDeFalhaGeral([{ company_id: companyId, nome: loja.nome }])[0];
+      setLevados((m) => ({ ...m, [companyId]: linha }));
+      if (linha.estado !== "erro") {
+        qc.invalidateQueries({ queryKey: ["lojas-do-produto", ativaId, String(alvo.id)] });
+        qc.invalidateQueries({ queryKey: ["products"] });
+      }
+    } catch (e: any) {
+      setLevados((m) => ({ ...m, [companyId]: linhasDeFalhaGeral([{ company_id: companyId, nome: loja.nome }], e)[0] }));
+    } finally {
+      setLevando(null);
+    }
+  }
+
+  async function aplicarNasOutras() {
+    if (!oferta || aplicando) return;
+    setAplicando(true);
+    const nomes = oferta.lojas.map((l) => l.nome);
+    try {
+      const resp = await lojasDoProdutoEdicaoApi.aplicarNasLojas(ativaId, oferta.pid, {
+        campos: oferta.campos, lojas: oferta.lojas.map((l) => String(l.company_id)),
+      });
+      const falharam = (resp?.resultados || []).filter((r) => r && r.status === "erro");
+      if (falharam.length > 0) {
+        const nomesQueFalharam = falharam.map((r) => r.nome || (oferta.lojas.find((l) => String(l.company_id) === String(r.company_id))?.nome) || "");
+        toast.error("Não deu para aplicar na " + nomesQueFalharam.filter(Boolean).join(" e ") + ". Tente de novo pela edição.");
+      } else {
+        toast.success("Aplicado também na " + (nomes.length === 1 ? nomes[0] : nomes.slice(0, -1).join(", ") + " e " + nomes[nomes.length - 1]) + ".");
+      }
+      qc.invalidateQueries({ queryKey: ["products"] });
+    } catch (_) {
+      toast.error("Não deu para aplicar na " + nomes.join(" e ") + ". Tente de novo pela edição.");
+    } finally {
+      setAplicando(false);
+      setOferta(null);
+      onClose();
+    }
+  }
+
   function alternarLoja(id: string) {
     if (id === ativaId) return;
     setLojasMarcadas((m) => (m.indexOf(id) >= 0 ? m.filter((x) => x !== id) : [...m, id]));
@@ -573,6 +649,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setGradeDe(null);
     setResultado(null);
     copiaPendenteRef.current = null;
+    setLevando(null);
+    setLevados({});
+    setOferta(null);
+    setAplicando(false);
 
     if (prod) {
       setSelecao(VAZIO);
@@ -975,6 +1055,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           mostrarResultadoECopiar(pendente, filaEmCursoRef.current);
           return;
         }
+        // A4 (pergunta 5 do plano): preço ou nome mudou e o produto está em
+        // outras lojas: oferece aplicar lá também. Vale só para a loja ativa
+        // até ela escolher; o estoque nunca vai junto.
+        const mudou = camposParaAplicar({ name: alvo!.name, price: alvo!.price }, { name: nome.trim(), price: precoNum });
+        if (mudou.length > 0 && outrasDoAlvo.length > 0) {
+          setOferta({ pid: String(alvo!.id), campos: mudou, lojas: outrasDoAlvo });
+          return;
+        }
         onClose();
         return;
       }
@@ -1160,13 +1248,15 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     salvar,
     // Escape fecha uma camada por vez: a confirmação aberta antes do modal.
     fechar: () => {
+      // A4: Esc na oferta é "Só nesta loja" (o Salvar já foi feito).
+      if (oferta) { if (!aplicando) { setOferta(null); onClose(); } return; }
       if (remocaoPendente) setRemocaoPendente(null);
       else if (dupPendente) setDupPendente(null);
       else if (confirmarSaida) { setConfirmarSaida(false); setSaidaParaVarios(false); }
       else pedirFechar();
     },
     fecharSheet: () => setCatSheet(false),
-    edicao: modoEdicao, pode: podeSalvar && !resultado, sheet: catSheet, ficha: fichaAberta || composicaoAberta,
+    edicao: modoEdicao, pode: podeSalvar && !resultado && !oferta, sheet: catSheet, ficha: fichaAberta || composicaoAberta,
   };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof document === "undefined") return;
@@ -1308,6 +1398,17 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // A1: logo depois do Item, como no mockup (a). Fora do campo, nada.
   const secLojas = !modoEdicao && campo.modo !== "nenhum" ? (
     <SecaoLojas campo={campo} marcadas={[ativaId, ...lojasMarcadas]} onAlternar={alternarLoja} narrow={narrow} />
+  ) : mostraLojasDaEdicao ? (
+    // A4 (mockup "Na edição"): onde está e "Levar para outra loja".
+    <LojasDaEdicao
+      em={emLojas}
+      podeLevarPara={podeLevarPara}
+      ativaId={ativaId}
+      levando={levando}
+      resultados={levados}
+      onLevar={(id) => { void levarPara(id); }}
+      sujo={sujo || gradeSuja || categoriaSuja}
+    />
   ) : null;
 
   // Trocar a unidade: se o estoque estava "por lote" e a unidade nova não
@@ -1800,6 +1901,33 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           />
         )}
       </View>
+
+      {oferta && (
+        <View style={s.exitOverlay} testID="oferta-aplicar-nas-lojas">
+          <View style={s.exitCard}>
+            <Text style={s.exitTitle}>{tituloDaOferta(oferta.lojas.map((l) => l.nome))}</Text>
+            <Text style={s.exitMsg}>{textoDaOferta(oferta.campos, oferta.lojas.map((l) => l.nome))}</Text>
+            <View style={[s.exitActions, narrow && { flexDirection: "column-reverse", alignItems: "stretch" }]}>
+              <Pressable
+                testID="oferta-so-nesta"
+                style={[s.exitStay, { minHeight: 44, justifyContent: "center" }]}
+                onPress={aplicando ? undefined : () => { setOferta(null); onClose(); }}
+                disabled={aplicando}
+              >
+                <Text style={[s.exitStayTxt, { textAlign: "center" }]}>Só nesta loja</Text>
+              </Pressable>
+              <Pressable
+                testID="oferta-aplicar"
+                style={[s.btnPri, { minHeight: 44, justifyContent: "center" }]}
+                onPress={aplicando ? undefined : () => { void aplicarNasOutras(); }}
+                disabled={aplicando}
+              >
+                {aplicando ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.btnPriTxt}>Aplicar também</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
 
       {remocaoPendente && (
         <View style={s.exitOverlay} testID="confirmar-remocao-com-estoque">

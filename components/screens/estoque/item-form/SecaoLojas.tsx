@@ -19,7 +19,8 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Nota, Secao, s as ui } from "./ui";
 import type { CampoDeLojas, LinhaDoResultado } from "./lojasDoCadastro";
-import { TEXTO_AVISO_FISCAL } from "./lojasDoCadastro";
+import { TEXTO_AVISO_FISCAL, dicaDaEdicao, lojasDoProdutoTxt } from "./lojasDoCadastro";
+import { useState } from "react";
 
 export const TEXTO_ESTOQUE_UNICO = "As suas lojas usam um estoque só. Este produto aparece em todas.";
 
@@ -115,6 +116,90 @@ export function CaixaDeLoja({ nome, sub, marcada, fixa, onPress, testID }: {
         <View style={st.tag}><Text style={st.tagTxt}>Você está aqui</Text></View>
       ) : null}
     </Pressable>
+  );
+}
+
+// ── edição (A4, D13, mockup "Na edição") ─────────────────────
+//
+// Leitura de onde o produto está e "Levar para outra loja" (cria o par lá
+// com estoque 0, pela mesma rota da cópia). Mover peças continua sendo
+// "Transferir"; tirar de uma loja continua sendo excluir lá.
+
+export const TEXTO_LEVAR_SEM_ESTOQUE = "Nasce lá com estoque 0.";
+export const TEXTO_SALVE_ANTES = "Salve antes de levar: a outra loja recebe o cadastro como está gravado.";
+
+type PropsEdicao = {
+  em: Array<{ company_id: string; nome: string }>;
+  podeLevarPara: Array<{ company_id: string; nome: string }>;
+  ativaId: string;
+  /** company_id em andamento. */
+  levando: string | null;
+  resultados: Record<string, LinhaDoResultado>;
+  onLevar: (companyId: string) => void;
+  sujo: boolean;
+};
+
+export function LojasDaEdicao({ em, podeLevarPara, ativaId, levando, resultados, onLevar, sujo }: PropsEdicao) {
+  const [aberto, setAberto] = useState(false);
+  const ativa = em.find((l) => String(l.company_id) === ativaId);
+  return (
+    <Secao icon="store" titulo="Lojas">
+      <View style={st.res} testID="lojas-da-edicao">
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={st.nome}>Este produto está em</Text>
+          <Text style={st.resTxt}>{lojasDoProdutoTxt(em, ativaId)}</Text>
+        </View>
+        {podeLevarPara.length > 0 ? (
+          <Pressable
+            testID="levar-para-outra-loja"
+            onPress={() => setAberto(!aberto)}
+            style={st.btnTentar}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: aberto }}
+          >
+            <Text style={st.btnTentarTxt}>Levar para outra loja</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {aberto ? (
+        <View style={[st.lista, { marginTop: 8 }]}>
+          {sujo ? <Text style={[ui.hint, { color: Colors.amber, marginTop: 0 }]}>{TEXTO_SALVE_ANTES}</Text> : null}
+          {podeLevarPara.map((l) => {
+            const id = String(l.company_id);
+            const r = resultados[id];
+            const indo = levando === id;
+            const feito = r && (r.estado === "criado" || r.estado === "ja_existia");
+            // Erro que repetir não resolve (código em uso, limite): sem toque.
+            const travado = indo || !!feito || sujo || !!levando || (!!r && r.estado === "erro" && !r.podeTentar);
+            return (
+              <Pressable
+                key={id}
+                testID={"levar-para-" + id}
+                onPress={travado ? undefined : () => onLevar(id)}
+                disabled={travado}
+                accessibilityRole="button"
+                style={[st.loja, feito && st.lojaOn]}
+              >
+                {indo ? (
+                  <View style={st.icone}><ActivityIndicator size="small" color={Colors.violet3} /></View>
+                ) : feito ? (
+                  <View style={[st.icone, st.iconeOk]}><Icon name="check" size={13} color={Colors.green} /></View>
+                ) : r && r.estado === "erro" ? (
+                  <View style={[st.icone, st.iconeErro]}><Text style={st.iconeErroTxt}>!</Text></View>
+                ) : (
+                  <View style={st.icone}><Icon name="plus" size={13} color={Colors.violet3} /></View>
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={st.nome} numberOfLines={2}>{l.nome}</Text>
+                  <Text style={st.resTxt}>{r ? r.texto : TEXTO_LEVAR_SEM_ESTOQUE}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+      <Text style={ui.hint}>{dicaDaEdicao(ativa ? ativa.nome : "")}</Text>
+    </Secao>
   );
 }
 
