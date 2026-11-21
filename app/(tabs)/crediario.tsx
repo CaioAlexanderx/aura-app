@@ -23,6 +23,11 @@ import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModa
 import { escolherRecentes } from "@/components/crediario/lancamento/calculos";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
+import { useModelosDeMensagem, salvarSobre } from "@/hooks/useModelosDeMensagem";
+import {
+  diasDeAtraso, modeloPadrao, parcelaDaCobranca, preencher, primeiroNome, situacaoDaParcela,
+  type DadosDaMensagem, type Situacao,
+} from "@/utils/crediarioMensagem";
 import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/Button";
@@ -150,6 +155,9 @@ type CobrancaPreviewState = {
    * o que enfileirar: o botão do canal oficial nem aparece.
    */
   installmentId?: string | null;
+  /** Modelos (21/11/2026): os dados das variáveis e a situação da parcela. */
+  dados: DadosDaMensagem;
+  situacao: Situacao;
 };
 
 type SortOrder = "balance" | "az";
@@ -427,55 +435,73 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id, searchQ]);
 
-  const handleCobrar = useCallback(async (customerId: string, customerName: string, phone: string | null) => {
+  // Modelos de mensagem da LOJA ativa (multi-CNPJ: a chave leva o id).
+  // Falhou a rota: o hook entrega os prontos da Aura embutidos no app.
+  const modelosMsg = useModelosDeMensagem(company?.id);
+
+  /**
+   * Monta a prévia do Cobrar. `carne` (21/11/2026): o Cobrar do cartão de um
+   * carnê cobra a parcela DAQUELE carnê (id null = grupo sem carnê). Antes
+   * caía sempre na parcela mais antiga da cliente, de qualquer carnê.
+   */
+  const handleCobrar = useCallback(async (
+    customerId: string, customerName: string, phone: string | null, carne?: { id: string | null },
+  ) => {
     if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
     setTriggeringId(customerId);
     try {
       const detail = await creditApi.getCustomerHistory(company!.id, customerId);
       const store  = company?.name || "nossa loja";
       const pixKey = String((rulesQ.data as any)?.pix_key || "").trim();
-      const debit  = (detail.transactions || []).find(t => t.type === "debit");
-      const prodMatch = debit?.notes ? debit.notes.match(/\(([^)]+)\)/) : null;
-      const products  = prodMatch ? prodMatch[1] : "";
-      const buyDate   = debit ? fmtDate(debit.created_at) : "";
-      const open = (detail.open_installments || []).slice()
-        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-      const nextDue = open[0];
-
-      const lines: string[] = [
-        `Olá, ${customerName}! Tudo bem? Passando pra lembrar do seu crediário aqui na ${store}.`,
-      ];
-      if (debit) lines.push(`Referente à compra do dia ${buyDate}${products ? ` (${products})` : ""}.`);
+      const nextDue = parcelaDaCobranca(detail.open_installments, carne);
 
       let valorLabel: string | undefined;
       let valorDesc: string | undefined;
+      const dados: DadosDaMensagem = {
+        nome: primeiroNome(customerName) || customerName,
+        loja: store,
+        saldo: fmt(detail.balance),
+        pix: pixKey || null,
+      };
+      let situacao: Situacao = "a_vencer";
 
       if (nextDue) {
         const valor = valorAPagarParcela(nextDue);
+        const atraso = diasDeAtraso(nextDue.due_date);
+        situacao = situacaoDaParcela(nextDue.due_date);
+        const parcela = `${nextDue.installment_number}/${nextDue.total_installments}`;
         valorLabel = fmt(valor);
-        valorDesc = `Parcela ${nextDue.installment_number}/${nextDue.total_installments} · vence ${fmtDate(nextDue.due_date)}`;
-        lines.push(`A parcela ${nextDue.installment_number}/${nextDue.total_installments} de ${fmt(valor)} vence em ${fmtDate(nextDue.due_date)}.`);
+        // "vence 10/10" de parcela vencida era o defeito do texto antigo.
+        valorDesc = situacao === "em_atraso"
+          ? `Parcela ${parcela} · venceu ${fmtDate(nextDue.due_date)} · ${pluralize(atraso, "dia", "dias")} de atraso`
+          : situacao === "vence_hoje"
+            ? `Parcela ${parcela} · vence hoje`
+            : `Parcela ${parcela} · vence ${fmtDate(nextDue.due_date)}`;
+        dados.valor = fmt(valor);
+        dados.vencimento = fmtDate(nextDue.due_date);
+        dados.parcela = parcela;
+        dados.dias = atraso > 0 ? String(atraso) : null;
       } else {
         valorLabel = fmt(detail.balance);
-        lines.push(`Seu saldo em aberto é de ${fmt(detail.balance)}.`);
       }
-      if (pixKey) lines.push(`Chave Pix para pagamento: ${pixKey}`);
-      lines.push(`— ${store}`);
 
+      const padrao = modeloPadrao(modelosMsg.modelos, situacao);
       setCobrancaPreview({
         recipientName: customerName,
         phone,
         valorLabel,
         valorDesc,
-        message: lines.join("\n\n"),
+        message: padrao ? preencher(padrao.body, dados).texto : "",
         installmentId: nextDue?.id || null,
+        dados,
+        situacao,
       });
     } catch {
       toast.error("Erro ao montar a cobrança");
     } finally {
       setTriggeringId(null);
     }
-  }, [company?.id, company?.name, rulesQ.data]);
+  }, [company?.id, company?.name, rulesQ.data, modelosMsg.modelos]);
 
   const kpis = dashQ.data?.kpis;
   const aging: AgingRow[] = agingQ.data || [];
@@ -950,6 +976,23 @@ export default function CrediarioScreen() {
               : undefined
           }
           onClose={() => setCobrancaPreview(null)}
+          modelos={modelosMsg.modelos}
+          modelosDaAura={modelosMsg.daAura}
+          limiteDeModelos={modelosMsg.limite}
+          dados={cobrancaPreview.dados}
+          situacao={cobrancaPreview.situacao}
+          onGerenciarModelos={() => {
+            setCobrancaPreview(null);
+            setModalCust(null);
+            router.push("/crediario/settings" as any);
+          }}
+          onSalvarModelo={async (como, base, m) => {
+            const salvo = como === "novo"
+              ? await modelosMsg.criar({ name: m.name, body: m.body, situation: m.situation })
+              : await salvarSobre(modelosMsg, base, m);
+            toast.success("Modelo salvo.");
+            return salvo;
+          }}
         />
       )}
     </ScrollView>
