@@ -190,36 +190,111 @@ export function avisosDoQueFaltou(faltando: VariavelDaMensagem[]): string[] {
 
 const LETRA_OU_NUMERO = /[\p{L}\p{N}]/u;
 
+const DIGITO = /\p{N}/u;
+const COLA_NUMERO = /[,./]/;
+const NUMERO_CURTO = /^\d{1,2}$/;
+
+/** O valor encostado neste ponto faz parte de outra palavra ou outro número? */
+function colado(s: string, ini: number, fim: number, valor: string): boolean {
+  const antes = ini > 0 ? s[ini - 1] : "";
+  const depois = s[fim] || "";
+  const primeiro = valor[0];
+  const ultimo = valor[valor.length - 1];
+  if (antes && LETRA_OU_NUMERO.test(antes) && LETRA_OU_NUMERO.test(primeiro)) return true;
+  if (depois && LETRA_OU_NUMERO.test(depois) && LETRA_OU_NUMERO.test(ultimo)) return true;
+  // "R$ 3,00", "10/12", "1.500": vírgula, ponto e barra entre dígitos são
+  // parte do número, não fronteira.
+  if (DIGITO.test(primeiro) && COLA_NUMERO.test(antes) && ini > 1 && DIGITO.test(s[ini - 2])) return true;
+  if (DIGITO.test(ultimo) && COLA_NUMERO.test(depois) && DIGITO.test(s[fim + 1] || "")) return true;
+  return false;
+}
+
 /**
  * "Salvar como modelo": o texto que a lojista editou, com os dados desta
- * cliente trocados pelas variáveis. Valor mais longo primeiro ("R$ 153,40"
- * antes de "153"), só em palavra inteira, empate na ordem de VARIAVEIS
- * (valor antes de saldo quando os dois são iguais).
+ * cliente trocados pelas variáveis.
+ *   - valor mais longo primeiro ("R$ 153,40" antes de "153"), só em palavra
+ *     ou número inteiro ("3" não troca dentro de "R$ 3,00");
+ *   - cada valor segue a ordem em que as variáveis daquele valor aparecem no
+ *     modelo de onde ela partiu (`base`): com parcela "10/12" = vencimento
+ *     "10/12", o primeiro "10/12" volta para a variável que vinha primeiro
+ *     lá; com valor = saldo, fica a que o modelo usava;
+ *   - número de 1 ou 2 dígitos solto ({dias}, às vezes {parcela}) só troca
+ *     onde o modelo de base tinha a variável (e quantas vezes tinha);
+ *   - sem base, o empate fica na ordem de VARIAVEIS.
  */
-export function paraModelo(texto: string, dados: DadosDaMensagem): string {
-  const candidatos = VARIAVEIS
-    .map((v, ordem) => ({ chave: v.chave, valor: String(dados[v.chave] ?? "").trim(), ordem }))
-    .filter((c) => c.valor.length > 0)
-    .sort((a, b) => (b.valor.length - a.valor.length) || (a.ordem - b.ordem));
+export function paraModelo(texto: string, dados: DadosDaMensagem, base?: string | null): string {
+  const porValor = new Map<string, VariavelDaMensagem[]>();
+  VARIAVEIS.forEach((v) => {
+    const valor = String(dados[v.chave] ?? "").trim();
+    if (!valor) return;
+    porValor.set(valor, [...(porValor.get(valor) || []), v.chave]);
+  });
+  // Fila por valor: as variáveis daquele valor na ordem em que o modelo de
+  // base as usa.
+  const fila = new Map<string, VariavelDaMensagem[]>();
+  const re = /\{([a-z_]+)\}/g;
+  let m: RegExpExecArray | null;
+  const b = String(base || "");
+  while ((m = re.exec(b))) {
+    const k = m[1] as VariavelDaMensagem;
+    const valor = String(dados[k] ?? "").trim();
+    if (!valor || !(porValor.get(valor) || []).includes(k)) continue;
+    fila.set(valor, [...(fila.get(valor) || []), k]);
+  }
+  const valores = Array.from(porValor.keys()).sort((x, y) => y.length - x.length);
   const s = String(texto || "");
   let out = "";
   let i = 0;
   while (i < s.length) {
-    let achou: { chave: string; valor: string } | null = null;
-    for (const c of candidatos) {
-      if (!s.startsWith(c.valor, i)) continue;
-      const antes = i > 0 ? s[i - 1] : "";
-      const depois = s[i + c.valor.length] || "";
-      const colaAntes = !!antes && LETRA_OU_NUMERO.test(antes) && LETRA_OU_NUMERO.test(c.valor[0]);
-      const colaDepois = !!depois && LETRA_OU_NUMERO.test(depois) && LETRA_OU_NUMERO.test(c.valor[c.valor.length - 1]);
-      if (colaAntes || colaDepois) continue;
-      achou = c;
+    let feito = false;
+    for (const valor of valores) {
+      if (!s.startsWith(valor, i) || colado(s, i, i + valor.length, valor)) continue;
+      const daFila = (fila.get(valor) || []).shift();
+      const chave = daFila || (NUMERO_CURTO.test(valor) ? null : (porValor.get(valor) as VariavelDaMensagem[])[0]);
+      if (!chave) continue;
+      out += "{" + chave + "}";
+      i += valor.length;
+      feito = true;
       break;
     }
-    if (achou) { out += "{" + achou.chave + "}"; i += achou.valor.length; }
-    else { out += s[i]; i += 1; }
+    if (!feito) { out += s[i]; i += 1; }
   }
   return out;
+}
+
+/**
+ * O modelo com que a prévia abre. Cliente sem parcela aberta (só saldo,
+ * fiado) abre no modelo que fala do {saldo} sem citar parcela. Modelo que
+ * ficaria vazio depois de tirar os parágrafos sem dado não serve: cai no
+ * primeiro que dá texto (de preferência o do saldo). null = nenhum da lista
+ * dá texto; quem chama usa o "Vamos combinar" da Aura.
+ */
+export function modeloInicial(
+  modelos: ModeloDeMensagem[], situacao: Situacao | null | undefined, dados: DadosDaMensagem,
+): ModeloDeMensagem | null {
+  const daTexto = (m: ModeloDeMensagem | null | undefined) => !!m && preencher(m.body, dados).texto.trim() !== "";
+  const semParcela = !temValor(dados.parcela);
+  const doSaldo = modelos.filter((m) => m.body.includes("{saldo}") && !PARTE_DA_PARCELA.some((k) => m.body.includes("{" + k + "}")));
+  const primeiro = semParcela
+    ? (doSaldo.find((m) => m.is_default) || doSaldo[0] || modeloPadrao(modelos, situacao))
+    : modeloPadrao(modelos, situacao);
+  if (daTexto(primeiro)) return primeiro;
+  return doSaldo.find(daTexto) || modelos.find(daTexto) || null;
+}
+
+/** O "Vamos combinar" da Aura: reserva final para nunca abrir com texto vazio. */
+export const MODELO_DE_RESERVA = MODELOS_DA_AURA[3];
+
+/**
+ * A chave Pix que entra no {pix}: a do canal digital (a mesma do código
+ * copia e cola e do QR) quando existe; senão a da régua. Uma fonte só por
+ * cobrança — o texto não pode dizer uma chave e o código pagar outra.
+ */
+export function chavePixDaMensagem(chaveDoCanal: string | null | undefined, chaveDaRegua: string | null | undefined): string | null {
+  const canal = String(chaveDoCanal || "").trim();
+  if (canal) return canal;
+  const regua = String(chaveDaRegua || "").trim();
+  return regua || null;
 }
 
 export type ParteDoModelo = { tipo: "texto" | "variavel"; valor: string };

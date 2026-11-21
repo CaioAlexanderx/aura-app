@@ -10,7 +10,7 @@
 // 4. o Cobrar do cartão de um carnê cita a parcela daquele carnê.
 // ============================================================
 import {
-  MODELOS_DA_AURA, avisosDoQueFaltou, diasDeAtraso, erroDoModelo, inserirVariavel, letras,
+  MODELOS_DA_AURA, avisosDoQueFaltou, chavePixDaMensagem, modeloInicial, diasDeAtraso, erroDoModelo, inserirVariavel, letras,
   modeloPadrao, paraModelo, parcelaDaCobranca, partesDoModelo, preencher, primeiroNome, situacaoDaParcela,
   type DadosDaMensagem, type ModeloDeMensagem,
 } from "@/utils/crediarioMensagem";
@@ -55,7 +55,7 @@ describe("preencher", () => {
 describe("paraModelo (Salvar como modelo)", () => {
   it("o texto editado volta a ter as variáveis, inclusive a frase nova", () => {
     const editado = preencher(atraso.body, MARIA).texto + "\n\nAh, e chegou a coleção nova que você tinha perguntado. Passa aqui!";
-    expect(paraModelo(editado, MARIA)).toBe(atraso.body + "\n\nAh, e chegou a coleção nova que você tinha perguntado. Passa aqui!");
+    expect(paraModelo(editado, MARIA, atraso.body)).toBe(atraso.body + "\n\nAh, e chegou a coleção nova que você tinha perguntado. Passa aqui!");
   });
 
   it('só palavra inteira: "Ana" não troca dentro de "semana" nem "Mariana"', () => {
@@ -64,11 +64,36 @@ describe("paraModelo (Salvar como modelo)", () => {
       .toBe("Oi {nome}, nesta semana a Mariana passa aí. {nome}!");
   });
 
-  it("valor mais longo primeiro; empate fica com valor (antes de saldo)", () => {
+  it("valor mais longo primeiro; sem modelo de base, empate fica com valor", () => {
     const dados = { valor: "R$ 50,00", saldo: "R$ 50,00", dias: "50" };
-    expect(paraModelo("Deve R$ 50,00 há 50 dias", dados)).toBe("Deve {valor} há {dias} dias");
+    expect(paraModelo("Deve R$ 50,00 há 50 dias", dados, "Deve {valor} há {dias} dias")).toBe("Deve {valor} há {dias} dias");
+    expect(paraModelo("Deve R$ 50,00", dados)).toBe("Deve {valor}");
     // "11" dentro do telefone não vira {dias}.
-    expect(paraModelo("Pix 11987654321, 11 dias", { dias: "11" })).toBe("Pix 11987654321, {dias} dias");
+    expect(paraModelo("Pix 11987654321, 11 dias", { dias: "11" }, "{dias} dias")).toBe("Pix 11987654321, {dias} dias");
+  });
+
+  it('"R$ 3,00" com 3 dias de atraso: o 3 do dinheiro não vira {dias}', () => {
+    const dados = { valor: "R$ 3,00", dias: "3", nome: "Ana" };
+    const base = "Oi, {nome}! A parcela de {valor} está com {dias} dias de atraso.";
+    expect(paraModelo("Oi, Ana! A parcela de R$ 3,00 está com 3 dias de atraso.", dados, base)).toBe(base);
+    // Sem {dias} no modelo de base, número solto de 1-2 dígitos não troca.
+    expect(paraModelo("Faltam 3 parcelas", { dias: "3" }, "Faltam 3 parcelas")).toBe("Faltam 3 parcelas");
+    expect(paraModelo("Total 1.500,00 e 3,5", { dias: "3", valor: "500" }, "{dias} {valor}")).toBe("Total 1.500,00 e 3,5");
+  });
+
+  it("valor = saldo: fica a variável que o modelo de base usava", () => {
+    const combinar = MODELOS_DA_AURA.find((m) => m.aura_key === "vamos_combinar")!;
+    const dados = { ...MARIA, valor: "R$ 306,80", saldo: "R$ 306,80" };
+    const texto = preencher(combinar.body, dados).texto;
+    expect(paraModelo(texto, dados, combinar.body)).toBe(combinar.body);
+  });
+
+  it('parcela "10/12" = vencimento "10/12": cada um volta para a sua variável', () => {
+    const dados = { parcela: "10/12", vencimento: "10/12" };
+    const base = "A parcela {parcela} vence dia {vencimento}.";
+    expect(paraModelo("A parcela 10/12 vence dia 10/12.", dados, base)).toBe(base);
+    const inverso = "Dia {vencimento} vence a {parcela}.";
+    expect(paraModelo("Dia 10/12 vence a 10/12.", dados, inverso)).toBe(inverso);
   });
 
   it("partesDoModelo separa as variáveis para destacar", () => {
@@ -142,5 +167,25 @@ describe("parcela do Cobrar no cartão do carnê", () => {
   it("grupo sem carnê (id null): só as parcelas sem carnê", () => {
     expect(parcelaDaCobranca(abertas, { id: null })!.id).toBe("p-sem");
     expect(parcelaDaCobranca([{ id: "x", due_date: "2026-01-01", account_id: "c" }], { id: null })).toBeUndefined();
+  });
+});
+
+describe("modelo inicial e chave Pix", () => {
+  it("sem parcela, abre no modelo do saldo; com parcela, no padrao da situacao", () => {
+    expect(modeloInicial(MODELOS_DA_AURA, "a_vencer", { nome: "A", loja: "L", saldo: "R$ 1,00" })!.aura_key).toBe("vamos_combinar");
+    expect(modeloInicial(MODELOS_DA_AURA, "em_atraso", MARIA)!.aura_key).toBe("passou_do_dia");
+  });
+  it("modelo que ficaria vazio e pulado; nenhum da texto = null (o pai usa a reserva)", () => {
+    const so: ModeloDeMensagem[] = [
+      { id: "p", name: "Parcela", body: "{parcela} {valor}", situation: "a_vencer", is_default: true, origin: "loja" },
+      { id: "n", name: "Nome", body: "Oi {nome}", situation: null, is_default: false, origin: "loja" },
+    ];
+    expect(modeloInicial(so, "a_vencer", { nome: "Ana" })!.id).toBe("n");
+    expect(modeloInicial([so[0]], "a_vencer", { nome: "Ana" })).toBeNull();
+  });
+  it("{pix}: a chave do canal digital (a do codigo) quando existe; senao a da regua", () => {
+    expect(chavePixDaMensagem("canal@loja.com", "regua@loja.com")).toBe("canal@loja.com");
+    expect(chavePixDaMensagem(null, "regua@loja.com")).toBe("regua@loja.com");
+    expect(chavePixDaMensagem(undefined, " ")).toBeNull();
   });
 });

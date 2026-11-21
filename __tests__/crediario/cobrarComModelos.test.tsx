@@ -102,12 +102,48 @@ describe("prévia do Cobrar com modelos", () => {
     expect(m).toEqual({
       name: "Passou do dia + novidade",
       body: MODELOS_DA_AURA[2].body + "\n\nAh, chegou coleção nova!",
-      situation: null,
+      // O seletor abre na situação do modelo de base: é o que vale.
+      situation: "em_atraso",
     });
     expect(m.body).not.toContain("Maria");
     // De volta à prévia, sem aviso de edição: o texto é o do modelo salvo.
     expect(tem(tree, "salvar-modelo")).toBe(false);
     expect(tem(tree, "cobranca-editado")).toBe(false);
+    tree.unmount();
+  });
+
+  it('Salvar como novo com o mesmo nome vira "Nome (2)"; "Não usar sozinho" tira o padrão', async () => {
+    const onSalvarModelo = jest.fn((_como: any, _base: any, _m: any) => Promise.resolve(null));
+    let tree: any;
+    await act(async () => { tree = montar({ onSalvarModelo }); });
+    await act(async () => { porId(tree, "cobranca-mensagem").props.onChangeText(texto(tree) + " Beijo!"); });
+    await act(async () => { porId(tree, "cobranca-salvar-modelo").props.onPress(); });
+    expect(porId(tree, "salvar-modelo-sit-em_atraso").props.accessibilityState).toEqual({ selected: true });
+    await act(async () => { porId(tree, "salvar-modelo-sit-livre").props.onPress(); });
+    await act(async () => { await porId(tree, "salvar-modelo-novo").props.onPress(); });
+    expect(onSalvarModelo.mock.calls[0][2]).toMatchObject({ name: "Passou do dia (2)", situation: null });
+    tree.unmount();
+  });
+
+  it("cliente sem parcela aberta abre no modelo do saldo (Vamos combinar)", async () => {
+    let tree: any;
+    await act(async () => {
+      tree = montar({ dados: { nome: "Maria", loja: "Loja", saldo: "R$ 50,00", pix: "x" }, situacao: "a_vencer" });
+    });
+    expect(texto(tree)).toContain("hoje o valor em aberto é R$ 50,00");
+    tree.unmount();
+  });
+
+  it("modelo que ficaria vazio não abre: usa o texto de reserva e nunca envia vazio", async () => {
+    const vazio = [{ id: "v", name: "Só parcela", body: "Parcela {parcela} de {valor}.", situation: "a_vencer", is_default: true, origin: "loja" }];
+    let tree: any;
+    await act(async () => {
+      tree = montar({ modelos: vazio, modelosDaAura: false, initialMessage: "Texto de reserva",
+        dados: { nome: "Maria", loja: "Loja", saldo: "R$ 50,00" } });
+    });
+    expect(texto(tree)).toBe("Texto de reserva");
+    await act(async () => { porId(tree, "cobranca-mensagem").props.onChangeText("   "); });
+    expect(porId(tree, "cobranca-enviar-whatsapp").props.disabled).toBe(true);
     tree.unmount();
   });
 
