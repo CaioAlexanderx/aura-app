@@ -19,6 +19,19 @@ import {
 
 export type SalvarModeloComo = "novo" | "atualizar";
 
+/** "Lembrete" já existe → "Lembrete (2)", "(3)"… dentro dos 40 caracteres. */
+export function nomeLivre(nome: string, modelos: Array<{ name: string }>): string {
+  const usados = new Set(modelos.map((m) => m.name.trim().toLowerCase()));
+  if (!usados.has(nome.toLowerCase())) return nome;
+  for (let n = 2; n < 100; n++) {
+    const sufixo = ` (${n})`;
+    const raiz = Array.from(nome).slice(0, MAX_NOME - sufixo.length).join("");
+    const tentativa = raiz + sufixo;
+    if (!usados.has(tentativa.toLowerCase())) return tentativa;
+  }
+  return nome;
+}
+
 export function SalvarComoModelo(props: {
   modeloAtual: ModeloDeMensagem;
   modelos: ModeloDeMensagem[];
@@ -31,11 +44,13 @@ export function SalvarComoModelo(props: {
 }) {
   const { modeloAtual, modelos, daAura, limite, textoEditado, dados, onVoltar, onSalvar } = props;
   const [nome, setNome] = useState(modeloAtual.name);
-  const [situacao, setSituacao] = useState<Situacao | null>(null);
+  // Abre na situação que o modelo já tem: o seletor mostra o que vai valer.
+  // "Não usar sozinho" tira o padrão.
+  const [situacao, setSituacao] = useState<Situacao | null>(modeloAtual.situation || null);
   const [salvando, setSalvando] = useState<SalvarModeloComo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const body = useMemo(() => paraModelo(textoEditado, dados), [textoEditado, dados]);
+  const body = useMemo(() => paraModelo(textoEditado, dados, modeloAtual.body), [textoEditado, dados, modeloAtual.body]);
   const exemplo = useMemo(() => preencher(body, DADOS_DE_EXEMPLO).texto, [body]);
   // Os prontos viram da loja no primeiro salvar: "novo" soma 1 aos 4.
   const cheio = !daAura && modelos.length >= limite;
@@ -50,9 +65,10 @@ export function SalvarComoModelo(props: {
     setErro(null);
     setSalvando(como);
     try {
-      // "Atualizar" sem escolha mantém a situação que o modelo já tinha.
-      const sit = como === "atualizar" && situacao === null ? modeloAtual.situation : situacao;
-      await onSalvar(como, { name: nome.trim(), body, situation: sit });
+      // "Salvar como novo" com o mesmo nome do modelo de base vira "Nome (2)".
+      const nomeFinal = como === "novo" ? nomeLivre(nome.trim(), modelos) : nome.trim();
+      if (nomeFinal !== nome.trim()) setNome(nomeFinal);
+      await onSalvar(como, { name: nomeFinal, body, situation: situacao });
     } catch (err: any) {
       setErro(err?.data?.error || err?.message || "Não foi possível salvar o modelo.");
     } finally {

@@ -139,6 +139,26 @@ describe("Enviar com QR Code", () => {
     r.tree.unmount();
   });
 
+  it("computador (Safari): a conversa abre dentro do toque, antes de esperar a cópia", async () => {
+    mockModo = "copiar";
+    let resolver: (v: boolean) => void = () => {};
+    mockCopiar.mockImplementationOnce(() => new Promise<boolean>((res) => { resolver = res; }));
+    let r: any;
+    await act(async () => { r = montar({ pixCopiaECola: EMV }); });
+    await flush();
+    let toque: Promise<void> | undefined;
+    act(() => { toque = porId(r.tree, "cobranca-enviar-qr").props.onPress(); });
+    // A cópia ainda não terminou, e a conversa já foi aberta.
+    expect(mockCopiar).toHaveBeenCalledTimes(1);
+    expect(urls()[0]).toContain("Oi, Maria!");
+    await act(async () => { resolver(false); await toque; });
+    // Copiar falhou: avisa, e o código Pix segue no passo 2.
+    expect(JSON.stringify(r.tree.toJSON())).toContain("Não consegui copiar o QR Code.");
+    expect(JSON.stringify(r.tree.toJSON())).not.toContain("QR Code copiado.");
+    expect(tem(r.tree, "cobranca-enviar-codigo")).toBe(true);
+    r.tree.unmount();
+  });
+
   it("celular: compartilha imagem + texto; cancelar não muda nada", async () => {
     mockModo = "compartilhar";
     mockCompartilhou = false;

@@ -25,7 +25,8 @@ import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioMo
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 import { useModelosDeMensagem, salvarSobre } from "@/hooks/useModelosDeMensagem";
 import {
-  diasDeAtraso, modeloPadrao, parcelaDaCobranca, preencher, primeiroNome, situacaoDaParcela,
+  MODELO_DE_RESERVA, chavePixDaMensagem, diasDeAtraso, modeloInicial, parcelaDaCobranca, preencher,
+  primeiroNome, situacaoDaParcela,
   type DadosDaMensagem, type Situacao,
 } from "@/utils/crediarioMensagem";
 import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
@@ -454,7 +455,9 @@ export default function CrediarioScreen() {
     try {
       const detail = await creditApi.getCustomerHistory(company!.id, customerId);
       const store  = company?.name || "nossa loja";
-      const pixKey = String((rulesQ.data as any)?.pix_key || "").trim();
+      // Uma chave só: a do canal digital (a do código copia e cola e do QR)
+      // quando existe; senão a da régua.
+      const pixKey = chavePixDaMensagem(chavePixDoQr(canalQ), (rulesQ.data as any)?.pix_key);
       const nextDue = parcelaDaCobranca(detail.open_installments, carne);
 
       let valorLabel: string | undefined;
@@ -502,13 +505,14 @@ export default function CrediarioScreen() {
         } catch { pixCopiaECola = null; }
       }
 
-      const padrao = modeloPadrao(modelosMsg.modelos, situacao);
+      // Sem parcela (só saldo) abre no modelo do {saldo}; nunca texto vazio.
+      const padrao = modeloInicial(modelosMsg.modelos, situacao, dados) || MODELO_DE_RESERVA;
       setCobrancaPreview({
         recipientName: customerName,
         phone,
         valorLabel,
         valorDesc,
-        message: padrao ? preencher(padrao.body, dados).texto : "",
+        message: preencher(padrao.body, dados).texto,
         installmentId: nextDue?.id || null,
         dados,
         situacao,

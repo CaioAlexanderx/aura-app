@@ -42,7 +42,7 @@ import { Motion, webTransition } from "@/constants/motion";
 import { waSkipReasonLabel } from "@/components/whatsapp/waGuards";
 import { SalvarComoModelo, type SalvarModeloComo } from "@/components/crediario/mensagens/SalvarComoModelo";
 import {
-  avisosDoQueFaltou, modeloPadrao, preencher,
+  avisosDoQueFaltou, modeloInicial, preencher,
   type DadosDaMensagem, type ModeloDeMensagem, type Situacao,
 } from "@/utils/crediarioMensagem";
 import {
@@ -134,7 +134,7 @@ export function CobrancaPreviewModal({
   const comModelos = Array.isArray(modelos) && modelos.length > 0;
   const dadosOk: DadosDaMensagem = dados || SEM_DADOS;
   const [modeloId, setModeloId] = useState<string | null>(() =>
-    comModelos ? modeloPadrao(modelos as ModeloDeMensagem[], situacao)?.id ?? null : null);
+    comModelos ? modeloInicial(modelos as ModeloDeMensagem[], situacao, dadosOk)?.id ?? null : null);
   const modelo = comModelos ? (modelos as ModeloDeMensagem[]).find((m) => m.id === modeloId) || null : null;
   const preenchido = useMemo(
     () => (modelo ? preencher(modelo.body, dadosOk) : null),
@@ -151,7 +151,7 @@ export function CobrancaPreviewModal({
   // (antes dependia do pai remontar o componente — risco de mensagem obsoleta).
   useEffect(() => {
     if (visible) {
-      const padrao = comModelos ? modeloPadrao(modelos as ModeloDeMensagem[], situacao) : null;
+      const padrao = comModelos ? modeloInicial(modelos as ModeloDeMensagem[], situacao, dadosOk) : null;
       setModeloId(padrao ? padrao.id : null);
       setMessage(padrao ? preencher(padrao.body, dadosOk).texto : initialMessage);
       setPasso("previa");
@@ -168,13 +168,13 @@ export function CobrancaPreviewModal({
   }, [visible, initialMessage]);
 
   // A lista mudou (carregou, salvou, os prontos viraram da loja) e o modelo
-  // escolhido não está mais nela: volta ao padrão da situação.
+  // escolhido não está mais nela: volta ao modelo inicial da situação. Sem
+  // nenhum que dê texto, fica o texto de reserva do pai (initialMessage).
   useEffect(() => {
-    if (!comModelos || modelo) return;
-    const padrao = modeloPadrao(modelos as ModeloDeMensagem[], situacao);
-    if (!padrao) return;
-    setModeloId(padrao.id);
-    setMessage(preencher(padrao.body, dadosOk).texto);
+    if (!comModelos || !modeloId || modelo) return;
+    const padrao = modeloInicial(modelos as ModeloDeMensagem[], situacao, dadosOk);
+    setModeloId(padrao ? padrao.id : null);
+    setMessage(padrao ? preencher(padrao.body, dadosOk).texto : initialMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comModelos, modelos, modelo]);
 
@@ -214,7 +214,11 @@ export function CobrancaPreviewModal({
   const initial = (recipientName.trim()[0] || "?").toUpperCase();
   const oficialDisponivel = podeEnviarOficial === true && typeof onEnviarOficial === "function";
 
+  const semTexto = !message.trim();
+
   function handleSend() {
+    // Nunca abre o WhatsApp com mensagem vazia.
+    if (semTexto) return;
     Linking.openURL(linkDoWhatsApp(phone, message));
     if (codigoPix && mandarCodigo) { setDepois({ qrCopiado: false }); return; }
     onClose();
@@ -227,7 +231,7 @@ export function CobrancaPreviewModal({
   }
 
   async function enviarComQr() {
-    if (!qr) return;
+    if (!qr || semTexto) return;
     setErroQr(null);
     setEnviandoQr(true);
     try {
@@ -238,12 +242,16 @@ export function CobrancaPreviewModal({
         else onClose();
         return;
       }
-      if (!(await copiarQr(qr.png))) {
-        setErroQr("Não consegui copiar o QR Code. Envie pelo WhatsApp e mande o código Pix em seguida.");
-        return;
-      }
+      // Os dois começam DENTRO do toque, sem await no meio: o Safari bloqueia
+      // abrir a conversa depois de esperar, e a área de transferência pede
+      // o gesto. copiarQr já chama clipboard.write na primeira linha.
+      const copiando = copiarQr(qr.png);
       Linking.openURL(linkDoWhatsApp(phone, message));
-      setDepois({ qrCopiado: true });
+      const copiou = await copiando;
+      setDepois({ qrCopiado: copiou });
+      if (!copiou) {
+        setErroQr("Não consegui copiar o QR Code. A conversa abriu só com o texto; mande o código Pix em seguida.");
+      }
     } finally {
       setEnviandoQr(false);
     }
@@ -521,6 +529,7 @@ export function CobrancaPreviewModal({
               <Pressable
                 style={({ hovered, pressed }: any) => [
                   cs.sendBtn,
+                  semTexto && { opacity: 0.5 },
                   hovered && !pressed && ({
                     transform: [{ translateY: -2 }],
                     ...(IS_WEB ? ({ boxShadow: "0 4px 16px rgba(37,211,102,0.35)" } as any) : null),
@@ -529,6 +538,7 @@ export function CobrancaPreviewModal({
                   IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
                 ]}
                 onPress={handleSend}
+                disabled={semTexto}
                 testID="cobranca-enviar-whatsapp"
               >
                 <Icon name="whatsapp" size={15} color="#fff" />
