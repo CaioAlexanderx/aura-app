@@ -21,6 +21,14 @@
 // aviso oferece "Salvar como modelo" (passo dentro do mesmo sheet) e "Voltar
 // ao texto do modelo". Variável sem valor tira o parágrafo e avisa. Sem
 // `modelos`, o modal é o de sempre (texto de `initialMessage`).
+// Pix copia e cola e QR Code (21/11/2026): com `pixCopiaECola` (o código
+// EMV da parcela), "Mandar também o Pix copia e cola em outra mensagem"
+// (marcado). Depois de enviar o texto, a prévia mostra o passo 2, que abre
+// o wa.me com SÓ o código: no celular o WhatsApp não deixa selecionar parte
+// do texto, e com a mensagem só com o código a cliente segura e copia.
+// "Enviar com QR Code": celular compartilha a imagem + o texto; computador
+// copia a imagem e abre o wa.me (utils/pixQrCompartilhar). Sem suporte ou
+// sem código, o botão não aparece.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -37,6 +45,10 @@ import {
   avisosDoQueFaltou, modeloPadrao, preencher,
   type DadosDaMensagem, type ModeloDeMensagem, type Situacao,
 } from "@/utils/crediarioMensagem";
+import {
+  ambienteDoNavegador, arquivoDoQr, compartilharQr, copiarQr, linkDoWhatsApp, modoDoQr, pngDoQrPix,
+  type ModoDoQr,
+} from "@/utils/pixQrCompartilhar";
 
 const IS_WEB = Platform.OS === "web";
 const SEM_DADOS: DadosDaMensagem = {};
@@ -86,6 +98,11 @@ export type CobrancaPreviewProps = {
     base: ModeloDeMensagem,
     m: { name: string; body: string; situation: Situacao | null },
   ) => Promise<ModeloDeMensagem | null | undefined>;
+  /**
+   * Código Pix copia e cola (EMV) com o valor desta cobrança. Ausente =
+   * loja sem chave Pix (ou o código não veio): nem a opção nem o QR aparecem.
+   */
+  pixCopiaECola?: string | null;
 };
 
 export function CobrancaPreviewModal({
@@ -105,7 +122,15 @@ export function CobrancaPreviewModal({
   situacao,
   onGerenciarModelos,
   onSalvarModelo,
+  pixCopiaECola,
 }: CobrancaPreviewProps) {
+  const codigoPix = String(pixCopiaECola || "").trim() || null;
+  const [mandarCodigo, setMandarCodigo] = useState(!!codigoPix);
+  /** Depois de enviar o texto: o passo 2 (código Pix) e/ou o aviso do QR copiado. */
+  const [depois, setDepois] = useState<{ qrCopiado: boolean } | null>(null);
+  const [qr, setQr] = useState<{ png: Blob; arquivo: File | null; modo: ModoDoQr } | null>(null);
+  const [enviandoQr, setEnviandoQr] = useState(false);
+  const [erroQr, setErroQr] = useState<string | null>(null);
   const comModelos = Array.isArray(modelos) && modelos.length > 0;
   const dadosOk: DadosDaMensagem = dados || SEM_DADOS;
   const [modeloId, setModeloId] = useState<string | null>(() =>
@@ -130,6 +155,9 @@ export function CobrancaPreviewModal({
       setModeloId(padrao ? padrao.id : null);
       setMessage(padrao ? preencher(padrao.body, dadosOk).texto : initialMessage);
       setPasso("previa");
+      setMandarCodigo(!!codigoPix);
+      setDepois(null);
+      setErroQr(null);
       setConfirmandoOficial(false);
       setEnviandoOficial(false);
       setResultadoOficial(null);
@@ -149,6 +177,21 @@ export function CobrancaPreviewModal({
     setMessage(preencher(padrao.body, dadosOk).texto);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comModelos, modelos, modelo]);
+
+  // A imagem do QR fica pronta antes do toque: compartilhar e copiar só
+  // valem dentro do gesto da pessoa, sem esperar nada no meio.
+  useEffect(() => {
+    let vivo = true;
+    setQr(null);
+    if (!visible || !codigoPix || !IS_WEB) return;
+    pngDoQrPix(codigoPix).then((png) => {
+      if (!vivo || !png) return;
+      const arquivo = arquivoDoQr(png);
+      const modo = modoDoQr(ambienteDoNavegador(arquivo));
+      if (modo) setQr({ png, arquivo, modo });
+    });
+    return () => { vivo = false; };
+  }, [visible, codigoPix]);
 
   const editado = !!preenchido && message !== preenchido.texto;
   const avisos = preenchido ? avisosDoQueFaltou(preenchido.faltando) : [];
@@ -172,10 +215,38 @@ export function CobrancaPreviewModal({
   const oficialDisponivel = podeEnviarOficial === true && typeof onEnviarOficial === "function";
 
   function handleSend() {
-    const clean = phone.replace(/\D/g, "");
-    const num = clean.startsWith("55") ? clean : `55${clean}`;
-    Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(message)}`);
+    Linking.openURL(linkDoWhatsApp(phone, message));
+    if (codigoPix && mandarCodigo) { setDepois({ qrCopiado: false }); return; }
     onClose();
+  }
+
+  /** Passo 2: uma mensagem só com o código, nada antes nem depois. */
+  function enviarCodigo() {
+    if (codigoPix) Linking.openURL(linkDoWhatsApp(phone, codigoPix));
+    onClose();
+  }
+
+  async function enviarComQr() {
+    if (!qr) return;
+    setErroQr(null);
+    setEnviandoQr(true);
+    try {
+      if (qr.modo === "compartilhar" && qr.arquivo) {
+        // Cancelou o compartilhar: nada saiu, a prévia fica como estava.
+        if (!(await compartilharQr(qr.arquivo, message))) return;
+        if (codigoPix && mandarCodigo) setDepois({ qrCopiado: false });
+        else onClose();
+        return;
+      }
+      if (!(await copiarQr(qr.png))) {
+        setErroQr("Não consegui copiar o QR Code. Envie pelo WhatsApp e mande o código Pix em seguida.");
+        return;
+      }
+      Linking.openURL(linkDoWhatsApp(phone, message));
+      setDepois({ qrCopiado: true });
+    } finally {
+      setEnviandoQr(false);
+    }
   }
 
   async function enviarOficial() {
@@ -320,6 +391,21 @@ export function CobrancaPreviewModal({
               <Text style={cs.note}>Quer deixar do seu jeito? Mude o texto aqui e toque em "Salvar como modelo".</Text>
             )}
 
+            {!!codigoPix && !depois && (
+              <Pressable
+                onPress={() => setMandarCodigo((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: mandarCodigo }}
+                style={cs.checkRow}
+                testID="cobranca-mandar-codigo"
+              >
+                <View style={[cs.checkBox, mandarCodigo && cs.checkBoxOn]}>
+                  {mandarCodigo && <Icon name="check" size={12} color="#fff" />}
+                </View>
+                <Text style={cs.checkTxt}>Mandar também o Pix copia e cola em outra mensagem</Text>
+              </Pressable>
+            )}
+
             {/* Nota de envio manual */}
             <Text style={cs.note}>
               Envio segue manual pelo WhatsApp. Nada é enviado sem você tocar em Enviar.
@@ -393,7 +479,33 @@ export function CobrancaPreviewModal({
               </View>
             )}
 
+            {!!depois && (
+              <View style={cs.passo2} testID="cobranca-passo-2">
+                {depois.qrCopiado && (
+                  <Text style={cs.passo2Ok} testID="cobranca-qr-copiado">
+                    QR Code copiado. No WhatsApp, cole com Ctrl+V antes de enviar.
+                  </Text>
+                )}
+                {!!codigoPix && mandarCodigo && (
+                  <>
+                    <Text style={cs.passo2Tit}>Passo 2 · Enviar o código Pix</Text>
+                    <Text style={cs.passo2Txt}>
+                      O código vai numa mensagem só com ele: no celular, a cliente segura a mensagem e toca em Copiar.
+                    </Text>
+                    <Pressable onPress={enviarCodigo} accessibilityRole="button" style={cs.passo2Btn} testID="cobranca-enviar-codigo">
+                      <Icon name="whatsapp" size={15} color="#fff" />
+                      <Text style={cs.sendTxt}>Enviar o código Pix</Text>
+                    </Pressable>
+                  </>
+                )}
+                <Pressable onPress={onClose} accessibilityRole="button" style={cs.passo2Fim} testID="cobranca-concluir">
+                  <Text style={cs.cancelTxt}>Concluir</Text>
+                </Pressable>
+              </View>
+            )}
+
             {/* Botões — F4: hover lift + pressed (antes sem feedback algum) */}
+            {!depois && (
             <View style={cs.btnRow}>
               <Pressable
                 style={({ hovered, pressed }: any) => [
@@ -417,11 +529,29 @@ export function CobrancaPreviewModal({
                   IS_WEB ? (webTransition(["transform", "box-shadow"], Motion.fast) as any) : null,
                 ]}
                 onPress={handleSend}
+                testID="cobranca-enviar-whatsapp"
               >
                 <Icon name="whatsapp" size={15} color="#fff" />
                 <Text style={cs.sendTxt}>Enviar pelo WhatsApp</Text>
               </Pressable>
             </View>
+            )}
+
+            {!depois && !!qr && (
+              <Pressable
+                onPress={enviarComQr}
+                disabled={enviandoQr}
+                accessibilityRole="button"
+                style={[cs.qrBtn, enviandoQr && { opacity: 0.6 }]}
+                testID="cobranca-enviar-qr"
+              >
+                {enviandoQr
+                  ? <ActivityIndicator size="small" color={Colors.violet3} />
+                  : <Icon name="qr_code" size={15} color={Colors.violet3} />}
+                <Text style={cs.qrBtnTxt}>Enviar com QR Code</Text>
+              </Pressable>
+            )}
+            {!!erroQr && <Text style={cs.warn} testID="cobranca-qr-erro">{erroQr}</Text>}
           </ScrollView>
       </>
       )}
@@ -561,6 +691,28 @@ const cs = StyleSheet.create({
   editedBack: { minHeight: 40, paddingHorizontal: 6, justifyContent: "center" },
   editedBackTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
   warn: { fontSize: 11.5, color: Colors.amber, marginTop: 8, lineHeight: 16 },
+  // ── Pix copia e cola e QR (21/11/2026) ───────────────────
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, marginTop: 8 },
+  checkBox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border2,
+    alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg2,
+  },
+  checkBoxOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  checkTxt: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: "600", lineHeight: 17 },
+  passo2: { marginTop: 14, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, padding: 12, gap: 8 },
+  passo2Ok: { fontSize: 12, fontWeight: "700", color: Colors.green, lineHeight: 17 },
+  passo2Tit: { fontSize: 13, fontWeight: "800", color: Colors.ink },
+  passo2Txt: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  passo2Btn: {
+    minHeight: 44, borderRadius: 10, backgroundColor: "#25d366", flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 7,
+  },
+  passo2Fim: { minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  qrBtn: {
+    marginTop: 10, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2,
+    backgroundColor: Colors.violetD, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7,
+  },
+  qrBtnTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
   warnLink: { color: Colors.violet3, fontWeight: "700" },
 
   msgInput: {
