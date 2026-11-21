@@ -13,6 +13,7 @@
 // A conta sai da lista que o app já carrega (useCustomers): multi-CNPJ vem
 // de graça (no consolidado soma as lojas). Nada de hover (regra 7).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -61,9 +62,9 @@ export function ChamarSumidos() {
 
   const chamar = useCallback((id: string, nome: string, telefone: string | null) => {
     // Síncrono dentro do toque: o navegador bloqueia o pop-up depois de um await.
-    const ok = openWhatsApp(telefone, mensagemDeChamado(nome, company?.name));
+    const ok = openWhatsApp(telefone, mensagemDeChamado(nome, nomeDaLojaDe(company)));
     if (ok) setChamados(marcas.marcar(id));
-  }, [company?.name, marcas]);
+  }, [nomeDaLojaDe(company), marcas]);
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content} testID="reativacao-essencial">

@@ -11,6 +11,7 @@
 //     acontece na loja do login (aba Certificado A1); para outra loja do
 //     grupo, a Aura troca de loja e abre a aba certa.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -29,7 +30,7 @@ const COR_DO_TOM = { ok: Colors.green, aviso: Colors.amber, erro: Colors.red } a
 const FUNDO_DO_TOM = { ok: Colors.greenD, aviso: Colors.amberD, erro: Colors.redD } as const;
 
 function nomeDe(c: any): string {
-  return String((c && (c.trade_name || c.name || c.legal_name)) || "Loja");
+  return nomeDaLojaDe(c) || "Loja";
 }
 
 export function AbaEmitirNfse({ companyId, onIrParaCertificado }: Props) {

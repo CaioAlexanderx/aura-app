@@ -21,6 +21,7 @@
 //   duração padrão da clínica; horário fora do turno mostra um aviso âmbar
 //   e salva normalmente (vira encaixe).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useEffect, useMemo, useRef, createElement } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
 import { IS_DARK_MODE } from "@/constants/colors";
@@ -274,7 +275,7 @@ export function NewAppointmentModal({ visible, onClose, initialDateTime, appoint
     const wantsWa = !!appointment && moved && notifyWa && !!patient.phone;
     const openWa = () =>
       wantsWa && originalAt && newAt
-        ? openWhatsApp(patient.phone, rescheduleText({ patientName: patient.name, clinicName: company?.name, from: originalAt, to: newAt }))
+        ? openWhatsApp(patient.phone, rescheduleText({ patientName: patient.name, clinicName: nomeDaLojaDe(company) || undefined, from: originalAt, to: newAt }))
         : false;
 
     if (appointment && mode.mode === "patch") {

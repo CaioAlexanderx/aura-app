@@ -54,6 +54,7 @@
 //     pra não recarregar de novo num refresh/voltar. Sem `?quote`, nada
 //     muda — é só mais um useEffect que nunca dispara.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { decisaoDoEnter, indiceDoDestaque, moverDestaque } from "@/utils/destaqueDaBusca";
 import { marcarEntrada } from "@/services/temposDaVenda";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1178,7 +1179,7 @@ export function usePdvState() {
           totalAfterDiscount: pc.totalCartao,
           discount:           pc.descontoCartao > 0 ? pc.descontoCartao : undefined,
         },
-        companyName:        company?.name || "Sua empresa",
+        companyName:        nomeDaLojaDe(company) || "Sua empresa",
         companyLogoUrl:     profile.logo_url || null,
         companyPhone:       profile.phone || null,
         companyAddress:     profile.address || null,
@@ -1196,7 +1197,7 @@ export function usePdvState() {
       total:              totalRaw,
       totalAfterDiscount: discount > 0 ? afterDiscount : undefined,
       discount:           discount > 0 ? discount : undefined,
-      companyName:        company?.name || "Sua empresa",
+      companyName:        nomeDaLojaDe(company) || "Sua empresa",
       companyLogoUrl:     profile.logo_url || null,
       companyPhone:       profile.phone || null,
       companyAddress:     profile.address || null,

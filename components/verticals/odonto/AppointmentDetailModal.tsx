@@ -18,6 +18,7 @@
 // - atualização otimista + carregamento no botão (o QA via 3–4 s de atraso);
 // - no celular (< 768 px) vira folha de baixo com botões de 48 px.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
@@ -83,7 +84,7 @@ export function AppointmentDetailModal({ visible, appointmentId, onClose, seed }
   const phone: string | null = appt?.patient_phone || null;
   const patientId = appt?.customer_id || appt?.patient_id;
   const when = appt?.scheduled_at ? new Date(appt.scheduled_at) : null;
-  const message = when ? appointmentMessage({ status, patientName, clinicName: company?.name, when }) : "";
+  const message = when ? appointmentMessage({ status, patientName, clinicName: nomeDaLojaDe(company) || undefined, when }) : "";
 
   function closeAll() {
     setStep("detail");

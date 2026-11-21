@@ -96,7 +96,12 @@ export function CnpjSection({ cnpj, cpf, taxRegime, onCnpjSaved }: Props) {
     try {
       // Salva tudo de uma vez: CNPJ + dados da RF (nome, endereço, telefone, regime)
       const body: Record<string, string> = { cnpj: cnpjInputNums };
-      if (cnpjPreview?.name)      body.trade_name  = cnpjPreview.name;
+      // 21/11/2026: o nome da Receita (fantasia, ou a razão social quando não
+      // há fantasia) só entra se a loja ainda não tem nome fantasia. Antes, salvar
+      // o CNPJ trocava o nome que a lojista escolheu pelo da Receita — em
+      // conta que nasceu com CPF, pelo nome da dona.
+      const fantasiaAtual = String((company as any)?.trade_name || "").trim();
+      if (cnpjPreview?.name && !fantasiaAtual) body.trade_name = cnpjPreview.name;
       if (cnpjPreview?.address)   body.address     = cnpjPreview.address;
       if (cnpjPreview?.phone)     body.phone       = cnpjPreview.phone;
       if (cnpjPreview?.taxRegime) body.tax_regime  = cnpjPreview.taxRegime;

@@ -1,14 +1,17 @@
 import { useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { useFocusEffect } from "expo-router";
 import { companiesApi } from "@/services/api";
 import { validateEmail, validatePhone, syncProfileCache } from "./shared";
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import type { ProfileField } from "./shared";
 
 export function useConfigProfile() {
   const { user, company, companyLogo, setCompanyLogo, updateCompany, isDemo } = useAuthStore();
+  const queryClient = useQueryClient();
 
-  const [companyName, setCompanyName] = useState(company?.name || "");
+  const [companyName, setCompanyName] = useState(nomeDaLojaDe(company));
   const [address,     setAddress]     = useState("");
   const [email,       setEmail]       = useState(user?.email || "");
   const [phone,       setPhone]       = useState("");
@@ -39,7 +42,7 @@ export function useConfigProfile() {
     setLoading(true);
     try {
       const p = await companiesApi.getProfile(company.id);
-      const name = p.trade_name || p.legal_name || company?.name || "";
+      const name = nomeDaLojaDe(p) || nomeDaLojaDe(company);
       const em   = p.email      || user?.email || "";
       const ph   = p.phone      || "";
       const addr = p.address    || "";
@@ -81,11 +84,18 @@ export function useConfigProfile() {
       if (res.email !== undefined) setEmail(res.email);
       if (res.phone !== undefined) setPhone(res.phone);
       if (res.address !== undefined) setAddress(res.address);
-      updateCompany({
-        name: res.trade_name || res.name || company.name,
-        // 24/10/2026: nome fantasia novo ja vale na etiqueta, sem novo login.
-        ...(res.trade_name !== undefined ? { trade_name: res.trade_name || null } : {}),
-      });
+      // 21/11/2026: o nome novo vale na hora em todo o app (topo, Caixa,
+      // fechamento, etiqueta, mensagens de WhatsApp), sem sair e entrar.
+      // A regra é a de utils/nomeDaLoja.ts: fantasia, senão razão social.
+      const empresaNova = {
+        trade_name: res.trade_name !== undefined ? (res.trade_name || null) : ((company as any).trade_name ?? null),
+        legal_name: res.legal_name !== undefined ? (res.legal_name || null) : ((company as any).legal_name ?? null),
+        name: res.name || company.name,
+      };
+      updateCompany({ ...empresaNova, name: nomeDaLojaDe(empresaNova) || company.name } as any);
+      // Telas que leem o perfil (Painel, banner) e o seletor de lojas.
+      queryClient.invalidateQueries({ queryKey: ["company-profile", company.id] });
+      useAuthStore.getState().loadCompanies().catch(() => {});
       syncProfileCache({
         companyName: res.trade_name || res.name || companyName,
         cnpj, email: res.email || email, phone: res.phone || phone,

@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -121,7 +122,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
 
     setSending(true);
     try {
-      const { inlineHtml } = generatePayslipHtml(emp, payslipType, company?.name || "Empresa", (company as any)?.cnpj);
+      const { inlineHtml } = generatePayslipHtml(emp, payslipType, nomeDaLojaDe(company) || "Empresa", (company as any)?.cnpj);
       const period = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
       const res = await fetch(`${BASE_URL}/companies/${company.id}/employees/${emp.id}/payslip/email`, {
@@ -154,7 +155,7 @@ export function Payslip({ emp, onBack }: { emp: Employee; onBack: () => void }) 
       toast.info("Impressão disponível apenas na versão web");
       return;
     }
-    const { fullPageHtml } = generatePayslipHtml(emp, payslipType, company?.name || "Minha Empresa", (company as any)?.cnpj);
+    const { fullPageHtml } = generatePayslipHtml(emp, payslipType, nomeDaLojaDe(company) || "Minha Empresa", (company as any)?.cnpj);
     const w = window.open("", "_blank", "width=750,height=900,scrollbars=yes");
     if (w) { w.document.write(fullPageHtml); w.document.close(); }
     else toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");

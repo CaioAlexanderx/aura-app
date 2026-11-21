@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Redirect } from "expo-router";
@@ -158,9 +159,7 @@ export default function KdsScreen() {
 
   const isWeb = Platform.OS === "web";
   const businessName =
-    ((company as any)?.trade_name) ||
-    ((company as any)?.legal_name) ||
-    ((company as any)?.name) ||
+    nomeDaLojaDe(company as any) ||
     "Aura Food";
 
   return (

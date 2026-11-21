@@ -10,6 +10,7 @@
 // É uma página do painel (precisa de login), com um único botão fora da
 // impressão. Sem tema escuro aqui de propósito: papel é branco.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Image, Platform, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -117,7 +118,7 @@ export default function FichaDeProducao() {
 
   const { order, items } = data;
   const criado = new Date(order.created_at);
-  const nomeDaLoja = (company as any)?.trade_name || (company as any)?.legal_name || (company as any)?.name || "";
+  const nomeDaLoja = nomeDaLojaDe(company as any);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: PAPEL }} contentContainerStyle={s.pagina}>

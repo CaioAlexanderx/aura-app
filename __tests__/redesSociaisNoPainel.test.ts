@@ -43,7 +43,7 @@ describe("os três campos existem e chegam ao backend", () => {
     expect(tab).toContain("setInstagram(f.instagram);");
     expect(tab).toContain("setTiktok(f.tiktok);");
     expect(tab).toContain("setFacebook(f.facebook);");
-    expect(tab).toContain("const f = formDoMeuSite(config, company?.name);");
+    expect(tab).toContain("const f = formDoMeuSite(config, nomeDaLojaDe(company));");
   });
 
   test("os campos ficam juntos, e a dica diz o que acontece", () => {

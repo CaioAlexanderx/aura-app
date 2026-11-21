@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { View, Text, Pressable, ScrollView, Platform } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -55,9 +56,7 @@ export function FoodSidebar({ collapsed, onToggle }: { collapsed: boolean; onTog
   const openOrders = hubStats?.open_orders ?? 0;
 
   const businessName =
-    ((company as any)?.trade_name) ||
-    ((company as any)?.legal_name) ||
-    ((company as any)?.name) ||
+    nomeDaLojaDe(company as any) ||
     "Aura Food";
 
   return (

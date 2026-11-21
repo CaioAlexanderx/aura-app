@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useEffect, useMemo, type MutableRefObject } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
 import { usePaletaDoCanal, type PaletaDoCanalTokens } from "./paletaDoCanal";
@@ -56,7 +57,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const p = usePaletaDoCanal();
   const s = useMemo(() => buildStyles(accent, p), [accent, p]);
   const { company } = useAuthStore();
-  const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
+  const [siteName, setSiteName] = useState(config.site_name || nomeDaLojaDe(company));
   const [tagline, setTagline] = useState(config.tagline || "");
   const [description, setDescription] = useState(config.description || "");
   const [phone, setPhone] = useState(maskPhone(config.phone || ""));
@@ -114,7 +115,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const mpConfigurado = mpRecebendo(mpGateway);
 
   // O que está salvo no servidor — a régua de "tem alteração?".
-  const [salvo, setSalvo] = useState<FormDoMeuSite>(() => formDoMeuSite(config, company?.name));
+  const [salvo, setSalvo] = useState<FormDoMeuSite>(() => formDoMeuSite(config, nomeDaLojaDe(company)));
 
   function aplicar(f: FormDoMeuSite) {
     setSiteName(f.siteName); setTagline(f.tagline);
@@ -137,7 +138,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
   useEffect(() => {
     if (!config.exists) return;
-    const f = formDoMeuSite(config, company?.name);
+    const f = formDoMeuSite(config, nomeDaLojaDe(company));
     aplicar(f);
     setSalvo(f);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,7 +200,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     // (35 vira 30) e normaliza as redes. Sem isto ela via 35 depois de
     // salvar e só descobria o 30 na loja.
     const gravado = resposta?.config
-      ? formDoMeuSite({ ...config, ...resposta.config }, company?.name)
+      ? formDoMeuSite({ ...config, ...resposta.config }, nomeDaLojaDe(company))
       : { ...formAtual, pixPct: formatarPct(corpo.pix_discount_pct) };
     aplicar(gravado);
     setSalvo(gravado);

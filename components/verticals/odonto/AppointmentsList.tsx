@@ -12,6 +12,7 @@
 // Confirmar amanhã (ConfirmTomorrowView); cores/rótulos de status vêm de
 // constants/dentalStatus.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Modal } from "react-native";
@@ -187,7 +188,7 @@ export function AppointmentsList({ confirmTomorrowSignal }: Props = {}) {
                   whatsappText={appointmentMessage({
                     status: a.status,
                     patientName: a.patient_name || "",
-                    clinicName: company?.name,
+                    clinicName: nomeDaLojaDe(company) || undefined,
                     when: new Date(a.scheduled_at),
                   })}
                   variant="icon"

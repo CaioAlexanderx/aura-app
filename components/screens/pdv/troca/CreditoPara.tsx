@@ -16,6 +16,7 @@
 // (onNovoCliente). O TrocaModal troca o miolo do passo pelo formulário
 // (troca/NovoClienteNaTroca) e, salvo, mostra "Cliente salvo" (salvoAgora).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -72,7 +73,7 @@ export function CreditoPara({
   }, [cliente, customers]);
 
   const variasLojas = Array.isArray(availableCompanies) && availableCompanies.length > 1;
-  const nomeDaLoja = company?.trade_name || company?.name || "";
+  const nomeDaLoja = nomeDaLojaDe(company);
   const linhaDaLoja = variasLojas && nomeDaLoja ? (
     <View style={s.loja} testID={`${testID}-loja`}>
       <Icon name="info" size={13} color={Colors.violet3} />

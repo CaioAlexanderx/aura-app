@@ -31,6 +31,7 @@
 // Sem hover (CLAUDE.md, armadilha 7): o cartão sugerido fica marcado o
 // tempo todo, não ao passar o mouse.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Linking, Platform } from "react-native";
 import { useRootNavigationState, useRouter } from "expo-router";
@@ -124,7 +125,7 @@ export function TrazerProdutos() {
 
   const respostas = checkin?.respostas || null;
   const sugerido = mostrarSugerido(respostas);
-  const loja = (company as any)?.name || null;
+  const loja = nomeDaLojaDe(company as any) || null;
 
   const seta = <Icon name="chevron-forward" size={16} color={C.ink3} />;
 
