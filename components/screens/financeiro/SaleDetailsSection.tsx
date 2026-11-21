@@ -51,8 +51,13 @@ var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ","); }
 
 // onTxAmountChange: valor do lancamento depois de remover/adicionar item. O
 // modal "Editar lancamento" usa pra nao regravar o valor antigo no Salvar.
-export function SaleDetailsSection({ txId, onClose, onTxAmountChange }: {
-  txId: string; onClose?: () => void; onTxAmountChange?: (amount: number) => void;
+//
+// 20/11/2026 (hotfix "Editar produtos" no detalhe da venda): somenteProdutos
+// esconde o cabecalho, o cliente e a vendedora. O detalhe da venda ja mostra
+// os dois, e vendedor(a) se edita no "Editar venda" (regras de comissao la).
+// Sem a prop, nada muda para o TransactionModal.
+export function SaleDetailsSection({ txId, onClose, onTxAmountChange, somenteProdutos }: {
+  txId: string; onClose?: () => void; onTxAmountChange?: (amount: number) => void; somenteProdutos?: boolean;
 }) {
   const {
     details, isLoading,
@@ -144,6 +149,7 @@ export function SaleDetailsSection({ txId, onClose, onTxAmountChange }: {
 
   return (
     <View style={s.box}>
+      {!somenteProdutos && (<>
       <View style={s.headerRow}>
         <Icon name="receipt" size={14} color={Colors.violet3} />
         <Text style={s.headerTitle}>{isLinked ? "Detalhes da venda" : "Detalhes do lancamento"}</Text>
@@ -247,6 +253,7 @@ export function SaleDetailsSection({ txId, onClose, onTxAmountChange }: {
           </View>
         </View>
       )}
+      </>)}
 
       {/* MERCADORIAS DA VENDA */}
       {isLinked && (
