@@ -120,6 +120,10 @@ export type CabecalhoDaEntrada = {
   numeroDaNota: string | null;
   chaveDaNota: string | null;
   usarMedio: boolean;
+  /** 20/11/2026 (A2, D14): os produtos NOVOS nascem também nestas lojas,
+   *  sem estoque (inclui a loja da entrada). Ausente ou com menos de 2 =
+   *  o corpo de hoje. Só vai na parte que tem produto novo. */
+  lojas?: string[] | null;
 };
 
 export type ParteDaEntrada = { corpo: Record<string, unknown>; itens: ItemDaEntrada[] };
@@ -152,6 +156,7 @@ export function montarCorpos(itens: ItemDaEntrada[], cab: CabecalhoDaEntrada, ma
     if (cab.fornecedorId) corpo.supplier_id = cab.fornecedorId;
     if (cab.numeroDaNota) corpo.invoice_number = cab.numeroDaNota;
     if (cab.chaveDaNota && cab.chaveDaNota.length === 44) corpo.nfe_key = cab.chaveDaNota;
+    if (cab.lojas && cab.lojas.length >= 2 && p.some((x) => !!x.novo)) corpo.lojas = cab.lojas;
     return { corpo, itens: p };
   });
 }

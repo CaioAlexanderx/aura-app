@@ -58,6 +58,10 @@ import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import { Passo1Fornecedor } from "./Passo1Fornecedor";
 import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
 import { Passo3Conferir } from "./Passo3Conferir";
+// 20/11/2026 (A2, D14, mockup d): os produtos novos também nas outras lojas.
+import { useLojasDoLote } from "@/hooks/useLojasDoLote";
+import { LojasDoChegou } from "../LojasDoLote";
+import { porLojaDaResposta, toastDaLojaComErro } from "../item-form/lojasDoCadastro";
 import { Passo4Pronto, ProntoDaLista } from "./Passo4Pronto";
 import { ligarListaAoFornecedor } from "./ligarAoFornecedor";
 import { productsBatchApi } from "@/services/productsBatchApi";
@@ -373,6 +377,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const ehDigitar = origem === "digitar";
   const digitada = useMemo(() => conferirDigitadas(digitadas, indice.porId, semCusto), [digitadas, indice, semCusto]);
   const podeDarEntrada = ehDigitar ? digitada.podeDarEntrada : resumo.podeDarEntrada;
+  // A2: a entrada é sempre na loja ativa; os produtos novos podem nascer
+  // também nas outras lojas do grupo, sem estoque.
+  const lojasDoLote = useLojasDoLote(companyId, visible);
+  const novosNaEntrada = passo === 3 && !soLigar && lojasDoLote.campo.modo === "escolha"
+    ? (ehDigitar ? digitada.itens : itensDaConferencia(linhas, semCusto)).filter((i) => !!i.novo).length
+    : 0;
   const quantasEntram = ehDigitar ? digitada.itens.length : resumo.entram;
 
   function decidir(n: number, d: DecisaoDaLinha | null) {
@@ -432,6 +442,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       numeroDaNota: ehDigitar ? numeroDigitado.trim() || null : !ehPlanilha && nota ? nota.numero || null : null,
       chaveDaNota: ehDigitar || ehPlanilha ? null : nota ? nota.chave : null,
       usarMedio,
+      lojas: lojasDoLote.corpo(false)?.lojas || null,
     });
     const total = itens.length;
     const r = await gravarEntrada(
@@ -440,6 +451,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       (feitos) => setGravando({ feitos, total }),
     );
     setGravando(null);
+    // A2: loja que não recebeu algum produto novo avisa; a entrada fica.
+    for (const resp of r.respostas) {
+      for (const p of porLojaDaResposta(resp)) {
+        if (p.erros && p.erros.length > 0) toast.error(toastDaLojaComErro(p));
+      }
+    }
     if (r.ok) {
       setRespostas(r.respostas);
       setFalha(null);
@@ -773,6 +790,9 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onRepetir={darEntrada}
                 onBaixar={IS_WEB ? baixarPendentes : undefined}
               />
+            )}
+            {passo === 3 && !gravando && ligando === null && novosNaEntrada > 0 && (
+              <LojasDoChegou lojas={lojasDoLote} nNovos={novosNaEntrada} />
             )}
             {passo === 3 && ehDigitar && !gravando && (
               <Passo3Digitar

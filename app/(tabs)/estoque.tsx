@@ -1413,6 +1413,8 @@ export default function EstoqueScreen() {
           onImportar={importPlanilha.importar}
           onFechar={importPlanilha.fechar}
           onBaixarProblemas={importPlanilha.baixarProblemas}
+          lojas={importPlanilha.lojas}
+          porLoja={importPlanilha.porLoja}
         />
       </WebPortal>
       {linkTarget && company?.id && (

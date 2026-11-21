@@ -284,8 +284,10 @@ describe("duas lojas no grupo", () => {
     expect(t).toContain("Em quais lojas este produto entra?");
     expect(t).toContain("Você está aqui");
     expect(t).toContain("Cada loja tem o seu estoque. Marque outra loja para o produto nascer nela também.");
-    const matriz = porTestID(tree, "loja-opcao-matriz");
-    const filial = porTestID(tree, "loja-opcao-filial");
+    // O Pressable de cada loja (o que leva o estado para o leitor de tela).
+    const caixa = (id: string) => tree.root.findAll((n: any) => n.props && n.props.testID === id && n.props.accessibilityState)[0];
+    const matriz = caixa("loja-opcao-matriz");
+    const filial = caixa("loja-opcao-filial");
     expect(matriz.props.accessibilityState).toEqual({ checked: true, disabled: true });
     expect(filial.props.accessibilityState).toEqual({ checked: false, disabled: false });
     preencher(tree);
