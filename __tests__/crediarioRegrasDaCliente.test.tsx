@@ -95,3 +95,32 @@ describe("Vendas a prazo (QA P2)", () => {
     expect(t.root.findAllByProps({ testID: "limite-regras-motivo" }, { deep: false } as any)).toHaveLength(1);
   });
 });
+
+describe("Limite definível (QA)", () => {
+  const ajustesLimite: any = {
+    termsMaxInst: "", setTermsMaxInst: jest.fn(), termsInterest: "", setTermsInterest: jest.fn(),
+    termsDirty: false, setTermsDirty: jest.fn(), savingTerms: false, saveTerms: jest.fn(),
+    blockReason: "", setBlockReason: jest.fn(), blockingAction: null, setBlockingAction: jest.fn(),
+    handleBlockToggle: jest.fn(), confirmBlock: jest.fn(), blockPending: false,
+    limiteInput: "", setLimiteInput: jest.fn(), limiteDirty: true, salvarLimite: jest.fn(), salvandoLimite: false, erroLimite: null,
+  };
+  test("campo do limite, dica de 'sem limite' e o salvar", () => {
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(<TabConta profile={{ credit_limit: 0 }} isBlocked={false} scoreLabel={null} availableLimit={0}
+        totalBalance={0} openInst={[]} nextDueDate="" hasTermsOverride={false} realCarnes={[]} ajustes={ajustesLimite} />);
+    });
+    const campo = t.root.findAllByProps({ testID: "limite-regras-limite-campo" }, { deep: false } as any)[0];
+    expect(campo.props.placeholder).toBe("Sem limite");
+    act(() => { campo.props.onChangeText("1.500,00x"); });
+    expect(ajustesLimite.setLimiteInput).toHaveBeenCalledWith("1.500,00");
+    act(() => { t.root.findAllByProps({ testID: "limite-regras-limite-salvar" }, { deep: false } as any)[0].props.onPress(); });
+    expect(ajustesLimite.salvarLimite).toHaveBeenCalled();
+    expect(JSON.stringify(t.toJSON())).toContain("Deixe em branco ou 0 para não ter limite.");
+  });
+  test("a ficha grava pelo PUT de limite, com 0 para vazio", () => {
+    const fonte = require("fs").readFileSync(require("path").join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte).toContain("const valor = limiteInput.trim() ? parseAmount(limiteInput) : 0;");
+    expect(fonte).toContain("await creditApi.setCustomerLimit(companyId, customerId, +valor.toFixed(2));");
+  });
+});

@@ -180,6 +180,12 @@ export function ClienteCrediarioModal({
   const [savingTerms, setSavingTerms] = useState(false);
   // QA 23/11: o erro ao salvar as regras fica na tela (o toast sumia).
   const [erroTermos, setErroTermos] = useState<string | null>(null);
+  // QA 23/11: limite de compras a prazo definível em "Limite e regras"
+  // (PUT .../customers/:cid/limit; 0 ou vazio = sem limite).
+  const [limiteInput, setLimiteInput] = useState("");
+  const [limiteDirty, setLimiteDirty] = useState(false);
+  const [salvandoLimite, setSalvandoLimite] = useState(false);
+  const [erroLimite, setErroLimite] = useState<string | null>(null);
 
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
@@ -351,6 +357,8 @@ export function ClienteCrediarioModal({
       setTrocarAberto(false);
       setMenuFicha(false);
       setMenuTelefone(false);
+      setLimiteDirty(false);
+      setErroLimite(null);
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -366,6 +374,10 @@ export function ClienteCrediarioModal({
   useEffect(() => {
     const p = profileQ.data;
     if (!p) return;
+    if (!limiteDirty) {
+      const lim = Number(p.credit_limit) || 0;
+      setLimiteInput(lim > 0 ? lim.toFixed(2).replace(".", ",") : "");
+    }
     const ov = p.terms?.overrides;
     if (ov) {
       setTermsMaxInst(ov.max_installments != null ? String(ov.max_installments) : "");
@@ -474,6 +486,24 @@ export function ClienteCrediarioModal({
 
   function confirmBlock() {
     blockMut.mutate({ action: "block", reason: blockReason.trim() || undefined });
+  }
+
+  async function salvarLimite() {
+    if (!customerId) return;
+    const valor = limiteInput.trim() ? parseAmount(limiteInput) : 0;
+    if (!isFinite(valor) || valor < 0) { setErroLimite("Digite um valor em reais, ou deixe em branco para não ter limite."); return; }
+    setSalvandoLimite(true);
+    setErroLimite(null);
+    try {
+      await creditApi.setCustomerLimit(companyId, customerId, +valor.toFixed(2));
+      toast.success(valor > 0 ? "Limite salvo." : "Limite retirado.");
+      setLimiteDirty(false);
+      atualizarFicha();
+    } catch (err: any) {
+      setErroLimite(err?.data?.error ? `Não foi possível salvar o limite: ${err.data.error}` : "Não foi possível salvar o limite. Confira a conexão e tente de novo.");
+    } finally {
+      setSalvandoLimite(false);
+    }
   }
 
   async function saveTerms() {
@@ -1284,6 +1314,8 @@ export function ClienteCrediarioModal({
       ajustes={{
         termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
         termsDirty, setTermsDirty, savingTerms, saveTerms, erroTermos,
+        limiteInput, setLimiteInput: (v: string) => { setLimiteInput(v); setLimiteDirty(true); setErroLimite(null); },
+        limiteDirty, salvarLimite, salvandoLimite, erroLimite,
         blockReason, setBlockReason, blockingAction, setBlockingAction,
         handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
       }}

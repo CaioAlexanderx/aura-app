@@ -33,6 +33,13 @@ export type AjustesProps = {
   saveTerms: () => void;
   /** Erro ao salvar as regras, na tela. */
   erroTermos?: string | null;
+  /** Limite de compras a prazo (QA 23/11): texto do campo e o salvar. */
+  limiteInput?: string;
+  setLimiteInput?: (v: string) => void;
+  limiteDirty?: boolean;
+  salvarLimite?: () => void;
+  salvandoLimite?: boolean;
+  erroLimite?: string | null;
   blockReason: string;
   setBlockReason: (v: string) => void;
   blockingAction: "block" | "unblock" | null;
@@ -107,6 +114,36 @@ export function TabConta({
       </>
     ) : (
       <Text style={c.texto}>Sem limite definido para este cadastro.</Text>
+    )}
+    {!!ajustes.setLimiteInput && (
+      <View style={{ marginTop: 10 }}>
+        <Text style={[m.fieldLabel, { fontFamily: Fonts.body }]}>Limite (R$)</Text>
+        <TextInput
+          style={m.termsInput}
+          value={ajustes.limiteInput ?? ""}
+          placeholder="Sem limite"
+          placeholderTextColor={CorDaFicha.secundario}
+          keyboardType="decimal-pad"
+          onChangeText={v => ajustes.setLimiteInput!(v.replace(/[^\d,.]/g, ""))}
+          accessibilityLabel="Limite de compras a prazo, em reais"
+          testID="limite-regras-limite-campo"
+        />
+        <Text style={[c.dica, { marginTop: 4 }]}>Deixe em branco ou 0 para não ter limite.</Text>
+        <Pressable
+          style={[m.cta, { marginTop: 10 }, (!ajustes.limiteDirty || ajustes.salvandoLimite) && { opacity: 0.45 }]}
+          onPress={ajustes.salvarLimite}
+          disabled={!ajustes.limiteDirty || ajustes.salvandoLimite}
+          accessibilityRole="button"
+          testID="limite-regras-limite-salvar"
+        >
+          {ajustes.salvandoLimite
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar limite</Text>}
+        </Pressable>
+        {!!ajustes.erroLimite && (
+          <Text style={c.erro} accessibilityRole="alert" testID="limite-regras-limite-erro">{ajustes.erroLimite}</Text>
+        )}
+      </View>
     )}
   </View>
 
