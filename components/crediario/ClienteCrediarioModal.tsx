@@ -133,6 +133,23 @@ export function ClienteCrediarioModal({
   casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false,
 }: Props) {
   const qc = useQueryClient();
+  // QA 23/11 (P1-5): depois de receber, remover ou corrigir pagamento,
+  // juntar, mudar as parcelas ou a data, TUDO o que mostra dinheiro desta
+  // cliente recarrega — a ficha, o perfil, a carteira (a lista ao lado, que
+  // fica escondida atrás da ficha: refetchType "all") e os indicadores.
+  // Antes cada ação invalidava uma parte, e "Falta pagar", o carnê e a lista
+  // ficavam com os números antigos.
+  function atualizarFicha(cliente: string | null | undefined = customerId) {
+    const todas = { refetchType: "all" as const };
+    if (cliente) {
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, cliente], ...todas });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, cliente], ...todas });
+    }
+    qc.invalidateQueries({ queryKey: ["credit-balances", companyId], ...todas });
+    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId], ...todas });
+    qc.invalidateQueries({ queryKey: ["credit-aging", companyId], ...todas });
+    onChanged?.();
+  }
   // F3 (23/11/2026): na tela cheia o Histórico vira a coluna da direita
   // (sempre à vista) e os painéis abrem nela; o centro fica com as parcelas.
   const emTela = casca === "tela";
@@ -434,9 +451,7 @@ export function ClienteCrediarioModal({
       toast.success(isBlocked ? "Cliente desbloqueado" : "Cliente bloqueado");
       setBlockReason("");
       setBlockingAction(null);
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      onChanged?.();
+      atualizarFicha();
     },
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao alterar bloqueio"),
   });
@@ -464,8 +479,7 @@ export function ClienteCrediarioModal({
       await creditApi.updateCustomerTerms(companyId, customerId!, body);
       toast.success("Regras salvas.");
       setTermsDirty(false);
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      onChanged?.();
+      atualizarFicha();
     } catch (err: any) {
       setErroTermos(erroAoSalvarRegras(err));
     } finally {
@@ -504,7 +518,7 @@ export function ClienteCrediarioModal({
       toast.success("Carnê criado!");
       setShowNewAccount(false);
       setNewAccountName("");
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      atualizarFicha();
     } catch (err: any) {
       toast.error(err?.data?.error || "Erro ao criar carnê");
     } finally {
@@ -518,8 +532,7 @@ export function ClienteCrediarioModal({
     onSuccess: (_res, vars) => {
       // A cliente mudou durante o envio: atualiza a ficha dela e não mexe na tela.
       if (vars.cliente !== clienteAtualRef.current) {
-        qc.invalidateQueries({ queryKey: ["credit-customer", companyId, vars.cliente] });
-        qc.invalidateQueries({ queryKey: ["credit-profile", companyId, vars.cliente] });
+        atualizarFicha(vars.cliente);
         toast.success("Vencimento atualizado!");
         return;
       }
@@ -527,8 +540,7 @@ export function ClienteCrediarioModal({
       setEditDueDateInput("");
       setEditDueDateError("");
       toast.success("Vencimento atualizado!");
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
       setHistLoaded(false);
     },
@@ -621,12 +633,7 @@ export function ClienteCrediarioModal({
       );
       renegKeyRef.current = null;
       setRenegScope(null);
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-      onChanged?.();
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
       setHistLoaded(false);
     } catch (err: any) {
@@ -734,12 +741,7 @@ export function ClienteCrediarioModal({
       setFreePreview(null);
       setFreeDateBr(todayBrSp());
       setReceberGate(false);
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-      onChanged?.();
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1):
       // antes o recebimento só aparecia reabrindo a ficha.
       setHistLoaded(false);
@@ -904,23 +906,12 @@ export function ClienteCrediarioModal({
   // F3 (revisão): resposta que chegou depois de trocar de cliente — atualiza
   // os dados DELA (e a carteira) sem tocar na tela da cliente nova.
   function atualizarDaCliente(cliente: string | null) {
-    if (!cliente) return;
-    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, cliente] });
-    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, cliente] });
-    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-    onChanged?.();
+    atualizarFicha(cliente);
   }
 
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
-    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-    onChanged?.();
+    atualizarFicha(customerId);
   }
 
   // F3 (revisão): o ?cliente= sobrevive à troca de loja (reloadAfterSwitch).
