@@ -423,7 +423,9 @@ describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
     expect(tudo).toContain("Sem data marcada");
     expect(tudo).toContain("Pode comprar mais");
     expect(tudo).toContain("R$ 429,34");
-    expect(tudo).toContain("limite de R$ 1.000,00 · às vezes atrasa · ");
+    expect(tudo).toContain("limite de R$ 1.000,00 · às vezes atrasa ·");
+    // o "ver" é um botão com área de 44 px
+    expect(porId(tree, "ficha-fato-ver-limite")[0].props.accessibilityRole).toBe("button");
     // a nota (640) não está no topo; os rótulos antigos sumiram
     expect(tudo).not.toContain("SCORE");
     expect(tudo).not.toContain("FALTA PAGAR");
@@ -451,6 +453,11 @@ describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
     expect(painel).toContain("640");
     expect(painel).toContain("Deixe em branco para usar a regra da loja.");
     expect(painel).toContain("Liberadas para esta cliente");
+  });
+
+  test("na janela, a lista do ⋯ vai para a área que rola (o cabeçalho fixo cortaria)", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte).toMatch(/<ScrollView style=\{m\.body\}[^>]*>\s*\{listaDoMenuDaFicha\}/);
   });
 
   test("na janela: duas abas (sem a aba Conta) e Limite e regras pelo ⋯", async () => {

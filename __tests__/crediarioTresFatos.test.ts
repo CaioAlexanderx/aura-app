@@ -44,7 +44,15 @@ describe("O que vem agora", () => {
       atrasadas: [{ due_date: "2026-11-02", remaining: 80, total_due: 82.11, days_late: 19 }],
       proxima: { due_date: "2026-12-02", remaining: 80 }, saldo: 570.66, hoje: HOJE, fmt,
     });
-    expect(f).toEqual({ titulo: "Atrasado", valor: "R$ 82,11", detalhe: "1 parcela · venceu 02/11, há 19 dias", atrasado: true });
+    // com encargos, a frase diz quanto é multa e juros (R$ 82,11 > R$ 80,00)
+    expect(f).toEqual({
+      titulo: "Atrasado", valor: "R$ 82,11",
+      detalhe: "com R$ 2,11 de multa e juros · 1 parcela · venceu 02/11, há 19 dias", atrasado: true,
+    });
+    const semEncargos = fatoOQueVemAgora({
+      atrasadas: [{ due_date: "2026-11-02", remaining: 80, days_late: 19 }], proxima: null, saldo: 80, hoje: HOJE, fmt,
+    });
+    expect(semEncargos.detalhe).toBe("1 parcela · venceu 02/11, há 19 dias");
   });
   test("várias atrasadas: soma e a mais antiga", () => {
     const f = fatoOQueVemAgora({
@@ -55,7 +63,7 @@ describe("O que vem agora", () => {
       proxima: null, saldo: 1240.5, hoje: HOJE, fmt,
     });
     expect(f.valor).toBe("R$ 426,80");
-    expect(f.detalhe).toBe("2 parcelas · a mais antiga venceu 18/10, há 34 dias");
+    expect(f.detalhe).toBe("com R$ 13,30 de multa e juros · 2 parcelas · a mais antiga venceu 18/10, há 34 dias");
   });
   test("sem dias do backend: conta pela data", () => {
     const f = fatoOQueVemAgora({ atrasadas: [{ due_date: "2026-11-20", remaining: 10 }], proxima: null, saldo: 10, hoje: HOJE, fmt });
@@ -66,6 +74,17 @@ describe("O que vem agora", () => {
     expect(f).toEqual({ titulo: "Próxima parcela", valor: "R$ 205,32", detalhe: "vence 20/12", atrasado: false });
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: HOJE, remaining: 5 }, saldo: 5, hoje: HOJE, fmt }).detalhe).toBe("vence hoje");
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: "2027-01-20", remaining: 5 }, saldo: 5, hoje: HOJE, fmt }).detalhe).toBe("vence 20/01/27");
+  });
+  test("vencida dentro da carência: 'venceu', nunca 'vence' com data passada", () => {
+    const f = fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: "2026-11-19", remaining: 50, total_due: 51 }, saldo: 50, hoje: HOJE, fmt });
+    expect(f.detalhe).toBe("venceu 19/11");
+    // e sem encargos: não está em atraso
+    expect(f.valor).toBe("R$ 50,00");
+  });
+  test("só parcelas a conferir", () => {
+    expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, aConferir: 2, saldo: 300, hoje: HOJE, fmt })).toEqual({
+      titulo: "O que vem agora", valor: "Parcelas a conferir", detalhe: "veja o aviso abaixo", atrasado: false,
+    });
   });
   test("compras sem carnê, sem parcela", () => {
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, saldo: 180, hoje: HOJE, fmt })).toEqual({
@@ -95,8 +114,11 @@ describe("Pode comprar mais", () => {
 });
 
 describe("apoio", () => {
-  test("valorDeHoje usa o total com encargos", () => {
-    expect(valorDeHoje({ due_date: "x", remaining: 80, total_due: 82.11 })).toBe(82.11);
+  test("valorDeHoje: encargos só quando atrasada (mesma regra da linha)", () => {
+    expect(valorDeHoje({ due_date: "x", remaining: 80, total_due: 82.11, is_overdue: true })).toBe(82.11);
+    expect(valorDeHoje({ due_date: "x", remaining: 80, total_due: 82.11, is_overdue: false })).toBe(80);
+    expect(valorDeHoje({ due_date: "x", remaining: 80, total_due: 82.11 }, true)).toBe(82.11);
+    expect(valorDeHoje({ due_date: "x", remaining: 80, charges_total: 3 }, true)).toBe(83);
     expect(valorDeHoje({ due_date: "x", amount_due: 100, covered_amount: 30 })).toBe(70);
   });
   test("datasDasPagas", () => {

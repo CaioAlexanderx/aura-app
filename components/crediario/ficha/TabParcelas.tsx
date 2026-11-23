@@ -193,7 +193,10 @@ export function TabParcelas({
     const hasCharges = late && chargesTotal > 0;
     const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
     const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
-    const venc = dataDoVencimento(ins.due_date, diaEmSaoPaulo(new Date().toISOString()));
+    const hoje = diaEmSaoPaulo(new Date().toISOString());
+    const venc = dataDoVencimento(ins.due_date, hoje);
+    // Vencida dentro da carência: não é atraso, mas a data já passou.
+    const jaVenceu = late || toReview || (diaEmSaoPaulo(ins.due_date) || "9999") < hoje;
     const jaPago = Number(ins.covered_amount || 0);
     const porque = late
       ? [
@@ -207,13 +210,18 @@ export function TabParcelas({
       <LinhaDaParcela
         key={ins.id}
         numero={`${ins.installment_number} de ${ins.total_installments}`}
-        data={`${late || toReview ? "venceu" : "vence"} ${venc}`}
+        data={`${jaVenceu ? "venceu" : "vence"} ${venc}`}
         porque={porque}
         valor={fmt(totalHoje)}
         atrasada={late}
         principal={indice === 0}
         onData={() => handleEditDueDateOpen(ins)}
-        onReceber={() => prefill(totalHoje)}
+        // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
+        // quem toca Receber no carnê B espera abater o B. Antes ia para a
+        // parcela mais antiga de qualquer carnê.
+        onReceber={() => prefill(totalHoje, ins.account_id ?? undefined)}
+        // O Pix da parcela volta (o Caio não aprovou tirar).
+        onPix={() => openInstallmentPix(ins.id)}
       />
     );
   };
@@ -233,13 +241,23 @@ export function TabParcelas({
             autoFocus
           />
           <Pressable
-            style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
+            style={[m.newAccConfirm, { minHeight: 44 }, creatingAccount && { opacity: 0.5 }]}
             onPress={handleCreateAccount}
             disabled={creatingAccount}
+            accessibilityRole="button"
           >
             {creatingAccount
               ? <ActivityIndicator size="small" color="#fff" />
               : <Text style={m.newAccConfirmTxt}>Criar</Text>}
+          </Pressable>
+          <Pressable
+            style={c.cancelar}
+            onPress={() => { setShowNewAccount(() => false); setNewAccountName(""); }}
+            disabled={creatingAccount}
+            accessibilityRole="button"
+            testID="carnes-novo-carne-cancelar"
+          >
+            <Text style={c.linkT}>Cancelar</Text>
           </Pressable>
         </View>
       )}
@@ -377,15 +395,16 @@ const c = StyleSheet.create({
   doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
   doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
   quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3 },
+  cancelar: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10 },
 });
 
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber }: {
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix }: {
   numero: string; data: string; porque: string; valor: string;
   atrasada: boolean; principal: boolean;
-  onData: () => void; onReceber: () => void;
+  onData: () => void; onReceber: () => void; onPix?: () => void;
 }) {
   return (
     <View style={[l.linha, atrasada && l.linhaLate]} testID={`parcela-${numero}`}>
@@ -415,6 +434,17 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
       >
         <Text style={[l.receberT, principal && { color: "#fff" }]}>Receber</Text>
       </Pressable>
+      {!!onPix && (
+        <Pressable
+          onPress={onPix}
+          style={({ pressed }: any) => [l.receber, l.receberS, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Pix da parcela ${numero}`}
+          testID={`parcela-${numero}-pix`}
+        >
+          <Text style={[l.receberT, { color: Colors.green }]}>Pix</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
