@@ -15,7 +15,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
 import { request } from "@/services/api";
-import { chavePixDoQr, ROTA_DA_CHAVE_PIX_DO_QR } from "@/utils/crediarioCarne";
+import { chavePixDoQr, diaMes, ROTA_DA_CHAVE_PIX_DO_QR } from "@/utils/crediarioCarne";
 import { waApi, WA_CREDIARIO_TEMPLATES } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { toast } from "@/components/Toast";
@@ -65,18 +65,13 @@ var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// A1-FE: data de calendário não passa por new Date() (meia-noite UTC vira o
+// dia anterior em São Paulo). QA 23/11/2026 (P1-6): o vencimento chega também
+// como "2026-11-27T00:00:00.000Z" — só "YYYY-MM-DD" era tratado como data
+// pura, e a prévia do Cobrar mandava "vence 26/11" para a cliente de uma
+// parcela de 27/11. Agora é o mesmo diaMes da ficha (utils/crediarioCarne).
 var fmtDate = function(iso: string) {
-  // A1-FE: date-only strings (YYYY-MM-DD) parsed as UTC midnight by new Date(),
-  // causing off-by-one in UTC-3 (Brazil). Split string instead to avoid the issue.
-  if (!iso) return "";
-  try {
-    const s = String(iso);
-    if (s.length === 10) {
-      const [, m, d] = s.split("-");
-      return d + "/" + m;
-    }
-    return new Date(s).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
-  } catch { return ""; }
+  return diaMes(iso);
 };
 
 /** Hoje em America/Sao_Paulo no formato YYYY-MM-DD (tz-safe). */
