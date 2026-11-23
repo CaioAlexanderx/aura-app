@@ -41,6 +41,12 @@ export function ConfirmGate({
   const c = tone === "red" ? Colors.red : Colors.amber;
   const bg = tone === "red" ? Colors.redD : Colors.amberD;
 
+  // 23/11/2026 (QA da ficha, P1): fechada, a pergunta NÃO existe. Antes ela
+  // ficava no DOM com altura 0 e opacidade 0 e os botões continuavam
+  // focáveis: Tab + Enter em "Sim, remover" escondido removia um pagamento
+  // sem pergunta. Perde-se a animação de fechar; abrir continua animado.
+  if (!visible) return null;
+
   return (
     <Collapsible open={visible} duration={Motion.base}>
       <View style={[s.box, { backgroundColor: bg, borderColor: c + "66" }]}>
