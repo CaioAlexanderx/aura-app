@@ -665,3 +665,25 @@ describe("QA P2: campo de data com 16 px (zoom do iOS)", () => {
     expect(fonte.match(/style=\{m\.dateInput\}/g)?.length).toBe(3);
   });
 });
+
+describe("QA P2: Cobrar sem telefone mostra a frase aprovada", () => {
+  test("à vista ao lado do Cobrar apagado", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve({ ...mockDetail, customer: { ...mockDetail.customer, phone: null } }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} onCobrar={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const aviso = porId(tree, "ficha-cobrar-aviso");
+    expect(aviso).toHaveLength(1);
+    expect(aviso[0].props.children).toBe("Adicione o telefone para cobrar pelo WhatsApp");
+    expect(porId(tree, "ficha-cobrar-sem-telefone")).toHaveLength(1);
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+});

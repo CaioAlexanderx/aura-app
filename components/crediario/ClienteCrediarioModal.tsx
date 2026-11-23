@@ -1049,6 +1049,12 @@ export function ClienteCrediarioModal({
 
   // 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
   // explica, abrindo a edição no campo do telefone.
+  // QA 23/11 (P2): sem telefone, a frase aprovada fica à vista ao lado do
+  // Cobrar apagado (antes só aparecia num aviso ao tocar).
+  const avisoSemTelefone = !!onCobrar && !detailQ.isLoading && !phone && (
+    <Text style={f.semTelefone} testID="ficha-cobrar-aviso">Adicione o telefone para cobrar pelo WhatsApp</Text>
+  );
+
   const botaoCobrar = !!onCobrar && !detailQ.isLoading && (
     phone ? (
       <Pressable
@@ -1996,6 +2002,7 @@ export function ClienteCrediarioModal({
             {carregandoFicha ? carregandoEl : tab === "historico" ? historicoEl : parcelasEl}
           </ScrollView>
 
+          {!!avisoSemTelefone && <View style={{ paddingHorizontal: 12, paddingTop: 6, backgroundColor: Colors.bg2 }}>{avisoSemTelefone}</View>}
           {!detailQ.isLoading && (
             <View style={pg.rodape} testID="ficha-rodape">
               {botaoCobrar}
@@ -2033,6 +2040,7 @@ export function ClienteCrediarioModal({
 
           <View style={m.fixedHeader}>
             {identidade}
+            {!!avisoSemTelefone && <View style={{ marginTop: -6, marginBottom: 10 }}>{avisoSemTelefone}</View>}
             {numeros}
             {avisoEl}
 
@@ -2178,6 +2186,7 @@ export function ClienteCrediarioModal({
           </Pressable>
           {botaoCobrar}
         </View>
+        {!!avisoSemTelefone && <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>{avisoSemTelefone}</View>}
         <ScrollView style={t.rolagem} contentContainerStyle={t.movConteudo} showsVerticalScrollIndicator={true}>
           {historicoEl}
         </ScrollView>
@@ -2321,6 +2330,7 @@ const f = StyleSheet.create({
   fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
   fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 2 },
+  semTelefone: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17 },
   fatoVer: { fontFamily: Fonts.body, fontSize: 11.5, fontWeight: "700", color: Colors.violet3 },
   fatoSubLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 2, marginTop: 2 },
   fatoVerArea: { minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 6, marginVertical: -14 },
