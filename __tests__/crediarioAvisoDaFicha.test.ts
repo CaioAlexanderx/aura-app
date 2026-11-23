@@ -41,10 +41,10 @@ describe("Movimentações recarrega depois de mexer no dinheiro", () => {
     return fonte.slice(i, fim > i ? fim : undefined);
   }
   test("receber pagamento", () => {
-    expect(trechoDeSucesso("async function confirmFreePayment()")).toContain("setHistLoaded(false);");
+    expect(trechoDeSucesso("async function confirmFreePayment(")).toContain("setHistLoaded(false);");
   });
   test("mudar as parcelas (renegociar)", () => {
-    expect(trechoDeSucesso("async function confirmRenegociar()")).toContain("setHistLoaded(false);");
+    expect(trechoDeSucesso("async function confirmRenegociar(")).toContain("setHistLoaded(false);");
   });
   test("mudar o vencimento", () => {
     const i = fonte.indexOf("const editDueDateMut = useMutation({");
