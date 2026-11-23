@@ -1970,9 +1970,13 @@ export function ClienteCrediarioModal({
                 <Text style={pg.heroK}>{fatoFalta.titulo}</Text>
                 <Text style={[pg.heroV, fatoFalta.tom === "credito" && { color: Colors.green }]} testID="ficha-pagina-falta">{fatoFalta.valor}</Text>
                 {!detailQ.isLoading && (
-                  <Text style={[pg.agora, fatoAgora.atrasado && { color: Colors.red }]} testID="crediario-ficha-status">
-                    {`${fatoAgora.titulo} ${fatoAgora.valor}${fatoAgora.detalhe ? ` · ${fatoAgora.detalhe}` : ""}`}
-                  </Text>
+                  // QA 23/11 (P2): título numa linha, valor e detalhe na outra.
+                  <View testID="crediario-ficha-status" style={{ marginTop: 4 }}>
+                    <Text style={[pg.heroK, fatoAgora.atrasado && { color: Colors.red }]}>{fatoAgora.titulo}</Text>
+                    <Text style={[pg.agora, { marginTop: 0 }, fatoAgora.atrasado && { color: Colors.red }]}>
+                      {`${fatoAgora.valor}${fatoAgora.detalhe ? ` · ${fatoAgora.detalhe}` : ""}`}
+                    </Text>
+                  </View>
                 )}
                 {!!profile && (
                   <View style={f.fatoSubLinha} testID="crediario-ficha-limite">

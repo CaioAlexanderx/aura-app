@@ -506,7 +506,10 @@ describe("F5: celular, página inteira", () => {
     expect(tudo).toContain("Maria Aparecida Souza");
     expect(tudo).toContain("Falta pagar");
     expect(texto(porId(tree, "ficha-pagina-falta")[0].props.children)).toBe("R$ 570,66");
-    expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando vier o pagamento");
+    // QA P2: título e valor em linhas separadas
+    const agora = porId(tree, "crediario-ficha-status")[0].findAll((n: any) => typeof n.props?.children === "string").map((n: any) => n.props.children);
+    expect(agora).toContain("Próxima parcela");
+    expect(agora).toContain("Sem data marcada · compras sem carnê: receba quando vier o pagamento");
     expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa ·ver");
     expect(porId(tree, "ficha-aba-parcelas")).toHaveLength(1);
     expect(porId(tree, "ficha-aba-historico")).toHaveLength(1);
