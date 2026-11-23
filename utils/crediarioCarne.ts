@@ -475,7 +475,7 @@ export function juncaoIndisponivel(err: ErroDeApi): boolean {
 }
 
 export const MSG_JUNCAO_INDISPONIVEL =
-  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Renegociar de cada carnê continua funcionando.";
+  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Mudar as parcelas de cada carnê continua funcionando.";
 
 /** Erro do preview/apply do juntar em português claro. */
 export function mensagemErroJuncao(err: ErroDeApi): string {

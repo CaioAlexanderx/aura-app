@@ -2,7 +2,7 @@
 // "paga inteira / abateu / sobra" e "hoje faltam".
 import {
   agruparPorMes, diaDoEvento, mesDoEvento, paraOndeFoiODinheiro, tituloDoEvento,
-  valorComSinal, verboDoPagamento, diminuiADivida,
+  valorComSinal, verboDoPagamento, diminuiADivida, dataDoVencimento,
   type AlocacaoDaMovimentacao,
 } from "@/utils/crediarioMovimentacao";
 
@@ -96,9 +96,32 @@ describe("para onde foi o dinheiro", () => {
     });
   });
 
+  test("abatimento pequeno, mas de mais de um centavo, é abateu (não sobra)", () => {
+    const g = paraOndeFoiODinheiro(
+      [
+        aloc({ installment_id: "q1", principal_paid: 100, status_after: "paid" }),
+        aloc({ installment_id: "q2", number: 2, principal_paid: 0.5, status_after: "pending" }),
+      ],
+      [{ id: "q2", due_date: "2026-12-20", remaining: 99.5 }],
+      "2026-11-23",
+    );
+    expect(g[0].linhas[1]).toMatchObject({ tipo: "abateu", rotulo: "Parcela 2 de 3 · abateu R$ 0,50" });
+  });
+
+  test("vencimento de outro ano mostra o ano", () => {
+    const g = paraOndeFoiODinheiro(
+      [aloc({ installment_id: "z", principal_paid: 30, status_after: "pending", due_date: "2027-01-20" })],
+      [{ id: "z", due_date: "2027-01-20", remaining: 70 }],
+      "2026-11-23",
+    );
+    expect(g[0].linhas[0].detalhe).toBe("vence 20/01/27 · hoje faltam R$ 70,00");
+    expect(dataDoVencimento("2026-12-20", "2026-11-23")).toBe("20/12");
+    expect(dataDoVencimento("2025-12-20T00:00:00.000Z", "2026-11-23")).toBe("20/12/25");
+  });
+
   test("pagamento que só abateu (sem quitar nada) nunca é sobra, mesmo pequeno", () => {
     const g = paraOndeFoiODinheiro(
-      [aloc({ installment_id: "x", principal_paid: 0.5, status_after: "pending" })],
+      [aloc({ installment_id: "x", principal_paid: 0.01, status_after: "pending" })],
       [{ id: "x", due_date: "2026-11-20", remaining: 10 }],
       "2026-11-20",
     );

@@ -102,7 +102,7 @@ describe("JuntarCarnesPanel", () => {
     await assentar();
     expect(botao(t).props.disabled).toBe(true);
     expect(texto(t.toJSON())).toContain("Marque pelo menos 2 carnês");
-    expect(texto(t.toJSON())).toContain("use o Renegociar dele");
+    expect(texto(t.toJSON())).toContain("use o Mudar as parcelas dele");
     apertar(t, "juntar-carne-c1");
     await assentar();
     expect(botao(t).props.disabled).toBe(true);

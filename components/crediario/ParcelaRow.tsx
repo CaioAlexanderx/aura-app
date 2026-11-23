@@ -14,6 +14,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { Collapsible } from "@/components/anim";
 import { Motion, webTransition } from "@/constants/motion";
@@ -76,7 +77,9 @@ export function ParcelaRow({
       >
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.title} numberOfLines={1}>{title}</Text>
-          <Text style={s.sub} numberOfLines={1}>{subtitle}</Text>
+          {/* 23/11/2026: duas linhas — no celular "venceu · dias · multa e juros"
+              não cabe numa só e os dias de atraso eram cortados. */}
+          <Text style={s.sub} numberOfLines={2}>{subtitle}</Text>
         </View>
         <Text style={[s.amount, { color: overdue ? Colors.red : Colors.ink }]}>{amount}</Text>
         {!!onEditDate && (
@@ -122,14 +125,14 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10,
     paddingHorizontal: 14, paddingVertical: 12, minHeight: 44,
   },
-  title: { fontSize: 13.5, fontWeight: "700", color: Colors.ink },
-  sub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
-  amount: { fontSize: 14, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
+  title: { fontFamily: Fonts.body, fontSize: 13.5, fontWeight: "700", color: Colors.ink },
+  sub: { fontFamily: Fonts.body, fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  amount: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
   breakdown: { paddingHorizontal: 14, paddingBottom: 6 },
   bLine: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   bTotal: { borderTopWidth: 1, borderTopColor: Colors.border, borderStyle: "dashed" as any, marginTop: 4, paddingTop: 7 },
-  bLabel: { fontSize: 12, color: Colors.ink2 },
-  bValue: { fontSize: 12, color: Colors.ink2, fontVariant: ["tabular-nums"] as any },
+  bLabel: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink2 },
+  bValue: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink2, fontVariant: ["tabular-nums"] as any },
   bStrong: { fontWeight: "800", color: Colors.ink },
   // Task 03/08: coluna — o CTA primário (Receber) ganha a largura toda e
   // as secundárias dividem a linha de baixo; acaba o truncamento de

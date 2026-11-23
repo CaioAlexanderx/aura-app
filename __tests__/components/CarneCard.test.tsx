@@ -248,6 +248,18 @@ describe("TabParcelas — aba de carnês", () => {
     expect(onJuntar).toHaveBeenCalled();
   });
 
+  it("parcela atrasada: dias de atraso antes da multa e juros, e o ano só fora do ano corrente", () => {
+    const { dataDoVencimento, diaEmSaoPaulo } = require("@/utils/crediarioMovimentacao");
+    const atrasada = parcela({
+      id: "a9", due_date: "2026-11-02", is_overdue: true, days_late: 19,
+      amount_due: 80, remaining: 80, charges_total: 2.11, total_due: 82.11,
+    });
+    const { t } = montarAba({ accounts: [], useCarneLayout: false, openInst: [atrasada] });
+    const venc = dataDoVencimento("2026-11-02", diaEmSaoPaulo(new Date().toISOString()));
+    expect(texto(t.toJSON())).toContain(`venceu ${venc} · 19 dias de atraso · R$ 80,00 + R$ 2,11 de multa e juros`);
+    expect(dataDoVencimento("2027-12-20", "2026-11-23")).toBe("20/12/27");
+  });
+
   it("backend antigo sem carnê: a lista de parcelas de sempre", () => {
     const { t } = montarAba({ accounts: [], useCarneLayout: false });
     const txt = texto(t.toJSON());
