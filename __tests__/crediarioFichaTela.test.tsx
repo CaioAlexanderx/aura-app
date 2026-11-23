@@ -87,6 +87,9 @@ describe("layoutDaFicha", () => {
   });
   test("pela largura útil: 1366 com o menu aberto (~1086) dá três colunas", () => {
     expect(layoutDaFicha(1086, 1366)).toBe("larga");
+    // QA 23/11: 1366 − 280 do menu − 6 da barra de rolagem = 1079
+    expect(layoutDaFicha(1079, 1366)).toBe("larga");
+    expect(layoutDaFicha(1366 - 280 - 17, 1366)).toBe("larga");
     expect(layoutDaFicha(LARGURA_UTIL_LARGA, 1400)).toBe("larga");
   });
   test("entre 700 e 1079 de largura útil, duas colunas", () => {
