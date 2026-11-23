@@ -159,6 +159,8 @@ type CobrancaPreviewState = {
   /** Modelos (21/11/2026): os dados das variáveis e a situação da parcela. */
   dados: DadosDaMensagem;
   situacao: Situacao;
+  /** Código Pix copia e cola (EMV) do valor cobrado. null = sem chave/sem valor. */
+  pixCopiaECola: string | null;
 };
 
 type SortOrder = "balance" | "az";
@@ -488,6 +490,21 @@ export default function CrediarioScreen() {
         valorLabel = fmt(detail.balance);
       }
 
+      // Pix copia e cola (21/11/2026): o código vai numa 2ª mensagem, só com
+      // ele. Usa a chave do canal digital (a do QR do carnê). Sem chave
+      // conhecida (null) nem pergunta; falhou: a prévia segue sem o código.
+      let pixCopiaECola: string | null = null;
+      if (chavePixDoQr(canalQ) !== null) {
+        try {
+          const pix = nextDue
+            ? await creditApi.getInstallmentPix(company!.id, nextDue.id)
+            : Number(detail.balance) > 0
+              ? await creditApi.getFreePix(company!.id, customerId, Number(detail.balance))
+              : null;
+          pixCopiaECola = pix && pix.emv ? String(pix.emv) : null;
+        } catch { pixCopiaECola = null; }
+      }
+
       // Sem parcela (só saldo) abre no modelo do {saldo}; nunca texto vazio.
       const padrao = modeloInicial(modelosMsg.modelos, situacao, dados) || MODELO_DE_RESERVA;
       setCobrancaPreview({
@@ -499,6 +516,7 @@ export default function CrediarioScreen() {
         installmentId: nextDue?.id || null,
         dados,
         situacao,
+        pixCopiaECola,
       });
     } catch {
       toast.error("Erro ao montar a cobrança");
@@ -985,6 +1003,7 @@ export default function CrediarioScreen() {
           limiteDeModelos={modelosMsg.limite}
           dados={cobrancaPreview.dados}
           situacao={cobrancaPreview.situacao}
+          pixCopiaECola={cobrancaPreview.pixCopiaECola}
           onGerenciarModelos={() => {
             setCobrancaPreview(null);
             setModalCust(null);
