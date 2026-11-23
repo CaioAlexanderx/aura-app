@@ -720,3 +720,35 @@ describe("QA P2: score em frase não contradiz o atraso", () => {
     creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
   });
 });
+
+describe("QA P2: valor acima do saldo", () => {
+  test("a pergunta diz quanto vira crédito e o novo saldo nunca é negativo", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: -160.1, credit_generated: 160.1 }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo.props.onChangeText("730,76"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    jest.useRealTimers();
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(porId(tree, "receber-novo-saldo")[0].props.children).toBe("R$ 0,00");
+    const rotulo = tree.root.findAll((n: any) => n.props && n.props.children === "Confirmar R$ 730,76")[0];
+    let alvo: any = rotulo;
+    while (alvo && typeof alvo.props.onPress !== "function") alvo = alvo.parent;
+    act(() => { alvo.props.onPress(); });
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).toContain("R$ 160,10 vão virar crédito na loja, no nome de Maria.");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+});

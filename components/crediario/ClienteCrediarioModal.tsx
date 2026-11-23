@@ -73,6 +73,7 @@ import {
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
+import { primeiroNome } from "@/utils/crediarioMensagem";
 import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
 import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
@@ -984,9 +985,13 @@ export function ClienteCrediarioModal({
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
   // não bloqueia — receber parcela a parcela de mesmo valor é uso legítimo.
   const repetido = receberGate ? recebimentoRecente(detail?.transactions, ultimoRecebimento, freeAmtValue) : null;
+  // QA 23/11 (P2): valor acima do que falta — a pergunta diz quanto vira
+  // crédito na loja (antes só a prévia dizia, e o saldo aparecia negativo).
+  const creditoNaPrevia = freePreview && freePreview.credit_generated > 0.009 ? freePreview.credit_generated : 0;
   const gateMessage = repetido
     ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
-    : `Confirmar recebimento de ${fmt(freeAmtValue)} ${formaComPreposicao(methodLabel)}?`;
+    : `Confirmar recebimento de ${fmt(freeAmtValue)} ${formaComPreposicao(methodLabel)}?`
+      + (creditoNaPrevia > 0 ? ` ${fmt(creditoNaPrevia)} vão virar crédito na loja, no nome de ${primeiroNome(name) || name}.` : "");
 
   // F3 (23/11/2026): na tela cheia o X de dentro de um painel fecha só o
   // painel (a ficha é a página); na janela fecha a ficha, como sempre.
@@ -1493,8 +1498,9 @@ export function ClienteCrediarioModal({
                     ))}
                     <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
                       <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
-                      <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
-                        {fmt(freePreview.new_balance)}
+                      {/* Nunca negativo: o que passa vira crédito, na linha de baixo. */}
+                      <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]} testID="receber-novo-saldo">
+                        {fmt(Math.max(0, freePreview.new_balance))}
                       </Text>
                     </View>
                     {freePreview.credit_generated > 0 && (
