@@ -55,6 +55,17 @@ describe("prévia do Cobrar com modelos", () => {
     tree.unmount();
   });
 
+  it("QA P2: o telefone aparece formatado", async () => {
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+    const txt = JSON.stringify(tree.toJSON());
+    // no cabeçalho da prévia (a mensagem pode trazer a chave Pix crua)
+    expect(txt).toContain('" · ","(11) 98765-4321"');
+    expect(txt).not.toContain('" · ","11987654321"');
+    tree.unmount();
+  });
+
   it("tocar em outro modelo troca o texto", async () => {
     let tree: any;
     await act(async () => { tree = montar(); });

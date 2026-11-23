@@ -36,6 +36,7 @@ import {
   Platform, Linking, ScrollView, ActivityIndicator,
 } from "react-native";
 import { Colors } from "@/constants/colors";
+import { formatarTelefone } from "@/utils/telefone";
 import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { Motion, webTransition } from "@/constants/motion";
@@ -309,7 +310,8 @@ export function CobrancaPreviewModal({
                 <Text style={cs.recipientName} numberOfLines={1}>{recipientName}</Text>
                 <Text style={cs.recipientSub}>
                   <Text style={cs.waLabel}>WhatsApp</Text>
-                  {" · "}{phone}
+                  {/* QA 23/11 (P2): "(11) 95630-5269", não os dígitos crus. */}
+                  {" · "}{formatarTelefone(phone) || phone}
                 </Text>
               </View>
             </View>
