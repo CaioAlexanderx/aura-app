@@ -26,6 +26,7 @@
 import { request, BASE_URL } from "@/services/api";
 import type { GroupOpenItem } from "@/utils/creditoOutraLoja";
 import { useAuthStore } from "@/stores/auth";
+import type { ModeloDeMensagem, Situacao } from "@/utils/crediarioMensagem";
 import { openPrintWindow } from "@/services/printWindow";
 import {
   carnePrintPath, type OpcoesDeImpressao, type CompraDoCarne, type ParcelaPagaDoCarne,
@@ -559,6 +560,17 @@ export function valorAPagarParcela(inst: CreditInstallment): number {
   return Number(inst.total_due ?? rem);
 }
 
+/** GET /credit/message-templates. source 'aura' = a loja ainda não salvou modelo. */
+export type MessageTemplatesList = {
+  source: "aura" | "loja";
+  templates: ModeloDeMensagem[];
+  limit: number;
+  max_body: number;
+  variables?: string[];
+  schema_pending?: boolean;
+  imported_from_regua?: number;
+};
+
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
 export const creditApi = {
@@ -724,6 +736,31 @@ export const creditApi = {
   },
   getAging(companyId: string) {
     return request<AgingRow[]>(`${base(companyId)}/dashboard/aging`);
+  },
+  // ── Modelos de mensagem do Cobrar (21/11/2026, migration 462) ──
+  // Toda escrita devolve a lista inteira já atualizada (mesmo shape do GET).
+  listMessageTemplates(companyId: string) {
+    return request<MessageTemplatesList>(`${base(companyId)}/message-templates`);
+  },
+  createMessageTemplate(companyId: string, body: { name: string; body: string; situation?: Situacao | null; replaces_aura?: string | null }) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates`, { method: "POST", body }
+    );
+  },
+  updateMessageTemplate(companyId: string, templateId: string, patch: { name?: string; body?: string; situation?: Situacao | null }) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates/${templateId}`, { method: "PATCH", body: patch }
+    );
+  },
+  setDefaultMessageTemplate(companyId: string, templateId: string, situation: Situacao | null) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates/${templateId}/default`, { method: "POST", body: { situation } }
+    );
+  },
+  deleteMessageTemplate(companyId: string, templateId: string) {
+    return request<MessageTemplatesList & { deleted: boolean }>(
+      `${base(companyId)}/message-templates/${templateId}`, { method: "DELETE" }
+    );
   },
   getCollectionRules(companyId: string) {
     return request<CollectionRules>(`${base(companyId)}/collection/rules`);

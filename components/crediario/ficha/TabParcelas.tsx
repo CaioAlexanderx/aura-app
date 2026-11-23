@@ -85,7 +85,8 @@ export type TabParcelasProps = {
   companyId: string;
   customerId: string;
   phone: string | null;
-  onCobrar?: ((customerId: string, customerName: string, phone: string | null) => void) | undefined;
+  /** `carne` (21/11/2026): cobra a parcela DESTE carnê; id null = grupo sem carnê. */
+  onCobrar?: ((customerId: string, customerName: string, phone: string | null, carne?: { id: string | null }) => void) | undefined;
   name: string;
 };
 
@@ -237,7 +238,8 @@ export function TabParcelas({
                   : undefined
             }
             renegociarLabel={podeParcelar ? "Parcelar saldo" : "Renegociar"}
-            onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone) : undefined}
+            // 21/11/2026: cobra a parcela deste carnê, não a mais antiga da cliente.
+            onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone, { id: carne.id ?? null }) : undefined}
             onExcluir={onExcluirCarne && carne.id && !carne.semCarne && excluiveis.has(carne.id)
               ? () => onExcluirCarne({ id: carne.id!, nome: carne.nome, falta: carne.falta })
               : undefined}

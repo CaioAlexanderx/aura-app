@@ -93,7 +93,7 @@ type Props = {
   onClose: () => void;
   /** Leva aonde a chave Pix do QR é cadastrada (Canal Digital → Meu Site). */
   onOpenSettings?: () => void;
-  onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
+  onCobrar?: (customerId: string, customerName: string, phone: string | null, carne?: { id: string | null }) => void;
   onChanged?: () => void;
   /** Lojas do grupo que este usuário pode abrir (faixa "também deve na..."). */
   accessibleCompanyIds?: string[];

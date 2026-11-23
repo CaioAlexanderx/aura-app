@@ -216,7 +216,8 @@ describe("TabParcelas — aba de carnês", () => {
     apertarRotulo(t, "Renegociar");
     expect(props.onRenegociar).toHaveBeenCalledWith("c1", "Compra de 13/09", 140);
     apertarRotulo(t, "Cobrar");
-    expect(props.onCobrar).toHaveBeenCalledWith("cli", "Alexander Olivier", "66999990000");
+    // 21/11/2026: o Cobrar do cartão leva o carnê (cobra a parcela dele).
+    expect(props.onCobrar).toHaveBeenCalledWith("cli", "Alexander Olivier", "66999990000", { id: "c1" });
   });
 
   it("Compras anteriores sem parcela: Receber sem mirar carnê e Parcelar saldo", () => {
