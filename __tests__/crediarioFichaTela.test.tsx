@@ -551,6 +551,18 @@ describe("F5: celular, página inteira", () => {
     expect(estilos).toContain("xBtn: { width: 44, height: 44");
   });
 
+  test("QA P1-7: Esc/voltar com o menu do telefone aberto fecha só o menu", async () => {
+    const { tree, onClose } = await montarPagina();
+    act(() => { porId(tree, "ficha-telefone")[0].props.onPress(); });
+    expect(porId(tree, "ficha-telefone-opcoes")).toHaveLength(1);
+    const modal = tree.root.findAll((n: any) => n.props && typeof n.props.onRequestClose === "function" && n.props.transparent === false)[0];
+    act(() => { modal.props.onRequestClose(); });
+    expect(porId(tree, "ficha-telefone-opcoes")).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { modal.props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test("voltar do Android / Esc com painel aberto fecha o painel, não a ficha", async () => {
     const { tree, onClose } = await montarPagina();
     act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });

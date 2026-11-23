@@ -217,6 +217,8 @@ export function ClienteCrediarioModal({
   const [trocarAberto, setTrocarAberto] = useState(false);
   // F4: o "⋯" do alto da ficha.
   const [menuFicha, setMenuFicha] = useState(false);
+  // QA 23/11 (P1-7): o menu do telefone (celular) entra na pilha do Esc.
+  const [menuTelefone, setMenuTelefone] = useState(false);
   // Resposta do Histórico que chega depois de trocar de cliente (setas) não
   // pode pintar a ficha da cliente nova.
   const clienteAtualRef = useRef<string | null>(customerId);
@@ -343,6 +345,7 @@ export function ClienteCrediarioModal({
       setLimiteAberto(false);
       setTrocarAberto(false);
       setMenuFicha(false);
+      setMenuTelefone(false);
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -996,18 +999,19 @@ export function ClienteCrediarioModal({
     setLimiteAberto(false);
     setTrocarAberto(false);
     setMenuFicha(false);
+    setMenuTelefone(false);
   }
   const fecharDoPainel = emTela || emPagina ? fecharPaineis : onClose;
   // Abrir um painel fecha o que estava aberto (tela cheia e página: os
   // painéis ficam lado a lado com a ficha) e, em qualquer casca, o "⋯".
   function fecharAoAbrirPainel() {
     if (emTela || emPagina) fecharPaineis();
-    else setMenuFicha(false);
+    else { setMenuFicha(false); setMenuTelefone(false); }
   }
   // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
   // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
-    || limiteAberto || trocarAberto || menuFicha || !!excluirAlvo || !!recusaExclusao;
+    || limiteAberto || trocarAberto || menuFicha || menuTelefone || !!excluirAlvo || !!recusaExclusao;
   // F3 (revisão): com um envio em andamento a ficha não troca de cliente
   // (lista, setas e teclado) — a resposta cairia na ficha de outra.
   const ocupado = freeSubmitting || renegSubmitting || excluindo || editDueDateMut.isPending || abrindoDevolucao
@@ -1027,6 +1031,7 @@ export function ClienteCrediarioModal({
         else if (repetidoServidor) setRepetidoServidor(null);
         else if (receberGate) setReceberGate(false);
         else if (pixInstId) { setPixInstId(null); setPixData(null); }
+        else if (menuTelefone) setMenuTelefone(false);
         else if (menuFicha) setMenuFicha(false);
         else fecharPaineis();
       } else if (acao === "fechar-ficha") onClose();
@@ -1110,7 +1115,7 @@ export function ClienteCrediarioModal({
             </View>
             {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
             {!detailQ.isLoading && (
-              <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+              <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} opcoesAbertas={menuTelefone} onOpcoesAbertas={setMenuTelefone} />
             )}
           </View>
         </View>
@@ -1897,6 +1902,7 @@ export function ClienteCrediarioModal({
       else if (repetidoServidor) setRepetidoServidor(null);
       else if (receberGate) setReceberGate(false);
       else if (pixInstId) { setPixInstId(null); setPixData(null); }
+      else if (menuTelefone) setMenuTelefone(false);
       else if (menuFicha) setMenuFicha(false);
       else if (painelAberto) fecharPaineis();
       else onClose();
@@ -1948,7 +1954,7 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
                 {!detailQ.isLoading && (
-                  <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+                  <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} opcoesAbertas={menuTelefone} onOpcoesAbertas={setMenuTelefone} />
                 )}
               </View>
             )}
