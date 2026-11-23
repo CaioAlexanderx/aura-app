@@ -29,11 +29,20 @@ import { datasDasPagas } from "@/utils/crediarioTresFatos";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./MenuMais";
 import { fmt } from "./fichaHelpers";
 
+/** QA 23/11/2026: o que a linha precisa saber do carnê. */
+export type InfoDaLinha<P> = {
+  /** "3 de 4" pela POSIÇÃO no carnê (por data) — depois de juntar carnês o
+   *  número gravado repetia ("1 de 2, 2 de 2, 1 de 3"). Só na tela. */
+  numero: string;
+  /** Parcelas abertas do carnê que vêm antes desta (o Receber abate por elas). */
+  anteriores: P[];
+};
+
 export type CarneCardProps<P extends ParcelaAbertaDoCarne> = {
   carne: CarneDerivado<P>;
   /** Linha da parcela a pagar (montada pela TabParcelas). O índice diz se é a
    *  primeira do carnê (o "Receber" dela é o primário). */
-  renderParcela: (p: P, indice: number) => React.ReactNode;
+  renderParcela: (p: P, indice: number, info: InfoDaLinha<P>) => React.ReactNode;
   onReceber: () => void;
   onImprimir: () => void;
   /** Ausente = sem a opção (carnê sem parcela para renegociar). */
@@ -73,7 +82,17 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
     itensDoMenu.push({ rotulo: "Excluir este carnê", onPress: onExcluir, destrutivo: true, testID: `carne-${c.key}-excluir` });
   }
 
-  const pagas = c.parcelasPagas;
+  // QA 23/11/2026: numeração pela posição no carnê, por data (pagas
+  // primeiro, depois as abertas). Backend antigo (sem as pagas na resposta):
+  // o número gravado, que é o único que se conhece.
+  const pagas = c.temCamposNovos
+    ? c.parcelasPagas.slice().sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)) || a.installment_number - b.installment_number)
+    : c.parcelasPagas;
+  const totalNoCarne = pagas.length + c.parcelasAbertas.length;
+  const numeroDaPaga = (p: (typeof pagas)[number], j: number) =>
+    c.temCamposNovos ? `${j + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
+  const numeroDaAberta = (p: P, i: number) =>
+    c.temCamposNovos ? `${pagas.length + i + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
   const resumoPagas = pagas.length > 0
     ? `${pagas.length} ${pagas.length === 1 ? "paga" : "pagas"}${datasDasPagas(pagas.map(p => diaMes(p.paid_at))) ? ` · ${datasDasPagas(pagas.map(p => diaMes(p.paid_at)))}` : ""}`
     : c.semCarne ? "Compras" : "Itens da compra";
@@ -178,11 +197,11 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
               )}
             </View>
           )}
-          {pagas.map(p => (
+          {pagas.map((p, j) => (
             <View key={p.id} style={s.row} testID={`carne-${c.key}-paga`}>
               <Text style={[s.rowK, { color: CorDaFicha.secundario }]}>
                 <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
-                {`Parcela ${p.installment_number} de ${p.total_installments}`}
+                {`Parcela ${numeroDaPaga(p, j)}`}
                 {diaMes(p.paid_at) ? ` · paga em ${diaMes(p.paid_at)}` : " · paga"}
               </Text>
               <Text style={[s.rowV, { color: CorDaFicha.secundario }]}>{fmt(p.amount)}</Text>
@@ -195,7 +214,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         <Text style={[s.nota, { paddingHorizontal: 14 }]}>Carnês juntados: {c.juntadoDe.join(", ")}</Text>
       )}
 
-      {c.parcelasAbertas.map((p, i) => renderParcela(p, i))}
+      {c.parcelasAbertas.map((p, i) => renderParcela(p, i, { numero: numeroDaAberta(p, i), anteriores: c.parcelasAbertas.slice(0, i) }))}
 
       {c.semParcelas && (
         <View style={s.semParcelas}>

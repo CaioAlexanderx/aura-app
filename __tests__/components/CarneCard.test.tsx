@@ -224,6 +224,33 @@ describe("TabParcelas — aba de carnês", () => {
     expect(props.prefill).toHaveBeenCalledWith(70, "c1");
   });
 
+  it("QA: Receber na 2ª linha é 'Receber até esta' e preenche as anteriores + esta", () => {
+    const { t, props } = montarAba();
+    apertarRotulo(t, "Receber até esta: R$ 140,00, as parcelas anteriores deste carnê e a 4 de 4");
+    expect(props.prefill).toHaveBeenCalledWith(140, "c1");
+    expect(texto(t.toJSON())).toContain("Receber até esta");
+  });
+
+  it("QA: depois de juntar carnês, numera pela posição no carnê (não '1 de 2, 2 de 2, 1 de 3')", () => {
+    const juntado = {
+      ...CONTA, id: "j1", name: "Carnês juntados", paid_count: 0, total_count: 4, paid_installments: [],
+      remaining: 280, total_amount: 280,
+    };
+    const abertas = [
+      parcela({ id: "x1", account_id: "j1", installment_number: 1, total_installments: 2, due_date: "2099-01-10" }),
+      parcela({ id: "x2", account_id: "j1", installment_number: 2, total_installments: 2, due_date: "2099-02-10" }),
+      parcela({ id: "x3", account_id: "j1", installment_number: 1, total_installments: 3, due_date: "2099-03-10" }),
+      parcela({ id: "x4", account_id: "j1", installment_number: 2, total_installments: 3, due_date: "2099-04-10" }),
+    ];
+    const { t } = montarAba({ accounts: [juntado], openInst: abertas });
+    const txt = texto(t.toJSON());
+    expect(txt).toContain("1 de 4");
+    expect(txt).toContain("2 de 4");
+    expect(txt).toContain("3 de 4");
+    expect(txt).toContain("4 de 4");
+    expect(txt).not.toContain("1 de 3");
+  });
+
   it("vencida dentro da carência (não atrasada): 'venceu', não 'vence'", () => {
     const { t } = montarAba({ openInst: [parcela({ due_date: "2026-01-10", is_overdue: false })] });
     expect(texto(t.toJSON())).toContain("venceu 10/01");

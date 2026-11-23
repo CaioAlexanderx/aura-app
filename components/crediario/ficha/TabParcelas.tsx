@@ -43,7 +43,7 @@ import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/cr
 import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
-import { CarneCard } from "./CarneCard";
+import { CarneCard, type InfoDaLinha } from "./CarneCard";
 import { fmt } from "./fichaHelpers";
 import { m, CorDaFicha } from "./fichaStyles";
 
@@ -184,8 +184,16 @@ export function TabParcelas({
     );
   };
 
+  // O que se paga hoje por uma parcela (com multa e juros só em atraso).
+  const valorHoje = (ins: CreditInstallment) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = isInstallmentOverdue(ins);
+    const enc = ins.charges_total ?? 0;
+    return late && enc > 0 ? (ins.total_due ?? (rem + enc)) : rem;
+  };
+
   // F4: a linha da parcela no cartão do carnê — sem sanfona.
-  const renderLinha = (ins: CreditInstallment, indice: number) => {
+  const renderLinha = (ins: CreditInstallment, indice: number, info?: InfoDaLinha<CreditInstallment>) => {
     const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
     const late = isInstallmentOverdue(ins);
     const toReview = !late && needsReview(ins);
@@ -206,10 +214,18 @@ export function TabParcelas({
       : toReview
         ? "antes de o carnê ser cadastrado — confira se já foi paga"
         : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
+    // QA 23/11/2026: o backend abate pela parcela mais antiga do carnê (não
+    // dá para mirar uma parcela). Na 1ª linha "Receber" é esta; nas outras,
+    // "Receber até esta" preenche as anteriores + esta — o que de fato vai
+    // ser pago para esta ficar em dia. Antes abria com o valor desta e
+    // pagava a 1ª.
+    const anteriores = info?.anteriores ?? [];
+    const valorAteAqui = +(anteriores.reduce((s, a) => s + valorHoje(a), 0) + totalHoje).toFixed(2);
     return (
       <LinhaDaParcela
         key={ins.id}
-        numero={`${ins.installment_number} de ${ins.total_installments}`}
+        numero={info?.numero ?? `${ins.installment_number} de ${ins.total_installments}`}
+        ateAqui={anteriores.length > 0 ? fmt(valorAteAqui) : null}
         data={`${jaVenceu ? "venceu" : "vence"} ${venc}`}
         porque={porque}
         valor={fmt(totalHoje)}
@@ -219,7 +235,7 @@ export function TabParcelas({
         // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
         // quem toca Receber no carnê B espera abater o B. Antes ia para a
         // parcela mais antiga de qualquer carnê.
-        onReceber={() => prefill(totalHoje, ins.account_id ?? undefined)}
+        onReceber={() => prefill(anteriores.length > 0 ? valorAteAqui : totalHoje, ins.account_id ?? undefined)}
         // O Pix da parcela volta (o Caio não aprovou tirar).
         onPix={() => openInstallmentPix(ins.id)}
       />
@@ -401,8 +417,10 @@ const c = StyleSheet.create({
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix }: {
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui }: {
   numero: string; data: string; porque: string; valor: string;
+  /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
+  ateAqui?: string | null;
   atrasada: boolean; principal: boolean;
   onData: () => void; onReceber: () => void; onPix?: () => void;
 }) {
@@ -430,9 +448,11 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
         onPress={onReceber}
         style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
-        accessibilityLabel={`Receber ${valor} da parcela ${numero}`}
+        accessibilityLabel={ateAqui
+          ? `Receber até esta: ${ateAqui}, as parcelas anteriores deste carnê e a ${numero}`
+          : `Receber ${valor} da parcela ${numero}`}
       >
-        <Text style={[l.receberT, principal && { color: "#fff" }]}>Receber</Text>
+        <Text style={[l.receberT, principal && { color: "#fff" }]}>{ateAqui ? "Receber até esta" : "Receber"}</Text>
       </Pressable>
       {!!onPix && (
         <Pressable
