@@ -23,6 +23,13 @@ import {
 jest.mock("expo-font", () => ({ loadAsync: jest.fn(), isLoaded: () => true, useFonts: () => [true] }));
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+// F5: o Modal do react-native-web usa portal, que o test renderer não monta.
+jest.mock("react-native", () => {
+  const RN = jest.requireActual("react-native");
+  const R = jest.requireActual("react");
+  const Modal = ({ visible, children, ...rest }: any) => (visible ? R.createElement("View", rest, children) : null);
+  return { ...RN, Modal };
+});
 jest.mock("react-native-qrcode-svg", () => "QRCode");
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/hooks/useNfseAutomatica", () => ({ useNfseAutomaticaConfig: () => ({ ativa: false }) }));
@@ -379,7 +386,7 @@ describe("revisão da F3: travas da ficha em tela cheia", () => {
   test("abrir um painel fecha o que estava aberto (na tela cheia)", () => {
     for (const f of ["function receberDaAba(", "function handleEditDueDateOpen(", "function openRenegociar(", "async function openInstallmentPix("]) {
       const i = fonte.indexOf(f);
-      expect(fonte.slice(i, i + 160)).toContain("if (emTela) fecharPaineis();");
+      expect(fonte.slice(i, i + 160)).toContain("if (emTela || emPagina) fecharPaineis();");
     }
   });
 });
@@ -454,6 +461,75 @@ describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
     act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
     expect(porId(tree, "ficha-painel-limite")).toHaveLength(1);
+  });
+});
+
+describe("F5: celular, página inteira", () => {
+  function texto(node: any): string {
+    if (node == null) return "";
+    if (typeof node === "string") return node;
+    if (Array.isArray(node)) return node.map(texto).join("");
+    return texto(node.children);
+  }
+  async function montarPagina(extra: any = {}) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onClose = jest.fn();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="pagina" companyId="loja1" customerId="c1" onClose={onClose} onCobrar={jest.fn()} {...extra} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    return { tree, onClose };
+  }
+
+  test("cabeçalho de uma linha, Falta pagar com a frase, duas abas e rodapé com Cobrar e Receber", async () => {
+    const { tree, onClose } = await montarPagina();
+    expect(porId(tree, "ficha-pagina")).toHaveLength(1);
+    const tudo = texto(tree.toJSON());
+    expect(tudo).toContain("Maria Aparecida Souza");
+    expect(tudo).toContain("Falta pagar");
+    expect(texto(porId(tree, "ficha-pagina-falta")[0].props.children)).toBe("R$ 570,66");
+    expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando ela pagar");
+    expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa · ");
+    expect(porId(tree, "ficha-aba-parcelas")).toHaveLength(1);
+    expect(porId(tree, "ficha-aba-historico")).toHaveLength(1);
+    expect(porId(tree, "ficha-aba-conta")).toHaveLength(0);
+    const rodape = porId(tree, "ficha-rodape")[0];
+    expect(rodape.findAllByProps({ testID: "ficha-cobrar" }, { deep: false } as any)).toHaveLength(1);
+    expect(rodape.findAllByProps({ testID: "ficha-receber" }, { deep: false } as any)).toHaveLength(1);
+    act(() => { porId(tree, "ficha-voltar")[0].props.onPress(); });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test("Movimentações: a aba troca e o alto encolhe para uma linha", async () => {
+    const { tree } = await montarPagina();
+    act(() => { porId(tree, "ficha-aba-historico")[0].props.onPress(); });
+    expect(porId(tree, "ficha-pagina-hero")).toHaveLength(0);
+    expect(texto(tree.toJSON())).toContain("mais recentes primeiro");
+  });
+
+  test("voltar do Android / Esc com painel aberto fecha o painel, não a ficha", async () => {
+    const { tree, onClose } = await montarPagina();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const modal = tree.root.findAll((n: any) => n.props && typeof n.props.onRequestClose === "function" && n.props.transparent === false)[0];
+    act(() => { modal.props.onRequestClose(); });
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { modal.props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("alvos de toque de 44 px ou mais no celular", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    const pg = fonte.slice(fonte.indexOf("const pg = StyleSheet.create({"), fonte.indexOf("const t = StyleSheet.create({"));
+    expect(pg).toContain("voltar: { flexDirection: \"row\", alignItems: \"center\", gap: 4, minHeight: 44, minWidth: 44");
+    expect(pg).toContain("segItem: { flex: 1, minHeight: 44");
+    expect(pg).toContain("receber: { flex: 1, minHeight: 46");
+    // nada de largura fixa na página (320 px sem rolagem para o lado)
+    expect(pg).not.toMatch(/\bwidth: \d{3,}/);
   });
 });
 

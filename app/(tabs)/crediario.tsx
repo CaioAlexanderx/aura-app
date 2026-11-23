@@ -1078,10 +1078,10 @@ export default function CrediarioScreen() {
 
       <CriarLancamentoModal visible={showCriar} onClose={fecharCriar} recentes={recentesDoLancamento} />
 
-      {/* Celular e telas estreitas: a janela de sempre (a F5 a leva para a
-          página inteira). Na tela larga e média a ficha está acima. */}
+      {/* F5 (23/11/2026): celular e telas estreitas, a ficha em página
+          inteira (era folha de 94%). Na tela larga e média ela está acima. */}
       {!fichaEmTela && (
-        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca="janela" />
+        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca="pagina" />
       )}
 
       {cobrancaPreview && (
