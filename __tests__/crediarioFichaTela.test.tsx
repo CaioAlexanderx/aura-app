@@ -625,3 +625,21 @@ describe("QA 23/11 (P1-5): depois de mexer no dinheiro, tudo recarrega", () => {
     expect(juntou).toContain("handleHistoricRefresh();");
   });
 });
+
+describe("QA P2: Cobrar mostra que está preparando", () => {
+  test("desligado e com 'Preparando…' enquanto a prévia abre", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} onCobrar={jest.fn()} cobrando />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const b = porId(tree, "ficha-cobrar")[0];
+    expect(b.props.disabled).toBe(true);
+    expect(b.props.accessibilityLabel).toBe("Preparando a cobrança");
+  });
+});

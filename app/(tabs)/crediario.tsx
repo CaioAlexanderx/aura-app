@@ -677,6 +677,7 @@ export default function CrediarioScreen() {
     },
     onClose: fecharFicha,
     abertaPeloEndereco: !!modalCust?.doEndereco,
+    cobrando: !!modalCust && triggeringId === modalCust.id,
     accessibleCompanyIds,
     onOpenInCompany: handleOpenInCompany,
     switchingCompany: switching,

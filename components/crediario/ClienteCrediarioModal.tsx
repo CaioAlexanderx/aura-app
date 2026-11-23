@@ -124,13 +124,15 @@ type Props = {
   /** F3 (revisão): a ficha veio do ?cliente= do endereço (recarga, troca de
    *  loja). Cliente de outra loja sem nada nesta fecha a ficha. */
   abertaPeloEndereco?: boolean;
+  /** QA 23/11 (P2): a prévia do Cobrar está sendo montada (leva segundos). */
+  cobrando?: boolean;
 };
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
-  casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false,
+  casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false, cobrando = false,
 }: Props) {
   const qc = useQueryClient();
   // QA 23/11 (P1-5): depois de receber, remover ou corrigir pagamento,
@@ -1046,9 +1048,21 @@ export function ClienteCrediarioModal({
   // explica, abrindo a edição no campo do telefone.
   const botaoCobrar = !!onCobrar && !detailQ.isLoading && (
     phone ? (
-      <Pressable style={[m.waBtn, (emTela || emPagina) && t.cobrarTela]} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
-        <Icon name="whatsapp" size={16} color={Colors.green} />
-        <Text style={m.waTxt}>Cobrar</Text>
+      <Pressable
+        style={[m.waBtn, (emTela || emPagina) && t.cobrarTela, cobrando && { opacity: 0.6 }]}
+        onPress={() => onCobrar(customerId!, name, phone)}
+        disabled={cobrando}
+        accessibilityRole="button"
+        accessibilityState={{ busy: cobrando, disabled: cobrando }}
+        accessibilityLabel={cobrando ? "Preparando a cobrança" : "Cobrar"}
+        testID="ficha-cobrar"
+      >
+        {/* QA 23/11 (P2): a prévia leva alguns segundos; o botão avisa e
+            não aceita um segundo toque. */}
+        {cobrando
+          ? <ActivityIndicator size="small" color={Colors.green} />
+          : <Icon name="whatsapp" size={16} color={Colors.green} />}
+        <Text style={m.waTxt}>{cobrando ? "Preparando…" : "Cobrar"}</Text>
       </Pressable>
     ) : (
       <Pressable
