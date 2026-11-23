@@ -45,7 +45,7 @@ import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard } from "./CarneCard";
 import { fmt } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
 function sumRemaining(list: CreditInstallment[]): number {
@@ -235,7 +235,7 @@ export function TabParcelas({
           <TextInput
             style={m.newAccInput}
             placeholder="Nome do carnê"
-            placeholderTextColor={Colors.ink3}
+            placeholderTextColor={CorDaFicha.secundario}
             value={newAccountName}
             onChangeText={setNewAccountName}
             autoFocus
@@ -392,9 +392,9 @@ const c = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
     paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
-  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
-  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3 },
+  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: CorDaFicha.secundario },
+  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: CorDaFicha.secundario, fontVariant: ["tabular-nums"] as any },
+  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: CorDaFicha.secundario },
   cancelar: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10 },
 });
 
@@ -442,7 +442,7 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
           accessibilityLabel={`Pix da parcela ${numero}`}
           testID={`parcela-${numero}-pix`}
         >
-          <Text style={[l.receberT, { color: Colors.green }]}>Pix</Text>
+          <Text style={[l.receberT, { color: CorDaFicha.verdeTexto }]}>Pix</Text>
         </Pressable>
       )}
     </View>
@@ -455,9 +455,9 @@ const l = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   linhaLate: { backgroundColor: Colors.redD },
-  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.ink3, alignItems: "center", justifyContent: "center" },
+  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: CorDaFicha.secundario, alignItems: "center", justifyContent: "center" },
   icLate: { borderColor: Colors.red },
-  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: Colors.ink3 },
+  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: CorDaFicha.secundario },
   num: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, minWidth: 48 },
   meio: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
   data: {
@@ -466,7 +466,7 @@ const l = StyleSheet.create({
   },
   dataT: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink },
   lapis: { fontFamily: Fonts.body, fontSize: 12, color: Colors.violet3 },
-  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 3 },
+  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 3 },
   valor: { fontFamily: Fonts.mono, fontSize: 13.5, fontWeight: "500", color: Colors.ink, textAlign: "right", marginLeft: "auto" as any, fontVariant: ["tabular-nums"] as any },
   receber: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   receberP: { backgroundColor: Colors.violet },

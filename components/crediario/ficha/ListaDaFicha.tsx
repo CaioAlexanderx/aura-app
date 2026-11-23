@@ -15,6 +15,7 @@
 import { useEffect } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { CorDaFicha } from "./fichaStyles";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 
@@ -72,11 +73,11 @@ export function ListaDaFicha({
       </Pressable>
 
       <View style={s.busca}>
-        <Icon name="search" size={13} color={Colors.ink3} />
+        <Icon name="search" size={13} color={CorDaFicha.secundario} />
         <TextInput
           style={s.buscaInput}
           placeholder="Buscar cliente…"
-          placeholderTextColor={Colors.ink3}
+          placeholderTextColor={CorDaFicha.secundario}
           value={busca}
           onChangeText={onBusca}
           autoCorrect={false}
@@ -150,7 +151,7 @@ const s = StyleSheet.create({
   },
   voltarTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.violet3, flex: 1 },
   kbd: {
-    fontFamily: Fonts.mono, fontSize: 11, color: Colors.ink3,
+    fontFamily: Fonts.mono, fontSize: 11, color: CorDaFicha.secundario,
     borderWidth: 1, borderColor: Colors.border2, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1,
   },
   busca: {
@@ -166,15 +167,15 @@ const s = StyleSheet.create({
   filtroOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },
   filtroTxt: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: Colors.ink2 },
   lista: { flex: 1, minHeight: 0 },
-  vazio: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, padding: 12 },
+  vazio: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, padding: 12 },
   item: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10 },
   itemHover: { backgroundColor: Colors.violetD },
   itemOn: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   nome: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink },
-  sit: { fontFamily: Fonts.body, fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  sit: { fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario, marginTop: 1 },
   valor: { fontFamily: Fonts.mono, fontSize: 12, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   rodape: {
-    fontFamily: Fonts.body, fontSize: 11, color: Colors.ink3,
+    fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario,
     paddingHorizontal: 14, paddingVertical: 9, borderTopWidth: 1, borderTopColor: Colors.border,
   },
 });

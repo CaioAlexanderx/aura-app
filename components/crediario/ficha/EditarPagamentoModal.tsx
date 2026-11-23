@@ -21,7 +21,7 @@ import { creditApi } from "@/services/creditApi";
 import { mudancasDoPagamento, type PagamentoOriginal } from "@/utils/crediarioPagamento";
 import { todaySP } from "@/utils/creditOverdue";
 import { fmt, parseAmount, PAYMENT_METHODS } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 export type PagamentoEmEdicao = PagamentoOriginal & {
   id: string;
@@ -118,7 +118,7 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
             <Text style={s.sub}>Lançado como {fmt(pagamento.amount)} em {formatIsoToBr(pagamento.paidAt)}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Fechar" testID="editar-pagamento-fechar">
-            <Icon name="x" size={18} color={Colors.ink3} />
+            <Icon name="x" size={18} color={CorDaFicha.secundario} />
           </Pressable>
         </View>
 
@@ -128,7 +128,7 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
           value={valor}
           onChangeText={(v) => { setValor(v.replace(/[^\d,.]/g, "")); setErro(null); }}
           placeholder="0,00"
-          placeholderTextColor={Colors.ink3}
+          placeholderTextColor={CorDaFicha.secundario}
           keyboardType="decimal-pad"
           testID="editar-pagamento-valor"
         />
@@ -177,7 +177,7 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
               value={busca}
               onChangeText={setBusca}
               placeholder="Nome, telefone ou CPF da cliente certa"
-              placeholderTextColor={Colors.ink3}
+              placeholderTextColor={CorDaFicha.secundario}
               autoFocus
               testID="editar-pagamento-busca"
             />
@@ -224,7 +224,7 @@ const s = StyleSheet.create({
   body: { padding: 18, paddingBottom: 22 },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
   title: { fontSize: 16, fontWeight: "700", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  sub: { fontSize: 12, color: CorDaFicha.secundario, marginTop: 2 },
   input: {
     backgroundColor: Colors.bg2, borderColor: Colors.border2, borderWidth: 1, borderRadius: 11,
     paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: Colors.ink,
@@ -237,14 +237,14 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
   trocarTxt: { fontSize: 12, fontWeight: "700", color: Colors.violet3 },
-  vazio: { fontSize: 12, color: Colors.ink3, marginTop: 8 },
+  vazio: { fontSize: 12, color: CorDaFicha.secundario, marginTop: 8 },
   achado: {
     minHeight: 44, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 8, marginTop: 6,
     borderRadius: 9, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2,
   },
   achadoNome: { fontSize: 13, fontWeight: "600", color: Colors.ink },
-  achadoSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
-  nota: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginTop: 14 },
+  achadoSub: { fontSize: 11, color: CorDaFicha.secundario, marginTop: 1 },
+  nota: { fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17, marginTop: 14 },
   erro: { fontSize: 12, color: Colors.red, fontWeight: "600", marginTop: 10 },
   acoes: { flexDirection: "row", gap: 10, marginTop: 16 },
   btnGhost: {

@@ -17,6 +17,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
+import { CorDaFicha } from "./fichaStyles";
 import { Fonts } from "@/constants/fonts";
 import { copyText } from "@/utils/clipboard";
 import { formatarTelefone } from "@/utils/telefone";
@@ -88,7 +89,7 @@ export function TelefoneDaFicha({ phone, onEditar, opcoesAbertas, onOpcoesAberta
             accessibilityRole="button"
             testID="ficha-sem-telefone"
           >
-            <Text style={[s.telNum, { color: Colors.ink3 }]}>Sem telefone ·</Text>
+            <Text style={[s.telNum, { color: CorDaFicha.secundario }]}>Sem telefone ·</Text>
             {!!onEditar && <Text style={s.telAcao}>adicionar</Text>}
           </Pressable>
         )}

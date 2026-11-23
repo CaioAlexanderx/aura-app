@@ -51,7 +51,7 @@ import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
   PAYMENT_METHODS, type Tab,
 } from "./ficha/fichaHelpers";
-import { m } from "./ficha/fichaStyles";
+import { m, CorDaFicha } from "./ficha/fichaStyles";
 import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
@@ -1078,8 +1078,8 @@ export function ClienteCrediarioModal({
         accessibilityLabel="Cobrar. Adicione o telefone para cobrar pelo WhatsApp"
         testID="ficha-cobrar-sem-telefone"
       >
-        <Icon name="whatsapp" size={16} color={Colors.ink3} />
-        <Text style={[m.waTxt, { color: Colors.ink3 }]}>Cobrar</Text>
+        <Icon name="whatsapp" size={16} color={CorDaFicha.secundario} />
+        <Text style={[m.waTxt, { color: CorDaFicha.secundario }]}>Cobrar</Text>
       </Pressable>
     )
   );
@@ -1301,7 +1301,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={m.panelTitle}>{receiptResult ? "Pagamento registrado" : "Receber pagamento"}</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
 
@@ -1327,7 +1327,7 @@ export function ClienteCrediarioModal({
                         <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           <Text style={m.previewVal}>{fmt((line.principal_paid || 0) + (line.charges_paid || 0))}</Text>
-                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                          <Text style={[m.previewVal, { fontSize: 10, color: CorDaFicha.secundario }]}>
                             {translateStatus(line.status_after)}
                           </Text>
                         </View>
@@ -1407,7 +1407,7 @@ export function ClienteCrediarioModal({
                       triggerPreview(clean, freeAccountId);
                     }}
                     placeholder="0,00"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={CorDaFicha.secundario}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -1475,7 +1475,7 @@ export function ClienteCrediarioModal({
                             </Text>
                           )}
                           <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
-                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                          <Text style={[m.previewVal, { fontSize: 10, color: CorDaFicha.secundario }]}>
                             {translateStatus(line.status_after)}
                           </Text>
                         </View>
@@ -1565,7 +1565,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={m.panelTitle}>{pixOverlayTitle}</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
@@ -1622,7 +1622,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={[m.panelTitle, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
@@ -1638,7 +1638,7 @@ export function ClienteCrediarioModal({
                   value={renegTotal}
                   onChangeText={onRenegTotalChange}
                   placeholder="0,00"
-                  placeholderTextColor={Colors.ink3}
+                  placeholderTextColor={CorDaFicha.secundario}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -1674,7 +1674,7 @@ export function ClienteCrediarioModal({
                       value={renegPerParcel}
                       onChangeText={onRenegPerParcelChange}
                       placeholder="0,00"
-                      placeholderTextColor={Colors.ink3}
+                      placeholderTextColor={CorDaFicha.secundario}
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -1723,7 +1723,7 @@ export function ClienteCrediarioModal({
                     style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
                     onPress={() => setRenegScope(null)}
                   >
-                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                    <Text style={[m.ctaTxt, { color: CorDaFicha.secundario }]}>Cancelar</Text>
                   </Pressable>
                   <Pressable
                     style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
@@ -1782,7 +1782,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={m.panelTitle}>Alterar vencimento</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
@@ -1806,7 +1806,7 @@ export function ClienteCrediarioModal({
                     style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
                     onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
                   >
-                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                    <Text style={[m.ctaTxt, { color: CorDaFicha.secundario }]}>Cancelar</Text>
                   </Pressable>
                   <Pressable
                     style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
@@ -2026,7 +2026,7 @@ export function ClienteCrediarioModal({
               <Text style={m.crumbTxt}>Crediário</Text>
             </Pressable>
             <Pressable onPress={onClose} style={m.xBtn}>
-              <Icon name="x" size={15} color={Colors.ink3} />
+              <Icon name="x" size={15} color={CorDaFicha.secundario} />
             </Pressable>
           </View>
 
@@ -2228,7 +2228,7 @@ const pg = StyleSheet.create({
   heroK: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink2 },
   heroV: { fontFamily: Fonts.mono, fontSize: 28, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   agora: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink2, marginTop: 2 },
-  limite: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  limite: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, marginTop: 2 },
   heroCurto: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 10 },
   heroCurtoV: { fontFamily: Fonts.mono, fontSize: 18, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   seg: {
@@ -2288,7 +2288,7 @@ const t = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2,
   },
   setaTxt: { fontFamily: Fonts.body, fontSize: 18, fontWeight: "700", color: Colors.ink },
-  posicao: { fontFamily: Fonts.mono, fontSize: 12, color: Colors.ink3, minWidth: 64, textAlign: "center" },
+  posicao: { fontFamily: Fonts.mono, fontSize: 12, color: CorDaFicha.secundario, minWidth: 64, textAlign: "center" },
   trocarTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink },
   trocarFundo: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 19, backgroundColor: "rgba(3,5,14,0.35)" },
   trocarLista: {
@@ -2319,7 +2319,7 @@ const f = StyleSheet.create({
   fatoK: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "600", color: Colors.ink2 },
   fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
-  fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
+  fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 2 },
   fatoVer: { fontFamily: Fonts.body, fontSize: 11.5, fontWeight: "700", color: Colors.violet3 },
   fatoSubLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 2, marginTop: 2 },
   fatoVerArea: { minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 6, marginVertical: -14 },

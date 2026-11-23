@@ -19,7 +19,7 @@ import { Fonts } from "@/constants/fonts";
 import type { CreditAccount } from "@/services/creditApi";
 import { fraseDoScore } from "@/utils/crediarioTresFatos";
 import { fmt } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 /** Props do bloco de Termos/Bloqueio — estado vive no shell. */
 export type AjustesProps = {
@@ -151,7 +151,7 @@ export function TabConta({
         style={m.termsInput}
         value={ajustes.termsMaxInst}
         placeholder={lojaMax != null ? `${lojaMax} (regra da loja)` : "regra da loja"}
-        placeholderTextColor={Colors.ink3}
+        placeholderTextColor={CorDaFicha.secundario}
         keyboardType="numeric"
         onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
       />
@@ -160,7 +160,7 @@ export function TabConta({
         style={m.termsInput}
         value={ajustes.termsInterest}
         placeholder={lojaJuros != null ? `${(Number(lojaJuros) * 100).toFixed(2).replace(".", ",")} (regra da loja)` : "regra da loja"}
-        placeholderTextColor={Colors.ink3}
+        placeholderTextColor={CorDaFicha.secundario}
         keyboardType="decimal-pad"
         onChangeText={v => { ajustes.setTermsInterest(v.replace(/[^\d,.]/g, "")); ajustes.setTermsDirty(true); }}
       />
@@ -214,7 +214,7 @@ export function TabConta({
             value={ajustes.blockReason}
             onChangeText={ajustes.setBlockReason}
             placeholder="Ex: Inadimplência por 60+ dias"
-            placeholderTextColor={Colors.ink3}
+            placeholderTextColor={CorDaFicha.secundario}
             multiline
           />
           <Pressable
@@ -246,7 +246,7 @@ const c = StyleSheet.create({
   caixa: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3, borderRadius: 11, padding: 12 },
   texto: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
   frase: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink },
-  dica: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  dica: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17 },
   erro: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.red, marginTop: 8, lineHeight: 17 },
   par: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 6 },
   parK: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2 },
