@@ -207,7 +207,7 @@ export function TabHistorico({
             <View style={lc.itemList}>
               {ev.items.map((it, idx) => (
                 <View key={idx} style={lc.ln}>
-                  <Text style={lc.lnTxt} numberOfLines={1}>{`${it.quantity}× ${it.product_name}`}</Text>
+                  <Text style={lc.lnTxt} numberOfLines={2}>{`${it.quantity}× ${it.product_name}`}</Text>
                   {/* INC-2026-11-20-01: o backend manda o total em reais (sale_items.total_price), nao em centavos. */}
                   <Text style={lc.lnVal}>{fmt(it.total)}</Text>
                 </View>
@@ -221,7 +221,8 @@ export function TabHistorico({
             <View style={{ gap: 6, marginTop: 4 }} testID={`crediario-pagamento-parcelas-${ev.id}`}>
               {grupos.map((g) => (
                 <View key={g.chave}>
-                  <Text style={lc.onde} numberOfLines={1}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
+                  {/* QA 23/11 (P2): duas linhas em vez de cortar o nome do carnê. */}
+                  <Text style={lc.onde} numberOfLines={2}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
                   {g.linhas.map((l) => (
                     <View key={l.id} style={lc.ln}>
                       <Text style={[lc.marca, { color: l.tipo === "inteira" ? Colors.green : Colors.amber }]}>
