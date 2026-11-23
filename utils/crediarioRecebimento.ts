@@ -60,13 +60,27 @@ function haQuanto(segundos: number): string {
   return `há ${min} minuto${min === 1 ? "" : "s"}`;
 }
 
+/**
+ * "no Pix", "em dinheiro", "no cartão" (QA 23/11/2026, P2: era "em pix").
+ * Recebe o rótulo da forma (Dinheiro, Pix, Cartão…).
+ */
+export function formaComPreposicao(rotulo: string): string {
+  const r = String(rotulo || "").trim();
+  const min = r.toLowerCase();
+  if (!r) return "";
+  if (min === "pix") return "no Pix";
+  if (min.startsWith("cartão") || min.startsWith("cartao")) return `no ${min}`;
+  if (min.startsWith("transfer")) return `na ${min}`;
+  return `em ${min}`;
+}
+
 /** Texto do gate quando há um recebimento igual recente. */
 export function mensagemDeRepeticao(
   rep: RecebimentoRepetido,
   fmt: (n: number) => string,
   metodoLabel: (key: string | null) => string,
 ): string {
-  const anterior = rep.method ? ` em ${metodoLabel(rep.method).toLowerCase()}` : "";
+  const anterior = rep.method ? ` ${formaComPreposicao(metodoLabel(rep.method))}` : "";
   return `Você registrou ${fmt(rep.amount)}${anterior} ${haQuanto(rep.segundos)}. Registrar outro recebimento de ${fmt(rep.amount)}?`;
 }
 

@@ -133,7 +133,7 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
           testID="editar-pagamento-valor"
         />
 
-        <Text style={[m.fieldLabel, { marginTop: 14 }]}>Data do pagamento</Text>
+        <Text style={[m.fieldLabel, { marginTop: 14 }]}>Dia do pagamento</Text>
         <DateInput
           value={dataBr}
           onChangeText={(v) => { setDataBr(v); setErro(null); }}

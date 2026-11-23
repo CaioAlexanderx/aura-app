@@ -220,7 +220,9 @@ function restante(p: ParcelaAbertaDoCarne): number {
 }
 
 function rotuloDoItem(c: CompraDoCarne): string {
-  const desc = String(c.description || "").trim() || (c.manual ? "Lançamento manual" : "Compra");
+  // QA 23/11 (P2): o backend grava "Lancamento manual" (sem cedilha).
+  const bruto = String(c.description || "").trim();
+  const desc = (/^lan[cç]amento manual$/i.test(bruto) ? "Lançamento manual" : bruto) || (c.manual ? "Lançamento manual" : "Compra");
   const q = Number(c.quantity) || 0;
   return q > 1 ? `${q}× ${desc}` : desc;
 }

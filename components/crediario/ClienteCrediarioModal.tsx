@@ -46,6 +46,7 @@ import { ConfirmGate } from "@/components/ConfirmGate";
 import {
   recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
   pagamentoRepetidoDoErro, mensagemPagamentoRepetido, confirmarRepetidoNoEnvio, type PagamentoRepetido,
+  formaComPreposicao,
 } from "@/utils/crediarioRecebimento";
 import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
@@ -289,7 +290,7 @@ export function ClienteCrediarioModal({
   const [pixInstId, setPixInstId] = useState<string | null>(null);
   const [pixData, setPixData] = useState<CreditPix | null>(null);
   const [pixLoading, setPixLoading] = useState(false);
-  const pixOverlayTitle = pixInstId === "free" ? "Pix · Valor Livre" : "Pix da Parcela";
+  const pixOverlayTitle = pixInstId === "free" ? "Pix · valor livre" : "Pix da parcela";
 
   const profileQ = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
@@ -985,7 +986,7 @@ export function ClienteCrediarioModal({
   const repetido = receberGate ? recebimentoRecente(detail?.transactions, ultimoRecebimento, freeAmtValue) : null;
   const gateMessage = repetido
     ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
-    : `Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`;
+    : `Confirmar recebimento de ${fmt(freeAmtValue)} ${formaComPreposicao(methodLabel)}?`;
 
   // F3 (23/11/2026): na tela cheia o X de dentro de um painel fecha só o
   // painel (a ficha é a página); na janela fecha a ficha, como sempre.
@@ -1636,7 +1637,7 @@ export function ClienteCrediarioModal({
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
-                {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão substituídas por este novo cronograma.
+                {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão trocadas por estas novas parcelas.
               </Text>
 
               <Text style={[m.fieldLabel, { marginTop: 4 }]}>Novo total</Text>
@@ -1741,7 +1742,7 @@ export function ClienteCrediarioModal({
                   >
                     {renegSubmitting
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>Confirmar renegociação</Text>}
+                      : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>Mudar as parcelas</Text>}
                   </Pressable>
                 </View>
               </View>
@@ -1789,7 +1790,7 @@ export function ClienteCrediarioModal({
                   </View>
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
-                <Text style={m.panelTitle}>Alterar vencimento</Text>
+                <Text style={m.panelTitle}>Mudar a data</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
                   <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
