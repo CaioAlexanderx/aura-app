@@ -1849,7 +1849,7 @@ export function ClienteCrediarioModal({
           <ConfirmDialog
             visible={!!excluirAlvo}
             title={excluindo ? "Excluindo…" : "Excluir carnê"}
-            message={excluirAlvo ? textoConfirmarExclusao(excluirAlvo.falta, fmt) : ""}
+            message={excluirAlvo ? textoConfirmarExclusao(excluirAlvo.falta, fmt, excluirAlvo.nome) : ""}
             confirmLabel={excluindo ? "Excluindo…" : "Sim, excluir"}
             cancelLabel="Cancelar"
             destructive

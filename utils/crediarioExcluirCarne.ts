@@ -31,10 +31,12 @@ const MSG_DIVERGENTE =
 const MSG_GENERICA = "Não foi possível excluir o carnê. Tente novamente.";
 
 /** Texto do diálogo de confirmação. */
-export function textoConfirmarExclusao(falta: number, fmt: (n: number) => string): string {
+export function textoConfirmarExclusao(falta: number, fmt: (n: number) => string, nome?: string | null): string {
+  // QA 23/11/2026 (P2): diz QUAL carnê; sem gênero ("do cliente" saiu).
+  const qual = nome ? `o carnê "${nome}"` : "este carnê";
   return falta > 0.009
-    ? `Excluir este carnê? As parcelas em aberto (${fmt(falta)}) saem do saldo do cliente.`
-    : "Excluir este carnê? Ele sai da ficha do cliente.";
+    ? `Excluir ${qual}? As parcelas em aberto (${fmt(falta)}) saem do saldo.`
+    : `Excluir ${qual}? Ele sai da ficha.`;
 }
 
 /** Lê o erro do DELETE e diz o que a tela faz. */

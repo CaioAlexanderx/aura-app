@@ -146,8 +146,11 @@ describe("TabParcelas — Excluir carnê", () => {
 describe("utils/crediarioExcluirCarne", () => {
   it("confirmação diz quanto sai do saldo", () => {
     expect(textoConfirmarExclusao(300, fmt))
-      .toBe("Excluir este carnê? As parcelas em aberto (R$ 300,00) saem do saldo do cliente.");
-    expect(textoConfirmarExclusao(0, fmt)).toBe("Excluir este carnê? Ele sai da ficha do cliente.");
+      .toBe("Excluir este carnê? As parcelas em aberto (R$ 300,00) saem do saldo.");
+    expect(textoConfirmarExclusao(0, fmt)).toBe("Excluir este carnê? Ele sai da ficha.");
+    // QA P2: diz qual carnê
+    expect(textoConfirmarExclusao(300, fmt, "Compra de 19/10"))
+      .toBe('Excluir o carnê "Compra de 19/10"? As parcelas em aberto (R$ 300,00) saem do saldo.');
   });
 
   it("409 com recebimento: lista com dia e valor", () => {
