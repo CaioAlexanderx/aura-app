@@ -87,13 +87,13 @@ describe("JuntarCarnesPanel", () => {
   });
   afterEach(() => { jest.useRealTimers(); });
 
-  it("lista os carnês com produtos e quanto falta, inclusive Compras anteriores", async () => {
+  it("lista os carnês com produtos e quanto falta, inclusive Compras sem carnê", async () => {
     const { t } = montar();
     const txt = texto(t.toJSON());
     expect(txt).toContain("Compra de 13/09");
     expect(txt).toContain("2× Slide Alta 40/41");
     expect(txt).toContain("R$ 140,00");
-    expect(txt).toContain("Compras anteriores");
+    expect(txt).toContain("Compras sem carnê");
     expect(porId(t, "juntar-carne-general")).toHaveLength(1);
   });
 
@@ -102,7 +102,7 @@ describe("JuntarCarnesPanel", () => {
     await assentar();
     expect(botao(t).props.disabled).toBe(true);
     expect(texto(t.toJSON())).toContain("Marque pelo menos 2 carnês");
-    expect(texto(t.toJSON())).toContain("use o Renegociar dele");
+    expect(texto(t.toJSON())).toContain("use o Mudar as parcelas dele");
     apertar(t, "juntar-carne-c1");
     await assentar();
     expect(botao(t).props.disabled).toBe(true);

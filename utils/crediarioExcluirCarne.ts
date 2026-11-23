@@ -23,7 +23,7 @@ export type RespostaDaExclusao =
   | { tipo: "erro"; mensagem: string };
 
 const MSG_RECEBIMENTOS =
-  "Este carnê já tem recebimentos. Desfaça cada um na Linha do tempo e depois exclua o carnê.";
+  "Este carnê já tem recebimentos. Remova cada um em Movimentações e depois exclua o carnê.";
 const MSG_VENDA =
   "A dívida deste carnê vem de uma venda do Caixa. Para tirá-la, faça a devolução da venda: ela também devolve os produtos ao estoque.";
 const MSG_DIVERGENTE =

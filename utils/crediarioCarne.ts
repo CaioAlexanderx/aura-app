@@ -192,7 +192,8 @@ export type CarneDerivado<P extends ParcelaAbertaDoCarne = ParcelaAbertaDoCarne>
   juntadoDe: string[];
 };
 
-export const NOME_SEM_CARNE = "Compras anteriores";
+/** 23/11/2026 (F1 da ficha): era "Compras anteriores", que não dizia o quê. */
+export const NOME_SEM_CARNE = "Compras sem carnê";
 /** Como o grupo sem carnê vai em account_ids do juntar e na URL do preview. */
 export const CHAVE_SEM_CARNE = "general";
 
@@ -474,7 +475,7 @@ export function juncaoIndisponivel(err: ErroDeApi): boolean {
 }
 
 export const MSG_JUNCAO_INDISPONIVEL =
-  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Renegociar de cada carnê continua funcionando.";
+  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Mudar as parcelas de cada carnê continua funcionando.";
 
 /** Erro do preview/apply do juntar em português claro. */
 export function mensagemErroJuncao(err: ErroDeApi): string {

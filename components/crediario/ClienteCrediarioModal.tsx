@@ -21,10 +21,11 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Clipboard,
+  TextInput, ActivityIndicator, Clipboard, useWindowDimensions,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
@@ -68,6 +69,7 @@ import {
 } from "@/utils/crediarioCarne";
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
+import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
 
 function translateStatus(status: string | null | undefined): string {
   if (!status) return "";
@@ -109,6 +111,8 @@ export function ClienteCrediarioModal({
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
 }: Props) {
   const qc = useQueryClient();
+  // Rótulo da 1ª aba: "Compras e parcelas" não cabe em três abas de celular.
+  const { width: larguraDaTela } = useWindowDimensions();
 
   const [tab, setTab] = useState<Tab>("parcelas");
 
@@ -445,6 +449,8 @@ export function ClienteCrediarioModal({
       toast.success("Vencimento atualizado!");
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
       qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
+      setHistLoaded(false);
     },
     onError: (e: any) => toast.error(e?.message || "Erro ao alterar vencimento"),
   });
@@ -537,6 +543,8 @@ export function ClienteCrediarioModal({
       qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
       onChanged?.();
+      // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
+      setHistLoaded(false);
     } catch (err: any) {
       toast.error(err?.data?.error || "Não foi possível renegociar. Tente novamente.");
     } finally {
@@ -636,6 +644,9 @@ export function ClienteCrediarioModal({
       qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
       onChanged?.();
+      // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1):
+      // antes o recebimento só aparecia reabrindo a ficha.
+      setHistLoaded(false);
     } catch (err: any) {
       // Pagamento igual já gravado: nada entrou; a chave segue a mesma para o
       // "Lançar mesmo assim" (é o mesmo pedido).
@@ -809,7 +820,22 @@ export function ClienteCrediarioModal({
 
   const scoreWarning = profile?.score_warning ?? null;
   const availableLimit = profile?.available_limit ?? (profile ? (profile.credit_limit - profile.credit_used) : undefined);
+  // 23/11/2026 (F1): limite 0 é "sem limite" no backend (ledger: limit > 0 &&
+  // ...), mas o topo mostrava "DISPONÍVEL R$ 0,00" — ou negativo e vermelho
+  // em backend antigo. Agora diz o que é.
+  const limiteDefinido = !!profile && Number(profile.credit_limit) > 0;
+  const passouDoLimite = limiteDefinido
+    ? Math.max(0, +((Number(profile!.credit_used) || 0) - Number(profile!.credit_limit)).toFixed(2))
+    : 0;
   const scoreLabel = profile?.score_label ?? profile?.label ?? null;
+  const aviso = avisoDaFicha({
+    divergencia: detail?.ledger_mismatch === true,
+    somaDasParcelas: detail?.open_installments_total || 0,
+    saldoDaConta: balance,
+    aConferir: hasOverdue ? 0 : toReviewCount,
+    costumaAtrasar: !!scoreWarning,
+    fmt,
+  });
 
   const hasTermsOverride = !!(
     profile?.terms?.overrides?.max_installments != null ||
@@ -865,20 +891,6 @@ export function ClienteCrediarioModal({
                         {hasOverdue ? "Em atraso" : semSaldoNoRazao ? "Conferir" : "Em dia"}
                       </Text>
                     </View>
-                    {detail?.ledger_mismatch === true && (
-                      <View style={[m.pill, { backgroundColor: Colors.amber + "22" }]} testID="crediario-ficha-divergencia">
-                        <Text style={[m.pillTxt, { color: Colors.amber }]}>
-                          {`parcelas ${fmt(detail.open_installments_total || 0)} · saldo ${fmt(balance)}`}
-                        </Text>
-                      </View>
-                    )}
-                    {!hasOverdue && toReviewCount > 0 && (
-                      <View style={[m.pill, { backgroundColor: Colors.amber + "22" }]}>
-                        <Text style={[m.pillTxt, { color: Colors.amber }]}>
-                          {toReviewCount} a conferir
-                        </Text>
-                      </View>
-                    )}
                     {isBlocked && (
                       <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
                         <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
@@ -899,7 +911,7 @@ export function ClienteCrediarioModal({
             {!!profile && (
               <View style={f.metaRow}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={m.fixedMetaLbl}>{totalBalance < 0 ? "CRÉDITO A FAVOR" : "EM ABERTO"}</Text>
+                  <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>{totalBalance < 0 ? "TEM CRÉDITO NA LOJA" : "FALTA PAGAR"}</Text>
                   <Text
                     style={[f.metaHero, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}
                     numberOfLines={1}
@@ -912,22 +924,32 @@ export function ClienteCrediarioModal({
                   <Text style={[f.metaSmVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
                 </View>
                 {availableLimit !== undefined && (
-                  <View style={f.metaSm}>
-                    <Text style={m.fixedMetaLbl}>DISPONÍVEL</Text>
-                    <Text style={[f.metaSmVal, { color: availableLimit >= 0 ? Colors.green : Colors.red }]}>{fmt(availableLimit)}</Text>
+                  <View style={f.metaSm} testID="crediario-ficha-limite">
+                    <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>
+                      {!limiteDefinido ? "LIMITE" : passouDoLimite > 0 ? "PASSOU DO LIMITE" : "PODE COMPRAR MAIS"}
+                    </Text>
+                    <Text style={[f.metaSmVal, {
+                      fontFamily: Fonts.body,
+                      color: !limiteDefinido ? Colors.ink3 : passouDoLimite > 0 ? Colors.red : Colors.green,
+                    }]}>
+                      {!limiteDefinido ? "Sem limite definido" : fmt(passouDoLimite > 0 ? passouDoLimite : Math.max(0, availableLimit))}
+                    </Text>
                   </View>
                 )}
               </View>
             )}
 
-            {!!scoreWarning && (
-              <View style={m.scoreBanner}>
+            {/* 23/11/2026 (F1): um aviso por vez, em frase inteira, o mais grave
+                primeiro (utils/crediarioAvisoDaFicha). Saíram dos selos ao lado
+                do nome ("parcelas R$ X · saldo R$ Y", "N a conferir"), que não
+                diziam o que era nem o que fazer. */}
+            {!!aviso && (
+              <View
+                style={m.scoreBanner}
+                testID={aviso.tipo === "divergencia" ? "crediario-ficha-divergencia" : `crediario-ficha-aviso-${aviso.tipo}`}
+              >
                 <Icon name="alert_triangle" size={15} color={Colors.amber} />
-                <Text style={m.scoreBannerTxt}>
-                  Score abaixo do mínimo de aviso ({scoreWarning.threshold} pts). Score atual:{" "}
-                  <Text style={{ fontWeight: "800" }}>{scoreWarning.actual} pts</Text>.
-                  {" "}Você pode lançar normalmente — isto é apenas um alerta.
-                </Text>
+                <Text style={[m.scoreBannerTxt, { fontFamily: Fonts.body }]}>{aviso.texto}</Text>
               </View>
             )}
 
@@ -935,9 +957,14 @@ export function ClienteCrediarioModal({
             <View style={[m.tabs, { marginBottom: 12 }]}>
               {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
-                  <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {/* 10/10/2026: com carnê na ficha a aba se chama "Carnês" (mockup). */}
-                    {t === "parcelas" ? (useCarneLayout ? "Carnês" : "Parcelas") : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
+                  <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn]} numberOfLines={1}>
+                    {/* 23/11/2026 (F1): nomes do redesenho da ficha. No celular
+                        (< 480 px) a 1ª aba vira "Parcelas" e a 3ª "Limite": três
+                        abas em 375 px têm ~105 px cada. */}
+                    {t === "parcelas"
+                      ? (larguraDaTela < 480 ? "Parcelas" : "Compras e parcelas")
+                      : t === "historico" ? "Movimentações"
+                        : `${larguraDaTela < 480 ? "Limite" : "Limite e regras"}${(hasTermsOverride || isBlocked) ? " •" : ""}`}
                   </Text>
                 </Pressable>
               ))}
@@ -989,6 +1016,7 @@ export function ClienteCrediarioModal({
                     companyId={companyId}
                     customerId={customerId!}
                     customerName={name}
+                    openInst={openInst}
                     onRefresh={handleHistoricRefresh}
                   />
                 )}
@@ -1159,7 +1187,7 @@ export function ClienteCrediarioModal({
                   )}
                 </View>
 
-                <Text style={[m.fieldLabel, { marginTop: 12 }]}>Data do recebimento</Text>
+                <Text style={[m.fieldLabel, { marginTop: 12, fontFamily: Fonts.body }]}>Dia do pagamento</Text>
                 <DateInput
                   value={freeDateBr}
                   onChangeText={setFreeDateBr}
@@ -1189,7 +1217,7 @@ export function ClienteCrediarioModal({
                 )}
                 {!freePreviewLoading && freePreview && (
                   <View style={m.previewBox}>
-                    <Text style={m.previewTitle}>Como o valor vai ser aplicado</Text>
+                    <Text style={[m.previewTitle, { fontFamily: Fonts.body }]}>Para onde vai o dinheiro</Text>
                     {freePreview.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
                         <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
@@ -1345,7 +1373,7 @@ export function ClienteCrediarioModal({
                   </View>
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
-                <Text style={m.panelTitle}>Renegociar parcelas</Text>
+                <Text style={[m.panelTitle, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
                 <Pressable onPress={onClose} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
@@ -1564,7 +1592,7 @@ export function ClienteCrediarioModal({
             visible={recusaExclusao?.tipo === "recebimentos"}
             title="Este carnê já tem recebimentos"
             message={recusaExclusao?.tipo === "recebimentos" ? recusaExclusao.mensagem : ""}
-            confirmLabel="Abrir a Linha do tempo"
+            confirmLabel="Abrir Movimentações"
             cancelLabel="Agora não"
             destructive={false}
             onConfirm={() => { setRecusaExclusao(null); setTab("historico"); }}

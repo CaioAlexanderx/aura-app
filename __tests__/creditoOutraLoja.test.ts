@@ -26,9 +26,9 @@ describe("mensagemErroRecebimento", () => {
     expect(msg).toMatch(/Configurações → PDV/);
   });
 
-  it("sem conexão manda conferir o Histórico antes de repetir", () => {
+  it("sem conexão manda conferir Movimentações antes de repetir", () => {
     expect(mensagemErroRecebimento({ status: 0, isNetworkError: true, message: "x" }))
-      .toMatch(/Histórico/);
+      .toMatch(/Movimentações/);
   });
 
   it("400 fala do valor e da data, nunca do texto cru do backend", () => {

@@ -7,7 +7,7 @@
 //   - quitado = não falta nada (e não há parcela viva);
 //   - venda 1x/fiado: saldo sem parcela, sem barra de progresso;
 //   - backend antigo: nome, saldo e parcelas — sem quebrar;
-//   - grupo sem carnê vira "Compras anteriores", com as compras por compra;
+//   - grupo sem carnê vira "Compras sem carnê", com as compras por compra;
 //   - parcela órfã nunca some da ficha.
 // ============================================================
 import { derivarCarne, organizarCarnes, diaMes, NOME_SEM_CARNE } from "@/utils/crediarioCarne";
@@ -147,7 +147,7 @@ describe("derivarCarne — backend antigo (sem os campos novos)", () => {
   });
 });
 
-describe("grupo sem carnê — Compras anteriores", () => {
+describe("grupo sem carnê — Compras sem carnê", () => {
   const GERAL = {
     id: null, name: "Conta geral", balance: 425, remaining: 425, total_count: 1, paid_count: 0,
     purchases: [
@@ -179,7 +179,7 @@ describe("grupo sem carnê — Compras anteriores", () => {
 });
 
 describe("organizarCarnes", () => {
-  it("separa abertos de quitados e deixa Compras anteriores por último", () => {
+  it("separa abertos de quitados e deixa Compras sem carnê por último", () => {
     const { abertos, quitados } = organizarCarnes(
       [
         { id: null, name: "Conta geral", balance: 50, remaining: 50, total_count: 0, paid_count: 0, purchases: [] },
@@ -193,7 +193,7 @@ describe("organizarCarnes", () => {
     expect(abertos[0].parcelasAbertas).toHaveLength(1);
   });
 
-  it("parcela órfã (sem carnê na lista) vira o cartão Compras anteriores", () => {
+  it("parcela órfã (sem carnê na lista) vira o cartão Compras sem carnê", () => {
     const { abertos } = organizarCarnes(
       [{ id: "c1", name: "Carnê", balance: 70 }],
       [parcela({ account_id: "c1" }), parcela({ account_id: null, amount_due: 30 }), parcela({ account_id: "sumiu", amount_due: 20 })],
