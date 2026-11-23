@@ -143,7 +143,8 @@ export const m = StyleSheet.create({
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
   qChip: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
   qChipTxt: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: Colors.ink2 },
-  dateInput: { fontFamily: Fonts.body, backgroundColor: Colors.bg2, borderColor: Colors.violet2, borderWidth: 1.5, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15, color: Colors.ink },
+  // QA 23/11 (P2): 16 px — abaixo disso o iOS dá zoom ao focar.
+  dateInput: { fontFamily: Fonts.body, backgroundColor: Colors.bg2, borderColor: Colors.violet2, borderWidth: 1.5, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16, color: Colors.ink },
   dateHint: { fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario, marginTop: 6 },
   methods: { flexDirection: "row", gap: 7 },
   method: { flex: 1, alignItems: "center", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingVertical: 9 },

@@ -656,3 +656,12 @@ describe("QA P2: anel de foco violeta", () => {
     expect(fonte).toContain("useAnelDeFocoDaFicha(visible);");
   });
 });
+
+describe("QA P2: campo de data com 16 px (zoom do iOS)", () => {
+  test("estilo da data e o Mudar a data usando ele", () => {
+    const estilos = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ficha", "fichaStyles.ts"), "utf8");
+    expect(estilos).toMatch(/dateInput: \{[^}]*fontSize: 16/);
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte.match(/style=\{m\.dateInput\}/g)?.length).toBe(3);
+  });
+});

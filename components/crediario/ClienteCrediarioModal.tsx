@@ -1795,6 +1795,7 @@ export function ClienteCrediarioModal({
                 onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
                 placeholder="15/07/2026"
                 forceShowError={!!editDueDateError}
+                style={m.dateInput}
               />
               {!!editDueDateError && (
                 <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
