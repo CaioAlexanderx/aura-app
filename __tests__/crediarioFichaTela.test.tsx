@@ -695,3 +695,28 @@ describe("QA P2: a busca da lista não pisca '0 clientes'", () => {
     expect(fonte.slice(i, i + 600)).toContain("placeholderData: (anterior) => anterior,");
   });
 });
+
+describe("QA P2: score em frase não contradiz o atraso", () => {
+  test("com parcela atrasada, o fato 3 não traz a frase do score", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve({
+      ...mockDetail,
+      open_installments: [{ id: "p9", installment_number: 1, total_installments: 2, amount_due: 100, covered_amount: 0,
+        remaining: 100, due_date: "2026-10-01", status: "overdue", is_overdue: true, needs_review: false, days_late: 20 }],
+    }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const lim = JSON.stringify(porId(tree, "crediario-ficha-limite")[0].findAll((n: any) => typeof n.props?.children === "string").map((n: any) => n.props.children));
+    expect(lim).not.toContain("atrasa");
+    expect(lim).toContain("limite de R$ 1.000,00");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+});

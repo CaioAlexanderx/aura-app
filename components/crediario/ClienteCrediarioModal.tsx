@@ -1167,8 +1167,11 @@ export function ClienteCrediarioModal({
         atrasadas: parcelasAtrasadas, proxima: proximaParcela, aConferir: hasOverdue ? 0 : toReviewCount,
         saldo: totalBalance, hoje: hojeSP, fmt,
       });
+  // QA 23/11 (P2): com parcela atrasada, a frase do score ("paga em dia")
+  // contradizia o fato 2 — que já diz o atraso. A frase segue em Limite e regras.
   const fatoLimite = fatoPodeComprarMais({
-    limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit, scoreLabel, fmt,
+    limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit,
+    scoreLabel: fatoAgora.atrasado ? null : scoreLabel, fmt,
   });
   const numeros = !detailQ.isLoading && (
     <View style={f.fatos} testID="ficha-tres-fatos">
