@@ -21,6 +21,7 @@
 // Filtros de status: ScrollView horizontal de pills, espelhando
 // o padrão de pedidos.tsx. Lógica de filtragem inalterada.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { tourTarget } from "@/utils/tourTarget";
 import {
@@ -131,8 +132,8 @@ export function ListaDeOrcamentos({
 
   // As lojas do orçamento: a aberta, ou todas as do grupo no consolidado.
   const lojas: LojaDoOrcamento[] = useMemo(() => {
-    if (!consolidado) return company ? [{ id: company.id, name: (company as any).name || "", logo_url: logoDaLoja }] : [];
-    return (empresas || []).map((e) => ({ id: e.id, name: e.trade_name || e.name, logo_url: e.logo_url }));
+    if (!consolidado) return company ? [{ id: company.id, name: nomeDaLojaDe(company as any), logo_url: logoDaLoja }] : [];
+    return (empresas || []).map((e) => ({ id: e.id, name: nomeDaLojaDe(e), logo_url: e.logo_url }));
   }, [consolidado, company, empresas, logoDaLoja]);
   const nomeDaLoja = (cid: string) => lojas.find((l) => l.id === cid)?.name || "";
   const idsDasLojas = lojas.map((l) => l.id).join(",");

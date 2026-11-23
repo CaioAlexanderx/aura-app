@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, RefreshControl } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -226,7 +227,7 @@ export default function DashboardScreen() {
   // MULTICNPJ Sessao 2: header reflete o modo (consolidado vs empresa especifica)
   var companyLabel = consolidatedView
     ? "Visão consolidada · " + pluralize(companyCount, "empresa", "empresas")
-    : (tradeName || company?.name || "---");
+    : (tradeName || nomeDaLojaDe(company) || "---");
 
   // Breakdown so existe quando consolidated
   var breakdown = consolidatedView ? (d as any).breakdown : null;

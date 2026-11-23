@@ -7,6 +7,7 @@ import { maskCnpj } from "@/utils/masks";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { Card, fmtCNPJ, regimeLabel, sh } from "./shared";
+import { nomeDaLojaDe, type EmpresaComNome } from "@/utils/nomeDaLoja";
 
 // ── Derivação de regime a partir dos dados da Receita Federal ──
 // 12/10/2026: a fonte é o bloco `simples` do cnpj.ws (optante do SIMEI →
@@ -31,10 +32,48 @@ export function inferRegime(d: any): string {
 
 type CnpjPreview = {
   name:      string;
+  /** 23/11/2026: razão social da Receita (vai para legal_name, o campo fiscal). */
+  legalName?: string;
   address:   string;
   phone:     string;
   taxRegime: string;
 } | null;
+
+// ── O que salvar quando a lojista confirma o CNPJ (23/11/2026) ──
+// Decisão do Caio: a razão social da Receita é gravada em legal_name (é o
+// que sai na NFC-e) e o nome da loja fica como está. Em conta que nasceu
+// com CPF, o nome digitado no cadastro era a razão social; sem isto, ele
+// continuava na nota. Quando a loja não tem nome fantasia, o nome que
+// aparece hoje (a razão social antiga) passa a ser o nome fantasia, para
+// não mudar. Só uma loja sem nome nenhum recebe o nome da Receita.
+export function montarSalvarCnpj(
+  company: EmpresaComNome,
+  cnpjNums: string,
+  preview: CnpjPreview,
+): { body: Record<string, string>; aviso: string } {
+  const body: Record<string, string> = { cnpj: cnpjNums };
+  if (!preview) return { body, aviso: "CNPJ salvo!" };
+
+  const razaoReceita  = String(preview.legalName || "").trim();
+  const fantasiaAtual = String(company?.trade_name || "").trim();
+  const nomeAtual     = nomeDaLojaDe(company);
+  let nomeDaReceita = false;
+  if (!fantasiaAtual) {
+    if (nomeAtual) body.trade_name = nomeAtual;
+    else if (preview.name) { body.trade_name = preview.name; nomeDaReceita = true; }
+  }
+  if (razaoReceita)      body.legal_name = razaoReceita;
+  if (preview.address)   body.address    = preview.address;
+  if (preview.phone)     body.phone      = preview.phone;
+  if (preview.taxRegime) body.tax_regime = preview.taxRegime;
+
+  const aviso = !razaoReceita
+    ? "CNPJ salvo! Dados preenchidos pela Receita Federal."
+    : nomeDaReceita
+      ? "CNPJ salvo! Razão social e nome da loja preenchidos pela Receita Federal."
+      : "CNPJ salvo! Razão social atualizada pela Receita Federal. O nome da sua loja continua o mesmo.";
+  return { body, aviso };
+}
 
 type Props = {
   cnpj:        string;
@@ -75,7 +114,7 @@ export function CnpjSection({ cnpj, cpf, taxRegime, onCnpjSaved }: Props) {
 
       const phone = est.ddd1 && est.telefone1 ? `(${est.ddd1}) ${est.telefone1}` : "";
 
-      setCnpjPreview({ name, address, phone, taxRegime: inferRegime(d) });
+      setCnpjPreview({ name, legalName: d.razao_social || "", address, phone, taxRegime: inferRegime(d) });
     } catch {
       setCnpjPreview(null);
       setLookupError(true);
@@ -94,22 +133,26 @@ export function CnpjSection({ cnpj, cpf, taxRegime, onCnpjSaved }: Props) {
     if (!cnpjInputValid || !company?.id || isDemo) return;
     setCnpjSaving(true);
     try {
-      // Salva tudo de uma vez: CNPJ + dados da RF (nome, endereço, telefone, regime)
-      const body: Record<string, string> = { cnpj: cnpjInputNums };
-      if (cnpjPreview?.name)      body.trade_name  = cnpjPreview.name;
-      if (cnpjPreview?.address)   body.address     = cnpjPreview.address;
-      if (cnpjPreview?.phone)     body.phone       = cnpjPreview.phone;
-      if (cnpjPreview?.taxRegime) body.tax_regime  = cnpjPreview.taxRegime;
+      // Salva tudo de uma vez: CNPJ + dados da RF (razão social, endereço,
+      // telefone, regime). O nome da loja não muda (montarSalvarCnpj).
+      const { body, aviso } = montarSalvarCnpj(company as any, cnpjInputNums, cnpjPreview);
 
-      await companiesApi.updateProfile(company.id, body);
+      const res: any = await companiesApi.updateProfile(company.id, body);
+
+      // A empresa guardada já sai com a razão social nova (holerite impresso).
+      const atual: any = useAuthStore.getState().company || company;
+      const empresaNova = {
+        trade_name: res?.trade_name !== undefined ? (res.trade_name || null) : (body.trade_name ?? atual.trade_name ?? null),
+        legal_name: res?.legal_name !== undefined ? (res.legal_name || null) : (body.legal_name ?? atual.legal_name ?? null),
+      };
+      useAuthStore.getState().updateCompany({
+        ...empresaNova, cnpj: cnpjInputNums,
+        name: nomeDaLojaDe(empresaNova) || atual.name,
+      } as any);
 
       onCnpjSaved(cnpjInputNums, cnpjPreview);
       setCnpjInput(""); setCnpjPreview(null); setLookupError(false);
-      toast.success(
-        cnpjPreview
-          ? "CNPJ salvo! Dados preenchidos pela Receita Federal."
-          : "CNPJ salvo!"
-      );
+      toast.success(aviso);
     } catch (err: any) {
       toast.error(err?.message || "Erro ao salvar CNPJ.");
     } finally { setCnpjSaving(false); }

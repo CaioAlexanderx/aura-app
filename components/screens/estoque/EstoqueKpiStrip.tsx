@@ -149,7 +149,7 @@ export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalP
       <Card
         label="Unidades em estoque"
         valueNode={<>{fmtInt(totalUnits)}<span style={{ fontSize: 16, color: C.ink3, marginLeft: 4 } as any}>un</span></>}
-        sub="Soma de stock"
+        sub="Soma do estoque"
       />
       <Card
         label="Estoque baixo"

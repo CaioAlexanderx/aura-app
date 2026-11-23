@@ -45,6 +45,7 @@
 //   · O vazio nomeia o botão exato da ficha ("Marcar como parceiro") e
 //     leva até Clientes. "pts" virou "pontos" (texto sem abreviação).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router } from "expo-router";
@@ -89,7 +90,7 @@ function MatconProfissionaisScreen() {
   const qc = useQueryClient();
   const { settings } = usePdvSettings();
   const matcon = useMemo(() => readMatconSettings(settings as Partial<MatconSettings>), [settings]);
-  const nomeDaLoja = company?.name || "a loja";
+  const nomeDaLoja = nomeDaLojaDe(company) || "a loja";
 
   const [filtro, setFiltro] = useState<Filtro>("active");
   const [busca, setBusca] = useState("");

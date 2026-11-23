@@ -10,7 +10,8 @@ import { Colors } from "@/constants/colors";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { qtdComUnidade } from "@/utils/matconUnits";
-import { rotuloDaVariante as rotuloComNomeDaCor } from "@/utils/nomeDaCor";
+import { rotuloDaVariante as rotuloComNomeDaCor, corETamanhoDaVariante } from "@/utils/nomeDaCor";
+import { ordenarPeloTamanhoNaCor } from "@/utils/ordemDeTamanhos";
 
 // 14/11/2026 (CP2b da revisão de cores): o nome da cor é o mesmo do Caixa,
 // do cupom e da vitrine (utils/nomeDaCor.ts). Antes, a cor sem color_name
@@ -28,7 +29,11 @@ export function VariantesConsulta({ productId, unit }: { productId: string; unit
     staleTime: 30000,
     retry: 1,
   });
-  const variantes: any[] = Array.isArray((data as any)?.variants) ? (data as any).variants : [];
+  // 23/11/2026 (p-200): tamanhos em ordem (P, M, G; 34, 36...) dentro de cada cor.
+  const variantes: any[] = ordenarPeloTamanhoNaCor(
+    Array.isArray((data as any)?.variants) ? (data as any).variants : [],
+    corETamanhoDaVariante,
+  );
 
   if (isLoading) return <Text style={s.aviso}>Carregando tamanhos e cores...</Text>;
   if (isError) return <Text style={s.aviso}>Não consegui carregar os tamanhos e cores agora.</Text>;

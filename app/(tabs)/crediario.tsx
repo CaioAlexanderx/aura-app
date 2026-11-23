@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Animated,
@@ -454,7 +455,7 @@ export default function CrediarioScreen() {
     setTriggeringId(customerId);
     try {
       const detail = await creditApi.getCustomerHistory(company!.id, customerId);
-      const store  = company?.name || "nossa loja";
+      const store  = nomeDaLojaDe(company) || "nossa loja";
       // Uma chave só: a do canal digital (a do código copia e cola e do QR)
       // quando existe; senão a da régua.
       const pixKey = chavePixDaMensagem(chavePixDoQr(canalQ), (rulesQ.data as any)?.pix_key);
@@ -523,7 +524,7 @@ export default function CrediarioScreen() {
     } finally {
       setTriggeringId(null);
     }
-  }, [company?.id, company?.name, rulesQ.data, modelosMsg.modelos, canalQ]);
+  }, [company?.id, nomeDaLojaDe(company), rulesQ.data, modelosMsg.modelos, canalQ]);
 
   const kpis = dashQ.data?.kpis;
   const aging: AgingRow[] = agingQ.data || [];
@@ -969,7 +970,7 @@ export default function CrediarioScreen() {
         // (essa só entra no texto da cobrança). undefined enquanto carrega ou
         // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
         pixKey={chavePixDoQr(canalQ)}
-        storeName={company?.name || null}
+        storeName={nomeDaLojaDe(company) || null}
         onOpenSettings={() => { setModalCust(null); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); }}
         onCobrar={handleCobrar}
         onChanged={() => {

@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
@@ -163,7 +164,7 @@ export function HojeAppointmentsPanel() {
                       whatsappText={appointmentMessage({
                         status: a.status,
                         patientName: a.patient_name || "",
-                        clinicName: company?.name,
+                        clinicName: nomeDaLojaDe(company) || undefined,
                         when: new Date(a.scheduled_at),
                       })}
                       variant="icon"

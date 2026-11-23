@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { nfceApi, type NfceEmissionItem, type NfeKind } from "@/services/nfceApi";
 import { ns } from "./shared";
+import { parseDecimalBR } from "@/utils/parsePercent";
 
 // Forma de pagamento → código tPag enviado pro backend.
 // Backend mapeia via paymentCode() e Nuvem Fiscal espera tabela SEFAZ.
@@ -17,7 +18,19 @@ const PAGAMENTOS = [
   { key: "outros",   label: "Outros"   },
 ];
 
-type ItemRow = NfceEmissionItem & { _id: string };
+// 23/11/2026 (p-199): o campo guardava número a cada tecla, então "119,"
+// voltava a "119", a vírgula sumia e 119,90 virava 11990. Agora cada linha
+// guarda o TEXTO digitado (_qtdTexto, _precoTexto) e o número sai dele por
+// parseDecimalBR (vírgula ou ponto; "1.234,56" com milhar). quantity e
+// unit_price seguem numéricos para o subtotal e para o envio.
+type ItemRow = NfceEmissionItem & { _id: string; _qtdTexto: string; _precoTexto: string };
+
+/** Número já gravado -> texto do campo: 119.9 -> "119,9", 0 -> "". */
+function textoDoNumero(n: unknown): string {
+  const v = Number(n);
+  if (!isFinite(v) || v === 0) return "";
+  return String(v).replace(".", ",");
+}
 
 // Prefill enviado pelo nfe.tsx quando o lojista clica "Reemitir" num card
 // rejeitado. Hidrata o form a partir do snapshot da nota rejeitada
@@ -41,6 +54,8 @@ function newItemRow(): ItemRow {
     product_name: "",
     quantity: 1,
     unit_price: 0,
+    _qtdTexto: "1",
+    _precoTexto: "",
     ncm: "00000000",
     cfop: "5102",
     unit: "UN",
@@ -51,6 +66,8 @@ function itemsFromPrefill(items: NfceEmissionItem[] | undefined | null): ItemRow
   if (!Array.isArray(items) || items.length === 0) return [newItemRow()];
   return items.map(it => ({
     _id: Math.random().toString(36).slice(2),
+    _qtdTexto:    textoDoNumero(Number(it.quantity) || 1),
+    _precoTexto:  textoDoNumero(it.unit_price),
     product_id:   it.product_id ?? null,
     product_name: it.product_name || it.name || "",
     name:         it.name,
@@ -192,9 +209,9 @@ export function EmitNfceForm({
     // Validação local antes do POST
     const cleanItems = items
       .filter(i => (i.product_name || "").trim() && Number(i.quantity) > 0 && Number(i.unit_price) > 0)
-      .map(({ _id, ...rest }) => rest);
+      .map(({ _id, _qtdTexto, _precoTexto, ...rest }) => rest);
 
-    if (!cleanItems.length) { toast.error("Adicione ao menos um item válido (nome, qty, preço)"); return; }
+    if (!cleanItems.length) { toast.error("Adicione ao menos um item válido (nome, quantidade e preço)"); return; }
     if (tipo === "nfe" && !cpf.replace(/\D/g, "") && !cnpj.replace(/\D/g, "")) {
       toast.error("NF-e exige CPF ou CNPJ do destinatário"); return;
     }
@@ -292,16 +309,18 @@ export function EmitNfceForm({
 
             <View style={{ flexDirection: "row", gap: 6 }}>
               <View style={{ flex: 1 }}>
-                <Text style={ns.fLabel}>Qty</Text>
+                <Text style={ns.fLabel}>Qtd</Text>
                 <TextInput style={ns.fInput}
-                  value={String(it.quantity)} onChangeText={v => updateItem(it._id, { quantity: Number(v.replace(",", ".")) || 0 })}
+                  testID="nfce-item-qtd"
+                  value={it._qtdTexto} onChangeText={v => updateItem(it._id, { _qtdTexto: v, quantity: parseDecimalBR(v) ?? 0 })}
                   placeholder="1" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
               </View>
               <View style={{ flex: 2 }}>
                 <Text style={ns.fLabel}>Preço unit.</Text>
                 <TextInput style={ns.fInput}
-                  value={it.unit_price ? String(it.unit_price) : ""}
-                  onChangeText={v => updateItem(it._id, { unit_price: Number(v.replace(",", ".")) || 0 })}
+                  testID="nfce-item-preco"
+                  value={it._precoTexto}
+                  onChangeText={v => updateItem(it._id, { _precoTexto: v, unit_price: parseDecimalBR(v) ?? 0 })}
                   placeholder="0,00" placeholderTextColor={Colors.ink3} keyboardType="decimal-pad" />
               </View>
               <View style={{ flex: 1.5 }}>
@@ -413,7 +432,7 @@ export function EmitNfceForm({
           <Text style={{ fontSize: 22, fontWeight: "800", color: Colors.ink }}>{fmtBR(total)}</Text>
         </View>
 
-        <Pressable onPress={handleEmit} disabled={emitMut.isPending || total <= 0}
+        <Pressable testID="nfce-emitir" onPress={handleEmit} disabled={emitMut.isPending || total <= 0}
           style={[ns.emitBtn, (emitMut.isPending || total <= 0) && { opacity: 0.55 }]}>
           {emitMut.isPending
             ? <ActivityIndicator color="#fff" size="small" />

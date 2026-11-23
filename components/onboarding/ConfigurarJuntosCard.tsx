@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -91,7 +92,7 @@ export function ConfigurarJuntosCard() {
 
   function marcar() {
     // 1) abre o WhatsApp no mesmo toque; 2) só então fala com o servidor.
-    abrirLink(linkConfigurarJuntos((company as any)?.name));
+    abrirLink(linkConfigurarJuntos(nomeDaLojaDe(company as any) || undefined));
     registrar("solicitou");
     setFase("aberto");
   }

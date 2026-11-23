@@ -24,6 +24,9 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { creditApi } from "@/services/creditApi";
 import { PAYMENT_METHODS } from "@/components/crediario/ficha/fichaHelpers";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
+import {
+  pagamentoRepetidoDoErro, mensagemPagamentoRepetido, type PagamentoRepetido,
+} from "@/utils/crediarioRecebimento";
 import { fmt } from "./types";
 
 type Props = {
@@ -44,6 +47,9 @@ export function ReceberPagamentoModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmOverpay, setConfirmOverpay] = useState(false);
+  // 23/11/2026: o backend achou pagamento igual (mesmo valor, mesmo dia) e
+  // não gravou — pergunta antes de lançar de novo.
+  const [repetido, setRepetido] = useState<PagamentoRepetido | null>(null);
 
   // Reseta o formulário sempre que o modal reabre pra um novo cliente/valor.
   useEffect(() => {
@@ -52,6 +58,7 @@ export function ReceberPagamentoModal({
       setMethod("dinheiro");
       setError(null);
       setConfirmOverpay(false);
+      setRepetido(null);
     }
   }, [visible, balance]);
 
@@ -64,17 +71,21 @@ export function ReceberPagamentoModal({
     onClose();
   }
 
-  async function submit() {
+  async function submit(confirmarRepetido = false) {
     setSubmitting(true);
     setError(null);
     try {
       const res = await creditApi.receivePayment(companyId, customerId, {
         amount,
         payment_method: method,
+        ...(confirmarRepetido ? { confirmar_repetido: true } : {}),
       });
+      setRepetido(null);
       onSuccess(res.new_balance);
       handleClose();
     } catch (err: any) {
+      const rep = pagamentoRepetidoDoErro(err);
+      if (rep) { setConfirmOverpay(false); setRepetido(rep); return; }
       setError(err?.message || "Erro ao registrar pagamento");
     } finally {
       setSubmitting(false);
@@ -120,6 +131,7 @@ export function ReceberPagamentoModal({
               setAmountMasked(maskCurrency(v));
               setError(null);
               setConfirmOverpay(false);
+              setRepetido(null);
             }}
             keyboardType="number-pad"
             placeholder="0,00"
@@ -134,7 +146,7 @@ export function ReceberPagamentoModal({
             <Pressable
               key={pm.key}
               style={[s.method, method === pm.key && s.methodActive]}
-              onPress={() => setMethod(pm.key)}
+              onPress={() => { setMethod(pm.key); setRepetido(null); }}
               testID={`receber-pagamento-metodo-${pm.key}`}
             >
               <Text style={[s.methodTxt, method === pm.key && s.methodTxtActive]}>{pm.label}</Text>
@@ -151,8 +163,18 @@ export function ReceberPagamentoModal({
             `Isso vai gerar crédito a favor do cliente. Confirmar assim mesmo?`
           }
           confirmLabel="Sim, confirmar"
-          onConfirm={submit}
+          onConfirm={() => submit()}
           onCancel={() => setConfirmOverpay(false)}
+          loading={submitting}
+        />
+
+        <ConfirmGate
+          visible={!!repetido}
+          message={mensagemPagamentoRepetido(repetido?.data_pagamento ?? "")}
+          confirmLabel="Lançar mesmo assim"
+          cancelLabel="Cancelar"
+          onConfirm={() => submit(true)}
+          onCancel={() => setRepetido(null)}
           loading={submitting}
         />
 

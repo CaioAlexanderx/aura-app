@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { tourTarget } from "@/utils/tourTarget";
 import { useRouter } from "expo-router";
@@ -58,6 +59,7 @@ import { productLinksApi, type AggregatedProduct } from "@/services/productLinks
 import { useEstoquePremiumStyles } from "@/components/screens/estoque/useEstoquePremiumStyles";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
+import { legendaUnidadesEServicos } from "@/utils/resumoDoEstoque";
 import { OlhoValores } from "@/components/OlhoValores";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { EstoqueKpiStrip } from "@/components/screens/estoque/EstoqueKpiStrip";
@@ -495,7 +497,7 @@ export default function EstoqueScreen() {
   // 10/11/2026: transferir entre lojas — só numa loja específica (nunca no
   // consolidado), com outra loja do grupo que o usuário acessa.
   const lojasTransferencia = lojasDaTransferencia(availableCompanies, company?.id, {
-    consolidado: consolidatedView, consulta, demo: isDemo, nomeAtual: company?.name,
+    consolidado: consolidatedView, consulta, demo: isDemo, nomeAtual: nomeDaLojaDe(company),
   });
   const podeTransferir = !!lojasTransferencia;
   const [transferirAberto, setTransferirAberto] = useState(false);
@@ -1018,7 +1020,7 @@ export default function EstoqueScreen() {
             />
           ) : (
             <View style={s.summaryRow}>
-              <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
+              <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={legendaUnidadesEServicos(totalItems, serviceCount)} />
               {!consulta && !semCusto && <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />}
               <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
             </View>
@@ -1337,7 +1339,7 @@ export default function EstoqueScreen() {
         <ChegouMercadoriaModal
           visible
           companyId={company.id}
-          lojaNome={company.name || null}
+          lojaNome={nomeDaLojaDe(company) || null}
           products={products}
           semCusto={semCusto}
           onClose={() => setChegouAberto(false)}

@@ -199,6 +199,23 @@ export function rotuloDaVariante(v: VarianteComCor, separador: string = " · "):
 }
 
 /**
+ * Cor e tamanho brutos da variante, como gravados nos atributos (a cor é o
+ * valor do atributo, hex ou nome). Para ordenar listas de variantes
+ * (ordenarPeloTamanhoNaCor); para mostrar, use rotuloDaVariante.
+ */
+export function corETamanhoDaVariante(v: VarianteComCor): { cor: string | null; tamanho: string | null } {
+  let cor: string | null = null;
+  let tamanho: string | null = null;
+  for (const a of (Array.isArray(v && v.attributes) ? (v.attributes as Atributo[]) : [])) {
+    const val = valorDoAtributo(a);
+    if (!val) continue;
+    if (cor === null && ehAtributoDeCor(a)) cor = val;
+    else if (tamanho === null && ATRIBUTOS_DE_TAMANHO.has(nomeDoAtributo(a))) tamanho = val;
+  }
+  return { cor, tamanho };
+}
+
+/**
  * Nome da cor para mostrar no Caixa (seletor de variante → carrinho → nota).
  * `attrs` é o attributes da variante ([{attribute, value}]).
  * 14/11/2026: segue a regra única (nomeDaCor). Antes, o color_name saía

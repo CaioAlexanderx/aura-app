@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +22,7 @@ export function ProfileBanner() {
   if (isDemo || !company?.id) return null;
 
   // Calculate completion from API data (same fields as useConfigProfile)
-  const companyName = profile?.trade_name || profile?.legal_name || company?.name || "";
+  const companyName = nomeDaLojaDe(profile) || nomeDaLojaDe(company);
   const cnpj = profile?.cnpj || "";
   // 20/10/2026: conta sem CNPJ, cadastrada com CPF — o documento ja esta la.
   const cpf = profile?.cpf || "";

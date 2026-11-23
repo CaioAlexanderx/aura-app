@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions, TextInput } from "react-native";
 import { useLocalSearchParams, router, useRootNavigationState } from "expo-router";
@@ -501,7 +502,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           visible={showExport}
           onClose={function() { setShowExport(false); }}
           consolidated={!!consolidatedView}
-          companyName={company?.name || ""}
+          companyName={nomeDaLojaDe(company)}
           companyCount={companyCount || 0}
         />
       </WebPortal>
@@ -513,7 +514,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             live
             badge={consolidatedView
               ? "Consolidado · " + pluralize(companyCount || 0, "empresa")
-              : (company?.name || undefined)}
+              : (nomeDaLojaDe(company) || undefined)}
             subtitle={
               isLoading
                 ? "Carregando seus lançamentos…"
@@ -542,7 +543,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
         {/* Relatórios tem o próprio período (Hoje a Personalizado) no topo da
             aba; a Topbar (período, Exportar, Novo lançamento) é dos lançamentos. */}
         {!naAbaRelatorios && <FinanceiroTopbar
-          companyName={company?.name || ""}
+          companyName={nomeDaLojaDe(company)}
           consolidated={!!consolidatedView}
           companyCount={companyCount || 0}
           period={period}

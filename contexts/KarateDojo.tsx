@@ -20,6 +20,7 @@
 // rota vem de lá). Erro de rede não bloqueia o shell: dojoName cai no
 // company.name e a tela de Configurações oferece o retry.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import React, {
   createContext, useContext, useCallback, useEffect, useState, ReactNode,
 } from "react";
@@ -109,7 +110,7 @@ export function KarateDojoProvider({ children }: { children: ReactNode }) {
     error,
     reload: load,
     applyDojoMe,
-    dojoName: dojoMe?.name || company?.name || "Dojô",
+    dojoName: dojoMe?.name || nomeDaLojaDe(company) || "Dojô",
     dojoCode: dojoMe?.fpkt_affiliation_id ?? null,
     dojoLogoUrl: dojoMe?.logo_url ?? null,
     federationName:

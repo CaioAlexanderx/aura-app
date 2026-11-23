@@ -33,6 +33,7 @@
 // no NAV desde a Fase 0 (mod "clientes.reativacao"); o realce agora funciona
 // porque a tela passa a renderizar dentro do <Slot/> do (tabs)/_layout.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Switch } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -187,7 +188,7 @@ function ReativacaoMeta() {
   useEffect(() => { setChamados(marcas.ler()); }, [marcas]);
   function chamar(c: ReactivationCustomer) {
     // Síncrono no toque: o navegador bloqueia o pop-up depois de um await.
-    if (openWhatsApp(c.phone, mensagemDeChamado(c.name, company?.name))) {
+    if (openWhatsApp(c.phone, mensagemDeChamado(c.name, nomeDaLojaDe(company)))) {
       setChamados(marcas.marcar(c.id));
     }
   }

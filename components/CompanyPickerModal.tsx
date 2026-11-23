@@ -13,6 +13,7 @@
 //     onCancel={() => setOpen(false)}
 //   />
 
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useEffect } from "react";
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -103,7 +104,7 @@ export function CompanyPickerModal({
           <ScrollView style={s.list} contentContainerStyle={{ gap: 6 }}>
             {availableCompanies.map((c: any) => {
               const isSelected = selectedId === c.id;
-              const displayName = c.trade_name || c.name || c.legal_name || "Empresa";
+              const displayName = nomeDaLojaDe(c) || "Empresa";
               const cnpj = c.cnpj || null;
               return (
                 <Pressable
