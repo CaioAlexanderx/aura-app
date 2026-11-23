@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { tourTarget } from "@/utils/tourTarget";
 import { useRouter } from "expo-router";
@@ -495,7 +496,7 @@ export default function EstoqueScreen() {
   // 10/11/2026: transferir entre lojas — só numa loja específica (nunca no
   // consolidado), com outra loja do grupo que o usuário acessa.
   const lojasTransferencia = lojasDaTransferencia(availableCompanies, company?.id, {
-    consolidado: consolidatedView, consulta, demo: isDemo, nomeAtual: company?.name,
+    consolidado: consolidatedView, consulta, demo: isDemo, nomeAtual: nomeDaLojaDe(company),
   });
   const podeTransferir = !!lojasTransferencia;
   const [transferirAberto, setTransferirAberto] = useState(false);
@@ -1337,7 +1338,7 @@ export default function EstoqueScreen() {
         <ChegouMercadoriaModal
           visible
           companyId={company.id}
-          lojaNome={company.name || null}
+          lojaNome={nomeDaLojaDe(company) || null}
           products={products}
           semCusto={semCusto}
           onClose={() => setChegouAberto(false)}

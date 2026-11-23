@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
@@ -19,12 +20,19 @@ export function useCompanyProfile() {
     staleTime: 30000, // Reduced from 60s to catch profile updates faster
   });
 
-  // Sync trade_name to auth store (once per unique value)
+  // Sync do nome da loja para o auth store (uma vez por valor). 21/11/2026:
+  // leva nome fantasia e razão social juntos, para a regra única
+  // (utils/nomeDaLoja.ts) valer em quem lê o store — etiqueta, Caixa,
+  // mensagens — e não só no topo.
   useEffect(() => {
     if (!profile) return;
-    const newName = profile.trade_name || profile.legal_name;
-    if (newName && newName !== synced.current && newName !== company?.name) {
-      updateCompany({ name: newName } as any);
+    const newName = nomeDaLojaDe(profile);
+    const atual = company as any;
+    const mudou = newName !== nomeDaLojaDe(atual)
+      || (atual && (atual.trade_name ?? null) !== (profile.trade_name || null))
+      || (atual && (atual.legal_name ?? null) !== (profile.legal_name || null));
+    if (newName && newName !== synced.current && mudou) {
+      updateCompany({ name: newName, trade_name: profile.trade_name || null, legal_name: profile.legal_name || null } as any);
       synced.current = newName;
     }
   }, [profile?.trade_name, profile?.legal_name]);
@@ -36,7 +44,7 @@ export function useCompanyProfile() {
     profile,
     isLoading,
     refetch,
-    tradeName: profile?.trade_name || profile?.legal_name || company?.name || "",
+    tradeName: nomeDaLojaDe(profile) || nomeDaLojaDe(company),
     logoUrl: profile?.logo_url || null,
     plan,
   };

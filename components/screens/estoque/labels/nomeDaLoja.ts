@@ -8,7 +8,7 @@
 // todas as lojas — proibido (etiquetas: HTML idêntico para quem não pediu).
 //
 // Regra:
-//   - nome = nome fantasia; backend antigo, sem trade_name, usa company.name;
+//   - nome = nome da loja pela regra única (utils/nomeDaLoja.ts);
 //   - o toggle nasce DESLIGADO em todos os modelos e medidas;
 //   - exceção: o desenho "tag vertical" (Minha medida em pé, ehTagVertical),
 //     que foi desenhado com a loja no topo — lá nasce LIGADO;
@@ -20,18 +20,14 @@
 // sai com o nome sem a lojista marcar), ou reverter o PR.
 // ============================================================================
 import { customLabelPreset, type CustomLabelSpec } from "./customLabel";
+import { nomeDaLojaDe, type EmpresaComNome } from "@/utils/nomeDaLoja";
 
-type EmpresaComNome = { trade_name?: string | null; name?: string | null; legal_name?: string | null } | null | undefined;
-
-/** Nome que vai no topo da etiqueta: nome fantasia > name > razão social. */
+/** Nome que vai no topo da etiqueta: a regra única do app
+ *  (utils/nomeDaLoja.ts, 21/11/2026) — nome fantasia > razão social > name.
+ *  Para toda empresa que o app guarda, sai o mesmo texto de antes
+ *  (__tests__/nomeDaLojaUnico.test.ts, byte a byte). */
 export function nomeDaLojaDaEmpresa(company: EmpresaComNome): string {
-  if (!company) return "";
-  var candidatos = [company.trade_name, company.name, company.legal_name];
-  for (var i = 0; i < candidatos.length; i++) {
-    var v = candidatos[i];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return "";
+  return nomeDaLojaDe(company);
 }
 
 /** Padrão do toggle: ligado só quando a impressão sai no desenho tag vertical

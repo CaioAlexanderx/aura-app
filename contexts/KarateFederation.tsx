@@ -31,6 +31,7 @@
 // FAIL-SOFT: o fetch engole qualquer erro (404 enquanto o backend não
 // deployou a rota, 403, rede). Identidade visual não derruba o shell.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import React, {
   createContext, useContext, useEffect, useState, ReactNode,
 } from "react";
@@ -101,7 +102,7 @@ export function KarateFederationProvider({ children }: { children: ReactNode }) 
     federationId,
     federationName:
       identity?.name ||
-      (companyIsDojo ? null : company?.name) ||
+      (companyIsDojo ? null : nomeDaLojaDe(company)) ||
       FEDERATION_FALLBACK_NAME,
     federationLogoUrl: identity?.logo_url ?? null,
     federationSlug: identity?.slug ?? null,

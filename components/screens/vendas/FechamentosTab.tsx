@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal, Platform } from "react-native";
 import { useQueries } from "@tanstack/react-query";
@@ -93,10 +94,10 @@ export function FechamentosTab() {
   const companiesToFetch = useMemo(function() {
     if (consolidatedView) {
       return (availableCompanies || []).map(function(c: any) {
-        return { id: c.id, name: c.trade_name || c.legal_name || c.name || "Empresa" };
+        return { id: c.id, name: nomeDaLojaDe(c) || "Empresa" };
       });
     }
-    if (company?.id) return [{ id: company.id, name: (company as any).trade_name || company.name || "Empresa" }];
+    if (company?.id) return [{ id: company.id, name: nomeDaLojaDe(company) || "Empresa" }];
     return [];
   }, [consolidatedView, availableCompanies, company]);
 

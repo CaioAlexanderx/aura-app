@@ -48,6 +48,7 @@
 // ele (o caso do INC-2026-10-19-02), navegação inteira do navegador para a
 // raiz, que o AuthGuard leva ao Painel ou ao login.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Linking, Platform } from "react-native";
 import { useRootNavigationState, useRouter } from "expo-router";
@@ -240,7 +241,7 @@ export function CheckinEntrada() {
     if (companyId && algumPutFalhou.current) {
       checkinApi.put(companyId, corpoCompleto(respostas)).catch(() => {});
     }
-    const loja = (company as any)?.name || null;
+    const loja = nomeDaLojaDe(company as any) || null;
     // 1) wa.me no mesmo toque (importação assistida), antes de qualquer espera.
     const previa = destinoDoCheckin(respostas, { modulos, temProduto: temProdutoQ.data ?? null, loja });
     if (previa.whatsapp) abrirLink(previa.whatsapp);

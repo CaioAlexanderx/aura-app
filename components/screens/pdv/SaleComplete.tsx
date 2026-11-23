@@ -57,6 +57,7 @@
 // produto (ou quantos já esperam a próxima venda). O cupom impresso aqui
 // (botão ou automático) fica marcado para a faixa.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -202,7 +203,7 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
   const itensProduto = sale.items.filter((i) => !ehServico(i));
   const nomes = (l: typeof sale.items) => l.map((i) => i.name).join(", ");
   const somar = (l: typeof sale.items) => Math.round(l.reduce((t, i) => t + i.price * i.qty, 0) * 100) / 100;
-  const nomeDaLoja = (companyCount || 0) > 1 ? (company?.trade_name || company?.name || null) : null;
+  const nomeDaLoja = (companyCount || 0) > 1 ? (nomeDaLojaDe(company) || null) : null;
   // Instante em que a tela final abriu = o da venda (o vale-troca do cupom
   // vale pelo dia da venda, não pelo da impressão).
   const vendaEm = useRef(new Date()).current;

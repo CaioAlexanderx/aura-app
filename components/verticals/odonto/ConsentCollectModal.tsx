@@ -21,6 +21,7 @@
 // ao receber WS, transicionar pra signed. UI e thin layer.
 // ============================================================
 
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useState, useRef, useMemo } from "react";
 import {
   Modal, View, Text, Pressable, StyleSheet, ActivityIndicator,
@@ -229,8 +230,8 @@ export function ConsentCollectModal({
     // Pre-preenche valores conhecidos
     const initial: Record<string, string> = {};
     if (patientName) initial.nome_paciente = patientName;
-    if (company?.name || company?.legal_name || company?.trade_name) {
-      initial.nome_clinica = company.trade_name || company.legal_name || company.name || "";
+    if (nomeDaLojaDe(company)) {
+      initial.nome_clinica = nomeDaLojaDe(company);
     }
     setFilled(initial);
     setMode("fill");

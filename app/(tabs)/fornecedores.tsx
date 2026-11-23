@@ -21,6 +21,7 @@
 // (components/screens/estoque/chegou/portaDoChegou.ts), desligada até o A8:
 // com ela em false esta tela é idêntica à de antes e o wizard nem é montado.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -90,7 +91,7 @@ function ChegouDosFornecedores({ inicio, onClose }: { inicio: InicioDoChegou; on
     <ChegouMercadoriaModal
       visible
       companyId={company.id}
-      lojaNome={company.name || null}
+      lojaNome={nomeDaLojaDe(company) || null}
       products={products}
       semCusto={semCusto}
       inicio={inicio}
@@ -329,7 +330,7 @@ function FornecedoresScreen() {
       <PedidoCompraSheet
         order={pedido?.order || null}
         companyId={cid}
-        nomeDaLoja={company?.name || ""}
+        nomeDaLoja={nomeDaLojaDe(company)}
         telefoneDoCadastro={pedido?.telefone || null}
         onClose={() => setPedido(null)}
         onSalvo={invalidar}

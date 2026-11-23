@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput,
@@ -1049,7 +1050,7 @@ export function MembersSection() {
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const inviterName = (user as any)?.name || (user as any)?.full_name || undefined;
-  const companyName = (company as any)?.name || "Aura";
+  const companyName = nomeDaLojaDe(company as any) || "Aura";
 
   async function handleInvite(data: { email: string; role_label: string; company_ids?: string[]; permissions?: Record<string, boolean> }) {
     try { await inviteMember(data); setWizardOpen(false); } catch {}

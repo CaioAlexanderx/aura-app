@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView, Modal as RNModal } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -103,7 +104,7 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
     const previewExpires = previewExpiresAt(parseInt(String(settings.defaults.validity_days)) || 7);
     const initialText = renderTemplate(settings.template, {
       nome: customer.name.split(" ")[0] || customer.name,
-      empresa: company?.name || "nossa equipe",
+      empresa: nomeDaLojaDe(company) || "nossa equipe",
       cupom: "{{cupom_será_gerado}}",
       validade: previewExpires,
       descricao_desconto: formatDiscountDescription(
@@ -112,7 +113,7 @@ export function BirthdayCouponModal({ visible, onClose, customer, onSuccess }: P
       ),
     });
     setMessageText(initialText);
-  }, [visible, settings, customer, company?.name]);
+  }, [visible, settings, customer, nomeDaLojaDe(company)]);
 
   // Preview ao vivo da URL — DEVE ficar ANTES do early return para não
   // violar a regra dos hooks (React error #310: hook count mudaria a cada
