@@ -107,7 +107,6 @@ export function useConfigProfile() {
       // o nome dela era o nome antigo da loja, e avisa em site_name_atualizado.
       if (res.site_name_atualizado === true) toast.info("O nome da sua loja online também mudou.");
     } catch (err: any) {
-      const { toast } = await import("@/components/Toast");
       toast.error(err?.message || "Erro ao salvar");
     } finally { setSaving(false); }
   }
