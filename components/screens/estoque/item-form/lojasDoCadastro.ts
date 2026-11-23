@@ -353,3 +353,35 @@ export function porLojaDaResposta(resp: any): PorLojaDoLote[] {
     erros: Array.isArray(p.erros) ? p.erros : [],
   }));
 }
+
+// ── edição (A4, D13) ──────────────────────────────────────────
+
+/** "Matriz · Filial Centro" (mockup "Na edição"); a loja ativa primeiro. */
+export function lojasDoProdutoTxt(em: Array<{ company_id: string; nome: string }>, ativaId: string): string {
+  const ativa = em.filter((l) => String(l.company_id) === ativaId);
+  const outras = em.filter((l) => String(l.company_id) !== ativaId);
+  return [...ativa, ...outras].map((l) => l.nome).join(" · ");
+}
+
+/** "O que você alterar aqui vale para a Matriz. Para mandar peças, use "Transferir"." */
+export function dicaDaEdicao(nomeDaAtiva: string): string {
+  return "O que você alterar aqui vale para a " + nomeDaAtiva + ". Para mandar peças, use \"Transferir\".";
+}
+
+/** Campos de cadastro que mudaram e podem ir para as outras lojas (pergunta 5 do plano). */
+export function camposParaAplicar(antes: { name?: string | null; price?: number | string | null }, depois: { name: string; price: number }): Array<"price" | "name"> {
+  const out: Array<"price" | "name"> = [];
+  if (Math.abs((Number(antes.price) || 0) - (Number(depois.price) || 0)) > 0.0001) out.push("price");
+  if (String(antes.name || "").trim() !== String(depois.name || "").trim()) out.push("name");
+  return out;
+}
+
+export function tituloDaOferta(nomes: string[]): string {
+  return "Aplicar também na " + juntarComE(nomes) + "?";
+}
+
+export function textoDaOferta(campos: Array<"price" | "name">, nomes: string[]): string {
+  const oQue = campos.length === 2 ? "o preço e o nome" : campos[0] === "price" ? "o preço" : "o nome";
+  const lojas = juntarComE(nomes);
+  return "Você mudou " + oQue + ". A " + lojas + (nomes.length === 1 ? " continua" : " continuam") + " com o de antes até você aplicar lá. O estoque não muda.";
+}
