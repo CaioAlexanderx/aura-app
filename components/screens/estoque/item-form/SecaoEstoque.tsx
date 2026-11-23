@@ -28,8 +28,9 @@
 // aparece. Sem o perfil, a seção é a de hoje.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { matrixKey } from "@/services/productsVariationsApi";
 import { UNITS } from "../types";
@@ -37,11 +38,11 @@ import { Campo, Chip, Entrada, MiniBtn, Nota, Radio, Secao, IS_WEB, fr, s } from
 import { novoCodigoDeBarras } from "./codigoDeBarras";
 import { EditorDeCor } from "./EditorDeCor";
 import {
-  novaLinhaDeLote, statusEstoque, totalDosLotes, lotesParaGravar,
+  novaLinhaDeLote, statusEstoque, totalDosLotes, lotesParaGravar, usaGradeEmCartoes, totalDasCelulas,
   type CorDoItem, type LinhaDeLote, type StockMode,
 } from "./types";
 import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
-import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade } from "@/utils/matconUnits";
+import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade, qtdComUnidade } from "@/utils/matconUnits";
 import { dividirTamanhos, juntarTamanhos } from "@/utils/dividirTamanhos";
 import { rotuloDaLojaNaGrade, rotuloDoMinimo } from "./lojasDoCadastro";
 
@@ -109,6 +110,9 @@ export function SecaoEstoque(p: Props) {
   const [abrirBarras, setAbrirBarras] = useState(false);
   const perfil = p.perfil || PERFIL_PADRAO;
   const lojas = p.lojas && p.lojas.linhas.length >= 2 ? p.lojas : null;
+  // p-201: até 560 px a matriz cor × tamanho vira um cartão por cor.
+  const { width: larguraDaTela } = useWindowDimensions();
+  const emCartoes = usaGradeEmCartoes(larguraDaTela);
 
   // 18/10/2026 (p-35): "P, M, G" vira três tamanhos (regra de divisão em
   // utils/dividirTamanhos), mesclados sem duplicar e na ordem PP, P, M,
@@ -561,7 +565,15 @@ export function SecaoEstoque(p: Props) {
 
           {seletorDaGrade}
 
-          {matriz && (
+          {matriz && emCartoes ? (
+            <GradeEmCartoes
+              cores={C} tamanhos={Z}
+              celulas={p.celulas} onCelula={p.onCelula}
+              unidade={p.unidade} matcon={matcon}
+            />
+          ) : null}
+
+          {matriz && !emCartoes && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.grade} contentContainerStyle={{ minWidth: "100%" }}>
               <View>
                 <View style={[st.linha, st.linhaCab]}>
@@ -725,7 +737,124 @@ export function SecaoEstoque(p: Props) {
   );
 }
 
+// ── p-201 · grade em cartões (celular) ──────────────────────
+//
+// Mockup "Grade no celular" (aprovado em 23/11/2026). Até 560 px a tabela
+// cortava a última coluna; aqui cada cor é um cartão com o total dela no
+// cabeçalho e os tamanhos numa grade que quebra linha (campo de 44 px,
+// tamanho escrito em cima, sem rolar para o lado). O total do produto vem
+// acima da lista. As células são as MESMAS da tabela (matrixKey), com o
+// mesmo filtro e o mesmo rótulo de acessibilidade: só o desenho muda.
+const LARGURA_MIN_DO_TAMANHO = 76;
+const VAO_DOS_TAMANHOS = 8;
+
+// "12 peças", "1 par", "6 pares". Fora do Matcon o "un" da grade se lê
+// como peça (é o que a seção já diz em "Quantas peças em cada loja?").
+export function totalComUnidadeDaGrade(n: number, unidade: string, matcon: boolean): string {
+  const u = String(unidade || "").trim();
+  if (!matcon && (u === "" || u === "un")) return fmtQty(n) + (n === 1 ? " peça" : " peças");
+  return qtdComUnidade(n, u);
+}
+
+function GradeEmCartoes(p: {
+  cores: CorDoItem[];
+  tamanhos: string[];
+  celulas: Record<string, string>;
+  onCelula: (chave: string, v: string) => void;
+  unidade: string;
+  matcon: boolean;
+}) {
+  // Largura medida da área dos tamanhos: decide quantos cabem por linha e
+  // dá a todos a mesma largura (a última linha não estica). Antes da
+  // primeira medida, flex com base de 76 px.
+  const [larg, setLarg] = useState(0);
+  const cols = larg > 0 ? Math.max(1, Math.floor((larg + VAO_DOS_TAMANHOS) / (LARGURA_MIN_DO_TAMANHO + VAO_DOS_TAMANHOS))) : 0;
+  const larguraDoItem = cols ? { width: Math.floor((larg - VAO_DOS_TAMANHOS * (cols - 1)) / cols) } : st.tamItemFlex;
+  const medir = (e: any) => {
+    const w = Math.round(e?.nativeEvent?.layout?.width || 0);
+    if (w > 0 && w !== larg) setLarg(w);
+  };
+  const chavesDaCor = (hex: string) => p.tamanhos.map((z) => matrixKey(hex, z));
+  const totalDoProduto = totalDasCelulas(p.celulas, p.cores.flatMap((c) => chavesDaCor(c.hex)));
+
+  return (
+    <View testID="grade-em-cartoes">
+      <View style={st.totalBar}>
+        <Text style={st.totalBarTxt}>Total do produto</Text>
+        <Text style={st.totalBarNum} testID="grade-total-do-produto">
+          {totalComUnidadeDaGrade(totalDoProduto, p.unidade, p.matcon)}
+        </Text>
+      </View>
+      {p.cores.map((c) => {
+        const nome = c.name || c.hex;
+        return (
+          <View key={c.hex} style={st.corCartao} testID={"grade-cartao-" + c.hex} accessibilityLabel={nome}>
+            <View style={st.corCab}>
+              <View style={[st.sw, { backgroundColor: c.hex }]} />
+              <Text style={st.corNome} numberOfLines={1}>{nome}</Text>
+              <Text style={st.corTotal} testID={"grade-total-" + c.hex}>
+                {totalComUnidadeDaGrade(totalDasCelulas(p.celulas, chavesDaCor(c.hex)), p.unidade, p.matcon)}
+              </Text>
+            </View>
+            <View style={st.corCorpo}>
+              <View style={st.tamGrade} onLayout={medir}>
+                {p.tamanhos.map((z) => {
+                  const k = matrixKey(c.hex, z);
+                  const v = p.celulas[k] ?? "";
+                  return (
+                    <View key={k} style={larguraDoItem}>
+                      <Text style={st.tamRotulo} numberOfLines={1}>{z}</Text>
+                      <Entrada
+                        value={v}
+                        onChangeText={(t: string) => p.onCelula(k, t.replace(/\D/g, ""))}
+                        placeholder="0"
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                        accessibilityLabel={"Estoque de " + nome + " " + z}
+                        dataSet={ENTER_LOCAL}
+                        style={[st.tamCampo, v === "0" && { color: Colors.ink3 }]}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const st = {
+  // p-201 · grade em cartões (ver GradeEmCartoes).
+  totalBar: {
+    flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const,
+    gap: 8, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10,
+  },
+  totalBarTxt: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3 },
+  totalBarNum: { fontFamily: Fonts.mono, fontSize: 13, fontWeight: "500" as const, color: Colors.ink },
+  corCartao: {
+    marginBottom: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 14,
+    backgroundColor: Colors.bg3, overflow: "hidden" as const,
+  },
+  corCab: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  corNome: { flex: 1, minWidth: 0, fontFamily: Fonts.body, fontSize: 14, fontWeight: "700" as const, color: Colors.ink },
+  corTotal: { fontFamily: Fonts.mono, fontSize: 12, fontWeight: "500" as const, color: Colors.violet3, flexShrink: 0 },
+  corCorpo: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
+  tamGrade: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: VAO_DOS_TAMANHOS },
+  tamItemFlex: { flexBasis: LARGURA_MIN_DO_TAMANHO, flexGrow: 1 },
+  tamRotulo: {
+    fontFamily: Fonts.mono, fontSize: 11, fontWeight: "500" as const, letterSpacing: 0.4,
+    color: Colors.ink3, marginBottom: 4,
+  },
+  tamCampo: {
+    height: 44, paddingHorizontal: 0, paddingVertical: 0, borderRadius: 11,
+    fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500" as const, textAlign: "center" as const,
+  },
   // 20/11/2026 (em qual loja o produto entra): linha por loja, 44 px no toque.
   lojaLinha: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 10, minHeight: 44,
