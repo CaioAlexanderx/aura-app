@@ -219,20 +219,18 @@ export function FechamentosTab() {
   // Drawer
   const [selected, setSelected] = useState<Row | null>(null);
 
-  // 23/11/2026: nome e CNPJ da loja da linha no cabeçalho do relatório,
-  // como o Caixa passa no dia (company.name e company.cnpj).
-  const lojaDoRelatorio = function(companyId: string): LojaDoRelatorio {
-    if (company?.id === companyId) {
+  // 23/11/2026: nome e CNPJ da loja da linha no cabeçalho do relatório. O
+  // nome é o da linha (a mesma regra de nome da loja do Caixa); o CNPJ, como
+  // o Caixa passa no dia (company.cnpj) ou o da lista de lojas.
+  const lojaDoRelatorio = function(row: Row): LojaDoRelatorio {
+    if (company?.id === row.company_id) {
       return {
-        companyName: company.name || "Sua empresa",
+        companyName: row.company_name,
         companyCnpj: (company as any).cnpj || (company as any).profile?.cnpj || null,
       };
     }
-    const outra: any = (availableCompanies || []).find(function(c: any) { return c.id === companyId; });
-    return {
-      companyName: (outra && (outra.name || outra.trade_name || outra.legal_name)) || "Sua empresa",
-      companyCnpj: (outra && outra.cnpj) || null,
-    };
+    const outra: any = (availableCompanies || []).find(function(c: any) { return c.id === row.company_id; });
+    return { companyName: row.company_name, companyCnpj: (outra && outra.cnpj) || null };
   };
 
   return (
@@ -307,7 +305,7 @@ export function FechamentosTab() {
       <DrawerModal
         row={selected}
         onClose={function() { setSelected(null); }}
-        loja={selected ? lojaDoRelatorio(selected.company_id) : null}
+        loja={selected ? lojaDoRelatorio(selected) : null}
       />
     </View>
   );
