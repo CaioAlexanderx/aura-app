@@ -22,12 +22,18 @@
 // 09/11/2026: "Excluir carnê" no fim da linha de ações, destrutivo discreto
 // (vermelho só no texto). Também aparece no carnê vazio, que não tem as
 // outras ações. A confirmação e os recusados (recebimento, venda) são do shell.
+//
+// 23/11/2026 (F1 do redesenho da ficha, decisão do Caio): um Cobrar só, no
+// alto da ficha — saiu daqui (cobrava a parcela mais antiga da cliente, não a
+// deste carnê). Nomes novos: "Mudar as parcelas", "Dividir em parcelas",
+// "Compras sem carnê" (sem o selo "Sem carnê", que o nome já diz).
 // ============================================================
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/Button";
+import { Fonts } from "@/constants/fonts";
 import { diaMes, type CarneDerivado, type ParcelaAbertaDoCarne } from "@/utils/crediarioCarne";
 import { fmt } from "./fichaHelpers";
 
@@ -41,17 +47,15 @@ export type CarneCardProps<P extends ParcelaAbertaDoCarne> = {
   onImprimir: () => void;
   /** Ausente = sem o botão (carnê sem parcela para renegociar). */
   onRenegociar?: () => void;
-  /** Rótulo do botão de renegociar ("Parcelar saldo" no fiado). */
+  /** Rótulo do botão de renegociar ("Dividir em parcelas" no fiado). */
   renegociarLabel?: string;
-  /** Ausente = cliente sem telefone. */
-  onCobrar?: () => void;
   /** Ausente = sem o botão (grupo sem carnê, carnê cancelado ou juntado). */
   onExcluir?: () => void;
 };
 
 export function CarneCard<P extends ParcelaAbertaDoCarne>({
   carne, expanded, onToggle, renderParcela,
-  onReceber, onImprimir, onRenegociar, renegociarLabel = "Renegociar", onCobrar, onExcluir,
+  onReceber, onImprimir, onRenegociar, renegociarLabel = "Mudar as parcelas", onExcluir,
 }: CarneCardProps<P>) {
   const c = carne;
   const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : Colors.ink3;
@@ -91,9 +95,6 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
           <View style={s.chips}>
             {c.atrasado && (
               <View style={[s.chip, s.chipLate]}><Text style={[s.chipT, { color: Colors.red }]}>Em atraso</Text></View>
-            )}
-            {c.semCarne && (
-              <View style={[s.chip, s.chipOld]}><Text style={[s.chipT, { color: Colors.amber }]}>Sem carnê</Text></View>
             )}
             {!c.atrasado && !c.semCarne && !c.vazio && (
               <View style={[s.chip, s.chipOk]}><Text style={[s.chipT, { color: Colors.green }]}>Em dia</Text></View>
@@ -141,7 +142,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
             <View key={p.id} style={s.row} testID={`carne-${c.key}-paga`}>
               <Text style={[s.rowK, { color: Colors.ink3 }]}>
                 <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
-                {p.installment_number}/{p.total_installments}
+                {`${p.installment_number} de ${p.total_installments}`}
                 {diaMes(p.paid_at) ? ` · paga em ${diaMes(p.paid_at)}` : " · paga"}
               </Text>
               <Text style={[s.rowV, { color: Colors.ink3 }]}>{fmt(p.amount)}</Text>
@@ -155,7 +156,9 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
 
           {c.semParcelas && (
             <Text style={s.nota} testID={`carne-${c.key}-sem-parcelas`}>
-              {c.total && c.total > 0
+              {c.semCarne
+                ? "Compras sem parcelas definidas. Você pode receber qualquer valor, ou dividir esse saldo em parcelas."
+                : c.total && c.total > 0
                 ? `Faltam ${fmt(c.falta)} sem parcela a vencer. Receba qualquer valor pelo botão abaixo.`
                 : "Sem parcelas — à vista no crediário. Receba qualquer valor pelo botão abaixo."}
             </Text>
@@ -176,7 +179,6 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
               <View style={s.acts}>
                 <Acao rotulo="Imprimir" onPress={onImprimir} />
                 {!!onRenegociar && <Acao rotulo={renegociarLabel} onPress={onRenegociar} />}
-                {!!onCobrar && <Acao rotulo="Cobrar" onPress={onCobrar} />}
                 {!!onExcluir && (
                   <Acao rotulo="Excluir carnê" onPress={onExcluir} destrutiva testID={`carne-${c.key}-excluir`} />
                 )}
@@ -224,28 +226,28 @@ const s = StyleSheet.create({
   head: { paddingHorizontal: 14, paddingVertical: 13, minHeight: 48 },
   l1: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 10 },
   // flex:1 + minWidth:0 — nome comprido quebra em linhas; o valor nunca espreme.
-  nome: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: "700", color: Colors.ink },
-  valor: { fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
-  itens: { fontSize: 12.5, color: Colors.ink2, marginTop: 2 },
+  nome: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 14, fontWeight: "700", color: Colors.ink },
+  valor: { fontFamily: Fonts.body, fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] as any },
+  itens: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, marginTop: 2 },
   prog: { height: 6, borderRadius: 99, backgroundColor: Colors.bg4, marginTop: 10, overflow: "hidden" },
   progFill: { height: "100%", backgroundColor: Colors.green, borderRadius: 99 },
   l3: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" },
-  resumo: { flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 12, color: Colors.ink3 },
+  resumo: { fontFamily: Fonts.body, flexGrow: 1, flexShrink: 1, minWidth: 0, fontSize: 12, color: Colors.ink3 },
   chips: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: "auto" as any },
   chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, borderWidth: 1 },
-  chipT: { fontSize: 11, fontWeight: "700" },
+  chipT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700" },
   chipOk: { borderColor: Colors.green + "59", backgroundColor: Colors.greenD },
   chipLate: { borderColor: Colors.red + "66", backgroundColor: Colors.redD },
   chipOld: { borderColor: Colors.amber + "66", backgroundColor: Colors.amberD },
 
   body: { borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
-  lbl: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: Colors.ink3, marginBottom: 6 },
+  lbl: { fontFamily: Fonts.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: Colors.ink3, marginBottom: 6 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, paddingVertical: 5 },
-  rowK: { flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink },
-  rowV: { fontSize: 13, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
+  rowK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink },
+  rowV: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   rowSum: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4, paddingTop: 8 },
   strong: { fontWeight: "700" },
-  nota: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginTop: 6 },
+  nota: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17, marginTop: 6 },
 
   receber: { minHeight: 44, alignSelf: "stretch" },
   acts: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
@@ -255,7 +257,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10, borderRadius: 11,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: "transparent",
   },
-  actT: { fontSize: 13, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  actT: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, textAlign: "center" },
 });
 
 export default CarneCard;

@@ -18,18 +18,24 @@
 // tem carnê e "Quitados · N" recolhido no fim. A derivação de cada cartão
 // está em utils/crediarioCarne (testada sozinha). O selo de periodicidade
 // (Mensal/Quinzenal) saiu do cartão: não está no desenho aprovado.
+//
+// 23/11/2026 (F1 do redesenho da ficha): o Cobrar saiu do cartão do carnê
+// (um Cobrar só, no alto da ficha) e os nomes mudaram — "Parcela 1 de 3",
+// "vence 20/12" (sem o "· no prazo"), "19 dias de atraso", "Mudar as
+// parcelas", "Dividir em parcelas", "Criar carnê vazio".
 // ============================================================
 import { useMemo, useState } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
-import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
+import { diaMes, organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard } from "./CarneCard";
-import { fmt, fmtDate } from "./fichaHelpers";
+import { fmt } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
@@ -85,7 +91,8 @@ export type TabParcelasProps = {
   companyId: string;
   customerId: string;
   phone: string | null;
-  /** `carne` (21/11/2026): cobra a parcela DESTE carnê; id null = grupo sem carnê. */
+  /** 23/11/2026: o carnê não cobra mais (um Cobrar só, no alto da ficha).
+   *  Continua aceito para não mexer em quem já passa. */
   onCobrar?: ((customerId: string, customerName: string, phone: string | null, carne?: { id: string | null }) => void) | undefined;
   name: string;
 };
@@ -95,7 +102,7 @@ export function TabParcelas({
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
   handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, onExcluirCarne, prefill, openBalance,
-  customerId, phone, onCobrar, name,
+  name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
   const [expandedInstId, setExpandedInstId] = useState<string | null>(null);
@@ -127,16 +134,22 @@ export function TabParcelas({
     const chargesTotal = ins.charges_total ?? 0;
     const hasCharges = late && chargesTotal > 0;
     const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
+    const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
+    const venc = diaMes(ins.due_date);
     return (
       <ParcelaRow
         key={ins.id}
-        title={`Parcela ${ins.installment_number}/${ins.total_installments}`}
+        title={`Parcela ${ins.installment_number} de ${ins.total_installments}`}
         subtitle={
           late
-            ? `venceu ${fmtDate(ins.due_date)}${(ins.days_late ?? ins.days_charged ?? 0) > 0 ? ` · ${ins.days_late ?? ins.days_charged}d de atraso` : ""}`
+            ? [
+                `venceu ${venc}`,
+                hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
+                diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
+              ].filter(Boolean).join(" · ")
             : toReview
-              ? `venceu ${fmtDate(ins.due_date)} · anterior ao cadastro do carnê — confira se já foi paga`
-              : `vence ${fmtDate(ins.due_date)} · no prazo`
+              ? `venceu ${venc} · antes de o carnê ser cadastrado — confira se já foi paga`
+              : `vence ${venc}`
         }
         amount={fmt(totalHoje)}
         overdue={late}
@@ -188,7 +201,7 @@ export function TabParcelas({
             accessibilityRole="button"
             testID="carnes-novo-carne"
           >
-            <Text style={[c.linkT, { color: Colors.ink3 }]}>Novo carnê</Text>
+            <Text style={[c.linkT, { color: Colors.ink3 }]}>Criar carnê vazio</Text>
           </Pressable>
         </View>
       </View>
@@ -237,9 +250,7 @@ export function TabParcelas({
                 : podeParcelar ? () => onRenegociar(null, "Saldo em aberto", carne.falta)
                   : undefined
             }
-            renegociarLabel={podeParcelar ? "Parcelar saldo" : "Renegociar"}
-            // 21/11/2026: cobra a parcela deste carnê, não a mais antiga da cliente.
-            onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone, { id: carne.id ?? null }) : undefined}
+            renegociarLabel={podeParcelar ? "Dividir em parcelas" : "Mudar as parcelas"}
             onExcluir={onExcluirCarne && carne.id && !carne.semCarne && excluiveis.has(carne.id)
               ? () => onExcluirCarne({ id: carne.id!, nome: carne.nome, falta: carne.falta })
               : undefined}
@@ -291,7 +302,7 @@ export function TabParcelas({
             onPress={() => onRenegociar(null, "Parcelas em aberto", sumRemaining(openInst))}
           >
             <Icon name="repeat" size={12} color={Colors.violet3} />
-            <Text style={m.newAccTxt}>Renegociar</Text>
+            <Text style={[m.newAccTxt, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
           </Pressable>
           <Pressable
             style={[m.newAccBtn, { gap: 4 }]}
@@ -320,7 +331,7 @@ export function TabParcelas({
         <Button title={`Receber ${fmt(openBalance)}`} variant="primary" size="sm" full onPress={() => prefill(openBalance)} />
         {/* Parcelar saldo (10/07): conecta o fiado a um prazo — abre a renegociação
             com base no saldo sem agenda (backend cai no getUnscheduledBalance). */}
-        <Button title="Parcelar saldo" variant="ghost" size="sm" full onPress={() => onRenegociar(null, "Saldo em aberto", openBalance)} />
+        <Button title="Dividir em parcelas" variant="ghost" size="sm" full onPress={() => onRenegociar(null, "Saldo em aberto", openBalance)} />
       </View>
     </View>
   )}
@@ -345,11 +356,11 @@ const c = StyleSheet.create({
   links: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 14, marginLeft: "auto" as any },
   // Link de texto com alvo de toque de 44px.
   link: { minHeight: 44, justifyContent: "center" },
-  linkT: { fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
+  linkT: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
   done: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
     paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  doneK: { flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
-  doneV: { fontSize: 13, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
+  doneV: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
 });

@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { CreditAccount } from "@/services/creditApi";
 import { Collapsible } from "@/components/anim";
@@ -129,7 +130,7 @@ export function TabConta({
       </View>
       <Text style={c.condTxt}>
         Até {profile.terms.effective.max_installments}x ·{" "}
-        {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% a.m.
+        {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% ao mês
         {profile.terms.effective.due_day != null ? ` · vencimento dia ${profile.terms.effective.due_day}` : ""}
       </Text>
     </View>
@@ -161,12 +162,12 @@ export function TabConta({
       style={c.adjHead}
       onPress={() => setAdjOpen(v => !v)}
       accessibilityRole="button"
-      accessibilityLabel={`Ajustes deste cliente. Toque para ${adjOpen ? "recolher" : "expandir"}`}
+      accessibilityLabel={`Regras só para esta cliente. Toque para ${adjOpen ? "recolher" : "expandir"}`}
     >
       <View style={{ flex: 1 }}>
-        <Text style={m.cardTitle}>Ajustes deste cliente</Text>
-        <Text style={[m.tlSub, { marginTop: 3 }]}>
-          termos personalizados{hasTermsOverride ? " •" : ""} · bloqueio manual{isBlocked ? " •" : ""}
+        <Text style={[m.cardTitle, { fontFamily: Fonts.body }]}>Regras só para esta cliente</Text>
+        <Text style={[m.tlSub, { marginTop: 3, fontFamily: Fonts.body }]}>
+          parcelas e juros{hasTermsOverride ? " •" : ""} · vendas a prazo{isBlocked ? " •" : ""}
         </Text>
       </View>
       <View style={adjOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
@@ -177,20 +178,20 @@ export function TabConta({
     <Collapsible open={adjOpen}>
       {/* Termos personalizados */}
       <View style={c.adjSection}>
-        <Text style={c.adjTitle}>Termos deste cliente</Text>
-        <Text style={m.termsHint}>
-          Substitui as regras padrão da loja só para este cliente. Em branco = padrão; salvar tudo em branco remove o override.
+        <Text style={[c.adjTitle, { fontFamily: Fonts.body }]}>Parcelas e juros</Text>
+        <Text style={[m.termsHint, { fontFamily: Fonts.body }]}>
+          Deixe em branco para usar a regra da loja.
         </Text>
         {!!profile?.terms?.effective && (
           <View style={m.termsEffRow}>
-            <Text style={m.termsEffLbl}>Efetivo agora</Text>
+            <Text style={[m.termsEffLbl, { fontFamily: Fonts.body }]}>Valendo agora</Text>
             <Text style={m.termsEffVal}>
               {profile.terms.effective.max_installments}x ·{" "}
-              {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% a.m.
+              {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% ao mês
             </Text>
           </View>
         )}
-        <Text style={[m.fieldLabel, { marginTop: 14 }]}>Máx. parcelas</Text>
+        <Text style={[m.fieldLabel, { marginTop: 14, fontFamily: Fonts.body }]}>Máximo de parcelas</Text>
         <TextInput
           style={m.termsInput}
           value={ajustes.termsMaxInst}
@@ -215,19 +216,19 @@ export function TabConta({
         >
           {ajustes.savingTerms
             ? <ActivityIndicator color="#fff" />
-            : <Text style={m.ctaTxt}>Salvar termos</Text>}
+            : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar regras</Text>}
         </Pressable>
       </View>
 
       {/* Bloqueio manual */}
       <View style={c.adjSection}>
-        <Text style={c.adjTitle}>Bloqueio manual</Text>
-        <Text style={m.termsHint}>
-          Impede novas vendas a prazo para este cliente. Diferente do score — score baixo nunca bloqueia, só avisa.
+        <Text style={[c.adjTitle, { fontFamily: Fonts.body }]}>Vendas a prazo</Text>
+        <Text style={[m.termsHint, { fontFamily: Fonts.body }]}>
+          Ao bloquear, ela não compra mais a prazo até você liberar de novo.
         </Text>
         <View style={[m.blockRow, { borderTopWidth: 0, paddingVertical: 4 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={m.blockLabel}>{isBlocked ? "Cliente bloqueado" : "Cliente ativo"}</Text>
+            <Text style={[m.blockLabel, { fontFamily: Fonts.body }]}>{isBlocked ? "Bloqueadas para esta cliente" : "Liberadas para esta cliente"}</Text>
             {isBlocked && !!profile?.blocked_reason && (
               <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
             )}

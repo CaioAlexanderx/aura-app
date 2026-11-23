@@ -1,32 +1,42 @@
 // ============================================================
-// TabHistorico — Aura · Crediário (F3 do redesign; spec §2.3)
+// TabHistorico — Aura · Crediário · Movimentações
 //
-// F3: legenda de cores no topo (● pagamento ● compra ● ajuste);
-// confirmações "Devolver"/"Excluir" migram do Sim/Não inline para o
-// <ConfirmGate> (padrão único, slide-down animado); alvos de ação
-// sobem para ≥40px. Auto-load ao abrir a aba já acontece no shell.
+// 23/11/2026 (F1 do redesenho da ficha, mockup aprovado pelo Caio): o antigo
+// "Histórico · Linha do tempo" vira "Movimentações", na língua da lojista:
+//  - verbo no lugar do tipo ("Pagou no Pix", "Comprou", "Valor lançado à mão
+//    pela loja"), sem legenda de cores e sem o botão Atualizar (a lista já
+//    recarrega depois de cada ação);
+//  - sinal do ponto de vista da dívida: "−" verde diminui, "+" neutro aumenta
+//    (comprar não é erro);
+//  - mês como cabeçalho, dia curto na linha;
+//  - "Para onde foi o dinheiro": cada parcela "paga inteira", "abateu R$ X" ou
+//    "sobra do pagamento", com "vence dd/mm · hoje faltam R$ Y" tirado das
+//    parcelas abertas da ficha (utils/crediarioMovimentacao, testada sozinha);
+//  - uma ação à vista por linha (Recibo, Devolver itens) e o raro no "⋯":
+//    Corrigir/Remover este pagamento, Excluir este lançamento. O "⋯" abre um
+//    menu embaixo da linha com toque — nada depende de passar o mouse.
+//
 // Lógica preservada: recibo, devolução (B4/B5), excluir manual_debit,
-// paginação por cursor.
-//
-// 08/10/2026 (Looks da Jenny — R$ 200 na ficha da cliente errada, sem ter
-// como tirar): cada pagamento mostra, por carnê, as parcelas em que caiu e
-// ganha "Editar" (valor, dia, forma, cliente) e "Remover". Sem prazo. O
-// pagamento antigo, sem a divisão por parcela gravada, avisa que a correção é
-// pelo suporte em vez de esconder os botões sem explicar.
+// editar/remover pagamento (08/10, Looks da Jenny), paginação por cursor.
 // ============================================================
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { creditApi, printReceipt, type CreditHistoryEvent } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
 import { ConfirmGate } from "@/components/ConfirmGate";
-import { fmt, fmtDate } from "./fichaHelpers";
+import { fmt } from "./fichaHelpers";
 import { eventNote } from "./eventNote";
 import { m } from "./fichaStyles";
 import { carregarVendaParaDevolucao } from "./vendaParaDevolucao";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
-import { gruposPorCarne, diaSP } from "@/utils/crediarioPagamento";
+import { diaSP } from "@/utils/crediarioPagamento";
+import {
+  agruparPorMes, diaDoEvento, diaEmSaoPaulo, diminuiADivida, paraOndeFoiODinheiro,
+  tituloDoEvento, valorComSinal, type ParcelaAbertaDaFicha,
+} from "@/utils/crediarioMovimentacao";
 import { EditarPagamentoModal, type PagamentoEmEdicao } from "./EditarPagamentoModal";
 import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
@@ -43,12 +53,16 @@ export type TabHistoricoProps = {
   customerId: string;
   /** Nome da cliente da ficha — vai para o "Corrigir pagamento". */
   customerName?: string;
+  /** Parcelas abertas da ficha: o "hoje faltam" de cada parcela paga em parte. */
+  openInst?: ParcelaAbertaDaFicha[];
   onRefresh: () => void;
 };
 
+const NUM = { fontVariant: ["tabular-nums"] as any };
+
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
-  companyId, customerId, customerName, onRefresh,
+  companyId, customerId, customerName, openInst, onRefresh,
 }: TabHistoricoProps) {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [loadingRefundId, setLoadingRefundId] = useState<string | null>(null);
@@ -61,10 +75,15 @@ export function TabHistorico({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [editando, setEditando] = useState<PagamentoEmEdicao | null>(null);
+  // "⋯" aberto (um por vez).
+  const [menuDe, setMenuDe] = useState<string | null>(null);
   // 10/11/2026 (NFS-e automática, tela 5): a compra no crediário com serviço
   // mostra a nota de serviço da venda (o recebimento não é origem: a nota é
   // a da venda). Só consulta com a emissão automática ligada na loja.
   const { ativa: nfseAtiva } = useNfseAutomaticaConfig(companyId);
+
+  const meses = useMemo(() => agruparPorMes(histEvents), [histEvents]);
+  const hoje = diaEmSaoPaulo(new Date().toISOString());
 
   function recarregar() {
     onRefresh();
@@ -125,7 +144,7 @@ export function TabHistorico({
   }
 
   // Exclui um lançamento manual (manual_debit) via DELETE /credit/transaction/:id.
-  // Após sucesso, recarrega a timeline do zero (evita paginação inconsistente) e
+  // Após sucesso, recarrega a lista do zero (evita paginação inconsistente) e
   // invalida saldo/perfil via onRefresh (mesmo callback usado pela devolução).
   async function handleDelete(transactionId: string) {
     setDeletingId(transactionId);
@@ -151,26 +170,221 @@ export function TabHistorico({
     }
   }
 
+  function renderEvento(ev: CreditHistoryEvent) {
+    const diminui = diminuiADivida(ev.amount);
+    const isPrinting = printingId === ev.id;
+    const isLoadingRefund = loadingRefundId === ev.id;
+    const canRefund = ev.type === "purchase" && !!ev.sale_id;
+    // Só lançamento manual (sem venda/parcela vinculada) pode ser excluído por
+    // aqui — purchase/payment/refund têm efeitos colaterais (parcelas, estoque,
+    // venda) que o endpoint genérico de "undo" pode não reverter corretamente.
+    const canDelete = ev.type === "manual_debit";
+    const isDeleting = deletingId === ev.id;
+    const isPayment = ev.type === "payment";
+    const grupos = isPayment ? paraOndeFoiODinheiro(ev.payment?.allocations, openInst, hoje) : [];
+    const canEditPayment = isPayment && ev.payment?.can_edit === true;
+    // Backend novo respondeu (can_edit veio) mas o pagamento é anterior à
+    // divisão por parcela: explica em vez de só não mostrar as opções.
+    const pagamentoAntigo = isPayment && ev.payment?.can_edit === false;
+    const isRemoving = removingId === ev.id;
+    // 21/09/2026: descrição digitada no lançamento (meta.notes).
+    const note = eventNote(ev);
+    const temMais = canEditPayment || canDelete;
+    const menuAberto = menuDe === ev.id;
+
+    return (
+      <View key={ev.id} style={lc.ev} testID={`crediario-mov-${ev.id}`}>
+        <Text style={lc.dia}>{diaDoEvento(ev.occurred_at)}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={lc.topo}>
+            <Text style={lc.titulo}>{tituloDoEvento(ev)}</Text>
+            <Text style={[lc.valor, { color: diminui ? Colors.green : Colors.ink }]}>
+              {valorComSinal(ev.amount)}
+            </Text>
+          </View>
+          {!!note && <Text style={lc.note} selectable>{ev.type === "manual_debit" ? `“${note}”` : note}</Text>}
+          {ev.items && ev.items.length > 0 && (
+            <View style={lc.itemList}>
+              {ev.items.map((it, idx) => (
+                <View key={idx} style={lc.ln}>
+                  <Text style={lc.lnTxt} numberOfLines={1}>{`${it.quantity}× ${it.product_name}`}</Text>
+                  {/* INC-2026-11-20-01: o backend manda o total em reais (sale_items.total_price), nao em centavos. */}
+                  <Text style={lc.lnVal}>{fmt(it.total)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {nfseAtiva && ev.type === "purchase" && !!ev.sale_id && (
+            <NfseDaOrigem companyId={companyId} tipo="venda" id={ev.sale_id} origem="cobranca" style={{ marginTop: 8 }} testID={`crediario-nfse-${ev.id}`} />
+          )}
+          {grupos.length > 0 && (
+            <View style={{ gap: 6, marginTop: 4 }} testID={`crediario-pagamento-parcelas-${ev.id}`}>
+              {grupos.map((g) => (
+                <View key={g.chave}>
+                  <Text style={lc.onde} numberOfLines={1}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
+                  {g.linhas.map((l) => (
+                    <View key={l.id} style={lc.ln}>
+                      <Text style={[lc.marca, { color: l.tipo === "inteira" ? Colors.green : Colors.amber }]}>
+                        {l.tipo === "inteira" ? "✓" : "◐"}
+                      </Text>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={lc.lnTxt}>{l.rotulo}</Text>
+                        {!!l.detalhe && <Text style={lc.lnSub}>{l.detalhe}</Text>}
+                      </View>
+                      <Text style={lc.lnVal}>{fmt(l.valor)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
+          {pagamentoAntigo && (
+            <Text style={lc.antigo}>
+              Pagamento antigo: a Aura não guardou em quais parcelas ele entrou. Para corrigir ou remover, fale com a gente.
+            </Text>
+          )}
+
+          {/* Uma ação à vista (Recibo ou Devolver itens); o raro no "⋯". */}
+          {(isPayment || canRefund || temMais) && (
+            <View style={lc.acoes}>
+              {isPayment && (
+                <Pressable
+                  style={[lc.acao, isPrinting && { opacity: 0.5 }]}
+                  onPress={() => handlePrintReceipt(ev.id)}
+                  disabled={isPrinting}
+                  accessibilityRole="button"
+                  testID={`crediario-mov-recibo-${ev.id}`}
+                >
+                  {isPrinting
+                    ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 12, height: 12 }} />
+                    : <Icon name="printer" size={12} color={Colors.violet3} />}
+                  <Text style={lc.acaoTxt}>Recibo</Text>
+                </Pressable>
+              )}
+              {canRefund && (
+                <Pressable
+                  style={[lc.acao, isLoadingRefund && { opacity: 0.5 }]}
+                  onPress={() => { setMenuDe(null); setConfirmDeleteId(null); setConfirmRefundId(prev => prev === ev.id ? null : ev.id); }}
+                  disabled={isLoadingRefund}
+                  accessibilityRole="button"
+                  testID={`crediario-mov-devolver-${ev.id}`}
+                >
+                  {isLoadingRefund
+                    ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 12, height: 12 }} />
+                    : <Icon name="repeat" size={12} color={Colors.violet3} />}
+                  <Text style={lc.acaoTxt}>Devolver itens</Text>
+                </Pressable>
+              )}
+              {temMais && (
+                <Pressable
+                  style={[lc.mais, menuAberto && lc.maisOn]}
+                  onPress={() => { setConfirmRemoveId(null); setConfirmDeleteId(null); setMenuDe(menuAberto ? null : ev.id); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mais ações"
+                  accessibilityState={{ expanded: menuAberto }}
+                  testID={`crediario-mov-mais-${ev.id}`}
+                >
+                  <Text style={lc.maisTxt}>⋯</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {menuAberto && (
+            <View style={lc.menu} testID={`crediario-mov-menu-${ev.id}`}>
+              {canEditPayment && (
+                <Pressable
+                  style={lc.menuItem}
+                  onPress={() => {
+                    setMenuDe(null);
+                    setConfirmRemoveId(null);
+                    setEditando({
+                      id: ev.id,
+                      amount: Math.abs(ev.amount),
+                      method: ev.payment?.method || null,
+                      paidAt: diaSP(ev.occurred_at),
+                      customerId,
+                      customerName: customerName || "esta cliente",
+                    });
+                  }}
+                  disabled={isRemoving}
+                  accessibilityRole="button"
+                  testID={`crediario-pagamento-editar-${ev.id}`}
+                >
+                  <Text style={lc.menuTxt}>Corrigir este pagamento</Text>
+                </Pressable>
+              )}
+              {canEditPayment && (
+                <Pressable
+                  style={[lc.menuItem, isRemoving && { opacity: 0.5 }]}
+                  onPress={() => { setMenuDe(null); setConfirmRemoveId(ev.id); }}
+                  disabled={isRemoving}
+                  accessibilityRole="button"
+                  testID={`crediario-pagamento-remover-${ev.id}`}
+                >
+                  <Text style={[lc.menuTxt, { color: Colors.red }]}>Remover este pagamento</Text>
+                </Pressable>
+              )}
+              {canDelete && (
+                <Pressable
+                  style={[lc.menuItem, isDeleting && { opacity: 0.5 }]}
+                  onPress={() => { setMenuDe(null); setConfirmRefundId(null); setConfirmDeleteId(ev.id); }}
+                  disabled={isDeleting}
+                  accessibilityRole="button"
+                  testID={`crediario-mov-excluir-${ev.id}`}
+                >
+                  <Text style={[lc.menuTxt, { color: Colors.red }]}>Excluir este lançamento</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* ConfirmGate — padrão único de confirmação sensível (F3) */}
+          {canRefund && (
+            <ConfirmGate
+              visible={confirmRefundId === ev.id}
+              message={`Devolver itens da compra de ${fmt(Math.abs(ev.amount))}?`}
+              confirmLabel="Sim, devolver"
+              onConfirm={() => { setConfirmRefundId(null); openRefund(ev); }}
+              onCancel={() => setConfirmRefundId(null)}
+              loading={isLoadingRefund}
+            />
+          )}
+          {canEditPayment && (
+            <ConfirmGate
+              visible={confirmRemoveId === ev.id}
+              message={`Remover o pagamento de ${fmt(Math.abs(ev.amount))}? As parcelas que ele pagou voltam a ficar em aberto.`}
+              confirmLabel="Sim, remover"
+              tone="red"
+              onConfirm={() => { setConfirmRemoveId(null); handleRemovePayment(ev.id); }}
+              onCancel={() => setConfirmRemoveId(null)}
+              loading={isRemoving}
+            />
+          )}
+          {canDelete && (
+            <ConfirmGate
+              visible={confirmDeleteId === ev.id}
+              message={`Excluir este lançamento de ${fmt(Math.abs(ev.amount))}? Isso não pode ser desfeito.`}
+              confirmLabel="Sim, excluir"
+              tone="red"
+              onConfirm={() => { setConfirmDeleteId(null); handleDelete(ev.id); }}
+              onCancel={() => setConfirmDeleteId(null)}
+              loading={isDeleting}
+            />
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
 <View>
   <View style={m.card}>
-    <View style={m.cardTitleRow}>
-      <Text style={m.cardTitle}>Linha do tempo</Text>
-      <Pressable
-        style={[m.newAccBtn, { minHeight: 32 }]}
-        onPress={() => { setHistLoaded(false); loadHistory(); }}
-        disabled={histLoading}
-      >
-        <Icon name="refresh_cw" size={11} color={Colors.violet3} />
-        <Text style={m.newAccTxt}>Atualizar</Text>
-      </Pressable>
-    </View>
-
-    {/* F3: legenda de cores — antes os dots não tinham significado descobrível */}
-    <View style={lc.legendRow}>
-      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.green }]} /><Text style={lc.legendTxt}>pagamento</Text></View>
-      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.violet3 }]} /><Text style={lc.legendTxt}>compra</Text></View>
-      <View style={lc.legendItem}><View style={[lc.legendDot, { backgroundColor: Colors.amber }]} /><Text style={lc.legendTxt}>débito/ajuste</Text></View>
+    <View style={lc.cab}>
+      {/* Fonte do título inline: estilo inline vence a regra global de fonte
+          do painel (app/(tabs)/_layout.tsx); a classe do StyleSheet não. */}
+      <Text style={[lc.cabTitulo, { fontFamily: Fonts.heading }]}>Movimentações</Text>
+      <Text style={lc.cabSub}>mais recentes primeiro</Text>
     </View>
 
     {histLoading && histEvents.length === 0 && (
@@ -184,219 +398,27 @@ export function TabHistorico({
         style={[m.cta, { marginVertical: 10 }]}
         onPress={() => loadHistory()}
       >
-        <Text style={m.ctaTxt}>Carregar histórico</Text>
+        <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Carregar movimentações</Text>
       </Pressable>
     )}
 
     {histEvents.length === 0 && histLoaded && !histLoading && (
-      <Text style={m.emptyTxt}>Sem eventos no histórico.</Text>
+      <Text style={[m.emptyTxt, { fontFamily: Fonts.body }]}>Nenhuma movimentação ainda.</Text>
     )}
 
-    {histEvents.map((ev) => {
-      const isCredit = ev.amount < 0;
-      const typeLabels: Record<string, string> = {
-        purchase: "Compra",
-        manual_debit: "Débito manual",
-        payment: "Pagamento",
-        exchange_credit: "Crédito de troca",
-        // INC-2026-11-17-03: crédito usado numa venda do Caixa.
-        credit_use: "Crédito usado na compra",
-        refund: "Devolução",
-      };
-      const typeLabel = typeLabels[ev.type] ?? ev.type;
-      const methodStr = ev.payment?.method ? ` · ${ev.payment.method}` : "";
-      const isPrinting = printingId === ev.id;
-      const isLoadingRefund = loadingRefundId === ev.id;
-      const canRefund = ev.type === "purchase" && !!ev.sale_id;
-      // Só lançamento manual (sem venda/parcela vinculada) pode ser excluído pela
-      // timeline — purchase/payment/refund têm efeitos colaterais (parcelas, estoque,
-      // venda) que o endpoint genérico de "undo" pode não reverter corretamente.
-      const canDelete = ev.type === "manual_debit";
-      const isDeleting = deletingId === ev.id;
-      // Pagamento: parcelas que ele cobriu, por carnê, e se dá para corrigir.
-      const isPayment = ev.type === "payment";
-      const grupos = isPayment ? gruposPorCarne(ev.payment?.allocations) : [];
-      const canEditPayment = isPayment && ev.payment?.can_edit === true;
-      // Backend novo respondeu (can_edit veio) mas o pagamento é anterior à
-      // divisão por parcela: explica em vez de só não mostrar os botões.
-      const pagamentoAntigo = isPayment && ev.payment?.can_edit === false;
-      const isRemoving = removingId === ev.id;
-      // 21/09/2026: descrição digitada no lançamento (meta.notes) — chegava do
-      // backend e nunca aparecia; todo lançamento virava só "Débito manual".
-      const note = eventNote(ev);
-      return (
-        <View key={ev.id} style={m.tlItem}>
-          <View style={[m.tlDot, { backgroundColor: isCredit ? Colors.green : (ev.type === "purchase" ? Colors.violet3 : Colors.amber) }]} />
-          <View style={{ flex: 1 }}>
-            <View style={m.tlLine}>
-              <Text style={m.tlMain}>{typeLabel}{methodStr}</Text>
-              <Text style={[m.tlAmt, { color: isCredit ? Colors.green : Colors.red }]}>
-                {isCredit ? "" : "+"}{fmt(Math.abs(ev.amount))}
-              </Text>
-            </View>
-            <Text style={m.tlSub}>{fmtDate(ev.occurred_at)}</Text>
-            {!!note && <Text style={lc.note} selectable>{note}</Text>}
-            {ev.items && ev.items.length > 0 && (
-              <View style={lc.itemList}>
-                {ev.items.map((it, idx) => (
-                  <View key={idx} style={lc.itemRow}>
-                    <Text style={lc.itemQty}>{it.quantity}×</Text>
-                    <Text style={lc.itemName} numberOfLines={1}>{it.product_name}</Text>
-                    {/* INC-2026-11-20-01: o backend manda o total em reais (sale_items.total_price), nao em centavos. */}
-                    <Text style={lc.itemTotal}>{fmt(it.total)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {nfseAtiva && ev.type === "purchase" && !!ev.sale_id && (
-              <NfseDaOrigem companyId={companyId} tipo="venda" id={ev.sale_id} origem="cobranca" style={{ marginTop: 8 }} testID={`crediario-nfse-${ev.id}`} />
-            )}
-            {grupos.length > 0 && (
-              <View style={lc.alocBox} testID={`crediario-pagamento-parcelas-${ev.id}`}>
-                {grupos.map((g) => (
-                  <View key={g.chave} style={{ gap: 2 }}>
-                    <Text style={lc.alocCarne} numberOfLines={1}>{g.nome}</Text>
-                    {g.linhas.map((l) => (
-                      <View key={l.id} style={lc.alocRow}>
-                        <Text style={lc.alocLabel} numberOfLines={1}>
-                          {l.rotulo}{l.quitou ? " · quitada" : " · parcial"}
-                        </Text>
-                        <Text style={lc.alocVal}>{fmt(l.valor)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
-            {pagamentoAntigo && (
-              <Text style={lc.alocAntigo}>
-                Pagamento antigo, sem a divisão por parcela gravada. Para corrigir ou remover, fale com o suporte.
-              </Text>
-            )}
-            {/* Ações: Recibo (payments), Devolver (purchases com sale_id) e Excluir (manual_debit) */}
-            {(ev.type === "payment" || canRefund || canDelete) && (
-              <View style={lc.actionRow}>
-                {ev.type === "payment" && (
-                  <Pressable
-                    style={[lc.actionBtn, isPrinting && { opacity: 0.5 }]}
-                    onPress={() => handlePrintReceipt(ev.id)}
-                    disabled={isPrinting}
-                    hitSlop={4}
-                  >
-                    {isPrinting
-                      ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 12, height: 12 }} />
-                      : <Icon name="printer" size={12} color={Colors.violet3} />}
-                    <Text style={lc.actionBtnTxt}>Recibo</Text>
-                  </Pressable>
-                )}
-                {canEditPayment && (
-                  <Pressable
-                    style={lc.actionBtn}
-                    onPress={() => {
-                      setConfirmRemoveId(null);
-                      setEditando({
-                        id: ev.id,
-                        amount: Math.abs(ev.amount),
-                        method: ev.payment?.method || null,
-                        paidAt: diaSP(ev.occurred_at),
-                        customerId,
-                        customerName: customerName || "esta cliente",
-                      });
-                    }}
-                    disabled={isRemoving}
-                    hitSlop={4}
-                    testID={`crediario-pagamento-editar-${ev.id}`}
-                  >
-                    <Icon name="edit" size={12} color={Colors.violet3} />
-                    <Text style={lc.actionBtnTxt}>Editar</Text>
-                  </Pressable>
-                )}
-                {canEditPayment && (
-                  <Pressable
-                    style={[lc.actionBtn, lc.actionBtnRed, isRemoving && { opacity: 0.5 }]}
-                    onPress={() => setConfirmRemoveId(prev => prev === ev.id ? null : ev.id)}
-                    disabled={isRemoving}
-                    hitSlop={4}
-                    testID={`crediario-pagamento-remover-${ev.id}`}
-                  >
-                    {isRemoving
-                      ? <ActivityIndicator size="small" color={Colors.red} style={{ width: 12, height: 12 }} />
-                      : <Icon name="trash" size={12} color={Colors.red} />}
-                    <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Remover</Text>
-                  </Pressable>
-                )}
-                {canRefund && (
-                  <Pressable
-                    style={[lc.actionBtn, lc.actionBtnAmber, isLoadingRefund && { opacity: 0.5 }]}
-                    onPress={() => { setConfirmDeleteId(null); setConfirmRefundId(prev => prev === ev.id ? null : ev.id); }}
-                    disabled={isLoadingRefund}
-                    hitSlop={4}
-                  >
-                    {isLoadingRefund
-                      ? <ActivityIndicator size="small" color={Colors.amber} style={{ width: 12, height: 12 }} />
-                      : <Icon name="repeat" size={12} color={Colors.amber} />}
-                    <Text style={[lc.actionBtnTxt, { color: Colors.amber }]}>Devolver</Text>
-                  </Pressable>
-                )}
-                {canDelete && (
-                  <Pressable
-                    style={[lc.actionBtn, lc.actionBtnRed, isDeleting && { opacity: 0.5 }]}
-                    onPress={() => { setConfirmRefundId(null); setConfirmDeleteId(prev => prev === ev.id ? null : ev.id); }}
-                    disabled={isDeleting}
-                    hitSlop={4}
-                  >
-                    {isDeleting
-                      ? <ActivityIndicator size="small" color={Colors.red} style={{ width: 12, height: 12 }} />
-                      : <Icon name="trash" size={12} color={Colors.red} />}
-                    <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Excluir</Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-            {/* ConfirmGate — padrão único de confirmação sensível (F3) */}
-            {canRefund && (
-              <ConfirmGate
-                visible={confirmRefundId === ev.id}
-                message={`Devolver itens da compra de ${fmt(Math.abs(ev.amount))}?`}
-                confirmLabel="Sim, devolver"
-                onConfirm={() => { setConfirmRefundId(null); openRefund(ev); }}
-                onCancel={() => setConfirmRefundId(null)}
-                loading={isLoadingRefund}
-              />
-            )}
-            {canEditPayment && (
-              <ConfirmGate
-                visible={confirmRemoveId === ev.id}
-                message={`Remover o pagamento de ${fmt(Math.abs(ev.amount))}? As parcelas que ele pagou voltam a ficar em aberto.`}
-                confirmLabel="Sim, remover"
-                tone="red"
-                onConfirm={() => { setConfirmRemoveId(null); handleRemovePayment(ev.id); }}
-                onCancel={() => setConfirmRemoveId(null)}
-                loading={isRemoving}
-              />
-            )}
-            {canDelete && (
-              <ConfirmGate
-                visible={confirmDeleteId === ev.id}
-                message={`Excluir o débito manual de ${fmt(Math.abs(ev.amount))}? Isso não pode ser desfeito.`}
-                confirmLabel="Sim, excluir"
-                tone="red"
-                onConfirm={() => { setConfirmDeleteId(null); handleDelete(ev.id); }}
-                onCancel={() => setConfirmDeleteId(null)}
-                loading={isDeleting}
-              />
-            )}
-          </View>
-        </View>
-      );
-    })}
+    {meses.map((g) => (
+      <View key={g.mes + g.eventos[0]?.id}>
+        <Text style={lc.mes}>{g.mes}</Text>
+        {g.eventos.map(renderEvento)}
+      </View>
+    ))}
 
     {histCursor && !histLoading && (
       <Pressable
         style={[m.cta, { marginTop: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
         onPress={() => loadHistory(histCursor)}
       >
-        <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Carregar mais</Text>
+        <Text style={[m.ctaTxt, { color: Colors.ink2, fontFamily: Fonts.body }]}>Carregar mais</Text>
       </Pressable>
     )}
     {histLoading && histEvents.length > 0 && (
@@ -434,84 +456,45 @@ export function TabHistorico({
 }
 
 const lc = StyleSheet.create({
-  legendRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  cab: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 },
+  cabTitulo: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink },
+  cabSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3 },
+  mes: {
+    fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: Colors.ink3,
+    textTransform: "uppercase", letterSpacing: 0.5, marginTop: 12, marginBottom: 2,
   },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendTxt: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600" },
-  note: { fontSize: 12, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
-  alocBox: {
-    marginTop: 6, gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 9,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2,
+  ev: { flexDirection: "row", gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  dia: { fontFamily: Fonts.body, width: 44, fontSize: 12, fontWeight: "600", color: Colors.ink3, paddingTop: 1 },
+  topo: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
+  titulo: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, fontWeight: "700", color: Colors.ink },
+  valor: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "800", ...NUM },
+  note: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
+  onde: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 4, marginBottom: 2 },
+  itemList: { marginTop: 4, gap: 1 },
+  ln: { flexDirection: "row", alignItems: "flex-start", gap: 7, paddingVertical: 2 },
+  marca: { fontFamily: Fonts.body, width: 14, fontSize: 12.5, fontWeight: "800" },
+  lnTxt: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 12.5, color: Colors.ink2 },
+  lnSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
+  lnVal: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink, ...NUM },
+  antigo: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 5, lineHeight: 16 },
+  acoes: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 7 },
+  // Alvo ≥40px (toque).
+  acao: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, minHeight: 40, borderRadius: 9,
+    borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
-  alocCarne: { fontSize: 10.5, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.3 },
-  alocRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  alocLabel: { flex: 1, fontSize: 12, color: Colors.ink2 },
-  alocVal: { fontSize: 12, fontWeight: "700", color: Colors.ink },
-  alocAntigo: { fontSize: 11.5, color: Colors.ink3, marginTop: 5, lineHeight: 16 },
-  itemList: {
-    marginTop: 5,
-    gap: 3,
+  acaoTxt: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
+  mais: {
+    width: 40, minHeight: 40, borderRadius: 9, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  maisOn: { borderColor: Colors.violet2, backgroundColor: Colors.violetD },
+  maisTxt: { fontFamily: Fonts.body, fontSize: 16, fontWeight: "800", color: Colors.ink2, lineHeight: 18 },
+  menu: {
+    marginTop: 6, padding: 4, borderRadius: 11, gap: 2,
+    borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
-  itemQty: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: Colors.violet3,
-    minWidth: 20,
-  },
-  itemName: {
-    flex: 1,
-    fontSize: 11,
-    color: Colors.ink2,
-  },
-  itemTotal: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: Colors.ink,
-  },
-  actionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    marginTop: 6,
-    gap: 8,
-  },
-  // F3: alvo ≥40px (antes pv 4 / fonte 11)
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    minHeight: 40,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: Colors.border2,
-    backgroundColor: Colors.bg2,
-  },
-  actionBtnAmber: {
-    borderColor: Colors.amber + "55",
-    backgroundColor: Colors.amberD,
-  },
-  actionBtnRed: {
-    borderColor: Colors.red + "55",
-    backgroundColor: Colors.redD,
-  },
-  actionBtnTxt: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.violet3,
-  },
+  menuItem: { minHeight: 40, justifyContent: "center", paddingHorizontal: 10, borderRadius: 8 },
+  menuTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "600", color: Colors.ink },
 });

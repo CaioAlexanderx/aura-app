@@ -9,7 +9,7 @@
 //   - fiado (sem parcelas): sem barra, com o aviso, sem Renegociar;
 //   - backend antigo: nome, saldo e parcelas, sem quebrar.
 // TabParcelas:
-//   - um cartão por carnê em aberto, "Compras anteriores" e Quitados
+//   - um cartão por carnê em aberto, "Compras sem carnê" e Quitados
 //     recolhido; Receber do cartão mira o carnê dele; Imprimir todos.
 // ============================================================
 import React from "react";
@@ -94,8 +94,8 @@ describe("CarneCard", () => {
     expect(txt).toContain("Itens da compra");
     expect(txt).toContain("Total da compra");
     expect(txt).toContain("R$ 280,00");
-    expect(txt).toContain("1/4 · paga em 13/09");
-    expect(txt).toContain("2/4 · paga em 08/10");
+    expect(txt).toContain("1 de 4 · paga em 13/09");
+    expect(txt).toContain("2 de 4 · paga em 08/10");
     expect(txt).toContain("[parcela 3/4]");
     expect(txt).toContain("[parcela 4/4]");
     expect(porId(t, "carne-c1-paga")).toHaveLength(2);
@@ -104,10 +104,10 @@ describe("CarneCard", () => {
     expect(props.onReceber).toHaveBeenCalled();
     apertarRotulo(t, "Imprimir");
     expect(props.onImprimir).toHaveBeenCalled();
-    apertarRotulo(t, "Renegociar");
+    apertarRotulo(t, "Mudar as parcelas");
     expect(props.onRenegociar).toHaveBeenCalled();
-    apertarRotulo(t, "Cobrar");
-    expect(props.onCobrar).toHaveBeenCalled();
+    // 23/11/2026: um Cobrar só, no alto da ficha — o carnê não cobra.
+    expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
   });
 
   it("em atraso: chip vermelho no lugar do Em dia", () => {
@@ -125,7 +125,7 @@ describe("CarneCard", () => {
     expect(porId(t, "carne-c1-sem-parcelas")).toHaveLength(1);
     expect(txt).toContain("sem parcelas — à vista no crediário");
     expect(txt).toContain("Receber R$ 220,00");
-    expect(t.root.findAllByProps({ accessibilityLabel: "Renegociar" })).toHaveLength(0);
+    expect(t.root.findAllByProps({ accessibilityLabel: "Mudar as parcelas" })).toHaveLength(0);
     expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
   });
 
@@ -142,7 +142,7 @@ describe("CarneCard", () => {
     expect(txt).toContain("Receber R$ 140,00");
   });
 
-  it("grupo sem carnê: Compras anteriores, chip Sem carnê e compras por compra", () => {
+  it("grupo sem carnê: Compras sem carnê (sem o selo) e compras por compra", () => {
     const geral = {
       id: null, name: "Conta geral", balance: 180, remaining: 180, total_count: 1, paid_count: 0,
       purchases: [
@@ -153,8 +153,8 @@ describe("CarneCard", () => {
     };
     const { t } = montarCartao(geral, [parcela({ id: "g1", account_id: null, installment_number: 1, total_installments: 1 })], { expanded: true });
     const txt = texto(t.toJSON());
-    expect(txt).toContain("Compras anteriores");
-    expect(txt).toContain("Sem carnê");
+    expect(txt).toContain("Compras sem carnê");
+    expect(txt).not.toContain("Sem carnê");
     expect(txt).toContain("2 compras de antes dos carnês por compra");
     expect(txt).toContain("13/09 · Slide Asuna 40/41, Slide Alta 40/41");
     expect(txt).toContain("02/09 · Lançamento manual");
@@ -186,7 +186,7 @@ describe("TabParcelas — aba de carnês", () => {
     return { t, props };
   }
 
-  it("um cartão por carnê em aberto, Compras anteriores e Quitados recolhido", () => {
+  it("um cartão por carnê em aberto, Compras sem carnê e Quitados recolhido", () => {
     const { t } = montarAba();
     const txt = texto(t.toJSON());
     expect(txt).toContain("Em aberto · 2");
@@ -206,31 +206,33 @@ describe("TabParcelas — aba de carnês", () => {
     expect(props.setExpandedAccountId).toHaveBeenCalledWith("c1");
   });
 
-  it("aberto: Receber mira o carnê; Imprimir e Renegociar levam o carnê; parcela usa o ParcelaRow", () => {
+  it("aberto: Receber mira o carnê; Imprimir e Mudar as parcelas levam o carnê; parcela usa o ParcelaRow", () => {
     const { t, props } = montarAba({ expandedAccountId: "c1" });
-    expect(texto(t.toJSON())).toContain("Parcela 3/4");
+    expect(texto(t.toJSON())).toContain("Parcela 3 de 4");
     apertarRotulo(t, "Receber R$ 140,00");
     expect(props.prefill).toHaveBeenCalledWith(140, "c1");
     apertarRotulo(t, "Imprimir");
     expect(props.onImprimir).toHaveBeenCalledWith("c1", "Compra de 13/09", 2);
-    apertarRotulo(t, "Renegociar");
+    apertarRotulo(t, "Mudar as parcelas");
     expect(props.onRenegociar).toHaveBeenCalledWith("c1", "Compra de 13/09", 140);
-    apertarRotulo(t, "Cobrar");
-    // 21/11/2026: o Cobrar do cartão leva o carnê (cobra a parcela dele).
-    expect(props.onCobrar).toHaveBeenCalledWith("cli", "Alexander Olivier", "66999990000", { id: "c1" });
+    // 23/11/2026: um Cobrar só, no alto da ficha — o cartão não tem mais.
+    expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
+    expect(props.onCobrar).not.toHaveBeenCalled();
   });
 
-  it("Compras anteriores sem parcela: Receber sem mirar carnê e Parcelar saldo", () => {
+  it("Compras sem carnê sem parcela: Receber sem mirar carnê e Dividir em parcelas", () => {
     const { t, props } = montarAba({ expandedAccountId: null });
     apertarRotulo(t, "Receber R$ 50,00");
     expect(props.prefill).toHaveBeenCalledWith(50, undefined);
-    apertarRotulo(t, "Parcelar saldo");
+    apertarRotulo(t, "Dividir em parcelas");
     expect(props.onRenegociar).toHaveBeenCalledWith(null, "Saldo em aberto", 50);
     apertarRotulo(t, "Imprimir");
-    expect(props.onImprimir).toHaveBeenCalledWith(null, "Compras anteriores", 0);
+    expect(props.onImprimir).toHaveBeenCalledWith(null, "Compras sem carnê", 0);
+    expect(texto(t.toJSON())).toContain("Compras sem parcelas definidas. Você pode receber qualquer valor, ou dividir esse saldo em parcelas.");
   });
 
-  it("Imprimir todos não manda carnê; Novo carnê continua acessível", () => {
+  it("Imprimir todos não manda carnê; Criar carnê vazio continua acessível", () => {
+    expect(texto(montarAba().t.toJSON())).toContain("Criar carnê vazio");
     const { t, props } = montarAba();
     act(() => { porId(t, "carnes-imprimir-todos")[0].props.onPress(); });
     expect(props.onImprimir).toHaveBeenCalledWith(undefined, "Alexander Olivier", 2);
@@ -251,6 +253,6 @@ describe("TabParcelas — aba de carnês", () => {
     const txt = texto(t.toJSON());
     expect(txt).toContain("Parcelas em aberto");
     expect(txt).not.toContain("Em aberto ·");
-    expect(txt).toContain("Parcela 3/4");
+    expect(txt).toContain("Parcela 3 de 4");
   });
 });

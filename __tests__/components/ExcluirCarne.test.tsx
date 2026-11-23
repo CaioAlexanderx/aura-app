@@ -151,7 +151,7 @@ describe("utils/crediarioExcluirCarne", () => {
     expect(r).toEqual({ tipo: "recebimentos", recebimentos: [{ id: "p1", date: "2026-11-05T15:00:00.000Z", amount: 100 }] });
     if (r.tipo !== "recebimentos") throw new Error("tipo");
     const msg = mensagemDosRecebimentos(r.recebimentos, fmt);
-    expect(msg).toContain("Desfaça cada um na Linha do tempo e depois exclua o carnê.");
+    expect(msg).toContain("Remova cada um em Movimentações e depois exclua o carnê.");
     expect(msg).toContain("05/11 · R$ 100,00");
   });
 
