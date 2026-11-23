@@ -1,22 +1,23 @@
 // ============================================================
-// TabConta — Aura · Crediário (F3 do redesign; spec §2.3)
+// TabConta — Aura · Crediário · "Limite e regras"
 //
-// De tabela uniforme de pares label/valor para 3 grupos com hierarquia:
-//   Situação  — saldo HERÓI (24/800 colorido) + status
-//   Limite    — barra de progresso usado/disponível (antes era só número)
-//   Condições — texto compacto
-// + "Ajustes deste cliente" (Collapsible): Termos personalizados e
-//   Bloqueio manual migraram das abas próprias para cá (5 abas → 3).
-//   Estado e handlers continuam no shell (ClienteCrediarioModal).
+// 23/11/2026 (F4 do redesenho da ficha, mockup aprovado — celular, "Limite e
+// regras (pelo ⋯)"): a antiga aba Conta vira o painel "Limite e regras desta
+// cliente", aberto pelo "⋯" do alto da ficha ou pelo "ver" do terceiro fato.
+//  - saíram os cartões Situação e Carnês (repetiam o topo e as compras);
+//  - Limite: "Usou R$ X de R$ Y. Pode comprar mais R$ Z." (ou "Esta cliente
+//    não tem limite definido.");
+//  - "Como ela costuma pagar": a frase do score e a nota — o único lugar da
+//    ficha com o número (decisão 2 do Caio), com o que ela significa;
+//  - "Regras só para esta cliente" e "Vendas a prazo" à vista (era sanfona).
+// Estado e handlers continuam no shell (ClienteCrediarioModal).
 // ============================================================
-import { useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
-import { Icon } from "@/components/Icon";
 import type { CreditAccount } from "@/services/creditApi";
-import { Collapsible } from "@/components/anim";
-import { fmt, fmtDate, periodLabel, scoreColor, scoreLabelPt } from "./fichaHelpers";
+import { fraseDoScore } from "@/utils/crediarioTresFatos";
+import { fmt } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 
 /** Props do bloco de Termos/Bloqueio — estado vive no shell. */
@@ -51,239 +52,178 @@ export type TabContaProps = {
   ajustes: AjustesProps;
 };
 
-export function TabConta({
-  profile, isBlocked, scoreLabel, availableLimit, totalBalance,
-  openInst, nextDueDate, hasTermsOverride, realCarnes, ajustes,
-}: TabContaProps) {
-  const [adjOpen, setAdjOpen] = useState(false);
+const pct = (taxa: number) => `${(taxa * 100).toFixed(2).replace(".", ",")}%`;
 
-  const creditLimit = profile?.credit_limit ?? 0;
-  const creditUsed = profile?.credit_used ?? Math.max(0, creditLimit - (availableLimit ?? 0));
+export function TabConta({
+  profile, isBlocked, scoreLabel, availableLimit, ajustes,
+}: TabContaProps) {
+  const creditLimit = Number(profile?.credit_limit) || 0;
+  const creditUsed = Number(profile?.credit_used ?? Math.max(0, creditLimit - (availableLimit ?? 0))) || 0;
   const usedPct = creditLimit > 0 ? Math.max(0, Math.min(1, creditUsed / creditLimit)) : 0;
-  const saldoColor = totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3;
+  const passou = creditLimit > 0 ? +(creditUsed - creditLimit).toFixed(2) : 0;
+  const disponivel = Math.max(0, availableLimit ?? (creditLimit - creditUsed));
+  const frase = fraseDoScore(scoreLabel);
+  const ov = profile?.terms?.overrides || {};
+  const ef = profile?.terms?.effective;
 
   return (
 <View>
-  {/* ── Situação: saldo herói + status ── */}
-  <View style={m.card}>
-    <Text style={m.cardTitle}>Situação</Text>
-    <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[c.heroVal, { color: saldoColor }]} numberOfLines={1}>
-          {fmt(Math.abs(totalBalance))}
-        </Text>
-        <Text style={c.heroSub}>
-          {totalBalance < 0 ? "crédito a favor do cliente" : "em aberto"}
-          {openInst.length > 0 ? ` · ${openInst.length} parcela${openInst.length !== 1 ? "s" : ""}` : ""}
-          {openInst.length > 0 && fmtDate(nextDueDate) ? ` · próx. ${fmtDate(nextDueDate)}` : ""}
-        </Text>
-      </View>
-      <View style={{ alignItems: "flex-end", gap: 6 }}>
-        <View style={[m.pill, { backgroundColor: (isBlocked ? Colors.red : Colors.green) + "22" }]}>
-          <Text style={[m.pillTxt, { color: isBlocked ? Colors.red : Colors.green }]}>
-            {isBlocked ? "Bloqueado" : "Ativo"}
-          </Text>
+  {/* ── Limite ── */}
+  <View style={c.bloco} testID="limite-regras-limite">
+    <Text style={c.rotulo}>Limite de compras a prazo</Text>
+    {creditLimit > 0 ? (
+      <>
+        <View style={c.limitTrack}>
+          <View style={[c.limitFill, {
+            width: (`${Math.round(usedPct * 100)}%` as any),
+            backgroundColor: usedPct >= 1 ? Colors.red : usedPct > 0.75 ? Colors.amber : Colors.violet,
+          }]} />
         </View>
-        {!!profile && !!scoreLabel && (
-          <View style={[m.scorePill, { backgroundColor: scoreColor(scoreLabel) + "22" }]}>
-            <Text style={[m.scorePillTxt, { color: scoreColor(scoreLabel) }]}>
-              Score {profile.credit_score} · {scoreLabelPt(scoreLabel)}
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-    {isBlocked && !!profile?.blocked_reason && (
-      <Text style={[c.heroSub, { marginTop: 8, color: Colors.red }]}>Motivo do bloqueio: {profile.blocked_reason}</Text>
+        <Text style={c.texto}>
+          {`Usou ${fmt(creditUsed)} de ${fmt(creditLimit)}. `}
+          {passou > 0.009
+            ? <Text style={{ fontWeight: "800", color: Colors.red }}>{`Passou ${fmt(passou)} do limite.`}</Text>
+            : <Text style={{ fontWeight: "800", color: Colors.green }}>{`Pode comprar mais ${fmt(disponivel)}.`}</Text>}
+        </Text>
+      </>
+    ) : (
+      <Text style={c.texto}>Esta cliente não tem limite definido.</Text>
     )}
   </View>
 
-  {/* ── Limite: barra de progresso usado/disponível ── */}
-  {!!profile && creditLimit > 0 && (
-    <View style={m.card}>
-      <Text style={m.cardTitle}>Limite</Text>
-      <View style={c.limitTrack}>
-        <View style={[c.limitFill, {
-          width: (`${Math.round(usedPct * 100)}%` as any),
-          backgroundColor: usedPct >= 1 ? Colors.red : usedPct > 0.75 ? Colors.amber : Colors.violet,
-        }]} />
-      </View>
-      <Text style={c.limitTxt}>
-        {fmt(creditUsed)} usados de {fmt(creditLimit)} ·{" "}
-        <Text style={{ fontWeight: "800", color: (availableLimit ?? 0) >= 0 ? Colors.green : Colors.red }}>
-          {fmt(Math.abs(availableLimit ?? 0))} {(availableLimit ?? 0) >= 0 ? "disponível" : "acima do limite"}
+  {/* ── Score em frase + a nota (só aqui) ── */}
+  {!!profile && (
+    <View style={c.bloco} testID="limite-regras-score">
+      <Text style={c.rotulo}>Como ela costuma pagar</Text>
+      <View style={c.caixa}>
+        {!!frase && <Text style={c.frase}>{frase}</Text>}
+        <Text style={[c.texto, { marginTop: frase ? 4 : 0 }]}>
+          A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.
         </Text>
-      </Text>
-    </View>
-  )}
-
-  {/* ── Condições: compacto ── */}
-  {!!profile?.terms?.effective && (
-    <View style={m.card}>
-      <View style={m.cardTitleRow}>
-        <Text style={m.cardTitle}>Condições</Text>
-        {hasTermsOverride && (
-          <View style={[m.pill, { backgroundColor: Colors.violet3 + "22" }]}>
-            <Text style={[m.pillTxt, { color: Colors.violet3 }]}>Personalizadas</Text>
+        {profile.credit_score != null && (
+          <View style={c.par}>
+            <Text style={c.parK}>Nota</Text>
+            <Text style={c.parV}>{String(profile.credit_score)}</Text>
           </View>
         )}
       </View>
-      <Text style={c.condTxt}>
-        Até {profile.terms.effective.max_installments}x ·{" "}
-        {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% ao mês
-        {profile.terms.effective.due_day != null ? ` · vencimento dia ${profile.terms.effective.due_day}` : ""}
-      </Text>
     </View>
   )}
 
-  {/* ── Carnês ── */}
-  {realCarnes.length > 0 && (
-    <View style={m.card}>
-      <Text style={m.cardTitle}>Carnês</Text>
-      {realCarnes.map(acc => (
-        <View key={acc.id!} style={[m.row, { alignItems: "flex-start" }]}>
-          <View>
-            <Text style={m.rowK}>{acc.name}</Text>
-            <Text style={[m.tlSub, { marginTop: 2 }]}>
-              {acc.open_count} parcela{acc.open_count !== 1 ? "s" : ""} · {periodLabel(acc) || "—"}
-            </Text>
+  {/* ── Regras só para esta cliente (Termos) ── */}
+  <View style={c.bloco}>
+    <Text style={c.rotulo}>Regras só para esta cliente</Text>
+    <View style={c.caixa}>
+      {!!ef && (
+        <>
+          <View style={c.par}>
+            <Text style={c.parK}>Máximo de parcelas</Text>
+            <Text style={c.parV}>{`${ef.max_installments} ${ov.max_installments != null ? "(só dela)" : "(regra da loja)"}`}</Text>
           </View>
-          <Text style={[m.rowV, { color: acc.balance > 0 ? Colors.red : Colors.ink3, fontSize: 15 }]}>
-            {fmt(acc.balance)}
-          </Text>
+          <View style={c.par}>
+            <Text style={c.parK}>Juros ao mês</Text>
+            <Text style={c.parV}>{`${pct(ef.interest_rate)} ${ov.interest_rate != null ? "(só dela)" : "(regra da loja)"}`}</Text>
+          </View>
+        </>
+      )}
+      <Text style={[c.dica, { marginTop: ef ? 6 : 0 }]}>Deixe em branco para usar a regra da loja.</Text>
+      <Text style={[m.fieldLabel, { marginTop: 12, fontFamily: Fonts.body }]}>Máximo de parcelas</Text>
+      <TextInput
+        style={m.termsInput}
+        value={ajustes.termsMaxInst}
+        placeholder={ef?.max_installments ? `${ef.max_installments} (regra da loja)` : "regra da loja"}
+        placeholderTextColor={Colors.ink3}
+        keyboardType="numeric"
+        onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
+      />
+      <Text style={[m.fieldLabel, { marginTop: 10, fontFamily: Fonts.body }]}>Juros ao mês (%)</Text>
+      <TextInput
+        style={m.termsInput}
+        value={ajustes.termsInterest}
+        placeholder={ef ? `${(ef.interest_rate * 100).toFixed(2).replace(".", ",")} (regra da loja)` : "regra da loja"}
+        placeholderTextColor={Colors.ink3}
+        keyboardType="decimal-pad"
+        onChangeText={v => { ajustes.setTermsInterest(v.replace(/[^\d,.]/g, "")); ajustes.setTermsDirty(true); }}
+      />
+      <Pressable
+        style={[m.cta, { marginTop: 14 }, (!ajustes.termsDirty || ajustes.savingTerms) && { opacity: 0.45 }]}
+        onPress={ajustes.saveTerms}
+        disabled={!ajustes.termsDirty || ajustes.savingTerms}
+        accessibilityRole="button"
+      >
+        {ajustes.savingTerms
+          ? <ActivityIndicator color="#fff" />
+          : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar regras</Text>}
+      </Pressable>
+    </View>
+  </View>
+
+  {/* ── Vendas a prazo (bloqueio manual) ── */}
+  <View style={c.bloco}>
+    <Text style={c.rotulo}>Vendas a prazo</Text>
+    <View style={c.caixa}>
+      <View style={[c.par, { alignItems: "center" }]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={c.parK}>{isBlocked ? "Bloqueadas para esta cliente" : "Liberadas para esta cliente"}</Text>
+          {isBlocked && !!profile?.blocked_reason && (
+            <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
+          )}
         </View>
-      ))}
-    </View>
-  )}
-
-  {/* ── Ajustes deste cliente (Termos + Bloqueio, colapsado) ── */}
-  <View style={[m.card, { paddingBottom: adjOpen ? 14 : 8 }]}>
-    <Pressable
-      style={c.adjHead}
-      onPress={() => setAdjOpen(v => !v)}
-      accessibilityRole="button"
-      accessibilityLabel={`Regras só para esta cliente. Toque para ${adjOpen ? "recolher" : "expandir"}`}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={[m.cardTitle, { fontFamily: Fonts.body }]}>Regras só para esta cliente</Text>
-        <Text style={[m.tlSub, { marginTop: 3, fontFamily: Fonts.body }]}>
-          parcelas e juros{hasTermsOverride ? " •" : ""} · vendas a prazo{isBlocked ? " •" : ""}
-        </Text>
-      </View>
-      <View style={adjOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
-        <Icon name="chevron_down" size={15} color={adjOpen ? Colors.violet3 : Colors.ink3} />
-      </View>
-    </Pressable>
-
-    <Collapsible open={adjOpen}>
-      {/* Termos personalizados */}
-      <View style={c.adjSection}>
-        <Text style={[c.adjTitle, { fontFamily: Fonts.body }]}>Parcelas e juros</Text>
-        <Text style={[m.termsHint, { fontFamily: Fonts.body }]}>
-          Deixe em branco para usar a regra da loja.
-        </Text>
-        {!!profile?.terms?.effective && (
-          <View style={m.termsEffRow}>
-            <Text style={[m.termsEffLbl, { fontFamily: Fonts.body }]}>Valendo agora</Text>
-            <Text style={m.termsEffVal}>
-              {profile.terms.effective.max_installments}x ·{" "}
-              {(profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",")}% ao mês
-            </Text>
-          </View>
-        )}
-        <Text style={[m.fieldLabel, { marginTop: 14, fontFamily: Fonts.body }]}>Máximo de parcelas</Text>
-        <TextInput
-          style={m.termsInput}
-          value={ajustes.termsMaxInst}
-          placeholder={profile?.terms?.effective?.max_installments ? String(profile.terms.effective.max_installments) + " (padrão)" : "padrão"}
-          placeholderTextColor={Colors.ink3}
-          keyboardType="numeric"
-          onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
+        <Switch
+          value={isBlocked}
+          onValueChange={ajustes.handleBlockToggle}
+          trackColor={{ false: Colors.bg4, true: Colors.red }}
+          thumbColor="#fff"
+          disabled={ajustes.blockPending}
         />
-        <Text style={[m.fieldLabel, { marginTop: 10 }]}>Juros ao mês (%)</Text>
-        <TextInput
-          style={m.termsInput}
-          value={ajustes.termsInterest}
-          placeholder={profile?.terms?.effective ? (profile.terms.effective.interest_rate * 100).toFixed(2).replace(".", ",") + " (padrão)" : "padrão"}
-          placeholderTextColor={Colors.ink3}
-          keyboardType="decimal-pad"
-          onChangeText={v => { ajustes.setTermsInterest(v.replace(/[^\d,.]/g, "")); ajustes.setTermsDirty(true); }}
-        />
-        <Pressable
-          style={[m.cta, { marginTop: 14 }, (!ajustes.termsDirty || ajustes.savingTerms) && { opacity: 0.45 }]}
-          onPress={ajustes.saveTerms}
-          disabled={!ajustes.termsDirty || ajustes.savingTerms}
-        >
-          {ajustes.savingTerms
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar regras</Text>}
-        </Pressable>
       </View>
-
-      {/* Bloqueio manual */}
-      <View style={c.adjSection}>
-        <Text style={[c.adjTitle, { fontFamily: Fonts.body }]}>Vendas a prazo</Text>
-        <Text style={[m.termsHint, { fontFamily: Fonts.body }]}>
-          Ao bloquear, ela não compra mais a prazo até você liberar de novo.
-        </Text>
-        <View style={[m.blockRow, { borderTopWidth: 0, paddingVertical: 4 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[m.blockLabel, { fontFamily: Fonts.body }]}>{isBlocked ? "Bloqueadas para esta cliente" : "Liberadas para esta cliente"}</Text>
-            {isBlocked && !!profile?.blocked_reason && (
-              <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
-            )}
-          </View>
-          <Switch
-            value={isBlocked}
-            onValueChange={ajustes.handleBlockToggle}
-            trackColor={{ false: Colors.bg4, true: Colors.red }}
-            thumbColor="#fff"
-            disabled={ajustes.blockPending}
+      <Text style={[c.dica, { marginTop: 6 }]}>
+        Ao bloquear, ela não compra mais a prazo até você liberar de novo.
+      </Text>
+      {ajustes.blockingAction === "block" && !isBlocked && (
+        <>
+          <Text style={[m.fieldLabel, { marginTop: 10 }]}>Motivo (opcional)</Text>
+          <TextInput
+            style={[m.termsInput, { minHeight: 72, textAlignVertical: "top" }]}
+            value={ajustes.blockReason}
+            onChangeText={ajustes.setBlockReason}
+            placeholder="Ex: Inadimplência por 60+ dias"
+            placeholderTextColor={Colors.ink3}
+            multiline
           />
-        </View>
-        {ajustes.blockingAction === "block" && !isBlocked && (
-          <>
-            <Text style={[m.fieldLabel, { marginTop: 10 }]}>Motivo (opcional)</Text>
-            <TextInput
-              style={[m.termsInput, { minHeight: 72, textAlignVertical: "top" }]}
-              value={ajustes.blockReason}
-              onChangeText={ajustes.setBlockReason}
-              placeholder="Ex: Inadimplência por 60+ dias"
-              placeholderTextColor={Colors.ink3}
-              multiline
-            />
-            <Pressable
-              style={[m.cta, { marginTop: 12, backgroundColor: Colors.red }, ajustes.blockPending && { opacity: 0.5 }]}
-              onPress={ajustes.confirmBlock}
-              disabled={ajustes.blockPending}
-            >
-              {ajustes.blockPending
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={m.ctaTxt}>Confirmar bloqueio</Text>}
-            </Pressable>
-            <Pressable
-              style={[m.cta, { marginTop: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
-              onPress={() => ajustes.setBlockingAction(null)}
-            >
-              <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-    </Collapsible>
+          <Pressable
+            style={[m.cta, { marginTop: 12, backgroundColor: Colors.red }, ajustes.blockPending && { opacity: 0.5 }]}
+            onPress={ajustes.confirmBlock}
+            disabled={ajustes.blockPending}
+          >
+            {ajustes.blockPending
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={m.ctaTxt}>Confirmar bloqueio</Text>}
+          </Pressable>
+          <Pressable
+            style={[m.cta, { marginTop: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
+            onPress={() => ajustes.setBlockingAction(null)}
+          >
+            <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
   </View>
 </View>
   );
 }
 
 const c = StyleSheet.create({
-  heroVal: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5 },
-  heroSub: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
-  limitTrack: { height: 10, borderRadius: 999, backgroundColor: Colors.bg4, overflow: "hidden", marginTop: 2, marginBottom: 8 },
+  bloco: { marginBottom: 16 },
+  rotulo: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 6 },
+  caixa: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3, borderRadius: 11, padding: 12 },
+  texto: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
+  frase: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink },
+  dica: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  par: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 6 },
+  parK: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2 },
+  parV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
+  limitTrack: { height: 8, borderRadius: 999, backgroundColor: Colors.bg4, overflow: "hidden", marginBottom: 8 },
   limitFill: { height: "100%", borderRadius: 999 },
-  limitTxt: { fontSize: 12, color: Colors.ink3 },
-  condTxt: { fontSize: 13.5, color: Colors.ink2, fontWeight: "600" },
-  adjHead: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4, minHeight: 40 },
-  adjSection: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 12, paddingTop: 12 },
-  adjTitle: { fontSize: 13, fontWeight: "800", color: Colors.ink, marginBottom: 6 },
 });

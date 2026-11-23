@@ -73,6 +73,9 @@ import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
+import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
+import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
+import { diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 
 function translateStatus(status: string | null | undefined): string {
   if (!status) return "";
@@ -189,6 +192,8 @@ export function ClienteCrediarioModal({
   // da tela cheia; "Trocar cliente" abre a lista por cima na tela média.
   const [limiteAberto, setLimiteAberto] = useState(false);
   const [trocarAberto, setTrocarAberto] = useState(false);
+  // F4: o "⋯" do alto da ficha.
+  const [menuFicha, setMenuFicha] = useState(false);
   // Resposta do Histórico que chega depois de trocar de cliente (setas) não
   // pode pintar a ficha da cliente nova.
   const clienteAtualRef = useRef<string | null>(customerId);
@@ -305,6 +310,7 @@ export function ClienteCrediarioModal({
       setEditarCliente(null);
       setLimiteAberto(false);
       setTrocarAberto(false);
+      setMenuFicha(false);
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -389,6 +395,12 @@ export function ClienteCrediarioModal({
     [detail?.accounts, openInst],
   );
   const podeJuntar = carnesJuntaveis.length >= 2;
+  // F4: "N compras em aberto" no primeiro fato.
+  const carnesAbertos = useMemo(
+    () => organizarCarnes<CreditInstallment>(accounts as ContaDoCarne[], openInst, isInstallmentOverdue).abertos,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detail?.accounts, openInst],
+  );
 
   const isBlocked = profile?.status === "blocked";
 
@@ -973,12 +985,13 @@ export function ClienteCrediarioModal({
     setEditDueDateError("");
     setLimiteAberto(false);
     setTrocarAberto(false);
+    setMenuFicha(false);
   }
   const fecharDoPainel = emTela ? fecharPaineis : onClose;
   // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
   // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
-    || limiteAberto || trocarAberto || !!excluirAlvo || !!recusaExclusao;
+    || limiteAberto || trocarAberto || menuFicha || !!excluirAlvo || !!recusaExclusao;
   // F3 (revisão): com um envio em andamento a ficha não troca de cliente
   // (lista, setas e teclado) — a resposta cairia na ficha de outra.
   const ocupado = freeSubmitting || renegSubmitting || excluindo || editDueDateMut.isPending || abrindoDevolucao
@@ -998,6 +1011,7 @@ export function ClienteCrediarioModal({
         else if (repetidoServidor) setRepetidoServidor(null);
         else if (receberGate) setReceberGate(false);
         else if (pixInstId) { setPixInstId(null); setPixData(null); }
+        else if (menuFicha) setMenuFicha(false);
         else fecharPaineis();
       } else if (acao === "fechar-ficha") onClose();
       else if (acao === "anterior") navegacao?.onAnterior?.();
@@ -1032,74 +1046,102 @@ export function ClienteCrediarioModal({
     )
   );
 
-  // F3: na tela cheia o "Limite e regras" (a antiga aba Conta) abre na
-  // coluna da direita.
-  const botaoLimite = (
-    <Pressable
-      style={t.limiteBtn}
-      onPress={() => { fecharPaineis(); setLimiteAberto(true); }}
-      accessibilityRole="button"
-      testID="ficha-abrir-limite"
-    >
-      <Text style={t.limiteTxt}>Limite e regras{(hasTermsOverride || isBlocked) ? " •" : ""}</Text>
-    </Pressable>
-  );
+  // F4 (23/11/2026): "Limite e regras" (a antiga aba Conta) é um painel —
+  // na coluna da direita da tela cheia, por cima da ficha na janela.
+  function abrirLimite() {
+    fecharPaineis();
+    setLimiteAberto(true);
+  }
+
+  // F4: cartões de carnê (mesma regra da TabParcelas): só neles existe o
+  // "Criar carnê vazio".
+  const comCartoes = useCarneLayout || accounts.some(a => (a as any).remaining !== undefined || (a as any).purchases !== undefined);
+
+  // F4: o "⋯" do alto da ficha — o raro mora aqui (mockup aprovado).
+  const itensDaFicha: ItemDoMenu[] = [
+    ...(customerId ? [{ rotulo: "Editar cadastro da cliente", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
+    { rotulo: "Limite e regras desta cliente", onPress: abrirLimite, testID: "ficha-abrir-limite" },
+    ...(openInst.length > 0 || realCarnes.length > 0
+      ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { if (emTela) fecharPaineis(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
+      : []),
+    ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { if (emTela) fecharPaineis(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
+    ...(comCartoes
+      ? [{ rotulo: "Criar carnê vazio", onPress: () => { setTab("parcelas"); setShowNewAccount(true); setNewAccountName(""); }, testID: "carnes-novo-carne" }]
+      : []),
+  ];
 
   const identidade = (
-    <View style={m.cust}>
-      <View style={[m.custL, { flex: 1, minWidth: 0 }]}>
-        <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[m.custName, f.nome, { fontFamily: Fonts.heading }]} numberOfLines={2}>{name}</Text>
-          <View style={m.custSub}>
-            <View style={[m.dot, { backgroundColor: corStatus }]} />
-            <View style={[m.pill, { backgroundColor: corStatus + "22" }]} testID="crediario-ficha-status">
-              <Text style={[m.pillTxt, { color: corStatus }]}>
-                {hasOverdue ? "Em atraso" : semSaldoNoRazao ? "Conferir" : "Em dia"}
-              </Text>
+    <View style={{ marginBottom: 12 }}>
+      <View style={[m.cust, { marginBottom: 0 }]}>
+        <View style={[m.custL, { flex: 1, minWidth: 0 }]}>
+          <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={m.custSub}>
+              <Text style={[m.custName, f.nome, { fontFamily: Fonts.heading, flexShrink: 1 }]} numberOfLines={2}>{name}</Text>
+              {isBlocked && (
+                <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
+                  <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
+                </View>
+              )}
             </View>
-            {isBlocked && (
-              <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
-                <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
-              </View>
+            {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
+            {!detailQ.isLoading && (
+              <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
             )}
           </View>
-          {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
-          {!detailQ.isLoading && (
-            <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
-          )}
+        </View>
+        <View style={f.topoAcoes}>
+          {!emTela && botaoCobrar}
+          <BotaoMais aberto={menuFicha} onPress={() => setMenuFicha(v => !v)} rotulo="Mais ações da ficha" testID="ficha-mais" />
         </View>
       </View>
-      {emTela ? botaoLimite : botaoCobrar}
+      {menuFicha && (
+        <View style={{ marginTop: 8 }}>
+          <ListaDoMenu itens={itensDaFicha} onEscolher={() => setMenuFicha(false)} testID="ficha-menu" />
+        </View>
+      )}
     </View>
   );
 
-  // F3: EM ABERTO é o herói; score e disponível são suporte
-  const numeros = !!profile && (
-    <View style={f.metaRow}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>{totalBalance < 0 ? "TEM CRÉDITO NA LOJA" : "FALTA PAGAR"}</Text>
-        <Text
-          style={[f.metaHero, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}
-          numberOfLines={1}
-        >
-          {fmt(Math.abs(totalBalance))}
-        </Text>
+  // F4 (23/11/2026): três fatos em frase inteira no lugar de EM ABERTO,
+  // SCORE e DISPONÍVEL (utils/crediarioTresFatos, testada sozinha). O
+  // "O que vem agora" substitui o selo Em dia / Em atraso; a nota do score
+  // só aparece em "Limite e regras".
+  const hojeSP = diaEmSaoPaulo(new Date().toISOString());
+  const parcelasAtrasadas = openInst.filter(i => isInstallmentOverdue(i));
+  const proximaParcela = openInst.find(i => !isInstallmentOverdue(i) && !needsReview(i)
+    && (i.remaining ?? (i.amount_due - (i.covered_amount || 0))) > 0.009) || null;
+  const fatoFalta = fatoFaltaPagar({ saldo: totalBalance, comprasEmAberto: carnesAbertos.length, fmt });
+  const fatoAgora = semSaldoNoRazao
+    ? { titulo: "O que vem agora", valor: "Conferir as contas", detalhe: "veja o aviso abaixo", atrasado: false }
+    : fatoOQueVemAgora({ atrasadas: parcelasAtrasadas, proxima: proximaParcela, saldo: totalBalance, hoje: hojeSP, fmt });
+  const fatoLimite = fatoPodeComprarMais({
+    limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit, scoreLabel, fmt,
+  });
+  const numeros = !detailQ.isLoading && (
+    <View style={f.fatos} testID="ficha-tres-fatos">
+      <View style={[f.fato, { flexGrow: 1.1 }]} testID="ficha-fato-falta">
+        <Text style={f.fatoK}>{fatoFalta.titulo}</Text>
+        <Text style={[f.fatoBig, fatoFalta.tom === "credito" && { color: Colors.green }]} numberOfLines={1}>{fatoFalta.valor}</Text>
+        <Text style={f.fatoSub} numberOfLines={2}>{fatoFalta.detalhe}</Text>
       </View>
-      <View style={f.metaSm}>
-        <Text style={m.fixedMetaLbl}>SCORE</Text>
-        <Text style={[f.metaSmVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
+      <View style={[f.fato, { flexGrow: 1.2 }, fatoAgora.atrasado && f.fatoLate]} testID="crediario-ficha-status">
+        <Text style={f.fatoK}>{fatoAgora.titulo}</Text>
+        <Text style={[f.fatoMid, fatoAgora.atrasado && { color: Colors.red }]} numberOfLines={1}>{fatoAgora.valor}</Text>
+        <Text style={f.fatoSub} numberOfLines={2}>{fatoAgora.detalhe}</Text>
       </View>
-      {availableLimit !== undefined && (
-        <View style={f.metaSm} testID="crediario-ficha-limite">
-          <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>
-            {!limiteDefinido ? "LIMITE" : passouDoLimite > 0 ? "PASSOU DO LIMITE" : "PODE COMPRAR MAIS"}
+      {!!profile && (
+        <View style={f.fato} testID="crediario-ficha-limite">
+          <Text style={f.fatoK}>{fatoLimite.titulo}</Text>
+          <Text
+            style={[f.fatoMid, { color: fatoLimite.tom === "ok" ? Colors.green : fatoLimite.tom === "passou" ? Colors.red : Colors.ink2 }]}
+            numberOfLines={1}
+          >
+            {fatoLimite.valor}
           </Text>
-          <Text style={[f.metaSmVal, {
-            fontFamily: Fonts.body,
-            color: !limiteDefinido ? Colors.ink3 : passouDoLimite > 0 ? Colors.red : Colors.green,
-          }]}>
-            {!limiteDefinido ? "Sem limite definido" : fmt(passouDoLimite > 0 ? passouDoLimite : Math.max(0, availableLimit))}
+          <Text style={f.fatoSub} numberOfLines={2}>
+            {fatoLimite.detalhe ? `${fatoLimite.detalhe} · ` : ""}
+            <Text style={f.fatoVer} onPress={abrirLimite} accessibilityRole="link" testID="ficha-fato-ver-limite">ver</Text>
           </Text>
         </View>
       )}
@@ -1782,6 +1824,25 @@ export function ClienteCrediarioModal({
     </>
   );
 
+  const painelLimite = (
+    <View style={m.panel} testID="ficha-painel-limite">
+      <ModalPop visible style={{ flex: 1 }}>
+        <View style={m.panelHead}>
+          <Pressable onPress={() => setLimiteAberto(false)} style={m.panelBack} accessibilityRole="button">
+            <View style={{ transform: [{ rotate: "180deg" }] }}>
+              <Icon name="chevron_right" size={15} color={Colors.violet3} />
+            </View>
+            <Text style={m.panelBackTxt}>Voltar</Text>
+          </Pressable>
+          <Text style={m.panelTitle}>Limite e regras</Text>
+        </View>
+        <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 12 }} showsVerticalScrollIndicator={true}>
+          {carregandoFicha ? carregandoEl : contaEl}
+        </ScrollView>
+      </ModalPop>
+    </View>
+  );
+
   if (!emTela) return (
     // 12/10/2026: com painel interno aberto (Receber, Renegociar, Juntar, Alterar
     // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
@@ -1805,9 +1866,10 @@ export function ClienteCrediarioModal({
             {numeros}
             {avisoEl}
 
-            {/* F3: 5 abas → 3 (Termos/Bloqueio viraram Ajustes na aba Conta) */}
+            {/* F4 (23/11/2026): duas abas. "Limite e regras" saiu das abas e
+                virou painel (pelo "⋯" ou pelo "ver" do terceiro fato). */}
             <View style={[m.tabs, { marginBottom: 12 }]}>
-              {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
+              {(["parcelas", "historico"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
                   <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn]} numberOfLines={1}>
                     {/* 23/11/2026 (F1): nomes do redesenho da ficha. No celular
@@ -1828,7 +1890,6 @@ export function ClienteCrediarioModal({
               <>
                 {tab === "parcelas" && parcelasEl}
                 {tab === "historico" && historicoEl}
-                {tab === "conta" && contaEl}
               </>
             )}
           </ScrollView>
@@ -1842,6 +1903,7 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
+          {limiteAberto && painelLimite}
           {paineis}
           {dialogos}
     </ResponsiveSheet>
@@ -1904,25 +1966,6 @@ export function ClienteCrediarioModal({
     </View>
   );
 
-  const painelLimite = (
-    <View style={m.panel} testID="ficha-painel-limite">
-      <ModalPop visible style={{ flex: 1 }}>
-        <View style={m.panelHead}>
-          <Pressable onPress={() => setLimiteAberto(false)} style={m.panelBack} accessibilityRole="button">
-            <View style={{ transform: [{ rotate: "180deg" }] }}>
-              <Icon name="chevron_right" size={15} color={Colors.violet3} />
-            </View>
-            <Text style={m.panelBackTxt}>Voltar</Text>
-          </Pressable>
-          <Text style={m.panelTitle}>Limite e regras</Text>
-        </View>
-        <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 12 }} showsVerticalScrollIndicator={true}>
-          {carregandoFicha ? carregandoEl : contaEl}
-        </ScrollView>
-      </ModalPop>
-    </View>
-  );
-
   if (!visible) return null;
   return (
     <View style={t.raiz} testID="ficha-tela">
@@ -1941,6 +1984,7 @@ export function ClienteCrediarioModal({
           {avisoEl}
         </View>
         <ScrollView style={t.rolagem} contentContainerStyle={t.rolagemConteudo} showsVerticalScrollIndicator={true}>
+          <Text style={t.secao}>Compras e parcelas</Text>
           {carregandoFicha ? carregandoEl : parcelasEl}
         </ScrollView>
       </View>
@@ -1996,6 +2040,7 @@ const t = StyleSheet.create({
   rolagem: { flex: 1, minHeight: 0 },
   rolagemConteudo: { padding: 20, paddingTop: 14, paddingBottom: 32 },
   movConteudo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
+  secao: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 10 },
   direita: {
     minHeight: 0, backgroundColor: Colors.bg2, overflow: "hidden",
     borderLeftWidth: 1, borderLeftColor: Colors.border,
@@ -2044,6 +2089,20 @@ const f = StyleSheet.create({
   // 23/11/2026 (F2): nome da cliente é o título da ficha (Instrument Serif).
   nome: { fontSize: 22, fontWeight: "400", lineHeight: 26 },
   cobrarApagado: { opacity: 0.6, borderStyle: "dashed", borderColor: Colors.border2, backgroundColor: "transparent" },
+  // F4: três fatos
+  topoAcoes: { flexDirection: "row", alignItems: "center", gap: 8 },
+  fatos: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
+  fato: {
+    flexGrow: 1, flexBasis: 150, minWidth: 0,
+    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 13,
+    paddingHorizontal: 13, paddingVertical: 11,
+  },
+  fatoLate: { borderColor: Colors.red + "66", backgroundColor: Colors.redD },
+  fatoK: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "600", color: Colors.ink2 },
+  fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
+  fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
+  fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
+  fatoVer: { fontFamily: Fonts.body, fontWeight: "700", color: Colors.violet3 },
 });
 
 export default ClienteCrediarioModal;

@@ -239,6 +239,7 @@ describe("ClienteCrediarioModal na casca tela", () => {
 
   test("Limite e regras abre na coluna da direita; Esc fecha o painel e depois a ficha", async () => {
     const { tree, onClose } = await montar({ layout: "larga" });
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
     const direita = porId(tree, "ficha-direita")[0];
     expect(direita.findAllByProps({ testID: "ficha-painel-limite" }, { deep: false } as any)).toHaveLength(1);
@@ -318,8 +319,7 @@ describe("revisão da F3: travas da ficha em tela cheia", () => {
     let tree!: renderer.ReactTestRenderer;
     await act(async () => { tree = renderer.create(<Ficha customerId="c1" />); });
     await esperar();
-    const cab = porId(tree, "carne-k1-cabecalho");
-    if (cab.length && cab[0].props.onPress) act(() => { cab[0].props.onPress(); });
+    act(() => { porId(tree, "carne-k1-mais")[0].props.onPress(); });
     act(() => { porId(tree, "carne-k1-excluir")[0].props.onPress(); });
     expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(1);
 
@@ -330,6 +330,7 @@ describe("revisão da F3: travas da ficha em tela cheia", () => {
     expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(0);
 
     // de novo, e a cliente muda: o diálogo da anterior some
+    act(() => { porId(tree, "carne-k1-mais")[0].props.onPress(); });
     act(() => { porId(tree, "carne-k1-excluir")[0].props.onPress(); });
     expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(1);
     await act(async () => { tree.update(<Ficha customerId="c2" />); });
@@ -380,6 +381,79 @@ describe("revisão da F3: travas da ficha em tela cheia", () => {
       const i = fonte.indexOf(f);
       expect(fonte.slice(i, i + 160)).toContain("if (emTela) fecharPaineis();");
     }
+  });
+});
+
+describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
+  function texto(node: any): string {
+    if (node == null) return "";
+    if (typeof node === "string") return node;
+    if (Array.isArray(node)) return node.map(texto).join("");
+    return texto(node.children);
+  }
+  async function montarCasca(casca: "tela" | "janela") {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca={casca} layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} onCobrar={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    return tree;
+  }
+
+  test("Falta pagar, O que vem agora e Pode comprar mais, com o score em frase", async () => {
+    const tree = await montarCasca("tela");
+    expect(porId(tree, "ficha-tres-fatos")).toHaveLength(1);
+    expect(porId(tree, "crediario-ficha-status")).toHaveLength(1);
+    expect(porId(tree, "crediario-ficha-limite")).toHaveLength(1);
+    const tudo = texto(tree.toJSON());
+    expect(tudo).toContain("Falta pagar");
+    expect(tudo).toContain("R$ 570,66");
+    expect(tudo).toContain("Sem data marcada");
+    expect(tudo).toContain("Pode comprar mais");
+    expect(tudo).toContain("R$ 429,34");
+    expect(tudo).toContain("limite de R$ 1.000,00 · às vezes atrasa · ");
+    // a nota (640) não está no topo; os rótulos antigos sumiram
+    expect(tudo).not.toContain("SCORE");
+    expect(tudo).not.toContain("FALTA PAGAR");
+    expect(tudo).not.toContain("640");
+    // o selo Em dia / Em atraso ao lado do nome saiu
+    expect(tudo).not.toContain("Em dia");
+  });
+
+  test("o ⋯ abre com toque e leva a Limite e regras; o \"ver\" do terceiro fato também", async () => {
+    const tree = await montarCasca("tela");
+    expect(porId(tree, "ficha-menu")).toHaveLength(0);
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    const menu = texto(tree.toJSON());
+    expect(menu).toContain("Editar cadastro da cliente");
+    expect(menu).toContain("Limite e regras desta cliente");
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-fato-ver-limite")[0].props.onPress(); });
+    expect(porId(tree, "ficha-painel-limite")).toHaveLength(1);
+    const painel = texto(tree.toJSON());
+    expect(painel).toContain("Usou R$ 570,66 de R$ 1.000,00. ");
+    expect(painel).toContain("Pode comprar mais R$ 429,34.");
+    expect(painel).toContain("Como ela costuma pagar");
+    expect(painel).toContain("Às vezes atrasa");
+    expect(painel).toContain("A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.");
+    expect(painel).toContain("640");
+    expect(painel).toContain("Deixe em branco para usar a regra da loja.");
+    expect(painel).toContain("Liberadas para esta cliente");
+  });
+
+  test("na janela: duas abas (sem a aba Conta) e Limite e regras pelo ⋯", async () => {
+    const tree = await montarCasca("janela");
+    const tudo = texto(tree.toJSON());
+    expect(tudo).toContain("Movimentações");
+    expect(tudo).not.toMatch(/Limite e regras(?! desta)/);
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
+    expect(porId(tree, "ficha-painel-limite")).toHaveLength(1);
   });
 });
 

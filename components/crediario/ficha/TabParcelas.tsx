@@ -23,6 +23,14 @@
 // (um Cobrar só, no alto da ficha) e os nomes mudaram — "Parcela 1 de 3",
 // "vence 20/12" (sem o "· no prazo"), "19 dias de atraso", "Mudar as
 // parcelas", "Dividir em parcelas", "Criar carnê vazio".
+//
+// 23/11/2026 (F4 do redesenho): sem sanfona dentro de sanfona. Nos cartões
+// de carnê a parcela a pagar é uma linha só (<LinhaDaParcela>): número, data
+// com o lápis sempre à vista, multa e juros em frase quando houver, valor e
+// "Receber". O "Pix" da linha saiu (o "Gerar Pix" está no Receber
+// pagamento) e o "Alterar data" também (é o lápis). Juntar, Imprimir todos e
+// Criar carnê vazio foram para o "⋯" do alto da ficha. A ParcelaRow com
+// sanfona continua só na lista do backend antigo (sem carnês).
 // ============================================================
 import { useMemo, useState } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
@@ -102,10 +110,10 @@ export function TabParcelas({
   accounts, openInst, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, onExcluirCarne, prefill, openBalance,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onExcluirCarne, prefill, openBalance,
   name,
 }: TabParcelasProps) {
-  // Parcela expandida (uma por vez — progressive disclosure)
+  // Parcela expandida (uma por vez) — só na lista do backend antigo.
   const [expandedInstId, setExpandedInstId] = useState<string | null>(null);
   const [verQuitados, setVerQuitados] = useState(false);
 
@@ -176,39 +184,44 @@ export function TabParcelas({
     );
   };
 
+  // F4: a linha da parcela no cartão do carnê — sem sanfona.
+  const renderLinha = (ins: CreditInstallment, indice: number) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = isInstallmentOverdue(ins);
+    const toReview = !late && needsReview(ins);
+    const chargesTotal = ins.charges_total ?? 0;
+    const hasCharges = late && chargesTotal > 0;
+    const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
+    const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
+    const venc = dataDoVencimento(ins.due_date, diaEmSaoPaulo(new Date().toISOString()));
+    const jaPago = Number(ins.covered_amount || 0);
+    const porque = late
+      ? [
+          hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
+          diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
+        ].filter(Boolean).join(" · ")
+      : toReview
+        ? "antes de o carnê ser cadastrado — confira se já foi paga"
+        : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
+    return (
+      <LinhaDaParcela
+        key={ins.id}
+        numero={`${ins.installment_number} de ${ins.total_installments}`}
+        data={`${late || toReview ? "venceu" : "vence"} ${venc}`}
+        porque={porque}
+        valor={fmt(totalHoje)}
+        atrasada={late}
+        principal={indice === 0}
+        onData={() => handleEditDueDateOpen(ins)}
+        onReceber={() => prefill(totalHoje)}
+      />
+    );
+  };
+
   return (
 <>
   {cartoes && (
     <View style={{ marginBottom: 13 }}>
-      <View style={c.secRow}>
-        <Text style={m.cardTitle}>Em aberto · {abertos.length}</Text>
-        <View style={c.links}>
-          {!!onJuntar && (
-            <Pressable style={c.link} onPress={onJuntar} accessibilityRole="button" testID="carnes-juntar">
-              <Text style={c.linkT}>Juntar carnês</Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={c.link}
-            onPress={() => onImprimir(undefined, name, openInst.length)}
-            accessibilityRole="button"
-            testID="carnes-imprimir-todos"
-          >
-            <Text style={c.linkT}>Imprimir todos</Text>
-          </Pressable>
-          {/* "Novo carnê" manual continua existindo — discreto: o normal agora
-              é o carnê nascer da venda. */}
-          <Pressable
-            style={c.link}
-            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
-            accessibilityRole="button"
-            testID="carnes-novo-carne"
-          >
-            <Text style={[c.linkT, { color: Colors.ink3 }]}>Criar carnê vazio</Text>
-          </Pressable>
-        </View>
-      </View>
-
       {showNewAccount && (
         <View style={m.newAccRow}>
           <TextInput
@@ -232,7 +245,6 @@ export function TabParcelas({
       )}
 
       {abertos.map((carne) => {
-        const isExpanded = expandedAccountId === carne.id;
         // Renegociar precisa de parcela para substituir. No grupo sem carnê o
         // saldo sem agenda ainda pode ser parcelado (10/07, "Parcelar saldo").
         const podeRenegociar = carne.parcelasAbertas.length > 0;
@@ -241,9 +253,7 @@ export function TabParcelas({
           <CarneCard
             key={carne.key}
             carne={carne}
-            expanded={isExpanded}
-            onToggle={() => setExpandedAccountId(isExpanded ? undefined : carne.id)}
-            renderParcela={renderParcela}
+            renderParcela={renderLinha}
             // Receber do carnê cai NESTE carnê; o grupo sem carnê não tem id
             // para mirar e segue a regra de sempre (parcela mais antiga primeiro).
             onReceber={() => prefill(carne.falta, carne.id ?? undefined)}
@@ -268,9 +278,9 @@ export function TabParcelas({
       )}
 
       {quitados.length > 0 && (
-        <View style={{ marginTop: 6 }}>
+        <View style={{ marginTop: 2 }}>
           <View style={c.secRow}>
-            <Text style={m.cardTitle}>Quitados · {quitados.length}</Text>
+            <Text style={c.quitadosT}>{quitados.length} {quitados.length === 1 ? "carnê quitado" : "carnês quitados"}</Text>
             <Pressable
               style={c.link}
               onPress={() => setVerQuitados(v => !v)}
@@ -278,7 +288,7 @@ export function TabParcelas({
               accessibilityState={{ expanded: verQuitados }}
               testID="carnes-quitados-toggle"
             >
-              <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver todos"}</Text>
+              <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver"}</Text>
             </Pressable>
           </View>
           {verQuitados && quitados.map(q => (
@@ -365,5 +375,71 @@ const c = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
-  doneV: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3 },
+});
+
+// ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
+// Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
+// linha em vez de espremer: em tela estreita data e Receber descem.
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber }: {
+  numero: string; data: string; porque: string; valor: string;
+  atrasada: boolean; principal: boolean;
+  onData: () => void; onReceber: () => void;
+}) {
+  return (
+    <View style={[l.linha, atrasada && l.linhaLate]} testID={`parcela-${numero}`}>
+      <View style={[l.ic, atrasada && l.icLate]}>
+        <Text style={[l.icT, atrasada && { color: Colors.red }]}>{atrasada ? "!" : ""}</Text>
+      </View>
+      <Text style={l.num} accessibilityLabel={`Parcela ${numero}`}>{numero}</Text>
+      <View style={l.meio}>
+        <Pressable
+          onPress={onData}
+          style={({ pressed }: any) => [l.data, pressed && { backgroundColor: Colors.violetD }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Mudar a data da parcela ${numero}`}
+          hitSlop={6}
+        >
+          <Text style={[l.dataT, atrasada && { color: Colors.red }]}>{data}</Text>
+          <Text style={l.lapis}>✎</Text>
+        </Pressable>
+        {!!porque && <Text style={l.porque}>{porque}</Text>}
+      </View>
+      <Text style={[l.valor, atrasada && { color: Colors.red }]}>{valor}</Text>
+      <Pressable
+        onPress={onReceber}
+        style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Receber ${valor} da parcela ${numero}`}
+      >
+        <Text style={[l.receberT, principal && { color: "#fff" }]}>Receber</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const l = StyleSheet.create({
+  linha: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 10, rowGap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  linhaLate: { backgroundColor: Colors.redD },
+  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.ink3, alignItems: "center", justifyContent: "center" },
+  icLate: { borderColor: Colors.red },
+  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: Colors.ink3 },
+  num: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, minWidth: 48 },
+  meio: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
+  data: {
+    flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 36,
+    paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2,
+  },
+  dataT: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink },
+  lapis: { fontFamily: Fonts.body, fontSize: 12, color: Colors.violet3 },
+  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 3 },
+  valor: { fontFamily: Fonts.mono, fontSize: 13.5, fontWeight: "500", color: Colors.ink, textAlign: "right", marginLeft: "auto" as any, fontVariant: ["tabular-nums"] as any },
+  receber: { minHeight: 40, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  receberP: { backgroundColor: Colors.violet },
+  receberS: { borderWidth: 1, borderColor: Colors.border2 },
+  receberT: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.ink },
 });
