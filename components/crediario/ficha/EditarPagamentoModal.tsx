@@ -202,7 +202,10 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
         <Text style={s.nota}>
           {mudouCliente
             ? `O pagamento sai da ficha de ${pagamento.customerName} (as parcelas que ele pagou voltam a ficar em aberto) e entra na de ${cliente?.name}, nas parcelas mais antigas.`
-            : "Ao salvar, o pagamento é relançado e as parcelas são redistribuídas a partir da mais antiga."}
+            // QA 23/11 (P2): o backend (editPayment) relança no MESMO carnê
+            // quando o pagamento era de um carnê; só sem carnê vai para a
+            // parcela mais antiga de todas.
+            : "Ao salvar, o pagamento é lançado de novo. Se ele foi feito num carnê, continua nesse carnê, da parcela mais antiga dele em diante; senão, vai para as parcelas mais antigas."}
         </Text>
 
         {!!erro && <Text style={s.erro} testID="editar-pagamento-erro">{erro}</Text>}

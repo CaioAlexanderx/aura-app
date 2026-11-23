@@ -46,3 +46,11 @@ describe("Lançamento manual com cedilha", () => {
     expect(JSON.stringify(c.compras)).not.toContain("Lancamento manual");
   });
 });
+
+describe("Corrigir pagamento diz o que o backend faz (QA)", () => {
+  test("relança no mesmo carnê, não 'redistribui a partir da mais antiga'", () => {
+    const f = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ficha", "EditarPagamentoModal.tsx"), "utf8");
+    expect(f).not.toContain("redistribuídas a partir da mais antiga");
+    expect(f).toContain("Se ele foi feito num carnê, continua nesse carnê, da parcela mais antiga dele em diante; senão, vai para as parcelas mais antigas.");
+  });
+});
