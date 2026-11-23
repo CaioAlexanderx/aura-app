@@ -45,9 +45,11 @@ type Props = {
   children: React.ReactNode;
   /** Estilo extra aplicado ao cartão do sheet (raro). */
   sheetStyle?: StyleProp<ViewStyle>;
+  /** Atributos data-* do cartão (web), p.ex. o anel de foco da ficha. */
+  dataSet?: Record<string, string>;
 };
 
-export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 480, children, sheetStyle }: Props) {
+export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 480, children, sheetStyle, dataSet }: Props) {
   const { width, height } = useWindowDimensions();
   const isNarrow = width < SHEET_NARROW_BP;
 
@@ -82,6 +84,7 @@ export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 
               <Pressable
                 style={[s.sheet, s.sheetNarrow, { maxHeight: maxH }, sheetStyle]}
                 onPress={() => {}}
+                {...(dataSet ? ({ dataSet } as any) : null)}
               >
                 <Animated.View style={s.handle} />
                 {children}
@@ -92,6 +95,7 @@ export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 
               <Pressable
                 style={[s.sheet, s.sheetWide, { maxHeight: maxH }, sheetStyle]}
                 onPress={() => {}}
+                {...(dataSet ? ({ dataSet } as any) : null)}
               >
                 {children}
               </Pressable>

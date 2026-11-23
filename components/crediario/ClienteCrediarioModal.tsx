@@ -75,6 +75,7 @@ import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
 import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
 import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
+import { MARCA_DA_FICHA, useAnelDeFocoDaFicha } from "./ficha/anelDeFoco";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
 import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
 import { diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
@@ -1043,6 +1044,8 @@ export function ClienteCrediarioModal({
   });
 
   const carregandoFicha = detailQ.isLoading || profileQ.isLoading;
+  // QA 23/11 (P2): anel de foco violeta (o do app), não o do navegador.
+  useAnelDeFocoDaFicha(visible);
 
   // 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
   // explica, abrindo a edição no campo do telefone.
@@ -1926,7 +1929,7 @@ export function ClienteCrediarioModal({
       : `${fatoLimite.titulo} ${fatoLimite.valor}${fatoLimite.detalhe.includes(" · ") ? ` · ${fatoLimite.detalhe.split(" · ").slice(1).join(" · ")}` : ""}`;
     return (
       <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={pedirFechar}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={pg.raiz} testID="ficha-pagina">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={pg.raiz} testID="ficha-pagina" {...({ dataSet: MARCA_DA_FICHA } as any)}>
           <View style={pg.topo}>
             <Pressable onPress={onClose} style={pg.voltar} accessibilityRole="button" accessibilityLabel="Voltar para a lista do crediário" testID="ficha-voltar">
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -2014,7 +2017,7 @@ export function ClienteCrediarioModal({
     // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
     // o que a lojista estava digitando. O painel tem o próprio voltar; Esc e
     // voltar do Android seguem fechando como antes.
-    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700}>
+    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700} dataSet={MARCA_DA_FICHA}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -2135,7 +2138,7 @@ export function ClienteCrediarioModal({
 
   if (!visible) return null;
   return (
-    <View style={t.raiz} testID="ficha-tela">
+    <View style={t.raiz} testID="ficha-tela" {...({ dataSet: MARCA_DA_FICHA } as any)}>
       {larga && !!listaLateral && (
         <View style={t.lista}>
           {listaLateral}

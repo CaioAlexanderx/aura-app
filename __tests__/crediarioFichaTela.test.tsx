@@ -643,3 +643,16 @@ describe("QA P2: Cobrar mostra que está preparando", () => {
     expect(b.props.accessibilityLabel).toBe("Preparando a cobrança");
   });
 });
+
+describe("QA P2: anel de foco violeta", () => {
+  test("o estilo marca o contêiner da ficha e usa o violeta do app", () => {
+    const { cssDoAnelDeFoco } = require("@/components/crediario/ficha/anelDeFoco");
+    expect(cssDoAnelDeFoco(true)).toContain("[data-ficha-crediario] :focus-visible { outline: 2px solid #a78bfa");
+    expect(cssDoAnelDeFoco(false)).toContain("outline: 2px solid #7c3aed");
+  });
+  test("as três cascas levam a marca", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte.match(/MARCA_DA_FICHA/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(fonte).toContain("useAnelDeFocoDaFicha(visible);");
+  });
+});
