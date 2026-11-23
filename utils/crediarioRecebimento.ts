@@ -81,3 +81,43 @@ export function novaChaveDeRecebimento(companyId: string, customerId: string, no
   const salt = Math.random().toString(36).slice(2, 8);
   return `rfp-${companyId}-${customerId}-${now}-${salt}`;
 }
+
+// ── Pagamento repetido pelo servidor (23/11/2026, Looks Da Jenny) ─────────
+//
+// O mesmo recebimento entrou duas vezes na ficha: o segundo de outro
+// computador, com a data voltada um dia. O aviso acima não pega isso (olha só
+// esta tela e os últimos 2 minutos). O backend agora confere, antes de gravar,
+// se já existe pagamento com o mesmo valor e a mesma DATA DE PAGAMENTO para a
+// cliente nesta loja; se existe, responde 409 PAGAMENTO_REPETIDO sem gravar.
+// A tela pergunta e, no "Lançar mesmo assim", reenvia com
+// `confirmar_repetido: true` e a MESMA chave de idempotência (nada foi gravado).
+// Backend antigo nunca manda esse 409: nada muda.
+
+export const CODIGO_PAGAMENTO_REPETIDO = "PAGAMENTO_REPETIDO";
+
+export type PagamentoRepetido = { data_pagamento: string; valor: number };
+
+/** O 409 PAGAMENTO_REPETIDO do backend, ou null para qualquer outro erro. */
+export function pagamentoRepetidoDoErro(err: any): PagamentoRepetido | null {
+  if (!err || err.status !== 409) return null;
+  const d = err.data;
+  if (!d || d.code !== CODIGO_PAGAMENTO_REPETIDO) return null;
+  const data = typeof d.data_pagamento === "string" ? d.data_pagamento : "";
+  return { data_pagamento: data, valor: Number(d.valor) || 0 };
+}
+
+/** Hoje em Brasília, AAAA-MM-DD (o mesmo dia que o backend usa). */
+export function hojeEmBrasilia(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+/**
+ * Texto da confirmação. Hoje: texto aprovado pelo Caio. Outro dia: "em dd/mm".
+ * Data ilegível (o backend sempre manda) vira "nesta data" — nunca "em undefined".
+ */
+export function mensagemPagamentoRepetido(dataPagamento: string, hoje: string = hojeEmBrasilia()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dataPagamento || "");
+  if (!m) return "Já existe um pagamento igual nesta data. Lançar mesmo assim?";
+  if (dataPagamento === hoje) return "Já existe um pagamento igual hoje. Lançar mesmo assim?";
+  return `Já existe um pagamento igual em ${m[3]}/${m[2]}. Lançar mesmo assim?`;
+}
