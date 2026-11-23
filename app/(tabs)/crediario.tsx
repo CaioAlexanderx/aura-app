@@ -415,7 +415,10 @@ export default function CrediarioScreen() {
     staleTime: 60_000,
     // QA 23/11 (P2): enquanto a busca nova carrega, fica a lista anterior —
     // a lista ao lado da ficha piscava "0 clientes" a cada letra.
-    placeholderData: (anterior) => anterior,
+    // Só da mesma loja (revisão #1360): trocar de loja não mostra a carteira
+    // da outra enquanto carrega.
+    placeholderData: (anterior, consultaAnterior) =>
+      consultaAnterior?.queryKey?.[1] === company?.id ? anterior : undefined,
   });
 
   // 10/10/2026: config do canal digital — de onde sai a chave Pix do QR do
