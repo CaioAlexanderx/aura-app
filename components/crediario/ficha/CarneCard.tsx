@@ -92,7 +92,8 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   const numeroDaPaga = (p: (typeof pagas)[number], j: number) =>
     c.temCamposNovos ? `${j + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
   const numeroDaAberta = (p: P, i: number) =>
-    c.temCamposNovos ? `${pagas.length + i + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
+    c.temCamposNovos ? `${pagas.length + i + 1} de ${totalNoCarne}`
+      : `${(p as any).installment_number ?? i + 1} de ${(p as any).total_installments ?? c.parcelasAbertas.length}`;
   const resumoPagas = pagas.length > 0
     ? `${pagas.length} ${pagas.length === 1 ? "paga" : "pagas"}${datasDasPagas(pagas.map(p => diaMes(p.paid_at))) ? ` · ${datasDasPagas(pagas.map(p => diaMes(p.paid_at)))}` : ""}`
     : c.semCarne ? "Compras" : "Itens da compra";
