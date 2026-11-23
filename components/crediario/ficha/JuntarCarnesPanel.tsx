@@ -372,7 +372,7 @@ export function JuntarCarnesPanel({
                     {plano.produtos > 0 ? `, com ${plano.produtos} produto${plano.produtos > 1 ? "s" : ""}` : ""}
                     . As parcelas em aberto antigas somem; o que já foi pago continua no histórico.
                   </>
-                : "Para mudar as parcelas de um carnê só, use o Renegociar dele."}
+                : "Para mudar as parcelas de um carnê só, use o Mudar as parcelas dele."}
             </Text>
           </View>
         </ScrollView>

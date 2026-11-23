@@ -31,7 +31,8 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
-import { diaMes, organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
+import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
+import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard } from "./CarneCard";
@@ -135,7 +136,8 @@ export function TabParcelas({
     const hasCharges = late && chargesTotal > 0;
     const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
     const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
-    const venc = diaMes(ins.due_date);
+    // Ano só quando não é o corrente ("vence 20/12/27").
+    const venc = dataDoVencimento(ins.due_date, diaEmSaoPaulo(new Date().toISOString()));
     return (
       <ParcelaRow
         key={ins.id}
@@ -144,8 +146,9 @@ export function TabParcelas({
           late
             ? [
                 `venceu ${venc}`,
-                hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
+                // Os dias vêm antes dos encargos: é o que a lojista procura.
                 diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
+                hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
               ].filter(Boolean).join(" · ")
             : toReview
               ? `venceu ${venc} · antes de o carnê ser cadastrado — confira se já foi paga`

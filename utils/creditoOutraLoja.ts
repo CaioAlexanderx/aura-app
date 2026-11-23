@@ -43,7 +43,7 @@ export function mensagemErroRecebimento(err: ErroApi): string {
     return "O crediário está desligado nesta loja. Ative em Configurações → PDV → Políticas do Caixa.";
   }
   if (err?.isNetworkError || err?.status === 0) {
-    return "Sem conexão com o servidor. Antes de tentar de novo, confira no Histórico se o recebimento já entrou.";
+    return "Sem conexão com o servidor. Antes de tentar de novo, confira em Movimentações se o recebimento já entrou.";
   }
   if (err?.status === 400) {
     return "Confira o valor e a data do recebimento e tente de novo.";

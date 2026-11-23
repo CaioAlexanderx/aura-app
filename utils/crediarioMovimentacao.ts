@@ -77,8 +77,9 @@ export type GrupoDoDinheiro = {
 /** Nome do grupo sem carnê — o mesmo de utils/crediarioCarne. */
 export const NOME_SEM_CARNE_MOV = "Compras sem carnê";
 
-/** Até quanto o resto que caiu na parcela seguinte é "sobra" (centavos). */
-export const LIMITE_DA_SOBRA = 1;
+/** Até quanto o resto que caiu na parcela seguinte é "sobra": um centavo, o
+ *  resto de arredondamento do print da cliente. Acima disso é abatimento. */
+export const LIMITE_DA_SOBRA = 0.01;
 
 const MESES = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -121,12 +122,16 @@ export function diaDoEvento(iso: string | null | undefined): string {
   return `${d} ${MESES_CURTOS[Number(m) - 1] || ""}`.trim();
 }
 
-/** "20/12" de uma data pura (vencimento é dia de calendário, sem fuso). */
-function diaMesDaData(value: string | null | undefined): string {
+/**
+ * "20/12" de uma data pura (vencimento é dia de calendário, sem fuso), com o
+ * ano quando não é o do `hoje` (AAAA-MM-DD): "20/12/27". Sem `hoje`, sem ano.
+ */
+export function dataDoVencimento(value: string | null | undefined, hoje?: string | null): string {
   const dia = diaEmSaoPaulo(value);
   if (!dia) return "";
-  const [, m, d] = dia.split("-");
-  return `${d}/${m}`;
+  const [a, m, d] = dia.split("-");
+  const anoDeHoje = (hoje || "").slice(0, 4);
+  return anoDeHoje && a !== anoDeHoje ? `${d}/${m}/${a.slice(2)}` : `${d}/${m}`;
 }
 
 /** Mesma ordem que chegou (mais recentes primeiro), com o mês como cabeçalho. */
@@ -227,7 +232,7 @@ export function paraOndeFoiODinheiro(
       continue;
     }
 
-    const sobra = quitouAlguma && valor > 0 && valor < LIMITE_DA_SOBRA;
+    const sobra = quitouAlguma && valor > 0 && valor <= LIMITE_DA_SOBRA;
     const tipo: TipoDaLinha = sobra ? "sobra" : "abateu";
     const rotulo = sobra ? `${nome} · sobra do pagamento` : `${nome} · abateu ${brl(valor)}`;
 
@@ -237,7 +242,7 @@ export function paraOndeFoiODinheiro(
       detalhe = "já não está em aberto";
     } else {
       const venc = aberta.due_date || a.due_date;
-      const dm = diaMesDaData(venc);
+      const dm = dataDoVencimento(venc, hoje);
       const vencida = !!hoje && !!diaEmSaoPaulo(venc) && diaEmSaoPaulo(venc) < hoje;
       const falta = quantoFaltaHoje(aberta);
       const partes: string[] = [];
