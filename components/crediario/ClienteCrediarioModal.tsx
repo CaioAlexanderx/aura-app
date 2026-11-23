@@ -46,12 +46,13 @@ import { ConfirmGate } from "@/components/ConfirmGate";
 import {
   recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
   pagamentoRepetidoDoErro, mensagemPagamentoRepetido, confirmarRepetidoNoEnvio, type PagamentoRepetido,
+  formaComPreposicao,
 } from "@/utils/crediarioRecebimento";
 import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
   PAYMENT_METHODS, type Tab,
 } from "./ficha/fichaHelpers";
-import { m } from "./ficha/fichaStyles";
+import { m, CorDaFicha } from "./ficha/fichaStyles";
 import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
@@ -67,14 +68,16 @@ import {
   textoConfirmarExclusao, lerErroDaExclusao, mensagemDosRecebimentos, MENSAGEM_CARNE_DE_VENDA,
 } from "@/utils/crediarioExcluirCarne";
 import {
-  organizarCarnes, carnesParaJuntar, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
+  organizarCarnes, carnesParaJuntar, numerosPorPosicao, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
 } from "@/utils/crediarioCarne";
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
+import { primeiroNome } from "@/utils/crediarioMensagem";
 import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
-import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
+import { avisoPassaDoCarne, chaveDaPrevia, contaParaOValor, creditoDeVerdade, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
+import { MARCA_DA_FICHA, useAnelDeFocoDaFicha } from "./ficha/anelDeFoco";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
 import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
 import { diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
@@ -124,13 +127,15 @@ type Props = {
   /** F3 (revisão): a ficha veio do ?cliente= do endereço (recarga, troca de
    *  loja). Cliente de outra loja sem nada nesta fecha a ficha. */
   abertaPeloEndereco?: boolean;
+  /** QA 23/11 (P2): a prévia do Cobrar está sendo montada (leva segundos). */
+  cobrando?: boolean;
 };
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
-  casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false,
+  casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false, cobrando = false,
 }: Props) {
   const qc = useQueryClient();
   // QA 23/11 (P1-5): depois de receber, remover ou corrigir pagamento,
@@ -175,6 +180,12 @@ export function ClienteCrediarioModal({
   const [savingTerms, setSavingTerms] = useState(false);
   // QA 23/11: o erro ao salvar as regras fica na tela (o toast sumia).
   const [erroTermos, setErroTermos] = useState<string | null>(null);
+  // QA 23/11: limite de compras a prazo definível em "Limite e regras"
+  // (PUT .../customers/:cid/limit; 0 ou vazio = sem limite).
+  const [limiteInput, setLimiteInput] = useState("");
+  const [limiteDirty, setLimiteDirty] = useState(false);
+  const [salvandoLimite, setSalvandoLimite] = useState(false);
+  const [erroLimite, setErroLimite] = useState<string | null>(null);
 
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
@@ -237,6 +248,8 @@ export function ClienteCrediarioModal({
   const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
   const [freeAccountId, setFreeAccountId] = useState<string | null | undefined>(undefined);
   const [freePreview, setFreePreview] = useState<PaymentPlan | null>(null);
+  // Revisão #1360: de que valor e carnê é a prévia na tela ("valor|carnê").
+  const [freePreviewChave, setFreePreviewChave] = useState<string | null>(null);
   const [freePreviewLoading, setFreePreviewLoading] = useState(false);
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   // 15/09/2026: depois de receber, o painel mostra o que foi pago e oferece o
@@ -286,7 +299,7 @@ export function ClienteCrediarioModal({
   const [pixInstId, setPixInstId] = useState<string | null>(null);
   const [pixData, setPixData] = useState<CreditPix | null>(null);
   const [pixLoading, setPixLoading] = useState(false);
-  const pixOverlayTitle = pixInstId === "free" ? "Pix · Valor Livre" : "Pix da Parcela";
+  const pixOverlayTitle = pixInstId === "free" ? "Pix · valor livre" : "Pix da parcela";
 
   const profileQ = useQuery({
     queryKey: ["credit-profile", companyId, customerId],
@@ -346,6 +359,9 @@ export function ClienteCrediarioModal({
       setTrocarAberto(false);
       setMenuFicha(false);
       setMenuTelefone(false);
+      setLimiteDirty(false);
+      setErroLimite(null);
+      setLimiteInput("");
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -361,12 +377,17 @@ export function ClienteCrediarioModal({
   useEffect(() => {
     const p = profileQ.data;
     if (!p) return;
+    if (!limiteDirty) {
+      const lim = Number(p.credit_limit) || 0;
+      setLimiteInput(lim > 0 ? lim.toFixed(2).replace(".", ",") : "");
+    }
     const ov = p.terms?.overrides;
     if (ov) {
       setTermsMaxInst(ov.max_installments != null ? String(ov.max_installments) : "");
       setTermsInterest(ov.interest_rate != null ? String(+(ov.interest_rate * 100).toFixed(4)).replace(".", ",") : "");
     }
-  }, [profileQ.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileQ.data, customerId]);
 
   const detail = detailQ.data;
   const profile = profileQ.data;
@@ -420,7 +441,15 @@ export function ClienteCrediarioModal({
   faltaDoCarneRef.current = (id) => {
     if (!id) return null;
     const a = accounts.find(x => x.id === id);
-    return a ? Number(a.remaining ?? a.balance ?? 0) : null;
+    if (!a) return null;
+    // Revisão #1360: com multa e juros ligados, o carnê deve também os
+    // encargos das atrasadas (o backend cobra primeiro os encargos de todas
+    // as abertas do carnê). Sem isso, "Receber até esta" na última linha
+    // passava do "falta" e perdia o carnê.
+    const encargos = openInst
+      .filter(i => i.account_id === id && isInstallmentOverdue(i))
+      .reduce((s, i) => s + Number(i.charges_total ?? 0), 0);
+    return +(Number(a.remaining ?? a.balance ?? 0) + encargos).toFixed(2);
   };
 
   const nextDueDate = openInst.length > 0
@@ -444,6 +473,16 @@ export function ClienteCrediarioModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [detail?.accounts, openInst],
   );
+  // Revisão #1360: o mesmo "N de M" por posição da linha do carnê no painel
+  // "Mudar a data" e na prévia do Receber (antes "4 de 5" na linha e
+  // "Parcela 1/3" no painel). Grupo sem carnê: o número gravado.
+  const numeroDaParcela = useMemo(() => numerosPorPosicao(carnesAbertos), [carnesAbertos]);
+  const rotuloDaLinha = (line: Parameters<typeof installmentLabel>[0] & { installment_id?: string }) => {
+    const n = line.installment_id ? numeroDaParcela.get(line.installment_id) : undefined;
+    if (!n) return installmentLabel(line);
+    const venc = installmentLabel({ ...line, number: null, total_installments: null }).replace(/^Parcela/, "");
+    return `Parcela ${n}${venc}`;
+  };
 
   const isBlocked = profile?.status === "blocked";
 
@@ -469,6 +508,24 @@ export function ClienteCrediarioModal({
 
   function confirmBlock() {
     blockMut.mutate({ action: "block", reason: blockReason.trim() || undefined });
+  }
+
+  async function salvarLimite() {
+    if (!customerId) return;
+    const valor = limiteInput.trim() ? parseAmount(limiteInput) : 0;
+    if (!isFinite(valor) || valor < 0) { setErroLimite("Digite um valor em reais, ou deixe em branco para não ter limite."); return; }
+    setSalvandoLimite(true);
+    setErroLimite(null);
+    try {
+      await creditApi.setCustomerLimit(companyId, customerId, +valor.toFixed(2));
+      toast.success(valor > 0 ? "Limite salvo." : "Limite retirado.");
+      setLimiteDirty(false);
+      atualizarFicha();
+    } catch (err: any) {
+      setErroLimite(err?.data?.error ? `Não foi possível salvar o limite: ${err.data.error}` : "Não foi possível salvar o limite. Confira a conexão e tente de novo.");
+    } finally {
+      setSalvandoLimite(false);
+    }
   }
 
   async function saveTerms() {
@@ -682,20 +739,23 @@ export function ClienteCrediarioModal({
   const triggerPreview = useCallback((amtStr: string, accountId?: string | null) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     const amt = parseAmount(amtStr);
-    if (amt <= 0) { setFreePreview(null); return; }
+    if (amt <= 0) { setFreePreview(null); setFreePreviewChave(null); return; }
     previewTimerRef.current = setTimeout(async () => {
       setFreePreviewLoading(true);
+      const conta = contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId));
       try {
         const plan = await creditApi.previewPayment(companyId, customerId!, {
           amount: amt,
           // Acima do que falta no carnê, a prévia é de "todas as compras" —
           // a mesma conta que o envio faz (P1-4).
-          account_id: contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId)),
+          account_id: conta,
           paid_at: parseBrDate(freeDateBr) || undefined,
         });
         setFreePreview(plan);
+        setFreePreviewChave(chaveDaPrevia(amt, conta));
       } catch {
         setFreePreview(null);
+        setFreePreviewChave(null);
       } finally {
         setFreePreviewLoading(false);
       }
@@ -928,7 +988,7 @@ export function ClienteCrediarioModal({
   );
   useEffect(() => {
     if (!clienteForaDaLoja) return;
-    toast.info("Esta cliente não tem ficha nesta loja.");
+    toast.info("Este cadastro não tem ficha nesta loja.");
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteForaDaLoja]);
@@ -980,9 +1040,19 @@ export function ClienteCrediarioModal({
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
   // não bloqueia — receber parcela a parcela de mesmo valor é uso legítimo.
   const repetido = receberGate ? recebimentoRecente(detail?.transactions, ultimoRecebimento, freeAmtValue) : null;
+  // QA 23/11 (P2): valor acima do que falta — a pergunta diz quanto vira
+  // crédito na loja (antes só a prévia dizia, e o saldo aparecia negativo).
+  // Revisão #1360: credit_generated é o que sobra depois das PARCELAS; o
+  // fiado sem parcela absorve esse valor. Crédito de verdade só com o saldo
+  // novo negativo, e só se a prévia é do valor e do carnê de agora.
+  const previaAtual = !!freePreview && freePreviewChave === chaveDaPrevia(
+    freeAmtValue, contaParaOValor(freeAccountId, freeAmtValue, faltaDoCarneRef.current(freeAccountId)),
+  );
+  const creditoNaPrevia = previaAtual ? creditoDeVerdade(freePreview) : 0;
   const gateMessage = repetido
     ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
-    : `Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`;
+    : `Confirmar recebimento de ${fmt(freeAmtValue)} ${formaComPreposicao(methodLabel)}?`
+      + (creditoNaPrevia > 0 ? ` ${fmt(creditoNaPrevia)} vão virar crédito na loja, no nome de ${primeiroNome(name) || name}.` : "");
 
   // F3 (23/11/2026): na tela cheia o X de dentro de um painel fecha só o
   // painel (a ficha é a página); na janela fecha a ficha, como sempre.
@@ -1041,14 +1111,34 @@ export function ClienteCrediarioModal({
   });
 
   const carregandoFicha = detailQ.isLoading || profileQ.isLoading;
+  // QA 23/11 (P2): anel de foco violeta (o do app), não o do navegador.
+  useAnelDeFocoDaFicha(visible);
 
   // 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
   // explica, abrindo a edição no campo do telefone.
+  // QA 23/11 (P2): sem telefone, a frase aprovada fica à vista ao lado do
+  // Cobrar apagado (antes só aparecia num aviso ao tocar).
+  const avisoSemTelefone = !!onCobrar && !detailQ.isLoading && !phone && (
+    <Text style={f.semTelefone} testID="ficha-cobrar-aviso">Adicione o telefone para cobrar pelo WhatsApp</Text>
+  );
+
   const botaoCobrar = !!onCobrar && !detailQ.isLoading && (
     phone ? (
-      <Pressable style={[m.waBtn, (emTela || emPagina) && t.cobrarTela]} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
-        <Icon name="whatsapp" size={16} color={Colors.green} />
-        <Text style={m.waTxt}>Cobrar</Text>
+      <Pressable
+        style={[m.waBtn, (emTela || emPagina) && t.cobrarTela, cobrando && { opacity: 0.6 }]}
+        onPress={() => onCobrar(customerId!, name, phone)}
+        disabled={cobrando}
+        accessibilityRole="button"
+        accessibilityState={{ busy: cobrando, disabled: cobrando }}
+        accessibilityLabel={cobrando ? "Preparando a cobrança" : "Cobrar"}
+        testID="ficha-cobrar"
+      >
+        {/* QA 23/11 (P2): a prévia leva alguns segundos; o botão avisa e
+            não aceita um segundo toque. */}
+        {cobrando
+          ? <ActivityIndicator size="small" color={Colors.green} />
+          : <Icon name="whatsapp" size={16} color={Colors.green} />}
+        <Text style={m.waTxt}>{cobrando ? "Preparando…" : "Cobrar"}</Text>
       </Pressable>
     ) : (
       <Pressable
@@ -1061,8 +1151,8 @@ export function ClienteCrediarioModal({
         accessibilityLabel="Cobrar. Adicione o telefone para cobrar pelo WhatsApp"
         testID="ficha-cobrar-sem-telefone"
       >
-        <Icon name="whatsapp" size={16} color={Colors.ink3} />
-        <Text style={[m.waTxt, { color: Colors.ink3 }]}>Cobrar</Text>
+        <Icon name="whatsapp" size={16} color={CorDaFicha.secundario} />
+        <Text style={[m.waTxt, { color: CorDaFicha.secundario }]}>Cobrar</Text>
       </Pressable>
     )
   );
@@ -1080,8 +1170,8 @@ export function ClienteCrediarioModal({
 
   // F4: o "⋯" do alto da ficha — o raro mora aqui (mockup aprovado).
   const itensDaFicha: ItemDoMenu[] = [
-    ...(customerId ? [{ rotulo: "Editar cadastro da cliente", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
-    { rotulo: "Limite e regras desta cliente", onPress: abrirLimite, testID: "ficha-abrir-limite" },
+    ...(customerId ? [{ rotulo: "Editar cadastro", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
+    { rotulo: "Limite e regras desta ficha", onPress: abrirLimite, testID: "ficha-abrir-limite" },
     ...(openInst.length > 0 || realCarnes.length > 0
       ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { fecharAoAbrirPainel(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
       : []),
@@ -1144,8 +1234,11 @@ export function ClienteCrediarioModal({
         atrasadas: parcelasAtrasadas, proxima: proximaParcela, aConferir: hasOverdue ? 0 : toReviewCount,
         saldo: totalBalance, hoje: hojeSP, fmt,
       });
+  // QA 23/11 (P2): com parcela atrasada, a frase do score ("paga em dia")
+  // contradizia o fato 2 — que já diz o atraso. A frase segue em Limite e regras.
   const fatoLimite = fatoPodeComprarMais({
-    limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit, scoreLabel, fmt,
+    limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit,
+    scoreLabel: fatoAgora.atrasado ? null : scoreLabel, fmt,
   });
   const numeros = !detailQ.isLoading && (
     <View style={f.fatos} testID="ficha-tres-fatos">
@@ -1252,6 +1345,8 @@ export function ClienteCrediarioModal({
       ajustes={{
         termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
         termsDirty, setTermsDirty, savingTerms, saveTerms, erroTermos,
+        limiteInput, setLimiteInput: (v: string) => { setLimiteInput(v); setLimiteDirty(true); setErroLimite(null); },
+        limiteDirty, salvarLimite, salvandoLimite, erroLimite,
         blockReason, setBlockReason, blockingAction, setBlockingAction,
         handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
       }}
@@ -1284,7 +1379,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={m.panelTitle}>{receiptResult ? "Pagamento registrado" : "Receber pagamento"}</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
 
@@ -1307,10 +1402,10 @@ export function ClienteCrediarioModal({
                     <Text style={m.previewTitle}>Parcelas pagas</Text>
                     {receiptResult.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
+                        <Text style={m.previewLbl}>{rotuloDaLinha(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           <Text style={m.previewVal}>{fmt((line.principal_paid || 0) + (line.charges_paid || 0))}</Text>
-                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                          <Text style={[m.previewVal, { fontSize: 10, color: CorDaFicha.secundario }]}>
                             {translateStatus(line.status_after)}
                           </Text>
                         </View>
@@ -1390,7 +1485,7 @@ export function ClienteCrediarioModal({
                       triggerPreview(clean, freeAccountId);
                     }}
                     placeholder="0,00"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={CorDaFicha.secundario}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -1450,7 +1545,7 @@ export function ClienteCrediarioModal({
                     <Text style={[m.previewTitle, { fontFamily: Fonts.body }]}>Para onde vai o dinheiro</Text>
                     {freePreview.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
+                        <Text style={m.previewLbl}>{rotuloDaLinha(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           {line.charges_paid > 0 && (
                             <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
@@ -1458,7 +1553,7 @@ export function ClienteCrediarioModal({
                             </Text>
                           )}
                           <Text style={m.previewVal}>Principal: {fmt(line.principal_paid)}</Text>
-                          <Text style={[m.previewVal, { fontSize: 10, color: Colors.ink3 }]}>
+                          <Text style={[m.previewVal, { fontSize: 10, color: CorDaFicha.secundario }]}>
                             {translateStatus(line.status_after)}
                           </Text>
                         </View>
@@ -1466,14 +1561,15 @@ export function ClienteCrediarioModal({
                     ))}
                     <View style={[m.previewRow, { borderTopWidth: 1, borderTopColor: Colors.border2, paddingTop: 8, marginTop: 4 }]}>
                       <Text style={[m.previewLbl, { fontWeight: "700", color: Colors.ink }]}>Novo saldo em aberto</Text>
-                      <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]}>
-                        {fmt(freePreview.new_balance)}
+                      {/* Nunca negativo: o que passa vira crédito, na linha de baixo. */}
+                      <Text style={[m.previewVal, { color: freePreview.new_balance > 0 ? Colors.red : Colors.green, fontSize: 16 }]} testID="receber-novo-saldo">
+                        {fmt(Math.max(0, freePreview.new_balance))}
                       </Text>
                     </View>
-                    {freePreview.credit_generated > 0 && (
+                    {creditoNaPrevia > 0 && (
                       <View style={m.previewRow}>
                         <Text style={m.previewLbl}>Crédito gerado</Text>
-                        <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
+                        <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(creditoNaPrevia)}</Text>
                       </View>
                     )}
                   </View>
@@ -1548,7 +1644,7 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={m.panelTitle}>{pixOverlayTitle}</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
@@ -1605,12 +1701,12 @@ export function ClienteCrediarioModal({
                 </Pressable>
                 <Text style={[m.panelTitle, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
-                {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão substituídas por este novo cronograma.
+                {renegScope.label} · saldo em aberto {fmt(renegScope.openRemaining)}. As parcelas abertas serão trocadas por estas novas parcelas.
               </Text>
 
               <Text style={[m.fieldLabel, { marginTop: 4 }]}>Novo total</Text>
@@ -1621,7 +1717,7 @@ export function ClienteCrediarioModal({
                   value={renegTotal}
                   onChangeText={onRenegTotalChange}
                   placeholder="0,00"
-                  placeholderTextColor={Colors.ink3}
+                  placeholderTextColor={CorDaFicha.secundario}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -1657,7 +1753,7 @@ export function ClienteCrediarioModal({
                       value={renegPerParcel}
                       onChangeText={onRenegPerParcelChange}
                       placeholder="0,00"
-                      placeholderTextColor={Colors.ink3}
+                      placeholderTextColor={CorDaFicha.secundario}
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -1706,7 +1802,7 @@ export function ClienteCrediarioModal({
                     style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
                     onPress={() => setRenegScope(null)}
                   >
-                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                    <Text style={[m.ctaTxt, { color: CorDaFicha.secundario }]}>Cancelar</Text>
                   </Pressable>
                   <Pressable
                     style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
@@ -1715,7 +1811,7 @@ export function ClienteCrediarioModal({
                   >
                     {renegSubmitting
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>Confirmar renegociação</Text>}
+                      : <Text style={m.ctaTxt} numberOfLines={1} adjustsFontSizeToFit>Mudar as parcelas</Text>}
                   </Pressable>
                 </View>
               </View>
@@ -1763,14 +1859,14 @@ export function ClienteCrediarioModal({
                   </View>
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
-                <Text style={m.panelTitle}>Alterar vencimento</Text>
+                <Text style={m.panelTitle}>Mudar a data</Text>
                 <Pressable onPress={fecharDoPainel} style={m.xBtn}>
-                  <Icon name="x" size={13} color={Colors.ink3} />
+                  <Icon name="x" size={13} color={CorDaFicha.secundario} />
                 </Pressable>
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
-                Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
+                Parcela {numeroDaParcela.get(editingDueDateInst.id) ?? `${editingDueDateInst.installment_number}/${editingDueDateInst.total_installments}`} · parcelas seguintes serão recalculadas.
               </Text>
               <Text style={[m.fieldLabel, { marginBottom: 6, marginTop: 4 }]}>NOVA DATA (DD/MM/AAAA)</Text>
               <DateInput
@@ -1778,6 +1874,7 @@ export function ClienteCrediarioModal({
                 onChangeText={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
                 placeholder="15/07/2026"
                 forceShowError={!!editDueDateError}
+                style={m.dateInput}
               />
               {!!editDueDateError && (
                 <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
@@ -1789,7 +1886,7 @@ export function ClienteCrediarioModal({
                     style={[m.cta, { flex: 1, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}
                     onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }}
                   >
-                    <Text style={[m.ctaTxt, { color: Colors.ink3 }]}>Cancelar</Text>
+                    <Text style={[m.ctaTxt, { color: CorDaFicha.secundario }]}>Cancelar</Text>
                   </Pressable>
                   <Pressable
                     style={[m.cta, { flex: 2 }, editDueDateMut.isPending && { opacity: 0.5 }]}
@@ -1815,7 +1912,7 @@ export function ClienteCrediarioModal({
           <ConfirmDialog
             visible={!!excluirAlvo}
             title={excluindo ? "Excluindo…" : "Excluir carnê"}
-            message={excluirAlvo ? textoConfirmarExclusao(excluirAlvo.falta, fmt) : ""}
+            message={excluirAlvo ? textoConfirmarExclusao(excluirAlvo.falta, fmt, excluirAlvo.nome) : ""}
             confirmLabel={excluindo ? "Excluindo…" : "Sim, excluir"}
             cancelLabel="Cancelar"
             destructive
@@ -1912,7 +2009,7 @@ export function ClienteCrediarioModal({
       : `${fatoLimite.titulo} ${fatoLimite.valor}${fatoLimite.detalhe.includes(" · ") ? ` · ${fatoLimite.detalhe.split(" · ").slice(1).join(" · ")}` : ""}`;
     return (
       <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={pedirFechar}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={pg.raiz} testID="ficha-pagina">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={pg.raiz} testID="ficha-pagina" {...({ dataSet: MARCA_DA_FICHA } as any)}>
           <View style={pg.topo}>
             <Pressable onPress={onClose} style={pg.voltar} accessibilityRole="button" accessibilityLabel="Voltar para a lista do crediário" testID="ficha-voltar">
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -1936,9 +2033,13 @@ export function ClienteCrediarioModal({
                 <Text style={pg.heroK}>{fatoFalta.titulo}</Text>
                 <Text style={[pg.heroV, fatoFalta.tom === "credito" && { color: Colors.green }]} testID="ficha-pagina-falta">{fatoFalta.valor}</Text>
                 {!detailQ.isLoading && (
-                  <Text style={[pg.agora, fatoAgora.atrasado && { color: Colors.red }]} testID="crediario-ficha-status">
-                    {`${fatoAgora.titulo} ${fatoAgora.valor}${fatoAgora.detalhe ? ` · ${fatoAgora.detalhe}` : ""}`}
-                  </Text>
+                  // QA 23/11 (P2): título numa linha, valor e detalhe na outra.
+                  <View testID="crediario-ficha-status" style={{ marginTop: 4 }}>
+                    <Text style={[pg.heroK, fatoAgora.atrasado && { color: Colors.red }]}>{fatoAgora.titulo}</Text>
+                    <Text style={[pg.agora, { marginTop: 0 }, fatoAgora.atrasado && { color: Colors.red }]}>
+                      {`${fatoAgora.valor}${fatoAgora.detalhe ? ` · ${fatoAgora.detalhe}` : ""}`}
+                    </Text>
+                  </View>
                 )}
                 {!!profile && (
                   <View style={f.fatoSubLinha} testID="crediario-ficha-limite">
@@ -1978,6 +2079,7 @@ export function ClienteCrediarioModal({
             {carregandoFicha ? carregandoEl : tab === "historico" ? historicoEl : parcelasEl}
           </ScrollView>
 
+          {!!avisoSemTelefone && <View style={{ paddingHorizontal: 12, paddingTop: 6, backgroundColor: Colors.bg2 }}>{avisoSemTelefone}</View>}
           {!detailQ.isLoading && (
             <View style={pg.rodape} testID="ficha-rodape">
               {botaoCobrar}
@@ -2000,7 +2102,7 @@ export function ClienteCrediarioModal({
     // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
     // o que a lojista estava digitando. O painel tem o próprio voltar; Esc e
     // voltar do Android seguem fechando como antes.
-    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700}>
+    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700} dataSet={MARCA_DA_FICHA}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -2009,12 +2111,13 @@ export function ClienteCrediarioModal({
               <Text style={m.crumbTxt}>Crediário</Text>
             </Pressable>
             <Pressable onPress={onClose} style={m.xBtn}>
-              <Icon name="x" size={15} color={Colors.ink3} />
+              <Icon name="x" size={15} color={CorDaFicha.secundario} />
             </Pressable>
           </View>
 
           <View style={m.fixedHeader}>
             {identidade}
+            {!!avisoSemTelefone && <View style={{ marginTop: -6, marginBottom: 10 }}>{avisoSemTelefone}</View>}
             {numeros}
             {avisoEl}
 
@@ -2085,7 +2188,7 @@ export function ClienteCrediarioModal({
             disabled={!nav.onAnterior}
             style={[t.seta, !nav.onAnterior && { opacity: 0.4 }]}
             accessibilityRole="button"
-            accessibilityLabel="Cliente anterior"
+            accessibilityLabel="Ficha anterior"
             testID="ficha-anterior"
           >
             <Text style={t.setaTxt}>‹</Text>
@@ -2098,7 +2201,7 @@ export function ClienteCrediarioModal({
             disabled={!nav.onProxima}
             style={[t.seta, !nav.onProxima && { opacity: 0.4 }]}
             accessibilityRole="button"
-            accessibilityLabel="Próxima cliente"
+            accessibilityLabel="Próxima ficha"
             testID="ficha-proxima"
           >
             <Text style={t.setaTxt}>›</Text>
@@ -2121,7 +2224,7 @@ export function ClienteCrediarioModal({
 
   if (!visible) return null;
   return (
-    <View style={t.raiz} testID="ficha-tela">
+    <View style={t.raiz} testID="ficha-tela" {...({ dataSet: MARCA_DA_FICHA } as any)}>
       {larga && !!listaLateral && (
         <View style={t.lista}>
           {listaLateral}
@@ -2131,12 +2234,23 @@ export function ClienteCrediarioModal({
 
       <View style={t.centro} testID="ficha-centro">
         {!larga && barraDeTroca}
-        <View style={t.cabecalho}>
-          {identidade}
-          {numeros}
-          {avisoEl}
-        </View>
+        {/* QA 23/11 (P2): na tela média (1024 com o menu) o cabeçalho fixo
+            deixava ~200 px para os carnês; ali ele rola junto. */}
+        {larga && (
+          <View style={t.cabecalho} testID="ficha-cabecalho-fixo">
+            {identidade}
+            {numeros}
+            {avisoEl}
+          </View>
+        )}
         <ScrollView style={t.rolagem} contentContainerStyle={t.rolagemConteudo} showsVerticalScrollIndicator={true}>
+          {!larga && (
+            <View style={[t.cabecalho, t.cabecalhoRolando]} testID="ficha-cabecalho-rolando">
+              {identidade}
+              {numeros}
+              {avisoEl}
+            </View>
+          )}
           <Text style={t.secao}>Compras e parcelas</Text>
           {carregandoFicha ? carregandoEl : parcelasEl}
         </ScrollView>
@@ -2149,6 +2263,7 @@ export function ClienteCrediarioModal({
           </Pressable>
           {botaoCobrar}
         </View>
+        {!!avisoSemTelefone && <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>{avisoSemTelefone}</View>}
         <ScrollView style={t.rolagem} contentContainerStyle={t.movConteudo} showsVerticalScrollIndicator={true}>
           {historicoEl}
         </ScrollView>
@@ -2158,7 +2273,7 @@ export function ClienteCrediarioModal({
 
       {!larga && trocarAberto && !!listaLateral && (
         <>
-          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista das clientes" />
+          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista" />
           <View style={t.trocarLista} testID="ficha-trocar-lista">
             {listaLateral}
             {ocupado && <TravaDaLista />}
@@ -2200,7 +2315,7 @@ const pg = StyleSheet.create({
   heroK: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink2 },
   heroV: { fontFamily: Fonts.mono, fontSize: 28, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   agora: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink2, marginTop: 2 },
-  limite: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  limite: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, marginTop: 2 },
   heroCurto: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 10 },
   heroCurtoV: { fontFamily: Fonts.mono, fontSize: 18, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   seg: {
@@ -2229,6 +2344,8 @@ const t = StyleSheet.create({
   rolagemConteudo: { padding: 20, paddingTop: 14, paddingBottom: 32 },
   movConteudo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
   secao: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 10 },
+  // Dentro da rolagem: sem o padding próprio (o conteúdo já tem).
+  cabecalhoRolando: { paddingHorizontal: 0, paddingTop: 0, marginBottom: 14, marginHorizontal: -20, paddingLeft: 20, paddingRight: 20 },
   direita: {
     minHeight: 0, backgroundColor: Colors.bg2, overflow: "hidden",
     borderLeftWidth: 1, borderLeftColor: Colors.border,
@@ -2258,7 +2375,7 @@ const t = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2,
   },
   setaTxt: { fontFamily: Fonts.body, fontSize: 18, fontWeight: "700", color: Colors.ink },
-  posicao: { fontFamily: Fonts.mono, fontSize: 12, color: Colors.ink3, minWidth: 64, textAlign: "center" },
+  posicao: { fontFamily: Fonts.mono, fontSize: 12, color: CorDaFicha.secundario, minWidth: 64, textAlign: "center" },
   trocarTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink },
   trocarFundo: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 19, backgroundColor: "rgba(3,5,14,0.35)" },
   trocarLista: {
@@ -2289,7 +2406,8 @@ const f = StyleSheet.create({
   fatoK: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "600", color: Colors.ink2 },
   fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
-  fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
+  fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 2 },
+  semTelefone: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17 },
   fatoVer: { fontFamily: Fonts.body, fontSize: 11.5, fontWeight: "700", color: Colors.violet3 },
   fatoSubLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 2, marginTop: 2 },
   fatoVerArea: { minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 6, marginVertical: -14 },

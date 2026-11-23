@@ -17,7 +17,7 @@ const MARY = "8fbde0b9-2ec0-4bc9-be58-f86c31465fa6";
 describe("mensagemErroRecebimento", () => {
   it("cliente fora do cadastro do grupo diz o que fazer", () => {
     const msg = mensagemErroRecebimento({ status: 404, data: { code: "CUSTOMER_NOT_FOUND", error: "x" } });
-    expect(msg).toMatch(/cadastro desta loja/);
+    expect(msg).toMatch(/Este cadastro não está nesta loja/);
     expect(msg).toMatch(/abra de novo pela lista/);
   });
 

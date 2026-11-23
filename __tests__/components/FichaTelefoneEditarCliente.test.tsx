@@ -184,7 +184,7 @@ describe("EditarClienteDaFicha", () => {
     const { t } = montarJanela();
     expect(mockForm).toBeNull();
     expect(porId(t, "ficha-editar-cliente-sem-cadastro")).toHaveLength(1);
-    expect(texto(t.toJSON())).toContain("Não achamos o cadastro desta cliente.");
+    expect(texto(t.toJSON())).toContain("Não achamos este cadastro.");
     t.unmount();
   });
 

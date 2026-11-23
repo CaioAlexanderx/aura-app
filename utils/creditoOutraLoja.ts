@@ -37,7 +37,7 @@ export const MSG_RECEBIMENTO_GENERICA =
 export function mensagemErroRecebimento(err: ErroApi): string {
   const code = err?.data?.code;
   if (code === "CUSTOMER_NOT_FOUND") {
-    return "Esta cliente não está no cadastro desta loja nem das outras lojas do seu grupo. Feche a ficha e abra de novo pela lista.";
+    return "Este cadastro não está nesta loja nem nas outras lojas do seu grupo. Feche a ficha e abra de novo pela lista.";
   }
   if (code === "CREDIARIO_DISABLED") {
     return "O crediário está desligado nesta loja. Ative em Configurações → PDV → Políticas do Caixa.";

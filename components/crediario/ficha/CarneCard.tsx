@@ -21,6 +21,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
+import { CorDaFicha } from "./fichaStyles";
 import { Button } from "@/components/Button";
 import { Fonts } from "@/constants/fonts";
 import { diaMes, type CarneDerivado, type ParcelaAbertaDoCarne } from "@/utils/crediarioCarne";
@@ -28,11 +29,22 @@ import { datasDasPagas } from "@/utils/crediarioTresFatos";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./MenuMais";
 import { fmt } from "./fichaHelpers";
 
+/** QA 23/11/2026: o que a linha precisa saber do carnê. */
+export type InfoDaLinha<P> = {
+  /** "3 de 4" pela POSIÇÃO no carnê (por data) — depois de juntar carnês o
+   *  número gravado repetia ("1 de 2, 2 de 2, 1 de 3"). Só na tela. */
+  numero: string;
+  /** Parcelas abertas do carnê que vêm antes desta (o Receber abate por elas). */
+  anteriores: P[];
+  /** Todas as abertas do carnê (os encargos de todas vêm primeiro). */
+  todas: P[];
+};
+
 export type CarneCardProps<P extends ParcelaAbertaDoCarne> = {
   carne: CarneDerivado<P>;
   /** Linha da parcela a pagar (montada pela TabParcelas). O índice diz se é a
    *  primeira do carnê (o "Receber" dela é o primário). */
-  renderParcela: (p: P, indice: number) => React.ReactNode;
+  renderParcela: (p: P, indice: number, info: InfoDaLinha<P>) => React.ReactNode;
   onReceber: () => void;
   onImprimir: () => void;
   /** Ausente = sem a opção (carnê sem parcela para renegociar). */
@@ -53,7 +65,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   // F5: no celular o "Imprimir" entra no "⋯" (mockup, celular).
   const { width } = useWindowDimensions();
   const celular = width < 768;
-  const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : Colors.ink3;
+  const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : CorDaFicha.secundario;
   const temDetalhe = c.parcelasPagas.length > 0 || c.compras.length > 0;
   // Fiado no grupo sem carnê: os dois botões ficam à vista (mockup).
   const fiadoSemCarne = c.semCarne && c.semParcelas;
@@ -72,7 +84,20 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
     itensDoMenu.push({ rotulo: "Excluir este carnê", onPress: onExcluir, destrutivo: true, testID: `carne-${c.key}-excluir` });
   }
 
-  const pagas = c.parcelasPagas;
+  // QA 23/11/2026: numeração pela posição no carnê, por data (pagas
+  // primeiro, depois as abertas). Backend antigo (sem as pagas na resposta):
+  // o número gravado, que é o único que se conhece.
+  // Grupo sem carnê: o número gravado (revisão #1360).
+  const porPosicao = c.temCamposNovos && !c.semCarne;
+  const pagas = porPosicao
+    ? c.parcelasPagas.slice().sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)) || a.installment_number - b.installment_number)
+    : c.parcelasPagas;
+  const totalNoCarne = pagas.length + c.parcelasAbertas.length;
+  const numeroDaPaga = (p: (typeof pagas)[number], j: number) =>
+    porPosicao ? `${j + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
+  const numeroDaAberta = (p: P, i: number) =>
+    porPosicao ? `${pagas.length + i + 1} de ${totalNoCarne}`
+      : `${(p as any).installment_number ?? i + 1} de ${(p as any).total_installments ?? c.parcelasAbertas.length}`;
   const resumoPagas = pagas.length > 0
     ? `${pagas.length} ${pagas.length === 1 ? "paga" : "pagas"}${datasDasPagas(pagas.map(p => diaMes(p.paid_at))) ? ` · ${datasDasPagas(pagas.map(p => diaMes(p.paid_at)))}` : ""}`
     : c.semCarne ? "Compras" : "Itens da compra";
@@ -165,8 +190,8 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
               ))}
               {c.devolvido > 0 && (
                 <View style={s.row}>
-                  <Text style={[s.rowK, { color: Colors.ink3 }]}>Devolvido</Text>
-                  <Text style={[s.rowV, { color: Colors.ink3 }]}>−{fmt(c.devolvido)}</Text>
+                  <Text style={[s.rowK, { color: CorDaFicha.secundario }]}>Devolvido</Text>
+                  <Text style={[s.rowV, { color: CorDaFicha.secundario }]}>−{fmt(c.devolvido)}</Text>
                 </View>
               )}
               {c.comprasTotal != null && (
@@ -177,14 +202,14 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
               )}
             </View>
           )}
-          {pagas.map(p => (
+          {pagas.map((p, j) => (
             <View key={p.id} style={s.row} testID={`carne-${c.key}-paga`}>
-              <Text style={[s.rowK, { color: Colors.ink3 }]}>
+              <Text style={[s.rowK, { color: CorDaFicha.secundario }]}>
                 <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
-                {`Parcela ${p.installment_number} de ${p.total_installments}`}
+                {`Parcela ${numeroDaPaga(p, j)}`}
                 {diaMes(p.paid_at) ? ` · paga em ${diaMes(p.paid_at)}` : " · paga"}
               </Text>
-              <Text style={[s.rowV, { color: Colors.ink3 }]}>{fmt(p.amount)}</Text>
+              <Text style={[s.rowV, { color: CorDaFicha.secundario }]}>{fmt(p.amount)}</Text>
             </View>
           ))}
         </View>
@@ -194,7 +219,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         <Text style={[s.nota, { paddingHorizontal: 14 }]}>Carnês juntados: {c.juntadoDe.join(", ")}</Text>
       )}
 
-      {c.parcelasAbertas.map((p, i) => renderParcela(p, i))}
+      {c.parcelasAbertas.map((p, i) => renderParcela(p, i, { numero: numeroDaAberta(p, i), anteriores: c.parcelasAbertas.slice(0, i), todas: c.parcelasAbertas }))}
 
       {c.semParcelas && (
         <View style={s.semParcelas}>
@@ -242,7 +267,7 @@ const s = StyleSheet.create({
   itens: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, marginTop: 2 },
   falta: { alignItems: "flex-end", marginLeft: "auto" as any },
   valor: { fontFamily: Fonts.mono, fontSize: 14.5, fontWeight: "500", fontVariant: ["tabular-nums"] as any },
-  de: { fontFamily: Fonts.mono, fontSize: 11.5, color: Colors.ink3, marginTop: 1, fontVariant: ["tabular-nums"] as any },
+  de: { fontFamily: Fonts.mono, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   acoesTopo: { flexDirection: "row", alignItems: "center", gap: 6 },
   chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, borderWidth: 1 },
   chipT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700" },
@@ -251,24 +276,24 @@ const s = StyleSheet.create({
   pg: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingBottom: 10 },
   prog: { flex: 1, height: 6, borderRadius: 99, backgroundColor: Colors.bg4, overflow: "hidden" },
   progFill: { height: "100%", backgroundColor: Colors.green, borderRadius: 99 },
-  pgTxt: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3 },
+  pgTxt: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario },
 
   linhaPagas: {
     flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44,
     paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   marcaPaga: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "800", color: Colors.green, width: 20, textAlign: "center" },
-  linhaPagasTxt: { fontFamily: Fonts.body, flex: 1, fontSize: 12.5, color: Colors.ink3 },
+  linhaPagasTxt: { fontFamily: Fonts.body, flex: 1, fontSize: 12.5, color: CorDaFicha.secundario },
   ver: { fontFamily: Fonts.body, fontWeight: "700", color: Colors.violet3 },
 
   corpo: { paddingHorizontal: 14, paddingBottom: 10 },
-  lbl: { fontFamily: Fonts.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: Colors.ink3, marginBottom: 6 },
+  lbl: { fontFamily: Fonts.body, fontSize: 10.5, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: CorDaFicha.secundario, marginBottom: 6 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, paddingVertical: 4 },
   rowK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink },
   rowV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   rowSum: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4, paddingTop: 8 },
   strong: { fontWeight: "700" },
-  nota: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17, marginTop: 2, marginBottom: 6 },
+  nota: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17, marginTop: 2, marginBottom: 6 },
 
   semParcelas: { paddingHorizontal: 14, paddingBottom: 14, paddingTop: 4, borderTopWidth: 1, borderTopColor: Colors.border },
   botoes: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },

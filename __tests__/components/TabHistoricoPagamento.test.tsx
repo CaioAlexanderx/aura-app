@@ -92,7 +92,9 @@ describe("Histórico — pagamento", () => {
     expect(texto).toContain("Para onde foi o dinheiro · Compras sem carnê");
     expect(texto).toContain("Parcela 1 de 3 · paga inteira");
     expect(texto).toContain("Para onde foi o dinheiro · conta anterior");
-    expect(texto).toContain("Parcela 1 de 1 · abateu R$ 34,00");
+    // QA P2: o valor aparece uma vez só, à direita
+    expect(texto).toContain("Parcela 1 de 1 · abateu");
+    expect(texto).not.toContain("abateu R$ 34,00");
     // a parcela não veio entre as abertas da ficha: não afirma que foi paga
     expect(texto).toContain("já não está em aberto");
     expect(texto).toContain("R$ 166,00");

@@ -12,13 +12,14 @@
 //  - "Regras só para esta cliente" e "Vendas a prazo" à vista (era sanfona).
 // Estado e handlers continuam no shell (ClienteCrediarioModal).
 // ============================================================
-import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet } from "react-native";
+import { useEffect } from "react";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import type { CreditAccount } from "@/services/creditApi";
 import { fraseDoScore } from "@/utils/crediarioTresFatos";
 import { fmt } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 /** Props do bloco de Termos/Bloqueio — estado vive no shell. */
 export type AjustesProps = {
@@ -32,6 +33,13 @@ export type AjustesProps = {
   saveTerms: () => void;
   /** Erro ao salvar as regras, na tela. */
   erroTermos?: string | null;
+  /** Limite de compras a prazo (QA 23/11): texto do campo e o salvar. */
+  limiteInput?: string;
+  setLimiteInput?: (v: string) => void;
+  limiteDirty?: boolean;
+  salvarLimite?: () => void;
+  salvandoLimite?: boolean;
+  erroLimite?: string | null;
   blockReason: string;
   setBlockReason: (v: string) => void;
   blockingAction: "block" | "unblock" | null;
@@ -69,6 +77,16 @@ export function TabConta({
   const frase = fraseDoScore(scoreLabel);
   const ov = profile?.terms?.overrides || {};
   const ef = profile?.terms?.effective;
+  // QA 23/11 (P2): ao pedir o bloqueio, a tela rola até "Motivo / Confirmar
+  // bloqueio" (ficava abaixo da dobra e parecia que nada tinha acontecido).
+  const pedindoBloqueio = ajustes.blockingAction === "block" && !isBlocked;
+  useEffect(() => {
+    if (!pedindoBloqueio || Platform.OS !== "web" || typeof document === "undefined") return;
+    const t = setTimeout(() => {
+      try { (document.getElementById("limite-regras-motivo") as any)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); } catch {}
+    }, 50);
+    return () => clearTimeout(t);
+  }, [pedindoBloqueio]);
   // Valor da loja: plan-config; sem ele, o efetivo quando a cliente não tem
   // regra própria naquele campo (aí efetivo = loja).
   const lojaMax = regraDaLoja?.max_installments ?? (ov.max_installments == null ? ef?.max_installments : null);
@@ -95,18 +113,48 @@ export function TabConta({
         </Text>
       </>
     ) : (
-      <Text style={c.texto}>Esta cliente não tem limite definido.</Text>
+      <Text style={c.texto}>Sem limite definido para este cadastro.</Text>
+    )}
+    {!!ajustes.setLimiteInput && (
+      <View style={{ marginTop: 10 }}>
+        <Text style={[m.fieldLabel, { fontFamily: Fonts.body }]}>Limite (R$)</Text>
+        <TextInput
+          style={m.termsInput}
+          value={ajustes.limiteInput ?? ""}
+          placeholder="Sem limite"
+          placeholderTextColor={CorDaFicha.secundario}
+          keyboardType="decimal-pad"
+          onChangeText={v => ajustes.setLimiteInput!(v.replace(/[^\d,.]/g, ""))}
+          accessibilityLabel="Limite de compras a prazo, em reais"
+          testID="limite-regras-limite-campo"
+        />
+        <Text style={[c.dica, { marginTop: 4 }]}>Deixe em branco ou 0 para não ter limite.</Text>
+        <Pressable
+          style={[m.cta, { marginTop: 10 }, (!ajustes.limiteDirty || ajustes.salvandoLimite) && { opacity: 0.45 }]}
+          onPress={ajustes.salvarLimite}
+          disabled={!ajustes.limiteDirty || ajustes.salvandoLimite}
+          accessibilityRole="button"
+          testID="limite-regras-limite-salvar"
+        >
+          {ajustes.salvandoLimite
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar limite</Text>}
+        </Pressable>
+        {!!ajustes.erroLimite && (
+          <Text style={c.erro} accessibilityRole="alert" testID="limite-regras-limite-erro">{ajustes.erroLimite}</Text>
+        )}
+      </View>
     )}
   </View>
 
   {/* ── Score em frase + a nota (só aqui) ── */}
   {!!profile && (
     <View style={c.bloco} testID="limite-regras-score">
-      <Text style={c.rotulo}>Como ela costuma pagar</Text>
+      <Text style={c.rotulo}>Como costuma pagar</Text>
       <View style={c.caixa}>
         {!!frase && <Text style={c.frase}>{frase}</Text>}
         <Text style={[c.texto, { marginTop: frase ? 4 : 0 }]}>
-          A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.
+          A Aura olha os pagamentos deste cadastro e dá uma nota. A nota só avisa você: nunca impede a venda.
         </Text>
         {profile.credit_score != null && (
           <View style={c.par}>
@@ -120,17 +168,17 @@ export function TabConta({
 
   {/* ── Regras só para esta cliente (Termos) ── */}
   <View style={c.bloco}>
-    <Text style={c.rotulo}>Regras só para esta cliente</Text>
+    <Text style={c.rotulo}>Regras só para este cadastro</Text>
     <View style={c.caixa}>
       {!!ef && (
         <>
           <View style={c.par}>
             <Text style={c.parK}>Máximo de parcelas</Text>
-            <Text style={c.parV}>{`${ef.max_installments} ${ov.max_installments != null ? "(só dela)" : "(regra da loja)"}`}</Text>
+            <Text style={c.parV}>{`${ef.max_installments} ${ov.max_installments != null ? "(só deste cadastro)" : "(regra da loja)"}`}</Text>
           </View>
           <View style={c.par}>
             <Text style={c.parK}>Juros ao mês</Text>
-            <Text style={c.parV}>{`${pct(ef.interest_rate)} ${ov.interest_rate != null ? "(só dela)" : "(regra da loja)"}`}</Text>
+            <Text style={c.parV}>{`${pct(ef.interest_rate)} ${ov.interest_rate != null ? "(só deste cadastro)" : "(regra da loja)"}`}</Text>
           </View>
         </>
       )}
@@ -140,7 +188,7 @@ export function TabConta({
         style={m.termsInput}
         value={ajustes.termsMaxInst}
         placeholder={lojaMax != null ? `${lojaMax} (regra da loja)` : "regra da loja"}
-        placeholderTextColor={Colors.ink3}
+        placeholderTextColor={CorDaFicha.secundario}
         keyboardType="numeric"
         onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
       />
@@ -149,7 +197,7 @@ export function TabConta({
         style={m.termsInput}
         value={ajustes.termsInterest}
         placeholder={lojaJuros != null ? `${(Number(lojaJuros) * 100).toFixed(2).replace(".", ",")} (regra da loja)` : "regra da loja"}
-        placeholderTextColor={Colors.ink3}
+        placeholderTextColor={CorDaFicha.secundario}
         keyboardType="decimal-pad"
         onChangeText={v => { ajustes.setTermsInterest(v.replace(/[^\d,.]/g, "")); ajustes.setTermsDirty(true); }}
       />
@@ -175,31 +223,35 @@ export function TabConta({
     <View style={c.caixa}>
       <View style={[c.par, { alignItems: "center" }]}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={c.parK}>{isBlocked ? "Bloqueadas para esta cliente" : "Liberadas para esta cliente"}</Text>
+          <Text style={c.parK}>{isBlocked ? "Bloqueadas para este cadastro" : "Liberadas para este cadastro"}</Text>
           {isBlocked && !!profile?.blocked_reason && (
             <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
           )}
         </View>
+        {/* QA 23/11 (P2): ligado = vendas a prazo liberadas (o sentido
+            que a frase ao lado diz). Antes ligado era "bloqueada". */}
         <Switch
-          value={isBlocked}
+          value={!isBlocked}
           onValueChange={ajustes.handleBlockToggle}
-          trackColor={{ false: Colors.bg4, true: Colors.red }}
+          trackColor={{ false: Colors.red, true: Colors.green }}
           thumbColor="#fff"
           disabled={ajustes.blockPending}
+          accessibilityLabel={isBlocked ? "Vendas a prazo bloqueadas para este cadastro. Toque para liberar" : "Vendas a prazo liberadas para este cadastro. Toque para bloquear"}
+          testID="limite-regras-vendas-a-prazo"
         />
       </View>
       <Text style={[c.dica, { marginTop: 6 }]}>
-        Ao bloquear, ela não compra mais a prazo até você liberar de novo.
+        Ao bloquear, este cadastro não compra mais a prazo até você liberar de novo.
       </Text>
-      {ajustes.blockingAction === "block" && !isBlocked && (
-        <>
+      {pedindoBloqueio && (
+        <View nativeID="limite-regras-motivo" testID="limite-regras-motivo">
           <Text style={[m.fieldLabel, { marginTop: 10 }]}>Motivo (opcional)</Text>
           <TextInput
             style={[m.termsInput, { minHeight: 72, textAlignVertical: "top" }]}
             value={ajustes.blockReason}
             onChangeText={ajustes.setBlockReason}
             placeholder="Ex: Inadimplência por 60+ dias"
-            placeholderTextColor={Colors.ink3}
+            placeholderTextColor={CorDaFicha.secundario}
             multiline
           />
           <Pressable
@@ -217,7 +269,7 @@ export function TabConta({
           >
             <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
           </Pressable>
-        </>
+        </View>
       )}
     </View>
   </View>
@@ -231,7 +283,7 @@ const c = StyleSheet.create({
   caixa: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3, borderRadius: 11, padding: 12 },
   texto: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
   frase: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink },
-  dica: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  dica: { fontFamily: Fonts.body, fontSize: 12, color: CorDaFicha.secundario, lineHeight: 17 },
   erro: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.red, marginTop: 8, lineHeight: 17 },
   par: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 6 },
   parK: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2 },

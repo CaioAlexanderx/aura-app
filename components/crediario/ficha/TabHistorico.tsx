@@ -29,7 +29,7 @@ import { toast } from "@/components/Toast";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import { fmt } from "./fichaHelpers";
 import { eventNote } from "./eventNote";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 import { carregarVendaParaDevolucao } from "./vendaParaDevolucao";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 import { diaSP } from "@/utils/crediarioPagamento";
@@ -198,7 +198,7 @@ export function TabHistorico({
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={lc.topo}>
             <Text style={lc.titulo}>{tituloDoEvento(ev)}</Text>
-            <Text style={[lc.valor, { color: diminui ? Colors.green : Colors.ink }]}>
+            <Text style={[lc.valor, { color: diminui ? CorDaFicha.verdeTexto : Colors.ink }]}>
               {valorComSinal(ev.amount)}
             </Text>
           </View>
@@ -207,7 +207,7 @@ export function TabHistorico({
             <View style={lc.itemList}>
               {ev.items.map((it, idx) => (
                 <View key={idx} style={lc.ln}>
-                  <Text style={lc.lnTxt} numberOfLines={1}>{`${it.quantity}× ${it.product_name}`}</Text>
+                  <Text style={lc.lnTxt} numberOfLines={2}>{`${it.quantity}× ${it.product_name}`}</Text>
                   {/* INC-2026-11-20-01: o backend manda o total em reais (sale_items.total_price), nao em centavos. */}
                   <Text style={lc.lnVal}>{fmt(it.total)}</Text>
                 </View>
@@ -221,7 +221,8 @@ export function TabHistorico({
             <View style={{ gap: 6, marginTop: 4 }} testID={`crediario-pagamento-parcelas-${ev.id}`}>
               {grupos.map((g) => (
                 <View key={g.chave}>
-                  <Text style={lc.onde} numberOfLines={1}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
+                  {/* QA 23/11 (P2): duas linhas em vez de cortar o nome do carnê. */}
+                  <Text style={lc.onde} numberOfLines={2}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
                   {g.linhas.map((l) => (
                     <View key={l.id} style={lc.ln}>
                       <Text style={[lc.marca, { color: l.tipo === "inteira" ? Colors.green : Colors.amber }]}>
@@ -304,7 +305,7 @@ export function TabHistorico({
                       method: ev.payment?.method || null,
                       paidAt: diaSP(ev.occurred_at),
                       customerId,
-                      customerName: customerName || "esta cliente",
+                      customerName: customerName || "este cadastro",
                     });
                   }}
                   disabled={isRemoving}
@@ -458,25 +459,25 @@ export function TabHistorico({
 const lc = StyleSheet.create({
   cab: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 },
   cabTitulo: { fontFamily: Fonts.heading, fontSize: 20, color: Colors.ink },
-  cabSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3 },
+  cabSub: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario },
   mes: {
-    fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: Colors.ink3,
+    fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: CorDaFicha.secundario,
     textTransform: "uppercase", letterSpacing: 0.5, marginTop: 12, marginBottom: 2,
   },
   ev: { flexDirection: "row", gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
-  dia: { fontFamily: Fonts.body, width: 44, fontSize: 12, fontWeight: "600", color: Colors.ink3, paddingTop: 1 },
+  dia: { fontFamily: Fonts.body, width: 44, fontSize: 12, fontWeight: "600", color: CorDaFicha.secundario, paddingTop: 1 },
   topo: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },
   titulo: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, fontWeight: "700", color: Colors.ink },
   valor: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "800", ...NUM },
   note: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
-  onde: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 4, marginBottom: 2 },
+  onde: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 4, marginBottom: 2 },
   itemList: { marginTop: 4, gap: 1 },
   ln: { flexDirection: "row", alignItems: "flex-start", gap: 7, paddingVertical: 2 },
   marca: { fontFamily: Fonts.body, width: 14, fontSize: 12.5, fontWeight: "800" },
   lnTxt: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 12.5, color: Colors.ink2 },
-  lnSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
+  lnSub: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 1 },
   lnVal: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink, ...NUM },
-  antigo: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 5, lineHeight: 16 },
+  antigo: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 5, lineHeight: 16 },
   acoes: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 7 },
   // Alvo ≥44px (toque; F5 da ficha).
   acao: {

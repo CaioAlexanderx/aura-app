@@ -88,7 +88,7 @@ describe("O que vem agora", () => {
   });
   test("compras sem carnê, sem parcela", () => {
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, saldo: 180, hoje: HOJE, fmt })).toEqual({
-      titulo: "Próxima parcela", valor: "Sem data marcada", detalhe: "compras sem carnê: receba quando ela pagar", atrasado: false,
+      titulo: "Próxima parcela", valor: "Sem data marcada", detalhe: "compras sem carnê: receba quando vier o pagamento", atrasado: false,
     });
   });
   test("nada a vencer", () => {
@@ -127,5 +127,8 @@ describe("apoio", () => {
     expect(datasDasPagas(["01/09", "05/10", "05/11"])).toBe("01/09, 05/10 e 05/11");
     expect(datasDasPagas(["a", "b", "c", "05/12"])).toBe("a última em 05/12");
     expect(datasDasPagas([])).toBe("");
+    // QA P2: o mesmo dia não se repete
+    expect(datasDasPagas(["23/11", "23/11"])).toBe("23/11");
+    expect(datasDasPagas(["01/09", "23/11", "23/11"])).toBe("01/09 e 23/11");
   });
 });

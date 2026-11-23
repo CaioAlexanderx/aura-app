@@ -237,6 +237,9 @@ describe("ClienteCrediarioModal na casca tela", () => {
     const { tree } = await montar({ layout: "media", navegacao: { posicao: 2, total: 5, onAnterior } });
     expect(porId(tree, "ficha-lista")).toHaveLength(0);
     expect(porId(tree, "ficha-barra-troca")).toHaveLength(1);
+    // QA P2: na média o cabeçalho rola junto com os carnês
+    expect(porId(tree, "ficha-cabecalho-rolando")).toHaveLength(1);
+    expect(porId(tree, "ficha-cabecalho-fixo")).toHaveLength(0);
     expect(porId(tree, "ficha-posicao")[0].props.children).toBe("2 de 5");
     act(() => { porId(tree, "ficha-anterior")[0].props.onPress(); });
     expect(onAnterior).toHaveBeenCalled();
@@ -442,20 +445,20 @@ describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
     expect(porId(tree, "ficha-menu")).toHaveLength(0);
     act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     const menu = texto(tree.toJSON());
-    expect(menu).toContain("Editar cadastro da cliente");
-    expect(menu).toContain("Limite e regras desta cliente");
+    expect(menu).toContain("Editar cadastro");
+    expect(menu).toContain("Limite e regras desta ficha");
     act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     act(() => { porId(tree, "ficha-fato-ver-limite")[0].props.onPress(); });
     expect(porId(tree, "ficha-painel-limite")).toHaveLength(1);
     const painel = texto(tree.toJSON());
     expect(painel).toContain("Usou R$ 570,66 de R$ 1.000,00. ");
     expect(painel).toContain("Pode comprar mais R$ 429,34.");
-    expect(painel).toContain("Como ela costuma pagar");
+    expect(painel).toContain("Como costuma pagar");
     expect(painel).toContain("Às vezes atrasa");
-    expect(painel).toContain("A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.");
+    expect(painel).toContain("A Aura olha os pagamentos deste cadastro e dá uma nota. A nota só avisa você: nunca impede a venda.");
     expect(painel).toContain("640");
     expect(painel).toContain("Deixe em branco para usar a regra da loja.");
-    expect(painel).toContain("Liberadas para esta cliente");
+    expect(painel).toContain("Liberadas para este cadastro");
   });
 
   test("na janela, a lista do ⋯ vai para a área que rola (o cabeçalho fixo cortaria)", () => {
@@ -503,7 +506,10 @@ describe("F5: celular, página inteira", () => {
     expect(tudo).toContain("Maria Aparecida Souza");
     expect(tudo).toContain("Falta pagar");
     expect(texto(porId(tree, "ficha-pagina-falta")[0].props.children)).toBe("R$ 570,66");
-    expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando ela pagar");
+    // QA P2: título e valor em linhas separadas
+    const agora = porId(tree, "crediario-ficha-status")[0].findAll((n: any) => typeof n.props?.children === "string").map((n: any) => n.props.children);
+    expect(agora).toContain("Próxima parcela");
+    expect(agora).toContain("Sem data marcada · compras sem carnê: receba quando vier o pagamento");
     expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa ·ver");
     expect(porId(tree, "ficha-aba-parcelas")).toHaveLength(1);
     expect(porId(tree, "ficha-aba-historico")).toHaveLength(1);
@@ -620,5 +626,205 @@ describe("QA 23/11 (P1-5): depois de mexer no dinheiro, tudo recarrega", () => {
     const i = fonte.indexOf("function handleJuntou(");
     const juntou = fonte.slice(i, i + 1400);
     expect(juntou).toContain("handleHistoricRefresh();");
+  });
+});
+
+describe("QA P2: Cobrar mostra que está preparando", () => {
+  test("desligado e com 'Preparando…' enquanto a prévia abre", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} onCobrar={jest.fn()} cobrando />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const b = porId(tree, "ficha-cobrar")[0];
+    expect(b.props.disabled).toBe(true);
+    expect(b.props.accessibilityLabel).toBe("Preparando a cobrança");
+  });
+});
+
+describe("QA P2: anel de foco violeta", () => {
+  test("o estilo marca o contêiner da ficha e usa o violeta do app", () => {
+    const { cssDoAnelDeFoco } = require("@/components/crediario/ficha/anelDeFoco");
+    expect(cssDoAnelDeFoco(true)).toContain("[data-ficha-crediario] :focus-visible { outline: 2px solid #a78bfa");
+    expect(cssDoAnelDeFoco(false)).toContain("outline: 2px solid #7c3aed");
+  });
+  test("as três cascas levam a marca", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte.match(/MARCA_DA_FICHA/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(fonte).toContain("useAnelDeFocoDaFicha(visible);");
+  });
+});
+
+describe("QA P2: campo de data com 16 px (zoom do iOS)", () => {
+  test("estilo da data e o Mudar a data usando ele", () => {
+    const estilos = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ficha", "fichaStyles.ts"), "utf8");
+    expect(estilos).toMatch(/dateInput: \{[^}]*fontSize: 16/);
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+    expect(fonte.match(/style=\{m\.dateInput\}/g)?.length).toBe(3);
+  });
+});
+
+describe("QA P2: Cobrar sem telefone mostra a frase aprovada", () => {
+  test("à vista ao lado do Cobrar apagado", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve({ ...mockDetail, customer: { ...mockDetail.customer, phone: null } }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} onCobrar={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const aviso = porId(tree, "ficha-cobrar-aviso");
+    expect(aviso).toHaveLength(1);
+    expect(aviso[0].props.children).toBe("Adicione o telefone para cobrar pelo WhatsApp");
+    expect(porId(tree, "ficha-cobrar-sem-telefone")).toHaveLength(1);
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+});
+
+describe("QA P2: a busca da lista não pisca '0 clientes'", () => {
+  test("a carteira mantém a lista anterior enquanto a busca nova carrega", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
+    const i = fonte.indexOf('queryKey: ["credit-balances", company?.id, searchQ]');
+    // só da mesma loja (revisão #1360)
+    expect(fonte.slice(i, i + 800)).toContain("consultaAnterior?.queryKey?.[1] === company?.id ? anterior : undefined");
+  });
+});
+
+describe("QA P2: score em frase não contradiz o atraso", () => {
+  test("com parcela atrasada, o fato 3 não traz a frase do score", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve({
+      ...mockDetail,
+      open_installments: [{ id: "p9", installment_number: 1, total_installments: 2, amount_due: 100, covered_amount: 0,
+        remaining: 100, due_date: "2026-10-01", status: "overdue", is_overdue: true, needs_review: false, days_late: 20 }],
+    }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const lim = JSON.stringify(porId(tree, "crediario-ficha-limite")[0].findAll((n: any) => typeof n.props?.children === "string").map((n: any) => n.props.children));
+    expect(lim).not.toContain("atrasa");
+    expect(lim).toContain("limite de R$ 1.000,00");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+});
+
+describe("QA P2: valor acima do saldo", () => {
+  test("a pergunta diz quanto vira crédito e o novo saldo nunca é negativo", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: -160.1, credit_generated: 160.1 }));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={qc}>
+          <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId="c1" onClose={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo.props.onChangeText("730,76"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    jest.useRealTimers();
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(porId(tree, "receber-novo-saldo")[0].props.children).toBe("R$ 0,00");
+    const rotulo = tree.root.findAll((n: any) => n.props && n.props.children === "Confirmar R$ 730,76")[0];
+    let alvo: any = rotulo;
+    while (alvo && typeof alvo.props.onPress !== "function") alvo = alvo.parent;
+    act(() => { alvo.props.onPress(); });
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).toContain("R$ 160,10 vão virar crédito na loja, no nome de Maria.");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+});
+
+describe("revisão #1360 na ficha", () => {
+  function arvoreDaFicha(extra: any = {}) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (p: any) => (
+      <QueryClientProvider client={qc}>
+        <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" onClose={jest.fn()} {...extra} {...p} />
+      </QueryClientProvider>
+    );
+  }
+  async function esperar() { await act(async () => { await new Promise(r => setTimeout(r, 0)); }); }
+
+  test("prévia de outro valor: a pergunta não anuncia crédito", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: -160.1, credit_generated: 160.1 }));
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = () => tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo().props.onChangeText("730,76"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    // valor novo, prévia ainda não chegou
+    act(() => { campo().props.onChangeText("100"); });
+    jest.useRealTimers();
+    const rotulo = tree.root.findAll((n: any) => n.props && n.props.children === "Confirmar R$ 100,00")[0];
+    let alvo: any = rotulo;
+    while (alvo && typeof alvo.props.onPress !== "function") alvo = alvo.parent;
+    act(() => { alvo.props.onPress(); });
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).toContain("Confirmar recebimento de R$ 100,00 em dinheiro?");
+    expect(txt).not.toContain("vão virar crédito");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+
+  test("prévia em que o fiado absorve a sobra (saldo novo 0): sem crédito", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: 0, credit_generated: 80 }));
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo.props.onChangeText("200"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    jest.useRealTimers();
+    await esperar();
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).not.toContain("Crédito gerado");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+
+  test("o limite digitado num cadastro não aparece no outro", async () => {
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
+    act(() => { porId(tree, "limite-regras-limite-campo")[0].props.onChangeText("5"); });
+    expect(porId(tree, "limite-regras-limite-campo")[0].props.value).toBe("5");
+    await act(async () => { tree.update(<F customerId="c2" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
+    expect(porId(tree, "limite-regras-limite-campo")[0].props.value).not.toBe("5");
   });
 });

@@ -43,9 +43,10 @@ import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/cr
 import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
-import { CarneCard } from "./CarneCard";
+import { CarneCard, type InfoDaLinha } from "./CarneCard";
+import { valorParaQuitarAte } from "@/utils/crediarioReceberCarne";
 import { fmt } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
 function sumRemaining(list: CreditInstallment[]): number {
@@ -184,8 +185,16 @@ export function TabParcelas({
     );
   };
 
+  // O que se paga hoje por uma parcela (com multa e juros só em atraso).
+  const valorHoje = (ins: CreditInstallment) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = isInstallmentOverdue(ins);
+    const enc = ins.charges_total ?? 0;
+    return late && enc > 0 ? (ins.total_due ?? (rem + enc)) : rem;
+  };
+
   // F4: a linha da parcela no cartão do carnê — sem sanfona.
-  const renderLinha = (ins: CreditInstallment, indice: number) => {
+  const renderLinha = (ins: CreditInstallment, indice: number, info?: InfoDaLinha<CreditInstallment>) => {
     const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
     const late = isInstallmentOverdue(ins);
     const toReview = !late && needsReview(ins);
@@ -206,10 +215,27 @@ export function TabParcelas({
       : toReview
         ? "antes de o carnê ser cadastrado — confira se já foi paga"
         : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
+    // QA 23/11/2026: o backend abate pela parcela mais antiga do carnê (não
+    // dá para mirar uma parcela). Na 1ª linha "Receber" é esta; nas outras,
+    // "Receber até esta" preenche as anteriores + esta — o que de fato vai
+    // ser pago para esta ficar em dia. Antes abria com o valor desta e
+    // pagava a 1ª.
+    // Revisão #1360:
+    //  - grupo "Compras sem carnê" (sem account_id): "Receber" simples;
+    //  - com multa e juros, o backend (ledger.applyPayment) cobra primeiro os
+    //    encargos de TODAS as abertas do carnê e só depois o principal, da
+    //    mais antiga em diante. O valor que deixa ESTA em dia é: encargos de
+    //    todas + principal das anteriores e desta (utils/crediarioReceberCarne).
+    const doCarne = !!ins.account_id;
+    const anteriores = doCarne ? (info?.anteriores ?? []) : [];
+    const valorAteAqui = doCarne
+      ? valorParaQuitarAte(info?.todas ?? [ins], [...anteriores, ins], isInstallmentOverdue)
+      : totalHoje;
     return (
       <LinhaDaParcela
         key={ins.id}
-        numero={`${ins.installment_number} de ${ins.total_installments}`}
+        numero={info?.numero ?? `${ins.installment_number} de ${ins.total_installments}`}
+        ateAqui={anteriores.length > 0 ? fmt(valorAteAqui) : null}
         data={`${jaVenceu ? "venceu" : "vence"} ${venc}`}
         porque={porque}
         valor={fmt(totalHoje)}
@@ -219,7 +245,8 @@ export function TabParcelas({
         // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
         // quem toca Receber no carnê B espera abater o B. Antes ia para a
         // parcela mais antiga de qualquer carnê.
-        onReceber={() => prefill(totalHoje, ins.account_id ?? undefined)}
+        onReceber={() => prefill(valorAteAqui, ins.account_id ?? undefined)}
+        valorDoReceber={fmt(valorAteAqui)}
         // O Pix da parcela volta (o Caio não aprovou tirar).
         onPix={() => openInstallmentPix(ins.id)}
       />
@@ -235,7 +262,7 @@ export function TabParcelas({
           <TextInput
             style={m.newAccInput}
             placeholder="Nome do carnê"
-            placeholderTextColor={Colors.ink3}
+            placeholderTextColor={CorDaFicha.secundario}
             value={newAccountName}
             onChangeText={setNewAccountName}
             autoFocus
@@ -355,7 +382,7 @@ export function TabParcelas({
     <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
       <Text style={m.cardTitle}>Saldo em aberto sem parcelas</Text>
       <Text style={[m.emptyTxt, { textAlign: "center", marginTop: 6, lineHeight: 18 }]}>
-        Este cliente tem {fmt(openBalance)} em aberto de venda no crediário sem
+        Este cadastro tem {fmt(openBalance)} em aberto de venda no crediário sem
         parcelamento. Registre recebimentos de qualquer valor pelo botão abaixo.
       </Text>
       <View style={{ marginTop: 14, alignSelf: "stretch", flexDirection: "row", gap: 8 }}>
@@ -392,17 +419,21 @@ const c = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
     paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
-  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
-  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3 },
+  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: CorDaFicha.secundario },
+  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: CorDaFicha.secundario, fontVariant: ["tabular-nums"] as any },
+  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: CorDaFicha.secundario },
   cancelar: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10 },
 });
 
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix }: {
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber }: {
   numero: string; data: string; porque: string; valor: string;
+  /** O que o Receber preenche (pode incluir encargos das outras do carnê). */
+  valorDoReceber?: string;
+  /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
+  ateAqui?: string | null;
   atrasada: boolean; principal: boolean;
   onData: () => void; onReceber: () => void; onPix?: () => void;
 }) {
@@ -430,9 +461,11 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
         onPress={onReceber}
         style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
-        accessibilityLabel={`Receber ${valor} da parcela ${numero}`}
+        accessibilityLabel={ateAqui
+          ? `Receber até esta: ${ateAqui}, as parcelas anteriores deste carnê e a ${numero}`
+          : `Receber ${valorDoReceber ?? valor} da parcela ${numero}`}
       >
-        <Text style={[l.receberT, principal && { color: "#fff" }]}>Receber</Text>
+        <Text style={[l.receberT, principal && { color: "#fff" }]}>{ateAqui ? "Receber até esta" : "Receber"}</Text>
       </Pressable>
       {!!onPix && (
         <Pressable
@@ -442,7 +475,7 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
           accessibilityLabel={`Pix da parcela ${numero}`}
           testID={`parcela-${numero}-pix`}
         >
-          <Text style={[l.receberT, { color: Colors.green }]}>Pix</Text>
+          <Text style={[l.receberT, { color: CorDaFicha.verdeTexto }]}>Pix</Text>
         </Pressable>
       )}
     </View>
@@ -455,9 +488,9 @@ const l = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   linhaLate: { backgroundColor: Colors.redD },
-  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.ink3, alignItems: "center", justifyContent: "center" },
+  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: CorDaFicha.secundario, alignItems: "center", justifyContent: "center" },
   icLate: { borderColor: Colors.red },
-  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: Colors.ink3 },
+  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: CorDaFicha.secundario },
   num: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, minWidth: 48 },
   meio: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
   data: {
@@ -466,7 +499,7 @@ const l = StyleSheet.create({
   },
   dataT: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink },
   lapis: { fontFamily: Fonts.body, fontSize: 12, color: Colors.violet3 },
-  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 3 },
+  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 3 },
   valor: { fontFamily: Fonts.mono, fontSize: 13.5, fontWeight: "500", color: Colors.ink, textAlign: "right", marginLeft: "auto" as any, fontVariant: ["tabular-nums"] as any },
   receber: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   receberP: { backgroundColor: Colors.violet },
