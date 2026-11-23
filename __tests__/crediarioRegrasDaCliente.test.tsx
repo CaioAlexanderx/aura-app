@@ -67,3 +67,31 @@ describe("TabConta: o placeholder mostra a regra da LOJA", () => {
     expect(t.root.findAllByProps({ testID: "limite-regras-erro" }, { deep: false } as any)).toHaveLength(1);
   });
 });
+
+describe("Vendas a prazo (QA P2)", () => {
+  const base: any = {
+    termsMaxInst: "", setTermsMaxInst: jest.fn(), termsInterest: "", setTermsInterest: jest.fn(),
+    termsDirty: false, setTermsDirty: jest.fn(), savingTerms: false, saveTerms: jest.fn(),
+    blockReason: "", setBlockReason: jest.fn(), blockingAction: null, setBlockingAction: jest.fn(),
+    handleBlockToggle: jest.fn(), confirmBlock: jest.fn(), blockPending: false,
+  };
+  function montar(isBlocked: boolean, ajustes: any = base) {
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(<TabConta profile={{ credit_limit: 0 }} isBlocked={isBlocked} scoreLabel={null} availableLimit={0}
+        totalBalance={0} openInst={[]} nextDueDate="" hasTermsOverride={false} realCarnes={[]} ajustes={ajustes} />);
+    });
+    return t;
+  }
+  test("ligado = liberadas, com rótulo para leitor de tela", () => {
+    const sw = montar(false).root.findAllByProps({ testID: "limite-regras-vendas-a-prazo" }, { deep: false } as any)[0];
+    expect(sw.props.value).toBe(true);
+    expect(sw.props.accessibilityLabel).toBe("Vendas a prazo liberadas para esta cliente. Toque para bloquear");
+    const bloq = montar(true).root.findAllByProps({ testID: "limite-regras-vendas-a-prazo" }, { deep: false } as any)[0];
+    expect(bloq.props.value).toBe(false);
+  });
+  test("pedir o bloqueio mostra Motivo e Confirmar", () => {
+    const t = montar(false, { ...base, blockingAction: "block" });
+    expect(t.root.findAllByProps({ testID: "limite-regras-motivo" }, { deep: false } as any)).toHaveLength(1);
+  });
+});

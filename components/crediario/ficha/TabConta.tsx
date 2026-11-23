@@ -12,7 +12,8 @@
 //  - "Regras só para esta cliente" e "Vendas a prazo" à vista (era sanfona).
 // Estado e handlers continuam no shell (ClienteCrediarioModal).
 // ============================================================
-import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet } from "react-native";
+import { useEffect } from "react";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Switch, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import type { CreditAccount } from "@/services/creditApi";
@@ -69,6 +70,16 @@ export function TabConta({
   const frase = fraseDoScore(scoreLabel);
   const ov = profile?.terms?.overrides || {};
   const ef = profile?.terms?.effective;
+  // QA 23/11 (P2): ao pedir o bloqueio, a tela rola até "Motivo / Confirmar
+  // bloqueio" (ficava abaixo da dobra e parecia que nada tinha acontecido).
+  const pedindoBloqueio = ajustes.blockingAction === "block" && !isBlocked;
+  useEffect(() => {
+    if (!pedindoBloqueio || Platform.OS !== "web" || typeof document === "undefined") return;
+    const t = setTimeout(() => {
+      try { (document.getElementById("limite-regras-motivo") as any)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); } catch {}
+    }, 50);
+    return () => clearTimeout(t);
+  }, [pedindoBloqueio]);
   // Valor da loja: plan-config; sem ele, o efetivo quando a cliente não tem
   // regra própria naquele campo (aí efetivo = loja).
   const lojaMax = regraDaLoja?.max_installments ?? (ov.max_installments == null ? ef?.max_installments : null);
@@ -180,19 +191,23 @@ export function TabConta({
             <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
           )}
         </View>
+        {/* QA 23/11 (P2): ligado = vendas a prazo liberadas (o sentido
+            que a frase ao lado diz). Antes ligado era "bloqueada". */}
         <Switch
-          value={isBlocked}
+          value={!isBlocked}
           onValueChange={ajustes.handleBlockToggle}
-          trackColor={{ false: Colors.bg4, true: Colors.red }}
+          trackColor={{ false: Colors.red, true: Colors.green }}
           thumbColor="#fff"
           disabled={ajustes.blockPending}
+          accessibilityLabel={isBlocked ? "Vendas a prazo bloqueadas para esta cliente. Toque para liberar" : "Vendas a prazo liberadas para esta cliente. Toque para bloquear"}
+          testID="limite-regras-vendas-a-prazo"
         />
       </View>
       <Text style={[c.dica, { marginTop: 6 }]}>
         Ao bloquear, ela não compra mais a prazo até você liberar de novo.
       </Text>
-      {ajustes.blockingAction === "block" && !isBlocked && (
-        <>
+      {pedindoBloqueio && (
+        <View nativeID="limite-regras-motivo" testID="limite-regras-motivo">
           <Text style={[m.fieldLabel, { marginTop: 10 }]}>Motivo (opcional)</Text>
           <TextInput
             style={[m.termsInput, { minHeight: 72, textAlignVertical: "top" }]}
@@ -217,7 +232,7 @@ export function TabConta({
           >
             <Text style={[m.ctaTxt, { color: Colors.ink2 }]}>Cancelar</Text>
           </Pressable>
-        </>
+        </View>
       )}
     </View>
   </View>
