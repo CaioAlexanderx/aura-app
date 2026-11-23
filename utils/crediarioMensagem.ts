@@ -184,7 +184,7 @@ export function avisosDoQueFaltou(faltando: VariavelDaMensagem[]): string[] {
   if (faltando.some((k) => PARTE_DA_PARCELA.includes(k))) out.push("Sem parcela em aberto: tirei a parte da parcela do texto.");
   if (faltando.includes("dias")) out.push("A parcela não está em atraso: tirei a parte dos dias de atraso.");
   const outros = faltando.filter((k) => k !== "pix" && k !== "dias" && !PARTE_DA_PARCELA.includes(k));
-  if (outros.length) out.push("Faltou um dado da cliente: tirei essa parte do texto.");
+  if (outros.length) out.push("Faltou um dado do cadastro: tirei essa parte do texto.");
   return out;
 }
 

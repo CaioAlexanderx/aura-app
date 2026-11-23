@@ -81,7 +81,7 @@ export type Fato = {
 // ── 1. Falta pagar ──────────────────────────────────────────────────────
 export function fatoFaltaPagar(p: { saldo: number; comprasEmAberto: number; fmt: Fmt }): Fato & { tom: "deve" | "credito" | "zerado" } {
   if (p.saldo < -0.009) {
-    return { titulo: "Tem crédito na loja", valor: p.fmt(Math.abs(p.saldo)), detalhe: "ela pode usar numa compra", tom: "credito" };
+    return { titulo: "Tem crédito na loja", valor: p.fmt(Math.abs(p.saldo)), detalhe: "para usar numa próxima compra", tom: "credito" };
   }
   if (p.saldo <= 0.009) {
     return { titulo: "Falta pagar", valor: p.fmt(0), detalhe: "nada em aberto", tom: "zerado" };
