@@ -386,7 +386,7 @@ describe("revisão da F3: travas da ficha em tela cheia", () => {
   test("abrir um painel fecha o que estava aberto (na tela cheia)", () => {
     for (const f of ["function receberDaAba(", "function handleEditDueDateOpen(", "function openRenegociar(", "async function openInstallmentPix("]) {
       const i = fonte.indexOf(f);
-      expect(fonte.slice(i, i + 160)).toContain("if (emTela || emPagina) fecharPaineis();");
+      expect(fonte.slice(i, i + 160)).toContain("fecharAoAbrirPainel();");
     }
   });
 });
@@ -501,7 +501,7 @@ describe("F5: celular, página inteira", () => {
     expect(tudo).toContain("Falta pagar");
     expect(texto(porId(tree, "ficha-pagina-falta")[0].props.children)).toBe("R$ 570,66");
     expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando ela pagar");
-    expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa · ");
+    expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa ·ver");
     expect(porId(tree, "ficha-aba-parcelas")).toHaveLength(1);
     expect(porId(tree, "ficha-aba-historico")).toHaveLength(1);
     expect(porId(tree, "ficha-aba-conta")).toHaveLength(0);
@@ -517,6 +517,35 @@ describe("F5: celular, página inteira", () => {
     act(() => { porId(tree, "ficha-aba-historico")[0].props.onPress(); });
     expect(porId(tree, "ficha-pagina-hero")).toHaveLength(0);
     expect(texto(tree.toJSON())).toContain("mais recentes primeiro");
+  });
+
+  test("voltar do Android / Esc: a pergunta do Receber fecha antes do painel, e o painel antes da ficha", async () => {
+    const { tree, onClose } = await montarPagina();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    await act(async () => { campo.props.onChangeText("50"); });
+    const rotulo = tree.root.findAll((n: any) => n.props && n.props.children === "Confirmar R$ 50,00")[0];
+    let alvo: any = rotulo;
+    while (alvo && typeof alvo.props.onPress !== "function") alvo = alvo.parent;
+    act(() => { alvo.props.onPress(); });
+    expect(texto(tree.toJSON())).toContain("Confirmar recebimento de R$ 50,00");
+    const modal = tree.root.findAll((n: any) => n.props && typeof n.props.onRequestClose === "function" && n.props.transparent === false)[0];
+    act(() => { modal.props.onRequestClose(); });
+    // fechou a pergunta; o painel continua
+    expect(texto(tree.toJSON())).not.toContain("Confirmar recebimento de R$ 50,00");
+    expect(texto(tree.toJSON())).toContain("Confirmar R$ 50,00");
+    act(() => { modal.props.onRequestClose(); });
+    expect(texto(tree.toJSON())).not.toContain("Confirmar R$ 50,00");
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { modal.props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("a página só vale no celular: computador estreito ao lado do menu continua com a janela de 700 px", () => {
+    const pagina = fs.readFileSync(path.join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
+    expect(pagina).toContain('casca={width > JANELA_DO_CELULAR ? "janela" : "pagina"}');
+    const estilos = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ficha", "fichaStyles.ts"), "utf8");
+    expect(estilos).toContain("xBtn: { width: 44, height: 44");
   });
 
   test("voltar do Android / Esc com painel aberto fecha o painel, não a ficha", async () => {

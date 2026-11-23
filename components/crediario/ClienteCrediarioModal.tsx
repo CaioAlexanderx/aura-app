@@ -473,7 +473,7 @@ export function ClienteCrediarioModal({
   // Separado do prefill porque os atalhos de valor do painel (R$ 50/100/200)
   // usam o prefill e não podem desfazer o carnê escolhido nos chips.
   function receberDaAba(v: number, accountId?: string) {
-    if (emTela || emPagina) fecharPaineis();
+    fecharAoAbrirPainel();
     const str = v.toFixed(2).replace(".", ",");
     setFreeAccountId(accountId);
     setFreeAmt(str);
@@ -521,7 +521,7 @@ export function ClienteCrediarioModal({
   });
 
   function handleEditDueDateOpen(inst: CreditInstallment) {
-    if (emTela || emPagina) fecharPaineis();
+    fecharAoAbrirPainel();
     setEditingDueDateInst(inst);
     setEditDueDateInput(formatIsoToBr(inst.due_date));
     setEditDueDateError("");
@@ -536,7 +536,7 @@ export function ClienteCrediarioModal({
 
   // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
-    if (emTela || emPagina) fecharPaineis();
+    fecharAoAbrirPainel();
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
       : (instByAccount.get(accountId) || []);
@@ -764,7 +764,7 @@ export function ClienteCrediarioModal({
   }
 
   async function openInstallmentPix(installmentId: string) {
-    if (emTela || emPagina) fecharPaineis();
+    fecharAoAbrirPainel();
     setPixInstId(installmentId);
     setPixData(null);
     setPixLoading(true);
@@ -990,6 +990,12 @@ export function ClienteCrediarioModal({
     setMenuFicha(false);
   }
   const fecharDoPainel = emTela || emPagina ? fecharPaineis : onClose;
+  // Abrir um painel fecha o que estava aberto (tela cheia e página: os
+  // painéis ficam lado a lado com a ficha) e, em qualquer casca, o "⋯".
+  function fecharAoAbrirPainel() {
+    if (emTela || emPagina) fecharPaineis();
+    else setMenuFicha(false);
+  }
   // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
   // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
@@ -1064,9 +1070,9 @@ export function ClienteCrediarioModal({
     ...(customerId ? [{ rotulo: "Editar cadastro da cliente", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
     { rotulo: "Limite e regras desta cliente", onPress: abrirLimite, testID: "ficha-abrir-limite" },
     ...(openInst.length > 0 || realCarnes.length > 0
-      ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { if (emTela) fecharPaineis(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
+      ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { fecharAoAbrirPainel(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
       : []),
-    ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { if (emTela) fecharPaineis(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
+    ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { fecharAoAbrirPainel(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
     ...(comCartoes
       ? [{ rotulo: "Criar carnê vazio", onPress: () => { setTab("parcelas"); setShowNewAccount(v => !v); setNewAccountName(""); }, testID: "carnes-novo-carne" }]
       : []),
@@ -1201,9 +1207,9 @@ export function ClienteCrediarioModal({
         setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
         expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
         handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
-        onImprimir={(accountId, label, parcelas) => { if (emTela) fecharPaineis(); setPrintScope({ accountId, label, parcelas }); }}
-        onJuntar={podeJuntar ? () => { if (emTela) fecharPaineis(); setJuntarPre([]); } : undefined}
-        onExcluirCarne={(carne) => { if (emTela) fecharPaineis(); setExcluirAlvo(carne); }}
+        onImprimir={(accountId, label, parcelas) => { fecharAoAbrirPainel(); setPrintScope({ accountId, label, parcelas }); }}
+        onJuntar={podeJuntar ? () => { fecharAoAbrirPainel(); setJuntarPre([]); } : undefined}
+        onExcluirCarne={(carne) => { fecharAoAbrirPainel(); setExcluirAlvo(carne); }}
         openInstallmentPix={openInstallmentPix}
         prefill={receberDaAba}
         openBalance={totalBalance}
@@ -1242,7 +1248,7 @@ export function ClienteCrediarioModal({
   // cartão mira o carnê dele, e este é o recebimento livre (parcela mais
   // antiga primeiro).
   function abrirReceberLivre() {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     setFreeAccountId(undefined);
     setReceberOpen(true);
   }
@@ -1865,9 +1871,14 @@ export function ClienteCrediarioModal({
   if (emPagina) {
     const pedirFechar = () => {
       if (ocupado) return;
+      // A mesma ordem da tela larga: diálogo, pergunta do Receber, Pix,
+      // "⋯", painel; só depois a ficha.
       if (recusaExclusao) setRecusaExclusao(null);
       else if (excluirAlvo) setExcluirAlvo(null);
+      else if (repetidoServidor) setRepetidoServidor(null);
+      else if (receberGate) setReceberGate(false);
       else if (pixInstId) { setPixInstId(null); setPixData(null); }
+      else if (menuFicha) setMenuFicha(false);
       else if (painelAberto) fecharPaineis();
       else onClose();
     };
@@ -1887,13 +1898,9 @@ export function ClienteCrediarioModal({
             <Text style={pg.nome} numberOfLines={1}>{name}</Text>
             <BotaoMais aberto={menuFicha} onPress={() => setMenuFicha(v => !v)} rotulo="Mais ações da ficha" testID="ficha-mais" />
           </View>
-          {menuFicha && (
-            <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
-              <ListaDoMenu itens={itensDaFicha} onEscolher={() => setMenuFicha(false)} testID="ficha-menu" />
-            </View>
-          )}
-
           <ScrollView style={pg.rolagem} contentContainerStyle={pg.rolagemConteudo} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
+            {/* A lista do "⋯" rola com a página (fixa no topo, cortaria). */}
+            {listaDoMenuDaFicha}
             {tab === "historico" ? (
               <View style={pg.heroCurto}>
                 <Text style={pg.heroK}>{fatoFalta.titulo}</Text>
@@ -1909,10 +1916,12 @@ export function ClienteCrediarioModal({
                   </Text>
                 )}
                 {!!profile && (
-                  <Text style={pg.limite} testID="crediario-ficha-limite">
-                    {`${fraseScore} · `}
-                    <Text style={f.fatoVer} onPress={abrirLimite} accessibilityRole="link" testID="ficha-fato-ver-limite">ver</Text>
-                  </Text>
+                  <View style={f.fatoSubLinha} testID="crediario-ficha-limite">
+                    <Text style={[pg.limite, { flexShrink: 1, marginTop: 0 }]}>{`${fraseScore} ·`}</Text>
+                    <Pressable onPress={abrirLimite} style={f.fatoVerArea} accessibilityRole="button" accessibilityLabel="Ver limite e regras" testID="ficha-fato-ver-limite">
+                      <Text style={[f.fatoVer, { fontSize: 12 }]}>ver</Text>
+                    </Pressable>
+                  </View>
                 )}
                 {isBlocked && (
                   <View style={[m.pill, { backgroundColor: Colors.red + "22", alignSelf: "flex-start", marginTop: 6 }]}>

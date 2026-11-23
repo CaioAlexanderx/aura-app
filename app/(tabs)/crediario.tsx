@@ -24,7 +24,7 @@ import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModa
 import { escolherRecentes } from "@/components/crediario/lancamento/calculos";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { ListaDaFicha, type ClienteDaLista } from "@/components/crediario/ficha/ListaDaFicha";
-import { layoutDaFicha, posicaoNaLista, vizinhaNaLista } from "@/utils/crediarioFichaTela";
+import { JANELA_DO_CELULAR, layoutDaFicha, posicaoNaLista, vizinhaNaLista } from "@/utils/crediarioFichaTela";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 import { useModelosDeMensagem, salvarSobre } from "@/hooks/useModelosDeMensagem";
 import {
@@ -1078,10 +1078,12 @@ export default function CrediarioScreen() {
 
       <CriarLancamentoModal visible={showCriar} onClose={fecharCriar} recentes={recentesDoLancamento} />
 
-      {/* F5 (23/11/2026): celular e telas estreitas, a ficha em página
-          inteira (era folha de 94%). Na tela larga e média ela está acima. */}
+      {/* F5 (23/11/2026): no celular (janela ≤ 768 px) a ficha é página
+          inteira (era folha de 94%). Computador com a janela estreita ao lado
+          do menu continua com o diálogo de 700 px. Na tela larga e média a
+          ficha está acima. */}
       {!fichaEmTela && (
-        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca="pagina" />
+        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca={width > JANELA_DO_CELULAR ? "janela" : "pagina"} />
       )}
 
       {cobrancaPreview && (

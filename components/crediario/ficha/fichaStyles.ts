@@ -13,7 +13,8 @@ export const m = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   crumb: { flexDirection: "row", alignItems: "center", gap: 5 },
   crumbTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.violet3 },
-  xBtn: { width: 30, height: 30, borderRadius: 9, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
+  // 23/11/2026 (F5): alvo de toque de 44 px.
+  xBtn: { width: 44, height: 44, borderRadius: 11, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" },
 
   // HOTFIX F4.2 (09/07): flexShrink 1 — quando um sheet inferior (Receber/Pix/
   // Renegociar) abre em tela baixa, o body cede espaço em vez de empurrar
