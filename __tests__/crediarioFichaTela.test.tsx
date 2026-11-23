@@ -687,3 +687,11 @@ describe("QA P2: Cobrar sem telefone mostra a frase aprovada", () => {
     creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
   });
 });
+
+describe("QA P2: a busca da lista não pisca '0 clientes'", () => {
+  test("a carteira mantém a lista anterior enquanto a busca nova carrega", () => {
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
+    const i = fonte.indexOf('queryKey: ["credit-balances", company?.id, searchQ]');
+    expect(fonte.slice(i, i + 600)).toContain("placeholderData: (anterior) => anterior,");
+  });
+});

@@ -413,6 +413,9 @@ export default function CrediarioScreen() {
     queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true, q: searchQ || undefined }),
     enabled: !!company?.id,
     staleTime: 60_000,
+    // QA 23/11 (P2): enquanto a busca nova carrega, fica a lista anterior —
+    // a lista ao lado da ficha piscava "0 clientes" a cada letra.
+    placeholderData: (anterior) => anterior,
   });
 
   // 10/10/2026: config do canal digital — de onde sai a chave Pix do QR do
