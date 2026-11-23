@@ -237,6 +237,9 @@ describe("ClienteCrediarioModal na casca tela", () => {
     const { tree } = await montar({ layout: "media", navegacao: { posicao: 2, total: 5, onAnterior } });
     expect(porId(tree, "ficha-lista")).toHaveLength(0);
     expect(porId(tree, "ficha-barra-troca")).toHaveLength(1);
+    // QA P2: na média o cabeçalho rola junto com os carnês
+    expect(porId(tree, "ficha-cabecalho-rolando")).toHaveLength(1);
+    expect(porId(tree, "ficha-cabecalho-fixo")).toHaveLength(0);
     expect(porId(tree, "ficha-posicao")[0].props.children).toBe("2 de 5");
     act(() => { porId(tree, "ficha-anterior")[0].props.onPress(); });
     expect(onAnterior).toHaveBeenCalled();

@@ -2131,12 +2131,23 @@ export function ClienteCrediarioModal({
 
       <View style={t.centro} testID="ficha-centro">
         {!larga && barraDeTroca}
-        <View style={t.cabecalho}>
-          {identidade}
-          {numeros}
-          {avisoEl}
-        </View>
+        {/* QA 23/11 (P2): na tela média (1024 com o menu) o cabeçalho fixo
+            deixava ~200 px para os carnês; ali ele rola junto. */}
+        {larga && (
+          <View style={t.cabecalho} testID="ficha-cabecalho-fixo">
+            {identidade}
+            {numeros}
+            {avisoEl}
+          </View>
+        )}
         <ScrollView style={t.rolagem} contentContainerStyle={t.rolagemConteudo} showsVerticalScrollIndicator={true}>
+          {!larga && (
+            <View style={[t.cabecalho, t.cabecalhoRolando]} testID="ficha-cabecalho-rolando">
+              {identidade}
+              {numeros}
+              {avisoEl}
+            </View>
+          )}
           <Text style={t.secao}>Compras e parcelas</Text>
           {carregandoFicha ? carregandoEl : parcelasEl}
         </ScrollView>
@@ -2229,6 +2240,8 @@ const t = StyleSheet.create({
   rolagemConteudo: { padding: 20, paddingTop: 14, paddingBottom: 32 },
   movConteudo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
   secao: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 10 },
+  // Dentro da rolagem: sem o padding próprio (o conteúdo já tem).
+  cabecalhoRolando: { paddingHorizontal: 0, paddingTop: 0, marginBottom: 14, marginHorizontal: -20, paddingLeft: 20, paddingRight: 20 },
   direita: {
     minHeight: 0, backgroundColor: Colors.bg2, overflow: "hidden",
     borderLeftWidth: 1, borderLeftColor: Colors.border,
