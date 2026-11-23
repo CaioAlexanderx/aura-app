@@ -38,3 +38,11 @@ describe("ConfirmGate", () => {
     expect(botoes(t).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("ConfirmGate em 320 px (QA P2)", () => {
+  test("os botões quebram de linha em vez de cortar o texto", () => {
+    const fonte = require("fs").readFileSync(require("path").join(__dirname, "..", "components", "ConfirmGate.tsx"), "utf8");
+    expect(fonte).toContain('row: { flexDirection: "row", flexWrap: "wrap", gap: 8 }');
+    expect(fonte).toContain("confirmar: { flexGrow: 2, flexBasis: 170, minHeight: 44 }");
+  });
+});
