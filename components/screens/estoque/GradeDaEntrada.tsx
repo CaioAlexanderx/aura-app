@@ -25,7 +25,7 @@ export function GradeDaEntrada({ variantes, grade, onChange, testIDPrefixo }: Pr
   return (
     <View style={s.grade}>
       {/* 23/11/2026 (p-200): tamanhos em ordem dentro de cada cor. */}
-      {ordenarPeloTamanhoNaCor(variantes || [], corETamanhoDaVariante).map((v) => (
+      {ordenarPeloTamanhoNaCor<any>(variantes || [], corETamanhoDaVariante).map((v) => (
         <View key={v.id} style={s.gradeLinha}>
           <Text style={s.gradeNome} numberOfLines={1}>{rotuloDaVariante(v)}</Text>
           <Text style={s.gradeTem}>tem {fmtQty(parseFloat(v.stock_qty) || 0)}</Text>
