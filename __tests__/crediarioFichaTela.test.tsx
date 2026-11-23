@@ -30,7 +30,10 @@ jest.mock("@/components/nfse/NfseDaOrigem", () => ({ NfseDaOrigem: () => null })
 jest.mock("@/components/crediario/DevolucaoModal", () => ({ DevolucaoModal: () => null }));
 jest.mock("@/components/crediario/ficha/EditarClienteDaFicha", () => ({ EditarClienteDaFicha: () => null }));
 jest.mock("@/components/crediario/ficha/EditarPagamentoModal", () => ({ EditarPagamentoModal: () => null }));
-jest.mock("@/components/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+jest.mock("@/components/ConfirmDialog", () => {
+  const R = jest.requireActual("react");
+  return { ConfirmDialog: ({ visible, title }: any) => (visible ? R.createElement("View", { testID: `dialogo-${title}` }) : null) };
+});
 jest.mock("@/components/ResponsiveSheet", () => ({
   ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
 }));
@@ -112,12 +115,17 @@ describe("acaoDaTecla", () => {
   test("Esc fecha o painel antes da ficha", () => {
     expect(acaoDaTecla({ ...base, key: "Escape", painelAberto: true })).toBe("fechar-painel");
     expect(acaoDaTecla({ ...base, key: "Escape" })).toBe("fechar-ficha");
-    // dentro do campo do Receber o Esc também fecha o painel
-    expect(acaoDaTecla({ ...base, key: "Escape", painelAberto: true, alvoEditavel: true })).toBe("fechar-painel");
+    // dentro de campo de texto o Esc é do campo: não fecha nada
+    expect(acaoDaTecla({ ...base, key: "Escape", painelAberto: true, alvoEditavel: true })).toBeNull();
+    expect(acaoDaTecla({ ...base, key: "Escape", alvoEditavel: true })).toBeNull();
   });
   test("setas trocam de cliente", () => {
     expect(acaoDaTecla({ ...base, key: "ArrowUp" })).toBe("anterior");
     expect(acaoDaTecla({ ...base, key: "ArrowDown" })).toBe("proxima");
+  });
+  test("tecla segurada não troca em rajada", () => {
+    expect(acaoDaTecla({ ...base, key: "ArrowDown", repetida: true })).toBeNull();
+    expect(acaoDaTecla({ ...base, key: "Escape", repetida: true })).toBe("fechar-ficha");
   });
   test("setas não trocam dentro de campo nem com painel aberto", () => {
     expect(acaoDaTecla({ ...base, key: "ArrowDown", alvoEditavel: true })).toBeNull();
@@ -274,6 +282,104 @@ describe("ClienteCrediarioModal na casca tela", () => {
     creditApi.getHistoryTimeline.mockClear();
     await montar({ layout: "larga" });
     expect(creditApi.getHistoryTimeline).toHaveBeenCalledWith("loja1", "c1", expect.anything());
+  });
+});
+
+describe("revisão da F3: travas da ficha em tela cheia", () => {
+  const CARNE = {
+    id: "k1", name: "Compra de 19/10", status: "open", balance: 100, open_count: 1,
+    next_due_date: "2027-01-20", overdue: false, period_unit: "month", period_count: 1,
+    purchases: [], purchases_total: 100, total_amount: 100, refunded_total: 0, total_count: 1, paid_count: 0,
+    paid_installments: [], open_remaining: 100, unscheduled: 0, remaining: 100,
+  };
+  const PARCELA = {
+    id: "p1", customer_id: "c1", company_id: "loja1", installment_number: 1, total_installments: 1,
+    amount_due: 100, amount_paid: 0, covered_amount: 0, due_date: "2027-01-20", status: "pending",
+    account_id: "k1", is_overdue: false, needs_review: false,
+  };
+  const detalheComCarne = { ...mockDetail, accounts: [CARNE], open_installments: [PARCELA] };
+
+  function arvore(props: any) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (p: any) => (
+      <QueryClientProvider client={qc}>
+        <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" onClose={jest.fn()} {...props} {...p} />
+      </QueryClientProvider>
+    );
+  }
+  async function esperar() { await act(async () => { await new Promise(r => setTimeout(r, 0)); }); }
+
+  test("com 'Excluir carnê' aberto: setas não trocam, Esc fecha só o diálogo; trocar de cliente limpa o diálogo", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(detalheComCarne));
+    const onClose = jest.fn();
+    const onProxima = jest.fn();
+    const Ficha = arvore({ onClose, navegacao: { posicao: 1, total: 2, onProxima } });
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<Ficha customerId="c1" />); });
+    await esperar();
+    const cab = porId(tree, "carne-k1-cabecalho");
+    if (cab.length && cab[0].props.onPress) act(() => { cab[0].props.onPress(); });
+    act(() => { porId(tree, "carne-k1-excluir")[0].props.onPress(); });
+    expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(1);
+
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" })); });
+    expect(onProxima).not.toHaveBeenCalled();
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(0);
+
+    // de novo, e a cliente muda: o diálogo da anterior some
+    act(() => { porId(tree, "carne-k1-excluir")[0].props.onPress(); });
+    expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(1);
+    await act(async () => { tree.update(<Ficha customerId="c2" />); });
+    expect(porId(tree, "dialogo-Excluir carnê")).toHaveLength(0);
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+
+  test("cliente que a loja não acha (404, ?cliente= depois da troca de loja): fecha a ficha", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.reject(Object.assign(new Error("nf"), { status: 404 })));
+    const onClose = jest.fn();
+    const Ficha = arvore({ onClose });
+    await act(async () => { renderer.create(<Ficha customerId="c9" />); });
+    await esperar();
+    expect(onClose).toHaveBeenCalled();
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+
+  test("cliente de outra loja do grupo, sem nada nesta, aberta pelo endereço: fecha", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve({
+      ...mockDetail, balance: 0, customer: { ...mockDetail.customer, company_id: "outra" },
+    }));
+    const onClose = jest.fn();
+    await act(async () => { renderer.create(arvore({ onClose, abertaPeloEndereco: true })({ customerId: "c3" })); });
+    await esperar();
+    expect(onClose).toHaveBeenCalled();
+    // aberta por um toque (lead do Prontos pra comprar), a mesma cliente fica
+    const onClose2 = jest.fn();
+    await act(async () => { renderer.create(arvore({ onClose: onClose2 })({ customerId: "c4" })); });
+    await esperar();
+    expect(onClose2).not.toHaveBeenCalled();
+    creditApi.getCustomerHistory.mockImplementation(() => Promise.resolve(mockDetail));
+  });
+
+  const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+  test("envio em andamento trava a troca de cliente e as respostas checam a cliente", () => {
+    expect(fonte).toContain("const ocupado = freeSubmitting || renegSubmitting || excluindo");
+    expect(fonte).toContain("{ocupado && <TravaDaLista />}");
+    expect(fonte).toMatch(/if \(ocupado\) return;/);
+    // recebimento, renegociação, exclusão e juntar: guarda da cliente
+    expect(fonte.match(/clienteAtualRef\.current !== pedidoDe\) \{ atualizarDaCliente\(pedidoDe\)/g)?.length).toBe(3);
+    expect(fonte).toContain("if (clienteAtualRef.current !== customerId) { atualizarDaCliente(customerId);");
+    expect(fonte).toContain("if (vars.cliente !== clienteAtualRef.current) {");
+  });
+  test("abrir um painel fecha o que estava aberto (na tela cheia)", () => {
+    for (const f of ["function receberDaAba(", "function handleEditDueDateOpen(", "function openRenegociar(", "async function openInstallmentPix("]) {
+      const i = fonte.indexOf(f);
+      expect(fonte.slice(i, i + 160)).toContain("if (emTela) fecharPaineis();");
+    }
   });
 });
 

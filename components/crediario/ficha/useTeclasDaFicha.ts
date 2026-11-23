@@ -42,6 +42,7 @@ export function useTeclasDaFicha({ ativo, painelAberto, onAcao }: TeclasDaFicha)
         dialogoAberto: temDialogoAberto(),
         painelAberto: atual.current.painelAberto,
         comModificador: e.ctrlKey || e.metaKey || e.altKey,
+        repetida: e.repeat,
       });
       if (!acao) return;
       e.preventDefault();

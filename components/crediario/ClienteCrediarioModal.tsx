@@ -116,13 +116,16 @@ type Props = {
   listaLateral?: ReactNode;
   /** F3: posição da cliente na lista e a troca (↑ ↓ e ‹ ›). */
   navegacao?: { posicao: number; total: number; onAnterior?: () => void; onProxima?: () => void };
+  /** F3 (revisão): a ficha veio do ?cliente= do endereço (recarga, troca de
+   *  loja). Cliente de outra loja sem nada nesta fecha a ficha. */
+  abertaPeloEndereco?: boolean;
 };
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
-  casca = "janela", layout = "larga", listaLateral, navegacao,
+  casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false,
 }: Props) {
   const qc = useQueryClient();
   // F3 (23/11/2026): na tela cheia o Histórico vira a coluna da direita
@@ -302,6 +305,15 @@ export function ClienteCrediarioModal({
       setEditarCliente(null);
       setLimiteAberto(false);
       setTrocarAberto(false);
+      // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
+      // anterior — confirmar depois da troca excluiria o carnê dela na ficha
+      // da cliente nova.
+      setExcluirAlvo(null);
+      setRecusaExclusao(null);
+      setFreeSubmitting(false);
+      setRenegSubmitting(false);
+      setReceiptResult(null);
+      setHistLoading(false);
     }
   }, [visible, customerId]);
 
@@ -447,6 +459,7 @@ export function ClienteCrediarioModal({
   // Separado do prefill porque os atalhos de valor do painel (R$ 50/100/200)
   // usam o prefill e não podem desfazer o carnê escolhido nos chips.
   function receberDaAba(v: number, accountId?: string) {
+    if (emTela) fecharPaineis();
     const str = v.toFixed(2).replace(".", ",");
     setFreeAccountId(accountId);
     setFreeAmt(str);
@@ -471,9 +484,16 @@ export function ClienteCrediarioModal({
   }
 
   const editDueDateMut = useMutation({
-    mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) =>
+    mutationFn: ({ id, dueDate }: { id: string; dueDate: string; cliente: string | null }) =>
       creditApi.editInstallmentDueDate(companyId, id, dueDate),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
+      // A cliente mudou durante o envio: atualiza a ficha dela e não mexe na tela.
+      if (vars.cliente !== clienteAtualRef.current) {
+        qc.invalidateQueries({ queryKey: ["credit-customer", companyId, vars.cliente] });
+        qc.invalidateQueries({ queryKey: ["credit-profile", companyId, vars.cliente] });
+        toast.success("Vencimento atualizado!");
+        return;
+      }
       setEditingDueDateInst(null);
       setEditDueDateInput("");
       setEditDueDateError("");
@@ -487,6 +507,7 @@ export function ClienteCrediarioModal({
   });
 
   function handleEditDueDateOpen(inst: CreditInstallment) {
+    if (emTela) fecharPaineis();
     setEditingDueDateInst(inst);
     setEditDueDateInput(formatIsoToBr(inst.due_date));
     setEditDueDateError("");
@@ -496,11 +517,12 @@ export function ClienteCrediarioModal({
     const iso = parseBrDate(editDueDateInput);
     if (!iso) { setEditDueDateError("Data inválida"); return; }
     if (!editingDueDateInst) return;
-    editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso });
+    editDueDateMut.mutate({ id: editingDueDateInst.id, dueDate: iso, cliente: customerId });
   }
 
   // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
+    if (emTela) fecharPaineis();
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
       : (instByAccount.get(accountId) || []);
@@ -550,12 +572,14 @@ export function ClienteCrediarioModal({
         + "-" + Math.random().toString(36).slice(2, 8);
     }
     setRenegSubmitting(true);
+    const pedidoDe = customerId;
     try {
       const res = await rescheduleApi.apply(companyId, customerId, renegScope.accountId, {
         total,
         installments: renegCount,
         first_due_date: iso,
       }, renegKeyRef.current);
+      if (clienteAtualRef.current !== pedidoDe) { atualizarDaCliente(pedidoDe); toast.success("Parcelas mudadas."); return; }
       const adj = res.adjustment;
       toast.success(
         res.replayed
@@ -579,7 +603,7 @@ export function ClienteCrediarioModal({
     } catch (err: any) {
       toast.error(err?.data?.error || "Não foi possível renegociar. Tente novamente.");
     } finally {
-      setRenegSubmitting(false);
+      if (clienteAtualRef.current === pedidoDe) setRenegSubmitting(false);
     }
   }
 
@@ -602,7 +626,8 @@ export function ClienteCrediarioModal({
       setHistLoaded(true);
     } catch {
     } finally {
-      setHistLoading(false);
+      // O pedido de outra cliente não mexe no "carregando" da cliente nova.
+      if (clienteAtualRef.current === pedidoDe) setHistLoading(false);
     }
   }
 
@@ -646,6 +671,7 @@ export function ClienteCrediarioModal({
     if (amt <= 0) { toast.error("Informe um valor maior que zero"); return; }
     const paidAt = parseBrDate(freeDateBr) || undefined;
     setFreeSubmitting(true);
+    const pedidoDe = customerId;
     // A chave sobrevive a um erro: o retry do MESMO pedido é replay no backend.
     if (!freeKeyRef.current) freeKeyRef.current = novaChaveDeRecebimento(companyId, customerId!);
     try {
@@ -656,6 +682,9 @@ export function ClienteCrediarioModal({
         paid_at: paidAt,
         ...(confirmarRepetido ? { confirmar_repetido: true } : {}),
       }, freeKeyRef.current);
+      // F3 (revisão): a cliente mudou durante o envio (troca é travada, mas
+      // por garantia) — o recebimento entrou na ficha DELA; a tela não muda.
+      if (clienteAtualRef.current !== pedidoDe) { atualizarDaCliente(pedidoDe); toast.success("Recebido!"); return; }
       freeKeyRef.current = null;
       setUltimoRecebimento({ amount: amt, method: freeMethod, at: new Date().toISOString() });
       setRepetidoServidor(null);
@@ -686,6 +715,7 @@ export function ClienteCrediarioModal({
     } catch (err: any) {
       // Pagamento igual já gravado: nada entrou; a chave segue a mesma para o
       // "Lançar mesmo assim" (é o mesmo pedido).
+      if (clienteAtualRef.current !== pedidoDe) { toast.error(mensagemErroRecebimento(err)); return; }
       const rep = pagamentoRepetidoDoErro(err);
       if (rep) { setRepetidoServidor(rep); return; }
       console.error("[crediário] confirmFreePayment error:", err);
@@ -693,7 +723,7 @@ export function ClienteCrediarioModal({
       // conferir (Davi / Mary Lucy). Cada causa conhecida diz o que fazer.
       toast.error(mensagemErroRecebimento(err));
     } finally {
-      setFreeSubmitting(false);
+      if (clienteAtualRef.current === pedidoDe) setFreeSubmitting(false);
     }
   }
 
@@ -720,6 +750,7 @@ export function ClienteCrediarioModal({
   }
 
   async function openInstallmentPix(installmentId: string) {
+    if (emTela) fecharPaineis();
     setPixInstId(installmentId);
     setPixData(null);
     setPixLoading(true);
@@ -763,6 +794,7 @@ export function ClienteCrediarioModal({
 
   // ── 10/10/2026: carnês juntados — avisa, recarrega e abre o carnê novo ──
   function handleJuntou(res: MergePlan) {
+    if (clienteAtualRef.current !== customerId) { atualizarDaCliente(customerId); toast.success("Carnês juntados."); return; }
     const adj = res.adjustment;
     const n = res.installments_count;
     toast.success(
@@ -788,14 +820,17 @@ export function ClienteCrediarioModal({
     const alvo = excluirAlvo;
     if (!alvo || excluindo || !customerId) return;
     setExcluindo(true);
+    const pedidoDe = customerId;
     try {
       await creditApi.deleteCarne(companyId, customerId, alvo.id);
+      if (clienteAtualRef.current !== pedidoDe) { atualizarDaCliente(pedidoDe); toast.success("Carnê excluído."); return; }
       setExcluirAlvo(null);
       if (expandedAccountId === alvo.id) setExpandedAccountId(undefined);
       toast.success("Carnê excluído.");
       setHistLoaded(false);
       handleHistoricRefresh();
     } catch (err: any) {
+      if (clienteAtualRef.current !== pedidoDe) { toast.error(lerErroDaExclusao(err).tipo === "erro" ? "Não foi possível excluir o carnê." : "O carnê não foi excluído."); return; }
       setExcluirAlvo(null);
       const r = lerErroDaExclusao(err);
       if (r.tipo === "recebimentos") {
@@ -835,6 +870,18 @@ export function ClienteCrediarioModal({
     }
   }
 
+  // F3 (revisão): resposta que chegou depois de trocar de cliente — atualiza
+  // os dados DELA (e a carteira) sem tocar na tela da cliente nova.
+  function atualizarDaCliente(cliente: string | null) {
+    if (!cliente) return;
+    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, cliente] });
+    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, cliente] });
+    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
+    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
+    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
+    onChanged?.();
+  }
+
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
     qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
@@ -844,6 +891,22 @@ export function ClienteCrediarioModal({
     qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
     onChanged?.();
   }
+
+  // F3 (revisão): o ?cliente= sobrevive à troca de loja (reloadAfterSwitch).
+  // Cliente que esta loja não acha (404) ou que é de outra loja do grupo sem
+  // nada nesta: fecha a ficha e limpa o endereço (onClose da página).
+  const statusDoErro = (detailQ.error as any)?.status;
+  const clienteForaDaLoja = !!visible && (
+    (detailQ.isError && statusDoErro === 404) ||
+    (abertaPeloEndereco && !!detail?.customer?.company_id && detail.customer.company_id !== companyId
+      && Math.abs(balance) < 0.01 && accounts.length === 0 && openInst.length === 0)
+  );
+  useEffect(() => {
+    if (!clienteForaDaLoja) return;
+    toast.info("Esta cliente não tem ficha nesta loja.");
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteForaDaLoja]);
 
   const name = detail?.customer?.name || customerName || "Cliente";
   const outrasLojas = useMemo(
@@ -912,8 +975,14 @@ export function ClienteCrediarioModal({
     setTrocarAberto(false);
   }
   const fecharDoPainel = emTela ? fecharPaineis : onClose;
+  // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
+  // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
-    || limiteAberto || trocarAberto;
+    || limiteAberto || trocarAberto || !!excluirAlvo || !!recusaExclusao;
+  // F3 (revisão): com um envio em andamento a ficha não troca de cliente
+  // (lista, setas e teclado) — a resposta cairia na ficha de outra.
+  const ocupado = freeSubmitting || renegSubmitting || excluindo || editDueDateMut.isPending || abrindoDevolucao
+    || creatingAccount || savingTerms || blockMut.isPending;
 
   // F3: Esc fecha o painel (o Pix primeiro, que fica por cima do Receber) e
   // depois a ficha; ↑ ↓ trocam de cliente. Só na tela cheia do web.
@@ -921,8 +990,15 @@ export function ClienteCrediarioModal({
     ativo: emTela && visible,
     painelAberto,
     onAcao: (acao) => {
+      if (ocupado) return;
       if (acao === "fechar-painel") {
-        if (pixInstId) { setPixInstId(null); setPixData(null); } else fecharPaineis();
+        // O de cima primeiro: diálogo, pergunta do Receber, Pix, painel.
+        if (recusaExclusao) setRecusaExclusao(null);
+        else if (excluirAlvo) setExcluirAlvo(null);
+        else if (repetidoServidor) setRepetidoServidor(null);
+        else if (receberGate) setReceberGate(false);
+        else if (pixInstId) { setPixInstId(null); setPixData(null); }
+        else fecharPaineis();
       } else if (acao === "fechar-ficha") onClose();
       else if (acao === "anterior") navegacao?.onAnterior?.();
       else if (acao === "proxima") navegacao?.onProxima?.();
@@ -1070,9 +1146,9 @@ export function ClienteCrediarioModal({
         setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
         expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
         handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
-        onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
-        onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
-        onExcluirCarne={(carne) => setExcluirAlvo(carne)}
+        onImprimir={(accountId, label, parcelas) => { if (emTela) fecharPaineis(); setPrintScope({ accountId, label, parcelas }); }}
+        onJuntar={podeJuntar ? () => { if (emTela) fecharPaineis(); setJuntarPre([]); } : undefined}
+        onExcluirCarne={(carne) => { if (emTela) fecharPaineis(); setExcluirAlvo(carne); }}
         openInstallmentPix={openInstallmentPix}
         prefill={receberDaAba}
         openBalance={totalBalance}
@@ -1778,7 +1854,7 @@ export function ClienteCrediarioModal({
   // e regras) são os mesmos da janela e abrem por cima da coluna da direita
   // (m.panel é absoluto no pai), com os carnês visíveis ao lado.
   const larga = layout === "larga";
-  const nav = navegacao;
+  const nav = navegacao && ocupado ? { ...navegacao, onAnterior: undefined, onProxima: undefined } : navegacao;
   const barraDeTroca = (
     <View style={t.barra} testID="ficha-barra-troca">
       <Pressable onPress={onClose} style={t.barraBtn} accessibilityRole="button" accessibilityLabel="Voltar para a lista do crediário" testID="ficha-voltar">
@@ -1850,7 +1926,12 @@ export function ClienteCrediarioModal({
   if (!visible) return null;
   return (
     <View style={t.raiz} testID="ficha-tela">
-      {larga && !!listaLateral && <View style={t.lista}>{listaLateral}</View>}
+      {larga && !!listaLateral && (
+        <View style={t.lista}>
+          {listaLateral}
+          {ocupado && <TravaDaLista />}
+        </View>
+      )}
 
       <View style={t.centro} testID="ficha-centro">
         {!larga && barraDeTroca}
@@ -1881,7 +1962,10 @@ export function ClienteCrediarioModal({
       {!larga && trocarAberto && !!listaLateral && (
         <>
           <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista das clientes" />
-          <View style={t.trocarLista} testID="ficha-trocar-lista">{listaLateral}</View>
+          <View style={t.trocarLista} testID="ficha-trocar-lista">
+            {listaLateral}
+            {ocupado && <TravaDaLista />}
+          </View>
         </>
       )}
 
@@ -1890,8 +1974,21 @@ export function ClienteCrediarioModal({
   );
 }
 
+/** Por cima da lista das clientes enquanto um envio não termina. */
+function TravaDaLista() {
+  return (
+    <Pressable
+      style={t.trava}
+      onPress={() => toast.info("Espere terminar de salvar para trocar de cliente.")}
+      accessibilityLabel="Salvando. Espere para trocar de cliente."
+      testID="ficha-lista-travada"
+    />
+  );
+}
+
 // F3 (23/11/2026): casca da tela cheia.
 const t = StyleSheet.create({
+  trava: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5, backgroundColor: "rgba(3,5,14,0.25)" },
   raiz: { flex: 1, flexDirection: "row", minHeight: 0, minWidth: 0, borderTopWidth: 1, borderTopColor: Colors.border },
   lista: { width: 224, minHeight: 0, borderRightWidth: 1, borderRightColor: Colors.border },
   centro: { flex: 1, minWidth: 0, minHeight: 0 },
@@ -1910,7 +2007,7 @@ const t = StyleSheet.create({
   receber: { flex: 1, minHeight: 44, justifyContent: "center", paddingVertical: 10 },
   cobrarTela: { minHeight: 44, paddingHorizontal: 14, justifyContent: "center" },
   limiteBtn: {
-    minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 11,
+    minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 11,
     borderWidth: 1, borderColor: Colors.border2,
   },
   limiteTxt: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
@@ -1919,12 +2016,12 @@ const t = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 12,
   },
   barraBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5, minHeight: 40, paddingHorizontal: 12,
+    flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44, paddingHorizontal: 12,
     borderRadius: 10, borderWidth: 1, borderColor: Colors.border2,
   },
   setas: { flexDirection: "row", alignItems: "center", gap: 6 },
   seta: {
-    width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: Colors.border2,
   },
   setaTxt: { fontFamily: Fonts.body, fontSize: 18, fontWeight: "700", color: Colors.ink },

@@ -160,7 +160,7 @@ const s = StyleSheet.create({
   buscaInput: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 12.5, color: Colors.ink, outlineStyle: "none" } as any,
   filtros: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginHorizontal: 12, marginBottom: 6 },
   filtro: {
-    minHeight: 32, justifyContent: "center", paddingHorizontal: 10, borderRadius: 99,
+    minHeight: 44, justifyContent: "center", paddingHorizontal: 10, borderRadius: 99,
     borderWidth: 1, borderColor: Colors.border,
   },
   filtroOn: { backgroundColor: Colors.violet, borderColor: Colors.violet2 },

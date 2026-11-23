@@ -293,7 +293,8 @@ export default function CrediarioScreen() {
       try { router.setParams({ novo: undefined } as any); } catch {}
     }
   }
-  const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
+  // doEndereco: aberta pelo ?cliente= (recarga, troca de loja), não por um toque.
+  const [modalCust, setModalCust] = useState<{ id: string; name: string; doEndereco?: boolean } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
 
   // ── Cliente com dívida em outra loja do grupo (16/09/2026) ────────────
@@ -316,7 +317,7 @@ export default function CrediarioScreen() {
     if (!company?.id) return;
     const cid = clienteDaRota(params.cliente);
     if (!cid) { setModalCust(null); return; }
-    setModalCust((prev) => (prev?.id === cid ? prev : { id: cid, name: "" }));
+    setModalCust((prev) => (prev?.id === cid ? prev : { id: cid, name: "", doEndereco: true }));
   }, [params.cliente, company?.id]);
 
   const abrirFicha = useCallback((c: { id: string; name: string }) => {
@@ -680,6 +681,7 @@ export default function CrediarioScreen() {
       qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
     },
     onClose: fecharFicha,
+    abertaPeloEndereco: !!modalCust?.doEndereco,
     accessibleCompanyIds,
     onOpenInCompany: handleOpenInCompany,
     switchingCompany: switching,

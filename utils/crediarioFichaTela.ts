@@ -65,14 +65,19 @@ export type TeclaDaFicha = {
   painelAberto: boolean;
   /** Ctrl, Alt ou Cmd: atalho de outra coisa (navegador, Caixa). */
   comModificador: boolean;
+  /** Tecla segurada (auto-repetição): as setas não disparam em rajada. */
+  repetida?: boolean;
 };
 
 export function acaoDaTecla(t: TeclaDaFicha): AcaoDaTecla {
   if (t.dialogoAberto || t.comModificador) return null;
+  // Dentro de campo de texto nada fecha nem troca: o Esc é do campo, e as
+  // setas andam no texto.
+  if (t.alvoEditavel) return null;
   if (t.key === "Escape") return t.painelAberto ? "fechar-painel" : "fechar-ficha";
-  // Setas: nunca dentro de campo (o cursor anda no texto) nem com painel
-  // aberto (trocar de cliente levaria o valor que ela está digitando).
-  if (t.alvoEditavel || t.painelAberto) return null;
+  // Setas: nunca com painel aberto (trocar de cliente levaria o valor que ela
+  // está digitando) nem segurando a tecla.
+  if (t.painelAberto || t.repetida) return null;
   if (t.key === "ArrowUp") return "anterior";
   if (t.key === "ArrowDown") return "proxima";
   return null;
