@@ -60,7 +60,8 @@ describe("chavePixDoQr", () => {
   it("a tela do crediário lê o canal digital, não a régua, e o atalho vai para o Meu Site", () => {
     const fonte = require("fs").readFileSync(
       require("path").join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
-    expect(fonte).toContain("pixKey={chavePixDoQr(canalQ)}");
+    // F3 (23/11/2026): as duas cascas da ficha recebem as mesmas props (propsDaFicha).
+    expect(fonte).toMatch(/pixKey(=\{|: )chavePixDoQr\(canalQ\)/);
     expect(fonte).toContain("/digital-channel`");
     expect(fonte).toContain("router.push(ROTA_DA_CHAVE_PIX_DO_QR as any)");
     expect(ROTA_DA_CHAVE_PIX_DO_QR).toBe("/canal?tab=site");

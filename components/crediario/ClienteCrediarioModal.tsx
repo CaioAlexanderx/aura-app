@@ -17,7 +17,7 @@
 // Histórico anterior: C-2 (12/06) header fixo; A2-FE paid_at no preview;
 // B3 valor livre + Pix EMV; Item 2 (16/06) renegociação; Item 4 ícone WhatsApp.
 // ============================================================
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
@@ -72,6 +72,7 @@ import {
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
+import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
 
 function translateStatus(status: string | null | undefined): string {
   if (!status) return "";
@@ -105,14 +106,28 @@ type Props = {
   /** Troca para outra loja do grupo e reabre esta ficha lá. */
   onOpenInCompany?: (companyId: string, customerId: string) => void;
   switchingCompany?: boolean;
+  /** F3 (23/11/2026): "tela" = a ficha ocupa a área de conteúdo, como o
+   *  Caixa (tela larga e média); "janela" = o modal de sempre (celular). */
+  casca?: "janela" | "tela";
+  /** F3: "larga" põe a lista das clientes à esquerda; "media" troca a lista
+   *  pela barra "‹ Crediário · ‹ 3 de 38 › · Trocar cliente". */
+  layout?: "media" | "larga";
+  /** F3: a carteira estreita (ListaDaFicha), montada pela página. */
+  listaLateral?: ReactNode;
+  /** F3: posição da cliente na lista e a troca (↑ ↓ e ‹ ›). */
+  navegacao?: { posicao: number; total: number; onAnterior?: () => void; onProxima?: () => void };
 };
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
   onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
+  casca = "janela", layout = "larga", listaLateral, navegacao,
 }: Props) {
   const qc = useQueryClient();
+  // F3 (23/11/2026): na tela cheia o Histórico vira a coluna da direita
+  // (sempre à vista) e os painéis abrem nela; o centro fica com as parcelas.
+  const emTela = casca === "tela";
   // Rótulo da 1ª aba: "Compras e parcelas" não cabe em três abas de celular.
   const { width: larguraDaTela } = useWindowDimensions();
 
@@ -167,6 +182,14 @@ export function ClienteCrediarioModal({
 
   // 23/11/2026 (F2): "Editar cliente" por cima da ficha. foco = abrir no telefone.
   const [editarCliente, setEditarCliente] = useState<{ foco: boolean } | null>(null);
+  // F3: "Limite e regras" (a aba Conta) abre como painel na coluna da direita
+  // da tela cheia; "Trocar cliente" abre a lista por cima na tela média.
+  const [limiteAberto, setLimiteAberto] = useState(false);
+  const [trocarAberto, setTrocarAberto] = useState(false);
+  // Resposta do Histórico que chega depois de trocar de cliente (setas) não
+  // pode pintar a ficha da cliente nova.
+  const clienteAtualRef = useRef<string | null>(customerId);
+  clienteAtualRef.current = customerId;
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -277,6 +300,8 @@ export function ClienteCrediarioModal({
       setPixInstId(null);
       setPixData(null);
       setEditarCliente(null);
+      setLimiteAberto(false);
+      setTrocarAberto(false);
     }
   }, [visible, customerId]);
 
@@ -561,11 +586,13 @@ export function ClienteCrediarioModal({
   async function loadHistory(cursor?: string | null) {
     if (!companyId || !customerId) return;
     setHistLoading(true);
+    const pedidoDe = customerId;
     try {
       const res = await creditApi.getHistoryTimeline(companyId, customerId, {
         limit: 20,
         cursor: cursor ?? undefined,
       });
+      if (clienteAtualRef.current !== pedidoDe) return;
       if (cursor) {
         setHistEvents(prev => [...prev, ...res.events]);
       } else {
@@ -582,8 +609,11 @@ export function ClienteCrediarioModal({
   useEffect(() => {
     if (tab === "historico" && !histLoaded && visible && !!customerId) {
       loadHistory();
+    } else if (emTela && !histLoaded && visible && !!customerId) {
+      // Tela cheia: as Movimentações estão sempre à vista na direita.
+      loadHistory();
     }
-  }, [tab, histLoaded, visible, customerId]);
+  }, [tab, histLoaded, visible, customerId, emTela]);
 
   const triggerPreview = useCallback((amtStr: string, accountId?: string | null) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
@@ -866,217 +896,228 @@ export function ClienteCrediarioModal({
     ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
     : `Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`;
 
-  return (
-    // 12/10/2026: com painel interno aberto (Receber, Renegociar, Juntar, Alterar
-    // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
-    // o que a lojista estava digitando. O painel tem o próprio voltar; Esc e
-    // voltar do Android seguem fechando como antes.
-    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700}>
-          <View style={m.head}>
-            <Pressable onPress={onClose} style={m.crumb}>
-              <View style={{ transform: [{ rotate: "180deg" }] }}>
-                <Icon name="chevron_right" size={15} color={Colors.violet3} />
+  // F3 (23/11/2026): na tela cheia o X de dentro de um painel fecha só o
+  // painel (a ficha é a página); na janela fecha a ficha, como sempre.
+  function fecharPaineis() {
+    setReceberOpen(false);
+    setReceberGate(false);
+    setPixInstId(null);
+    setPixData(null);
+    setRenegScope(null);
+    setJuntarPre(null);
+    setPrintScope(null);
+    setEditingDueDateInst(null);
+    setEditDueDateError("");
+    setLimiteAberto(false);
+    setTrocarAberto(false);
+  }
+  const fecharDoPainel = emTela ? fecharPaineis : onClose;
+  const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
+    || limiteAberto || trocarAberto;
+
+  // F3: Esc fecha o painel (o Pix primeiro, que fica por cima do Receber) e
+  // depois a ficha; ↑ ↓ trocam de cliente. Só na tela cheia do web.
+  useTeclasDaFicha({
+    ativo: emTela && visible,
+    painelAberto,
+    onAcao: (acao) => {
+      if (acao === "fechar-painel") {
+        if (pixInstId) { setPixInstId(null); setPixData(null); } else fecharPaineis();
+      } else if (acao === "fechar-ficha") onClose();
+      else if (acao === "anterior") navegacao?.onAnterior?.();
+      else if (acao === "proxima") navegacao?.onProxima?.();
+    },
+  });
+
+  const carregandoFicha = detailQ.isLoading || profileQ.isLoading;
+
+  // 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
+  // explica, abrindo a edição no campo do telefone.
+  const botaoCobrar = !!onCobrar && !detailQ.isLoading && (
+    phone ? (
+      <Pressable style={[m.waBtn, emTela && t.cobrarTela]} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
+        <Icon name="whatsapp" size={16} color={Colors.green} />
+        <Text style={m.waTxt}>Cobrar</Text>
+      </Pressable>
+    ) : (
+      <Pressable
+        style={[m.waBtn, f.cobrarApagado, emTela && t.cobrarTela]}
+        onPress={() => {
+          toast.info("Adicione o telefone para cobrar pelo WhatsApp");
+          if (customerId) setEditarCliente({ foco: true });
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Cobrar. Adicione o telefone para cobrar pelo WhatsApp"
+        testID="ficha-cobrar-sem-telefone"
+      >
+        <Icon name="whatsapp" size={16} color={Colors.ink3} />
+        <Text style={[m.waTxt, { color: Colors.ink3 }]}>Cobrar</Text>
+      </Pressable>
+    )
+  );
+
+  // F3: na tela cheia o "Limite e regras" (a antiga aba Conta) abre na
+  // coluna da direita.
+  const botaoLimite = (
+    <Pressable
+      style={t.limiteBtn}
+      onPress={() => { fecharPaineis(); setLimiteAberto(true); }}
+      accessibilityRole="button"
+      testID="ficha-abrir-limite"
+    >
+      <Text style={t.limiteTxt}>Limite e regras{(hasTermsOverride || isBlocked) ? " •" : ""}</Text>
+    </Pressable>
+  );
+
+  const identidade = (
+    <View style={m.cust}>
+      <View style={[m.custL, { flex: 1, minWidth: 0 }]}>
+        <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[m.custName, f.nome, { fontFamily: Fonts.heading }]} numberOfLines={2}>{name}</Text>
+          <View style={m.custSub}>
+            <View style={[m.dot, { backgroundColor: corStatus }]} />
+            <View style={[m.pill, { backgroundColor: corStatus + "22" }]} testID="crediario-ficha-status">
+              <Text style={[m.pillTxt, { color: corStatus }]}>
+                {hasOverdue ? "Em atraso" : semSaldoNoRazao ? "Conferir" : "Em dia"}
+              </Text>
+            </View>
+            {isBlocked && (
+              <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
+                <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
               </View>
-              <Text style={m.crumbTxt}>Crediário</Text>
-            </Pressable>
-            <Pressable onPress={onClose} style={m.xBtn}>
-              <Icon name="x" size={15} color={Colors.ink3} />
-            </Pressable>
+            )}
           </View>
-
-          <View style={m.fixedHeader}>
-            <View style={m.cust}>
-              <View style={[m.custL, { flex: 1, minWidth: 0 }]}>
-                <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[m.custName, f.nome, { fontFamily: Fonts.heading }]} numberOfLines={2}>{name}</Text>
-                  <View style={m.custSub}>
-                    <View style={[m.dot, { backgroundColor: corStatus }]} />
-                    <View style={[m.pill, { backgroundColor: corStatus + "22" }]} testID="crediario-ficha-status">
-                      <Text style={[m.pillTxt, { color: corStatus }]}>
-                        {hasOverdue ? "Em atraso" : semSaldoNoRazao ? "Conferir" : "Em dia"}
-                      </Text>
-                    </View>
-                    {isBlocked && (
-                      <View style={[m.pill, { backgroundColor: Colors.red + "22" }]}>
-                        <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
-                      </View>
-                    )}
-                  </View>
-                  {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
-                  {!detailQ.isLoading && (
-                    <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
-                  )}
-                </View>
-              </View>
-              {/* 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
-                  explica, abrindo a edição no campo do telefone. */}
-              {!!onCobrar && !detailQ.isLoading && (
-                phone ? (
-                  <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
-                    <Icon name="whatsapp" size={16} color={Colors.green} />
-                    <Text style={m.waTxt}>Cobrar</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    style={[m.waBtn, f.cobrarApagado]}
-                    onPress={() => {
-                      toast.info("Adicione o telefone para cobrar pelo WhatsApp");
-                      if (customerId) setEditarCliente({ foco: true });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cobrar. Adicione o telefone para cobrar pelo WhatsApp"
-                    testID="ficha-cobrar-sem-telefone"
-                  >
-                    <Icon name="whatsapp" size={16} color={Colors.ink3} />
-                    <Text style={[m.waTxt, { color: Colors.ink3 }]}>Cobrar</Text>
-                  </Pressable>
-                )
-              )}
-            </View>
-
-            {/* F3: EM ABERTO é o herói; score e disponível são suporte */}
-            {!!profile && (
-              <View style={f.metaRow}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>{totalBalance < 0 ? "TEM CRÉDITO NA LOJA" : "FALTA PAGAR"}</Text>
-                  <Text
-                    style={[f.metaHero, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}
-                    numberOfLines={1}
-                  >
-                    {fmt(Math.abs(totalBalance))}
-                  </Text>
-                </View>
-                <View style={f.metaSm}>
-                  <Text style={m.fixedMetaLbl}>SCORE</Text>
-                  <Text style={[f.metaSmVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
-                </View>
-                {availableLimit !== undefined && (
-                  <View style={f.metaSm} testID="crediario-ficha-limite">
-                    <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>
-                      {!limiteDefinido ? "LIMITE" : passouDoLimite > 0 ? "PASSOU DO LIMITE" : "PODE COMPRAR MAIS"}
-                    </Text>
-                    <Text style={[f.metaSmVal, {
-                      fontFamily: Fonts.body,
-                      color: !limiteDefinido ? Colors.ink3 : passouDoLimite > 0 ? Colors.red : Colors.green,
-                    }]}>
-                      {!limiteDefinido ? "Sem limite definido" : fmt(passouDoLimite > 0 ? passouDoLimite : Math.max(0, availableLimit))}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 23/11/2026 (F1): um aviso por vez, em frase inteira, o mais grave
-                primeiro (utils/crediarioAvisoDaFicha). Saíram dos selos ao lado
-                do nome ("parcelas R$ X · saldo R$ Y", "N a conferir"), que não
-                diziam o que era nem o que fazer. */}
-            {!!aviso && (
-              <View
-                style={m.scoreBanner}
-                testID={aviso.tipo === "divergencia" ? "crediario-ficha-divergencia" : `crediario-ficha-aviso-${aviso.tipo}`}
-              >
-                <Icon name="alert_triangle" size={15} color={Colors.amber} />
-                <Text style={[m.scoreBannerTxt, { fontFamily: Fonts.body }]}>{aviso.texto}</Text>
-              </View>
-            )}
-
-            {/* F3: 5 abas → 3 (Termos/Bloqueio viraram Ajustes na aba Conta) */}
-            <View style={[m.tabs, { marginBottom: 12 }]}>
-              {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
-                <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
-                  <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn]} numberOfLines={1}>
-                    {/* 23/11/2026 (F1): nomes do redesenho da ficha. No celular
-                        (< 480 px) a 1ª aba vira "Parcelas" e a 3ª "Limite": três
-                        abas em 375 px têm ~105 px cada. */}
-                    {t === "parcelas"
-                      ? (larguraDaTela < 480 ? "Parcelas" : "Compras e parcelas")
-                      : t === "historico" ? "Movimentações"
-                        : `${larguraDaTela < 480 ? "Limite" : "Limite e regras"}${(hasTermsOverride || isBlocked) ? " •" : ""}`}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={true}>
-            {detailQ.isLoading || profileQ.isLoading ? (
-              <View style={{ paddingVertical: 36, alignItems: "center" }}>
-                <ActivityIndicator color={Colors.violet3} />
-              </View>
-            ) : (
-              <>
-                {tab === "parcelas" && (
-                  <GrupoEmAberto
-                    name={name}
-                    lojas={outrasLojas}
-                    storeName={storeName}
-                    acessiveis={lojasAcessiveis}
-                    abrindo={switchingCompany}
-                    onAbrirNaLoja={onOpenInCompany && customerId
-                      ? (cid) => onOpenInCompany(cid, customerId)
-                      : undefined}
-                  />
-                )}
-                {tab === "parcelas" && (
-                  <TabParcelas
-                    accounts={accounts} openInst={openInst}
-                    instByAccount={instByAccount} useCarneLayout={useCarneLayout}
-                    handleCreateAccount={handleCreateAccount} showNewAccount={showNewAccount}
-                    setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
-                    setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
-                    expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
-                    handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
-                    onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
-                    onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
-                    onExcluirCarne={(carne) => setExcluirAlvo(carne)}
-                    openInstallmentPix={openInstallmentPix}
-                    prefill={receberDaAba}
-                    openBalance={totalBalance}
-                    companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
-                  />
-                )}
-
-                {tab === "historico" && (
-                  <TabHistorico
-                    histEvents={histEvents} histCursor={histCursor} histLoading={histLoading}
-                    histLoaded={histLoaded} loadHistory={loadHistory} setHistLoaded={setHistLoaded}
-                    companyId={companyId}
-                    customerId={customerId!}
-                    customerName={name}
-                    openInst={openInst}
-                    onRefresh={handleHistoricRefresh}
-                  />
-                )}
-
-                {tab === "conta" && (
-                  <TabConta
-                    profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
-                    availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
-                    nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
-                    ajustes={{
-                      termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
-                      termsDirty, setTermsDirty, savingTerms, saveTerms,
-                      blockReason, setBlockReason, blockingAction, setBlockingAction,
-                      handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
-                    }}
-                  />
-                )}
-              </>
-            )}
-          </ScrollView>
-
-          {/* F3: CTA fixo — abre o sheet "Receber pagamento" */}
-          {!anyOverlayOpen && tab === "parcelas" && !detailQ.isLoading && (
-            <View style={m.footer}>
-              {/* Volta para "Todos": o Receber de um cartão mira o carnê dele, e
-                  o rodapé é o recebimento livre (parcela mais antiga primeiro). */}
-              <Pressable style={m.cta} onPress={() => { setFreeAccountId(undefined); setReceberOpen(true); }}>
-                <Text style={m.ctaTxt}>Receber pagamento</Text>
-              </Pressable>
-            </View>
+          {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
+          {!detailQ.isLoading && (
+            <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
           )}
+        </View>
+      </View>
+      {emTela ? botaoLimite : botaoCobrar}
+    </View>
+  );
 
+  // F3: EM ABERTO é o herói; score e disponível são suporte
+  const numeros = !!profile && (
+    <View style={f.metaRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>{totalBalance < 0 ? "TEM CRÉDITO NA LOJA" : "FALTA PAGAR"}</Text>
+        <Text
+          style={[f.metaHero, { color: totalBalance < 0 ? Colors.green : totalBalance > 0 ? Colors.red : Colors.ink3 }]}
+          numberOfLines={1}
+        >
+          {fmt(Math.abs(totalBalance))}
+        </Text>
+      </View>
+      <View style={f.metaSm}>
+        <Text style={m.fixedMetaLbl}>SCORE</Text>
+        <Text style={[f.metaSmVal, { color: scoreColor(scoreLabel) }]}>{profile.credit_score}</Text>
+      </View>
+      {availableLimit !== undefined && (
+        <View style={f.metaSm} testID="crediario-ficha-limite">
+          <Text style={[m.fixedMetaLbl, { fontFamily: Fonts.body }]}>
+            {!limiteDefinido ? "LIMITE" : passouDoLimite > 0 ? "PASSOU DO LIMITE" : "PODE COMPRAR MAIS"}
+          </Text>
+          <Text style={[f.metaSmVal, {
+            fontFamily: Fonts.body,
+            color: !limiteDefinido ? Colors.ink3 : passouDoLimite > 0 ? Colors.red : Colors.green,
+          }]}>
+            {!limiteDefinido ? "Sem limite definido" : fmt(passouDoLimite > 0 ? passouDoLimite : Math.max(0, availableLimit))}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  // 23/11/2026 (F1): um aviso por vez, em frase inteira, o mais grave
+  // primeiro (utils/crediarioAvisoDaFicha). Saíram dos selos ao lado do nome
+  // ("parcelas R$ X · saldo R$ Y", "N a conferir"), que não diziam o que era
+  // nem o que fazer.
+  const avisoEl = !!aviso && (
+    <View
+      style={m.scoreBanner}
+      testID={aviso.tipo === "divergencia" ? "crediario-ficha-divergencia" : `crediario-ficha-aviso-${aviso.tipo}`}
+    >
+      <Icon name="alert_triangle" size={15} color={Colors.amber} />
+      <Text style={[m.scoreBannerTxt, { fontFamily: Fonts.body }]}>{aviso.texto}</Text>
+    </View>
+  );
+
+  const carregandoEl = (
+    <View style={{ paddingVertical: 36, alignItems: "center" }}>
+      <ActivityIndicator color={Colors.violet3} />
+    </View>
+  );
+
+  const parcelasEl = (
+    <>
+      <GrupoEmAberto
+        name={name}
+        lojas={outrasLojas}
+        storeName={storeName}
+        acessiveis={lojasAcessiveis}
+        abrindo={switchingCompany}
+        onAbrirNaLoja={onOpenInCompany && customerId
+          ? (cid) => onOpenInCompany(cid, customerId)
+          : undefined}
+      />
+      <TabParcelas
+        accounts={accounts} openInst={openInst}
+        instByAccount={instByAccount} useCarneLayout={useCarneLayout}
+        handleCreateAccount={handleCreateAccount} showNewAccount={showNewAccount}
+        setShowNewAccount={setShowNewAccount} newAccountName={newAccountName}
+        setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
+        expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
+        handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
+        onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
+        onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
+        onExcluirCarne={(carne) => setExcluirAlvo(carne)}
+        openInstallmentPix={openInstallmentPix}
+        prefill={receberDaAba}
+        openBalance={totalBalance}
+        companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
+      />
+    </>
+  );
+
+  const historicoEl = (
+    <TabHistorico
+      histEvents={histEvents} histCursor={histCursor} histLoading={histLoading}
+      histLoaded={histLoaded} loadHistory={loadHistory} setHistLoaded={setHistLoaded}
+      companyId={companyId}
+      customerId={customerId!}
+      customerName={name}
+      openInst={openInst}
+      onRefresh={handleHistoricRefresh}
+    />
+  );
+
+  const contaEl = (
+    <TabConta
+      profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
+      availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
+      nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
+      ajustes={{
+        termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
+        termsDirty, setTermsDirty, savingTerms, saveTerms,
+        blockReason, setBlockReason, blockingAction, setBlockingAction,
+        handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
+      }}
+    />
+  );
+
+  // Abre o "Receber pagamento" livre. Volta para "Todos": o Receber de um
+  // cartão mira o carnê dele, e este é o recebimento livre (parcela mais
+  // antiga primeiro).
+  function abrirReceberLivre() {
+    if (emTela) fecharPaineis();
+    setFreeAccountId(undefined);
+    setReceberOpen(true);
+  }
+
+  const paineis = (
+    <>
           {/* ── Painel "Receber pagamento" (task 03/08): desliza POR CIMA da
                ficha ocupando o sheet inteiro — não comprime mais o body.
                Gate e CTA vivem no rodapé FIXO, sempre visíveis. ── */}
@@ -1091,7 +1132,7 @@ export function ClienteCrediarioModal({
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
                 <Text style={m.panelTitle}>{receiptResult ? "Pagamento registrado" : "Receber pagamento"}</Text>
-                <Pressable onPress={onClose} style={m.xBtn}>
+                <Pressable onPress={fecharDoPainel} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
@@ -1345,7 +1386,7 @@ export function ClienteCrediarioModal({
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
                 <Text style={m.panelTitle}>{pixOverlayTitle}</Text>
-                <Pressable onPress={onClose} style={m.xBtn}>
+                <Pressable onPress={fecharDoPainel} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
@@ -1402,7 +1443,7 @@ export function ClienteCrediarioModal({
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
                 <Text style={[m.panelTitle, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
-                <Pressable onPress={onClose} style={m.xBtn}>
+                <Pressable onPress={fecharDoPainel} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
@@ -1529,7 +1570,7 @@ export function ClienteCrediarioModal({
               carnes={carnesJuntaveis}
               preselecionados={juntarPre}
               onBack={() => setJuntarPre(null)}
-              onClose={onClose}
+              onClose={fecharDoPainel}
               onDone={handleJuntou}
             />
           )}
@@ -1540,7 +1581,7 @@ export function ClienteCrediarioModal({
               parcelas={printScope.parcelas}
               pixKey={pixKey}
               onBack={() => setPrintScope(null)}
-              onClose={onClose}
+              onClose={fecharDoPainel}
               onCadastrarPix={onOpenSettings}
               onPrint={(formato) => {
                 // Síncrono, dentro do clique: a janela de impressão abre antes
@@ -1562,7 +1603,7 @@ export function ClienteCrediarioModal({
                   <Text style={m.panelBackTxt}>Voltar</Text>
                 </Pressable>
                 <Text style={m.panelTitle}>Alterar vencimento</Text>
-                <Pressable onPress={onClose} style={m.xBtn}>
+                <Pressable onPress={fecharDoPainel} style={m.xBtn}>
                   <Icon name="x" size={13} color={Colors.ink3} />
                 </Pressable>
               </View>
@@ -1603,7 +1644,11 @@ export function ClienteCrediarioModal({
              </ModalPop>
             </View>
           )}
+    </>
+  );
 
+  const dialogos = (
+    <>
           {/* 09/11/2026: excluir carnê — confirmação e recusas (sem window.confirm:
               o viewer não tem). Por último, por cima da ficha. */}
           <ConfirmDialog
@@ -1658,10 +1703,240 @@ export function ClienteCrediarioModal({
             onClose={() => setEditarCliente(null)}
             onSaved={() => onChanged?.()}
           />
+    </>
+  );
 
+  if (!emTela) return (
+    // 12/10/2026: com painel interno aberto (Receber, Renegociar, Juntar, Alterar
+    // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
+    // o que a lojista estava digitando. O painel tem o próprio voltar; Esc e
+    // voltar do Android seguem fechando como antes.
+    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700}>
+          <View style={m.head}>
+            <Pressable onPress={onClose} style={m.crumb}>
+              <View style={{ transform: [{ rotate: "180deg" }] }}>
+                <Icon name="chevron_right" size={15} color={Colors.violet3} />
+              </View>
+              <Text style={m.crumbTxt}>Crediário</Text>
+            </Pressable>
+            <Pressable onPress={onClose} style={m.xBtn}>
+              <Icon name="x" size={15} color={Colors.ink3} />
+            </Pressable>
+          </View>
+
+          <View style={m.fixedHeader}>
+            {identidade}
+            {numeros}
+            {avisoEl}
+
+            {/* F3: 5 abas → 3 (Termos/Bloqueio viraram Ajustes na aba Conta) */}
+            <View style={[m.tabs, { marginBottom: 12 }]}>
+              {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
+                <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
+                  <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn]} numberOfLines={1}>
+                    {/* 23/11/2026 (F1): nomes do redesenho da ficha. No celular
+                        (< 480 px) a 1ª aba vira "Parcelas" e a 3ª "Limite": três
+                        abas em 375 px têm ~105 px cada. */}
+                    {t === "parcelas"
+                      ? (larguraDaTela < 480 ? "Parcelas" : "Compras e parcelas")
+                      : t === "historico" ? "Movimentações"
+                        : `${larguraDaTela < 480 ? "Limite" : "Limite e regras"}${(hasTermsOverride || isBlocked) ? " •" : ""}`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={true}>
+            {carregandoFicha ? carregandoEl : (
+              <>
+                {tab === "parcelas" && parcelasEl}
+                {tab === "historico" && historicoEl}
+                {tab === "conta" && contaEl}
+              </>
+            )}
+          </ScrollView>
+
+          {/* F3: CTA fixo — abre o sheet "Receber pagamento" */}
+          {!anyOverlayOpen && tab === "parcelas" && !detailQ.isLoading && (
+            <View style={m.footer}>
+              <Pressable style={m.cta} onPress={abrirReceberLivre}>
+                <Text style={m.ctaTxt}>Receber pagamento</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {paineis}
+          {dialogos}
     </ResponsiveSheet>
   );
+
+  // ── F3 (23/11/2026): a ficha em tela cheia ──────────────────────────
+  // Mockup aprovado (seção a): lista das clientes à esquerda (tela larga),
+  // o que ela deve no centro, dinheiro e Movimentações à direita. Os painéis
+  // (Receber, Pix, Mudar as parcelas, Juntar, Imprimir, Mudar a data, Limite
+  // e regras) são os mesmos da janela e abrem por cima da coluna da direita
+  // (m.panel é absoluto no pai), com os carnês visíveis ao lado.
+  const larga = layout === "larga";
+  const nav = navegacao;
+  const barraDeTroca = (
+    <View style={t.barra} testID="ficha-barra-troca">
+      <Pressable onPress={onClose} style={t.barraBtn} accessibilityRole="button" accessibilityLabel="Voltar para a lista do crediário" testID="ficha-voltar">
+        <View style={{ transform: [{ rotate: "180deg" }] }}>
+          <Icon name="chevron_right" size={15} color={Colors.violet3} />
+        </View>
+        <Text style={m.crumbTxt}>Crediário</Text>
+      </Pressable>
+      {!!nav && nav.total > 0 && (
+        <View style={t.setas}>
+          <Pressable
+            onPress={nav.onAnterior}
+            disabled={!nav.onAnterior}
+            style={[t.seta, !nav.onAnterior && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Cliente anterior"
+            testID="ficha-anterior"
+          >
+            <Text style={t.setaTxt}>‹</Text>
+          </Pressable>
+          <Text style={t.posicao} testID="ficha-posicao">
+            {nav.posicao > 0 ? `${nav.posicao} de ${nav.total}` : `${nav.total} na lista`}
+          </Text>
+          <Pressable
+            onPress={nav.onProxima}
+            disabled={!nav.onProxima}
+            style={[t.seta, !nav.onProxima && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Próxima cliente"
+            testID="ficha-proxima"
+          >
+            <Text style={t.setaTxt}>›</Text>
+          </Pressable>
+        </View>
+      )}
+      {!!listaLateral && (
+        <Pressable
+          onPress={() => setTrocarAberto(v => !v)}
+          style={[t.barraBtn, trocarAberto && { backgroundColor: Colors.violetD }]}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: trocarAberto }}
+          testID="ficha-trocar-cliente"
+        >
+          <Text style={t.trocarTxt}>Trocar cliente ⌄</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const painelLimite = (
+    <View style={m.panel} testID="ficha-painel-limite">
+      <ModalPop visible style={{ flex: 1 }}>
+        <View style={m.panelHead}>
+          <Pressable onPress={() => setLimiteAberto(false)} style={m.panelBack} accessibilityRole="button">
+            <View style={{ transform: [{ rotate: "180deg" }] }}>
+              <Icon name="chevron_right" size={15} color={Colors.violet3} />
+            </View>
+            <Text style={m.panelBackTxt}>Voltar</Text>
+          </Pressable>
+          <Text style={m.panelTitle}>Limite e regras</Text>
+        </View>
+        <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 12 }} showsVerticalScrollIndicator={true}>
+          {carregandoFicha ? carregandoEl : contaEl}
+        </ScrollView>
+      </ModalPop>
+    </View>
+  );
+
+  if (!visible) return null;
+  return (
+    <View style={t.raiz} testID="ficha-tela">
+      {larga && !!listaLateral && <View style={t.lista}>{listaLateral}</View>}
+
+      <View style={t.centro} testID="ficha-centro">
+        {!larga && barraDeTroca}
+        <View style={t.cabecalho}>
+          {identidade}
+          {numeros}
+          {avisoEl}
+        </View>
+        <ScrollView style={t.rolagem} contentContainerStyle={t.rolagemConteudo} showsVerticalScrollIndicator={true}>
+          {carregandoFicha ? carregandoEl : parcelasEl}
+        </ScrollView>
+      </View>
+
+      <View style={[t.direita, { width: larga ? 340 : 320 }]} testID="ficha-direita">
+        <View style={t.acoes}>
+          <Pressable style={[m.cta, t.receber]} onPress={abrirReceberLivre} accessibilityRole="button" testID="ficha-receber">
+            <Text style={m.ctaTxt}>Receber pagamento</Text>
+          </Pressable>
+          {botaoCobrar}
+        </View>
+        <ScrollView style={t.rolagem} contentContainerStyle={t.movConteudo} showsVerticalScrollIndicator={true}>
+          {historicoEl}
+        </ScrollView>
+        {limiteAberto && painelLimite}
+        {paineis}
+      </View>
+
+      {!larga && trocarAberto && !!listaLateral && (
+        <>
+          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista das clientes" />
+          <View style={t.trocarLista} testID="ficha-trocar-lista">{listaLateral}</View>
+        </>
+      )}
+
+      {dialogos}
+    </View>
+  );
 }
+
+// F3 (23/11/2026): casca da tela cheia.
+const t = StyleSheet.create({
+  raiz: { flex: 1, flexDirection: "row", minHeight: 0, minWidth: 0, borderTopWidth: 1, borderTopColor: Colors.border },
+  lista: { width: 224, minHeight: 0, borderRightWidth: 1, borderRightColor: Colors.border },
+  centro: { flex: 1, minWidth: 0, minHeight: 0 },
+  cabecalho: { paddingHorizontal: 20, paddingTop: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  rolagem: { flex: 1, minHeight: 0 },
+  rolagemConteudo: { padding: 20, paddingTop: 14, paddingBottom: 32 },
+  movConteudo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
+  direita: {
+    minHeight: 0, backgroundColor: Colors.bg2, overflow: "hidden",
+    borderLeftWidth: 1, borderLeftColor: Colors.border,
+  },
+  acoes: {
+    flexDirection: "row", alignItems: "stretch", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  receber: { flex: 1, minHeight: 44, justifyContent: "center", paddingVertical: 10 },
+  cobrarTela: { minHeight: 44, paddingHorizontal: 14, justifyContent: "center" },
+  limiteBtn: {
+    minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 11,
+    borderWidth: 1, borderColor: Colors.border2,
+  },
+  limiteTxt: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
+  barra: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8,
+    paddingHorizontal: 20, paddingTop: 12,
+  },
+  barraBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5, minHeight: 40, paddingHorizontal: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: Colors.border2,
+  },
+  setas: { flexDirection: "row", alignItems: "center", gap: 6 },
+  seta: {
+    width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.border2,
+  },
+  setaTxt: { fontFamily: Fonts.body, fontSize: 18, fontWeight: "700", color: Colors.ink },
+  posicao: { fontFamily: Fonts.mono, fontSize: 12, color: Colors.ink3, minWidth: 64, textAlign: "center" },
+  trocarTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink },
+  trocarFundo: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 19, backgroundColor: "rgba(3,5,14,0.35)" },
+  trocarLista: {
+    position: "absolute", top: 0, left: 0, bottom: 0, width: 300, zIndex: 20,
+    borderRightWidth: 1, borderRightColor: Colors.border2, backgroundColor: Colors.bg2,
+    boxShadow: "6px 0 24px rgba(0,0,0,0.35)",
+  },
+});
 
 // Estilos locais da F3 (herói do header)
 const f = StyleSheet.create({

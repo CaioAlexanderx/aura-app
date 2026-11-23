@@ -23,6 +23,8 @@ import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { escolherRecentes } from "@/components/crediario/lancamento/calculos";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
+import { ListaDaFicha, type ClienteDaLista } from "@/components/crediario/ficha/ListaDaFicha";
+import { layoutDaFicha, posicaoNaLista, vizinhaNaLista } from "@/utils/crediarioFichaTela";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 import { useModelosDeMensagem, salvarSobre } from "@/hooks/useModelosDeMensagem";
 import {
@@ -137,6 +139,10 @@ const AGING_COLORS: Record<string, string> = {
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
 
 const IS_WEB = Platform.OS === "web";
+
+// F3 da ficha (23/11/2026): a ficha em tela cheia ocupa a área útil, como o
+// Caixa (pdv.tsx): a viewport menos a barra do sininho (46 px).
+const FICHA_ALTURA = IS_WEB ? ({ height: "calc(100vh - 46px)" } as any) : { flex: 1 };
 
 // F4.1: no modo claro o Glass.heroGradSoft é um gradiente violeta DENSO
 // (feito para texto branco, como no Painel) — os tokens ink/ink3/violet3
@@ -302,12 +308,25 @@ export default function CrediarioScreen() {
     if (!availableCompanies?.length && !companiesLoading) loadCompanies().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // F3 (23/11/2026): ?cliente=<id> fica no endereço enquanto a ficha está
+  // aberta (antes abria a ficha e era apagado): recarregar a página continua
+  // nela, e o redirect da troca de loja (rotaFichaNaLoja) reabre a ficha na
+  // loja nova. Sem o parâmetro, a ficha fecha.
   useEffect(() => {
+    if (!company?.id) return;
     const cid = clienteDaRota(params.cliente);
-    if (!cid || !company?.id) return;
-    setModalCust({ id: cid, name: "" });
-    try { router.setParams({ cliente: undefined } as any); } catch {}
+    if (!cid) { setModalCust(null); return; }
+    setModalCust((prev) => (prev?.id === cid ? prev : { id: cid, name: "" }));
   }, [params.cliente, company?.id]);
+
+  const abrirFicha = useCallback((c: { id: string; name: string }) => {
+    setModalCust(c);
+    try { router.setParams({ cliente: c.id } as any); } catch {}
+  }, []);
+  const fecharFicha = useCallback(() => {
+    setModalCust(null);
+    try { router.setParams({ cliente: undefined } as any); } catch {}
+  }, []);
 
   async function handleOpenInCompany(targetCompanyId: string, customerId: string) {
     const web = Platform.OS === "web" && typeof window !== "undefined";
@@ -359,6 +378,25 @@ export default function CrediarioScreen() {
   const { width } = useWindowDimensions();
   const isWide   = width > 720;
   const isNarrow = width < 500;
+
+  // ── F3 (23/11/2026): ficha em tela cheia ──────────────────────────────
+  // A casca sai da largura ÚTIL (ao lado do menu do app), medida no onLayout
+  // da raiz; até medir, vale a janela. Celular e telas estreitas seguem com a
+  // janela de sempre (até a F5).
+  const [larguraUtil, setLarguraUtil] = useState(width);
+  const layoutFicha = layoutDaFicha(larguraUtil, width);
+  const fichaEmTela = !!modalCust && layoutFicha !== "janela";
+  // A lista de baixo não desmonta (busca, filtro e ordem ficam); a rolagem
+  // dela volta para onde estava quando a ficha fecha.
+  const listaRef = useRef<ScrollView>(null);
+  const rolagemDaLista = useRef(0);
+  useEffect(() => {
+    if (fichaEmTela) return;
+    const y = rolagemDaLista.current;
+    if (y <= 0) return;
+    const raf = requestAnimationFrame(() => { try { listaRef.current?.scrollTo({ y, animated: false }); } catch {} });
+    return () => cancelAnimationFrame(raf);
+  }, [fichaEmTela]);
 
   const dashQ = useQuery({
     queryKey: ["credit-dashboard", company?.id],
@@ -599,11 +637,88 @@ export default function CrediarioScreen() {
 
   const clearOrLabel = filterSel !== "todos" ? "toque de novo p/ limpar" : "toque numa faixa p/ filtrar";
 
+  // F3: a lista estreita ao lado da ficha usa a MESMA carteira da página
+  // (busca, filtro e ordem); as setas andam nela.
+  const idsDaLista = carteira.map((c) => c.id);
+  const naLista = posicaoNaLista(idsDaLista, modalCust?.id ?? null);
+  const irPara = (delta: 1 | -1) => {
+    const id = vizinhaNaLista(idsDaLista, modalCust?.id ?? null, delta);
+    const alvo = id ? carteira.find((c) => c.id === id) : null;
+    return alvo ? () => abrirFicha({ id: alvo.id, name: alvo.name }) : undefined;
+  };
+  const clientesDaLista: ClienteDaLista[] = fichaEmTela
+    ? carteira.map((cust) => {
+        const overdue = isCustomerOverdue(cust as any);
+        const conferir = statusDaCarteira(cust as any) === "conferir";
+        const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
+        return {
+          id: cust.id,
+          nome: cust.name,
+          atrasada: overdue,
+          situacao: overdue
+            ? (dl > 0 ? `Em atraso · ${pluralize(dl, "dia", "dias")}` : "Em atraso")
+            : conferir ? "Conferir" : "Em dia",
+          valor: conferir ? m(fmt(cust.open_installments || 0)) : m(fmt(cust.balance)),
+        };
+      })
+    : [];
+
+  const propsDaFicha = {
+    companyId: company?.id || "",
+    customerId: modalCust?.id || null,
+    customerName: modalCust?.name || null,
+    // A chave do QR do carnê é a do canal digital, NÃO a pix_key da régua
+    // (essa só entra no texto da cobrança). undefined enquanto carrega ou
+    // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
+    pixKey: chavePixDoQr(canalQ),
+    storeName: nomeDaLojaDe(company) || null,
+    onOpenSettings: () => { fecharFicha(); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); },
+    onCobrar: handleCobrar,
+    onChanged: () => {
+      qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });
+      qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] });
+      qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
+    },
+    onClose: fecharFicha,
+    accessibleCompanyIds,
+    onOpenInCompany: handleOpenInCompany,
+    switchingCompany: switching,
+  };
+
   return (
+    <View style={{ flex: 1 }} onLayout={(e) => setLarguraUtil(e.nativeEvent.layout.width)}>
+    {fichaEmTela && (
+      <View style={FICHA_ALTURA} testID="crediario-ficha-em-tela">
+        <ClienteCrediarioModal
+          {...propsDaFicha}
+          visible
+          casca="tela"
+          layout={layoutFicha === "larga" ? "larga" : "media"}
+          navegacao={{ posicao: naLista.posicao, total: naLista.total, onAnterior: irPara(-1), onProxima: irPara(1) }}
+          listaLateral={
+            <ListaDaFicha
+              clientes={clientesDaLista}
+              selecionadaId={modalCust?.id ?? null}
+              onEscolher={(id, nome) => abrirFicha({ id, name: nome })}
+              onVoltar={fecharFicha}
+              busca={searchInput}
+              onBusca={setSearchInput}
+              filtro={filterSel}
+              onFiltro={(f) => setFilterSel(f)}
+              rotuloDaFaixa={AGING_LABELS[filterSel] || null}
+              carregando={carteiraQ.isLoading}
+            />
+          }
+        />
+      </View>
+    )}
     <ScrollView
-      style={s.screen}
+      ref={listaRef}
+      style={[s.screen, fichaEmTela && { display: "none" }]}
       contentContainerStyle={[s.content, { padding: pad }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
+      onScroll={fichaEmTela ? undefined : (e) => { rolagemDaLista.current = e.nativeEvent.contentOffset.y; }}
+      scrollEventThrottle={64}
     >
       {/* ── Header (01/09/2026, QA onda 2 — cabeçalho unificado) ──
           A tela já tinha eyebrow + título próprios, quase o desenho certo.
@@ -664,7 +779,7 @@ export default function CrediarioScreen() {
         <CreditoLivreTab
           companyId={company?.id}
           consolidated={consolidatedView}
-          onOpenCustomer={(c) => setModalCust(c)}
+          onOpenCustomer={(c) => abrirFicha(c)}
         />
       )}
 
@@ -850,7 +965,7 @@ export default function CrediarioScreen() {
               return (
                 <Pressable
                   key={cust.id}
-                  onPress={() => setModalCust({ id: cust.id, name: cust.name })}
+                  onPress={() => abrirFicha({ id: cust.id, name: cust.name })}
                   accessibilityRole="button"
                   accessibilityLabel={`Abrir ficha de ${cust.name}, saldo ${m(fmt(cust.balance))}`}
                   style={({ hovered, pressed }: any) => [
@@ -961,28 +1076,11 @@ export default function CrediarioScreen() {
 
       <CriarLancamentoModal visible={showCriar} onClose={fecharCriar} recentes={recentesDoLancamento} />
 
-      <ClienteCrediarioModal
-        visible={!!modalCust}
-        companyId={company?.id || ""}
-        customerId={modalCust?.id || null}
-        customerName={modalCust?.name || null}
-        // A chave do QR do carnê é a do canal digital, NÃO a pix_key da régua
-        // (essa só entra no texto da cobrança). undefined enquanto carrega ou
-        // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
-        pixKey={chavePixDoQr(canalQ)}
-        storeName={nomeDaLojaDe(company) || null}
-        onOpenSettings={() => { setModalCust(null); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); }}
-        onCobrar={handleCobrar}
-        onChanged={() => {
-          qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });
-          qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] });
-          qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
-        }}
-        onClose={() => setModalCust(null)}
-        accessibleCompanyIds={accessibleCompanyIds}
-        onOpenInCompany={handleOpenInCompany}
-        switchingCompany={switching}
-      />
+      {/* Celular e telas estreitas: a janela de sempre (a F5 a leva para a
+          página inteira). Na tela larga e média a ficha está acima. */}
+      {!fichaEmTela && (
+        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca="janela" />
+      )}
 
       {cobrancaPreview && (
         <CobrancaPreviewModal
@@ -1007,7 +1105,7 @@ export default function CrediarioScreen() {
           pixCopiaECola={cobrancaPreview.pixCopiaECola}
           onGerenciarModelos={() => {
             setCobrancaPreview(null);
-            setModalCust(null);
+            fecharFicha();
             router.push("/crediario/settings" as any);
           }}
           onSalvarModelo={async (como, base, m) => {
@@ -1020,6 +1118,7 @@ export default function CrediarioScreen() {
         />
       )}
     </ScrollView>
+    </View>
   );
 }
 
