@@ -12,7 +12,13 @@
 // Instagram, aniversário, observações e endereço. Por isso o cadastro vem da
 // lista de useCustomers (a mesma da tela de Clientes, que traz o dono
 // inteiro até o limite do plano). Se a cliente não estiver lá, a janela diz
-// isso em vez de abrir um formulário pela metade.
+// isso em vez de abrir um formulário pela metade — e só diz que não achou
+// quando a lista carregou de fato; em erro (ou 403) diz que não conseguiu
+// abrir, sem afirmar nada sobre a cliente.
+//
+// O formulário guarda o que recebeu ao montar. Se a lista estava em cache e
+// a versão nova chega depois, ele recomeça com o cadastro novo — enquanto a
+// lojista não tiver mexido em nada; depois que mexeu, o que ela digitou fica.
 //
 // Multi-CNPJ: o PATCH vai pela loja da FICHA. O backend edita a cliente de
 // qualquer loja do mesmo dono (customers.js, owner-scoped), e a loja da ficha
@@ -20,7 +26,7 @@
 // cadastrada pode não ser (vendedora de uma loja só, no consolidado). Depois
 // recarrega a ficha e a carteira da loja da ficha.
 // ============================================================
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Pressable, StyleSheet } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -50,9 +56,18 @@ export function EditarClienteDaFicha(props: EditarClienteDaFichaProps) {
 
 function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: EditarClienteDaFichaProps & { customerId: string }) {
   const qc = useQueryClient();
-  const { customers, isLoading, isError, refetch, updateCustomerAsync } = useCustomers();
+  const { customers, isLoading, isError, planBlocked, isDemo, refetch, updateCustomerAsync } = useCustomers();
   const [salvando, setSalvando] = useState(false);
+  const [editou, setEditou] = useState(false);
   const cliente = customers.find(c => c.id === customerId) || null;
+  // Só afirma "não achamos" com a lista carregada de verdade.
+  const listaCarregada = !isLoading && !isError && !planBlocked && !isDemo;
+  // Chave do formulário: acompanha o cadastro até a lojista mexer.
+  const assinatura = cliente ? JSON.stringify([
+    cliente.name, cliente.phone, cliente.email, cliente.instagram, cliente.birthday, cliente.notes, cliente.endereco ?? null,
+  ]) : "";
+  const chaveRef = useRef("");
+  if (!editou) chaveRef.current = assinatura;
 
   async function salvar(c: Customer) {
     if (salvando) return;
@@ -90,13 +105,13 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
           <View style={s.centro} testID="ficha-editar-cliente-sem-cadastro">
             <Text style={[s.titulo, { fontFamily: Fonts.heading }]}>Editar cliente</Text>
             <Text style={s.txt}>
-              {isError
-                ? "Não deu para abrir o cadastro agora. Confira a internet e tente de novo."
-                : "Não achamos o cadastro desta cliente. Ele pode ter sido excluído na tela Clientes."}
+              {listaCarregada
+                ? "Não achamos o cadastro desta cliente. Ele pode ter sido excluído na tela Clientes."
+                : "Não consegui abrir o cadastro agora. Tente de novo em instantes."}
             </Text>
             <View style={s.botoes}>
-              {isError && (
-                <Pressable style={[s.btn, s.btnP]} onPress={() => refetch()} accessibilityRole="button">
+              {!listaCarregada && (
+                <Pressable style={[s.btn, s.btnP]} onPress={() => refetch()} accessibilityRole="button" testID="ficha-editar-cliente-tentar">
                   <Text style={[s.btnTxt, { color: "#fff" }]}>Tentar de novo</Text>
                 </Pressable>
               )}
@@ -108,9 +123,10 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
         ) : (
           <View style={salvando ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
             <AddCustomerForm
-              key={cliente.id}
+              key={`${cliente.id}:${chaveRef.current}`}
               initialData={cliente}
               focoNoTelefone={focoNoTelefone}
+              onEditou={() => setEditou(true)}
               onSave={salvar}
               onCancel={onClose}
             />

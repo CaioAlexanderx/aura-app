@@ -27,9 +27,17 @@ jest.mock("@/utils/whatsapp", () => {
 });
 jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: ({ children }: any) => children }));
 let mockForm: any = null;
-jest.mock("@/components/screens/clientes/AddCustomerForm", () => ({
-  AddCustomerForm: (p: any) => { mockForm = p; return null; },
-}));
+let mockMontagens = 0;
+jest.mock("@/components/screens/clientes/AddCustomerForm", () => {
+  const React = require("react");
+  return {
+    AddCustomerForm: (p: any) => {
+      React.useEffect(() => { mockMontagens++; }, []);
+      mockForm = p;
+      return null;
+    },
+  };
+});
 const mockUpdate = jest.fn();
 let mockLista: any = { customers: [], isLoading: false, isError: false };
 jest.mock("@/hooks/useCustomers", () => ({
@@ -56,7 +64,7 @@ function montarTel(props: any) {
   return t;
 }
 
-beforeEach(() => { jest.clearAllMocks(); mockLargura = 1280; mockForm = null; mockLista = { customers: [], isLoading: false, isError: false }; });
+beforeEach(() => { jest.clearAllMocks(); mockLargura = 1280; mockForm = null; mockMontagens = 0; mockLista = { customers: [], isLoading: false, isError: false }; });
 
 describe("TelefoneDaFicha", () => {
   test("tela larga: número formatado, toque copia, Abrir WhatsApp e Editar cliente", () => {
@@ -92,6 +100,24 @@ describe("TelefoneDaFicha", () => {
     act(() => { porId(t, "ficha-ligar")[0].props.onPress(); });
     expect(mockTel).toHaveBeenCalledWith("(12) 99123-4567");
     expect(porId(t, "ficha-telefone-opcoes")).toHaveLength(0);
+    t.unmount();
+  });
+
+  test("celular com número inválido: sem Ligar e sem WhatsApp, só Copiar", () => {
+    mockLargura = 375;
+    const t = montarTel({ phone: "123456", onEditar: jest.fn() });
+    act(() => { porId(t, "ficha-telefone")[0].props.onPress(); });
+    expect(porId(t, "ficha-copiar")).toHaveLength(1);
+    expect(porId(t, "ficha-ligar")).toHaveLength(0);
+    expect(porId(t, "ficha-abrir-whatsapp")).toHaveLength(0);
+    t.unmount();
+  });
+
+  test("alvo de toque do telefone com 44 px", () => {
+    const t = montarTel({ phone: "12991234567", onEditar: jest.fn() });
+    const estilo = porId(t, "ficha-telefone")[0].props.style;
+    const plano = [].concat(typeof estilo === "function" ? estilo({ pressed: false }) : estilo).filter(Boolean);
+    expect(Math.max(...plano.map((x: any) => x.minHeight || 0))).toBeGreaterThanOrEqual(44);
     t.unmount();
   });
 
@@ -159,6 +185,41 @@ describe("EditarClienteDaFicha", () => {
     expect(mockForm).toBeNull();
     expect(porId(t, "ficha-editar-cliente-sem-cadastro")).toHaveLength(1);
     expect(texto(t.toJSON())).toContain("Não achamos o cadastro desta cliente.");
+    t.unmount();
+  });
+
+  test("erro ou 403 na lista: não afirma que a cliente sumiu", () => {
+    mockLista = { customers: [], isLoading: false, isError: true };
+    let { t } = montarJanela();
+    let txt = texto(t.toJSON());
+    expect(txt).toContain("Não consegui abrir o cadastro agora. Tente de novo em instantes.");
+    expect(txt).not.toContain("Não achamos");
+    expect(porId(t, "ficha-editar-cliente-tentar")).toHaveLength(1);
+    t.unmount();
+    mockLista = { customers: [], isLoading: false, isError: false, planBlocked: true };
+    ({ t } = montarJanela());
+    txt = texto(t.toJSON());
+    expect(txt).toContain("Não consegui abrir o cadastro agora.");
+    expect(txt).not.toContain("Não achamos");
+    t.unmount();
+  });
+
+  test("o cadastro novo do refetch reinicia o formulário até a lojista mexer", () => {
+    mockLista = { customers: [MARIA], isLoading: false, isError: false };
+    const props = { visible: true, companyId: "loja-a", customerId: "cli-1", onClose: jest.fn() };
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<EditarClienteDaFicha {...props} />); });
+    expect(mockMontagens).toBe(1);
+    // chegou a versão nova (telefone cadastrado em outra tela): recomeça com ela
+    mockLista = { customers: [{ ...MARIA, phone: "(12) 99123-4567" }], isLoading: false, isError: false };
+    act(() => { t.update(<EditarClienteDaFicha {...props} />); });
+    expect(mockMontagens).toBe(2);
+    expect(mockForm.initialData.phone).toBe("(12) 99123-4567");
+    // a lojista começou a digitar: outra versão do servidor não apaga o que ela fez
+    act(() => { mockForm.onEditou(); });
+    mockLista = { customers: [{ ...MARIA, phone: "(12) 98888-0000" }], isLoading: false, isError: false };
+    act(() => { t.update(<EditarClienteDaFicha {...props} />); });
+    expect(mockMontagens).toBe(2);
     t.unmount();
   });
 

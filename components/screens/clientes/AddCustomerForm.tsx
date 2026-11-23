@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -26,9 +26,13 @@ type Props = {
   /** 23/11/2026 (ficha do crediário): abre com o cursor no telefone — o
    *  "Sem telefone · adicionar" e o Cobrar sem telefone levam direto a ele. */
   focoNoTelefone?: boolean;
+  /** 23/11/2026 (ficha do crediário): avisa, uma vez, que a pessoa começou a
+   *  mexer — quem abre o formulário pode então parar de recarregá-lo quando o
+   *  cadastro chega atualizado do servidor. */
+  onEditou?: () => void;
 };
 
-export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false }: Props) {
+export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou }: Props) {
   const isEdit = !!initialData;
   const [name, setName] = useState(initialData?.name || "");
   const [phone, setPhone] = useState(initialData?.phone || "");
@@ -37,6 +41,11 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
   const [birthday, setBirthday] = useState(initialData?.birthday || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [endereco, setEndereco] = useState<Endereco>(initialData?.endereco || ENDERECO_VAZIO);
+  const editou = name !== (initialData?.name || "") || phone !== (initialData?.phone || "")
+    || email !== (initialData?.email || "") || instagram !== (initialData?.instagram || "")
+    || birthday !== (initialData?.birthday || "") || notes !== (initialData?.notes || "")
+    || JSON.stringify(endereco) !== JSON.stringify(initialData?.endereco || ENDERECO_VAZIO);
+  useEffect(() => { if (editou) onEditou?.(); }, [editou]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome"); return; }

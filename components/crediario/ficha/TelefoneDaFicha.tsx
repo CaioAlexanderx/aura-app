@@ -20,7 +20,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { copyText } from "@/utils/clipboard";
 import { formatarTelefone } from "@/utils/telefone";
-import { buildWhatsAppUrl, openWhatsApp, openTel } from "@/utils/whatsapp";
+import { buildTelUrl, buildWhatsAppUrl, openWhatsApp, openTel } from "@/utils/whatsapp";
 
 export type TelefoneDaFichaProps = {
   phone: string | null | undefined;
@@ -38,6 +38,8 @@ export function TelefoneDaFicha({ phone, onEditar }: TelefoneDaFichaProps) {
   const temTelefone = !!numero;
   // Número que o wa.me não aceita (curto, DDI estrangeiro): sem o atalho.
   const abreWhatsApp = temTelefone && !!buildWhatsAppUrl(phone);
+  // Idem para o discador: número inválido não tem "Ligar".
+  const daParaLigar = temTelefone && !!buildTelUrl(phone);
 
   function copiar() {
     setOpcoes(false);
@@ -102,9 +104,11 @@ export function TelefoneDaFicha({ phone, onEditar }: TelefoneDaFichaProps) {
               <Text style={s.menuTxt}>Abrir conversa no WhatsApp</Text>
             </Pressable>
           )}
-          <Pressable style={s.menuItem} onPress={ligar} accessibilityRole="button" testID="ficha-ligar">
-            <Text style={s.menuTxt}>Ligar</Text>
-          </Pressable>
+          {daParaLigar && (
+            <Pressable style={s.menuItem} onPress={ligar} accessibilityRole="button" testID="ficha-ligar">
+              <Text style={s.menuTxt}>Ligar</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -113,22 +117,22 @@ export function TelefoneDaFicha({ phone, onEditar }: TelefoneDaFichaProps) {
 
 const s = StyleSheet.create({
   linha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4, marginTop: 4 },
-  // Alvo de toque ≥ 36 px na tela larga; o celular ganha 40 pela altura da linha.
+  // Alvo de toque de 44 px.
   tel: {
-    flexDirection: "row", alignItems: "center", gap: 6, minHeight: 36,
+    flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44,
     paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: Colors.border,
   },
   telOn: { borderColor: Colors.violet2, backgroundColor: Colors.violetD },
   telSem: { borderStyle: "dashed" },
   telNum: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, fontVariant: ["tabular-nums"] as any },
   telAcao: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700", color: Colors.violet3 },
-  link: { minHeight: 36, justifyContent: "center", paddingHorizontal: 8, borderRadius: 8 },
+  link: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8, borderRadius: 8 },
   linkTxt: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
   menu: {
     marginTop: 6, padding: 4, borderRadius: 11, gap: 2, alignSelf: "flex-start", minWidth: 220,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg3,
   },
-  menuItem: { minHeight: 40, justifyContent: "center", paddingHorizontal: 10, borderRadius: 8 },
+  menuItem: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10, borderRadius: 8 },
   menuTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "600", color: Colors.ink },
 });
 
