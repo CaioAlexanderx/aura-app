@@ -24,8 +24,8 @@
 // outras ações. A confirmação e os recusados (recebimento, venda) são do shell.
 //
 // 23/11/2026 (F1 do redesenho da ficha, decisão do Caio): um Cobrar só, no
-// alto da ficha — saiu daqui (cobrava a parcela mais antiga da cliente, não a
-// deste carnê). Nomes novos: "Mudar as parcelas", "Dividir em parcelas",
+// alto da ficha — o do carnê saiu (e com ele o risco de cobrar a parcela de
+// outro carnê). Nomes novos: "Mudar as parcelas", "Dividir em parcelas",
 // "Compras sem carnê" (sem o selo "Sem carnê", que o nome já diz).
 // ============================================================
 import React from "react";
