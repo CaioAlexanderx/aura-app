@@ -10,6 +10,8 @@ import { Colors } from "@/constants/colors";
 import { fmtQty } from "@/utils/matconUnits";
 import { numeroPositivo } from "@/utils/entradaDeMercadoria";
 import { rotuloDaVariante } from "./VariantesConsulta";
+import { corETamanhoDaVariante } from "@/utils/nomeDaCor";
+import { ordenarPeloTamanhoNaCor } from "@/utils/ordemDeTamanhos";
 
 type Props = {
   variantes: any[];
@@ -22,7 +24,8 @@ type Props = {
 export function GradeDaEntrada({ variantes, grade, onChange, testIDPrefixo }: Props) {
   return (
     <View style={s.grade}>
-      {variantes.map((v) => (
+      {/* 23/11/2026 (p-200): tamanhos em ordem dentro de cada cor. */}
+      {ordenarPeloTamanhoNaCor(variantes || [], corETamanhoDaVariante).map((v) => (
         <View key={v.id} style={s.gradeLinha}>
           <Text style={s.gradeNome} numberOfLines={1}>{rotuloDaVariante(v)}</Text>
           <Text style={s.gradeTem}>tem {fmtQty(parseFloat(v.stock_qty) || 0)}</Text>
