@@ -11,6 +11,7 @@ import { waApi, WA_CREDIARIO_TEMPLATES, type WaStatus } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal";
 import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { MensagensDeCobranca } from "@/components/crediario/mensagens/MensagensDeCobranca";
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
@@ -55,6 +56,12 @@ import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 //   - O toggle salva sozinho (PUT collection/rules) e não depende do
 //     botão "Salvar configurações": ligar ou desligar envio pago não
 //     pode ficar pendurado num rascunho.
+// Modelos de mensagem (21/11/2026): os 5 campos de texto da régua saem da
+//   tela (nenhum caminho usava o texto; o automático manda o template da
+//   Meta). No lugar, "Mensagens de cobrança": os modelos do Cobrar, por
+//   loja (components/crediario/mensagens/MensagensDeCobranca). A régua fica
+//   com dias e liga/desliga. O `template` de cada etapa continua no estado
+//   e volta igual no PUT: nada do que está gravado é apagado.
 // ============================================================
 
 type Rule = { id: string; name: string; days_relative: number; template: string; channel: string; enabled: boolean };
@@ -685,11 +692,13 @@ export default function CrediarioSettingsScreen() {
             </View>
             )}
 
+            <MensagensDeCobranca companyId={company?.id} />
+
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
             <Text style={st.reguaSub}>
-              Mensagens por etapa. {waAutoNaTela
-                ? "As etapas de WhatsApp saem sozinhas pelo número oficial da loja; o texto enviado é o template aprovado pela Meta, não o rascunho abaixo."
-                : "Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em \"Cobrar\"."} Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.
+              {waAutoNaTela
+                ? "Etapas e dias da cobrança automática. As etapas de WhatsApp saem sozinhas pelo número oficial da loja, com o template aprovado pela Meta."
+                : "Etapas e dias da cobrança. Hoje o envio é manual pelo WhatsApp, ao tocar em \"Cobrar\", com as mensagens acima."}
             </Text>
 
             {rules.map((r, i) => (
@@ -716,9 +725,6 @@ export default function CrediarioSettingsScreen() {
                   <Switch value={r.enabled} onValueChange={(v) => updateRule(i, { enabled: v })}
                     trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff" />
                 </View>
-                <TextInput style={st.template} value={r.template} multiline
-                  onChangeText={(v) => updateRule(i, { template: v })}
-                  placeholder="Mensagem desta etapa" placeholderTextColor={Colors.ink3} />
               </View>
             ))}
           </View>

@@ -81,3 +81,29 @@ export const lojasDoProdutoApi = {
     });
   },
 };
+
+// ── B3: edição (A4) ──────────────────────────────────────────
+
+export type RespostaLojasDoProduto = {
+  em: Array<{ company_id: string; nome: string; product_id: string }>;
+  pode_levar_para: Array<{ company_id: string; nome: string }>;
+};
+
+export type CampoParaAplicar = "price" | "name";
+
+export type RespostaAplicarNasLojas = {
+  resultados?: Array<{ company_id: string; nome?: string; status?: string; erro?: { code?: string; message?: string } | null }>;
+};
+
+export const lojasDoProdutoEdicaoApi = {
+  /** GET …/products/:pid/lojas: em quais lojas o par existe e para quais dá para levar. */
+  lojasDoProduto(companyId: string, productId: string) {
+    return request<RespostaLojasDoProduto>(base(companyId) + "/" + productId + "/lojas", { retry: 1 });
+  },
+  /** POST …/products/:pid/aplicar-nas-lojas: só campos de cadastro, nunca estoque. */
+  aplicarNasLojas(companyId: string, productId: string, body: { campos: CampoParaAplicar[]; lojas: string[] }) {
+    return request<RespostaAplicarNasLojas>(base(companyId) + "/" + productId + "/aplicar-nas-lojas", {
+      method: "POST", body, retry: 0, timeout: 60000,
+    });
+  },
+};
