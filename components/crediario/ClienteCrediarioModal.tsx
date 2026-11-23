@@ -73,6 +73,7 @@ import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
 import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
+import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
 import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
@@ -393,6 +394,14 @@ export function ClienteCrediarioModal({
   const useCarneLayout = realCarnes.length > 0;
   // Chips de carnê do "Receber pagamento": quitados ficam de fora.
   const carnesParaReceber = realCarnes.filter(a => (a.remaining ?? a.balance) > 0.009 || a.id === freeAccountId);
+  // QA 23/11 (P1-4): o que falta em cada carnê, para o "Quitar" e para o
+  // valor que passa do carnê (utils/crediarioReceberCarne).
+  const faltaDoCarneRef = useRef<(id: string | null | undefined) => number | null>(() => null);
+  faltaDoCarneRef.current = (id) => {
+    if (!id) return null;
+    const a = accounts.find(x => x.id === id);
+    return a ? Number(a.remaining ?? a.balance ?? 0) : null;
+  };
 
   const nextDueDate = openInst.length > 0
     ? openInst.reduce((best, i) => {
@@ -669,7 +678,9 @@ export function ClienteCrediarioModal({
       try {
         const plan = await creditApi.previewPayment(companyId, customerId!, {
           amount: amt,
-          account_id: accountId,
+          // Acima do que falta no carnê, a prévia é de "todas as compras" —
+          // a mesma conta que o envio faz (P1-4).
+          account_id: contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId)),
           paid_at: parseBrDate(freeDateBr) || undefined,
         });
         setFreePreview(plan);
@@ -697,7 +708,7 @@ export function ClienteCrediarioModal({
     try {
       const res = await creditApi.receiveFreePayment(companyId, customerId!, {
         amount: amt,
-        account_id: freeAccountId,
+        account_id: contaParaOValor(freeAccountId, amt, faltaDoCarneRef.current(freeAccountId)),
         method: freeMethod,
         paid_at: paidAt,
         ...(confirmarRepetido ? { confirmar_repetido: true } : {}),
@@ -1394,11 +1405,21 @@ export function ClienteCrediarioModal({
                     </Pressable>
                   ))}
                   {totalBalance > 0 && (
-                    <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
-                      <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+                    <Pressable style={m.qChip} onPress={() => prefill(valorDeQuitar(totalBalance, faltaDoCarneRef.current(freeAccountId)))}>
+                      <Text style={m.qChipTxt}>Quitar ({fmt(valorDeQuitar(totalBalance, faltaDoCarneRef.current(freeAccountId)))})</Text>
                     </Pressable>
                   )}
                 </View>
+
+                {(() => {
+                  const falta = faltaDoCarneRef.current(freeAccountId);
+                  const nome = accounts.find(a => a.id === freeAccountId)?.name || "este carnê";
+                  return falta != null && freeAmtValue > falta + 0.009 ? (
+                    <Text style={[m.dateHint, { color: Colors.amber }]} testID="receber-passa-do-carne">
+                      {avisoPassaDoCarne(nome, falta, fmt)}
+                    </Text>
+                  ) : null;
+                })()}
 
                 <Text style={[m.fieldLabel, { marginTop: 12, fontFamily: Fonts.body }]}>Dia do pagamento</Text>
                 <DateInput
