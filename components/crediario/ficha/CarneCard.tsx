@@ -19,7 +19,7 @@
 // Sem hover-reveal (regra 7): o "⋯" abre com toque, a lista entra no fluxo.
 // ============================================================
 import React, { useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Button } from "@/components/Button";
 import { Fonts } from "@/constants/fonts";
@@ -50,12 +50,18 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   const c = carne;
   const [menu, setMenu] = useState(false);
   const [detalhe, setDetalhe] = useState(false);
+  // F5: no celular o "Imprimir" entra no "⋯" (mockup, celular).
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
   const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : Colors.ink3;
   const temDetalhe = c.parcelasPagas.length > 0 || c.compras.length > 0;
   // Fiado no grupo sem carnê: os dois botões ficam à vista (mockup).
   const fiadoSemCarne = c.semCarne && c.semParcelas;
 
   const itensDoMenu: ItemDoMenu[] = [];
+  if (celular && !c.vazio && !fiadoSemCarne) {
+    itensDoMenu.push({ rotulo: "Imprimir este carnê", onPress: onImprimir, testID: `carne-${c.key}-imprimir` });
+  }
   if (onRenegociar && !fiadoSemCarne) {
     itensDoMenu.push({ rotulo: renegociarLabel === "Mudar as parcelas" ? "Mudar as parcelas (renegociar)" : renegociarLabel, onPress: onRenegociar, testID: `carne-${c.key}-renegociar` });
   }
@@ -74,7 +80,9 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   return (
     <View style={[s.card, c.atrasado && s.cardLate]} testID={`carne-${c.key}`}>
       <View style={s.head} testID={`carne-${c.key}-cabecalho`}>
-        <View style={{ flex: 1, minWidth: 0 }}>
+        {/* Base de 160 px: em tela estreita o valor e os botões descem de
+            linha em vez de espremer o nome. */}
+        <View style={s.nomeBloco}>
           <View style={s.nomeLinha}>
             <Text style={s.nome}>{c.nome}</Text>
             {c.atrasado && (
@@ -91,7 +99,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
           )}
         </View>
         <View style={s.acoesTopo}>
-          {!c.vazio && !fiadoSemCarne && (
+          {!celular && !c.vazio && !fiadoSemCarne && (
             <Pressable
               onPress={onImprimir}
               style={({ pressed }: any) => [s.act, pressed && { backgroundColor: Colors.violetD }]}
@@ -228,6 +236,7 @@ const s = StyleSheet.create({
   cardLate: { borderColor: Colors.red + "66" },
   head: { flexDirection: "row", alignItems: "flex-start", flexWrap: "wrap", gap: 10, paddingHorizontal: 14, paddingTop: 13, paddingBottom: 10 },
   nomeLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  nomeBloco: { flexGrow: 1, flexShrink: 1, flexBasis: 160, minWidth: 0 },
   // Nome comprido quebra em linhas; o valor nunca espreme.
   nome: { fontFamily: Fonts.body, flexShrink: 1, minWidth: 0, fontSize: 14.5, fontWeight: "700", color: Colors.ink },
   itens: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, marginTop: 2 },

@@ -21,7 +21,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } fro
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
-  TextInput, ActivityIndicator, Clipboard, useWindowDimensions,
+  TextInput, ActivityIndicator, Clipboard, useWindowDimensions, Modal, Platform, KeyboardAvoidingView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -111,7 +111,7 @@ type Props = {
   switchingCompany?: boolean;
   /** F3 (23/11/2026): "tela" = a ficha ocupa a área de conteúdo, como o
    *  Caixa (tela larga e média); "janela" = o modal de sempre (celular). */
-  casca?: "janela" | "tela";
+  casca?: "janela" | "tela" | "pagina";
   /** F3: "larga" põe a lista das clientes à esquerda; "media" troca a lista
    *  pela barra "‹ Crediário · ‹ 3 de 38 › · Trocar cliente". */
   layout?: "media" | "larga";
@@ -134,6 +134,8 @@ export function ClienteCrediarioModal({
   // F3 (23/11/2026): na tela cheia o Histórico vira a coluna da direita
   // (sempre à vista) e os painéis abrem nela; o centro fica com as parcelas.
   const emTela = casca === "tela";
+  // F5 (23/11/2026): no celular a ficha é página inteira (era folha de 94%).
+  const emPagina = casca === "pagina";
   // Rótulo da 1ª aba: "Compras e parcelas" não cabe em três abas de celular.
   const { width: larguraDaTela } = useWindowDimensions();
 
@@ -471,7 +473,7 @@ export function ClienteCrediarioModal({
   // Separado do prefill porque os atalhos de valor do painel (R$ 50/100/200)
   // usam o prefill e não podem desfazer o carnê escolhido nos chips.
   function receberDaAba(v: number, accountId?: string) {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     const str = v.toFixed(2).replace(".", ",");
     setFreeAccountId(accountId);
     setFreeAmt(str);
@@ -519,7 +521,7 @@ export function ClienteCrediarioModal({
   });
 
   function handleEditDueDateOpen(inst: CreditInstallment) {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     setEditingDueDateInst(inst);
     setEditDueDateInput(formatIsoToBr(inst.due_date));
     setEditDueDateError("");
@@ -534,7 +536,7 @@ export function ClienteCrediarioModal({
 
   // ── Item 2 (16/06): renegociacao de parcelas ─────────────────────────
   function openRenegociar(accountId: string | null | undefined, label: string, openRemaining: number) {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     const scopeInst = (accountId === null || accountId === undefined)
       ? (useCarneLayout ? (instByAccount.get(null) || []) : openInst)
       : (instByAccount.get(accountId) || []);
@@ -762,7 +764,7 @@ export function ClienteCrediarioModal({
   }
 
   async function openInstallmentPix(installmentId: string) {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     setPixInstId(installmentId);
     setPixData(null);
     setPixLoading(true);
@@ -987,7 +989,13 @@ export function ClienteCrediarioModal({
     setTrocarAberto(false);
     setMenuFicha(false);
   }
-  const fecharDoPainel = emTela ? fecharPaineis : onClose;
+  const fecharDoPainel = emTela || emPagina ? fecharPaineis : onClose;
+  // Abrir um painel fecha o que estava aberto (tela cheia e página: os
+  // painéis ficam lado a lado com a ficha) e, em qualquer casca, o "⋯".
+  function fecharAoAbrirPainel() {
+    if (emTela || emPagina) fecharPaineis();
+    else setMenuFicha(false);
+  }
   // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
   // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
@@ -1025,13 +1033,13 @@ export function ClienteCrediarioModal({
   // explica, abrindo a edição no campo do telefone.
   const botaoCobrar = !!onCobrar && !detailQ.isLoading && (
     phone ? (
-      <Pressable style={[m.waBtn, emTela && t.cobrarTela]} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
+      <Pressable style={[m.waBtn, (emTela || emPagina) && t.cobrarTela]} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
         <Icon name="whatsapp" size={16} color={Colors.green} />
         <Text style={m.waTxt}>Cobrar</Text>
       </Pressable>
     ) : (
       <Pressable
-        style={[m.waBtn, f.cobrarApagado, emTela && t.cobrarTela]}
+        style={[m.waBtn, f.cobrarApagado, (emTela || emPagina) && t.cobrarTela]}
         onPress={() => {
           toast.info("Adicione o telefone para cobrar pelo WhatsApp");
           if (customerId) setEditarCliente({ foco: true });
@@ -1062,9 +1070,9 @@ export function ClienteCrediarioModal({
     ...(customerId ? [{ rotulo: "Editar cadastro da cliente", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
     { rotulo: "Limite e regras desta cliente", onPress: abrirLimite, testID: "ficha-abrir-limite" },
     ...(openInst.length > 0 || realCarnes.length > 0
-      ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { if (emTela) fecharPaineis(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
+      ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { fecharAoAbrirPainel(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
       : []),
-    ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { if (emTela) fecharPaineis(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
+    ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { fecharAoAbrirPainel(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
     ...(comCartoes
       ? [{ rotulo: "Criar carnê vazio", onPress: () => { setTab("parcelas"); setShowNewAccount(v => !v); setNewAccountName(""); }, testID: "carnes-novo-carne" }]
       : []),
@@ -1199,9 +1207,9 @@ export function ClienteCrediarioModal({
         setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
         expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
         handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
-        onImprimir={(accountId, label, parcelas) => { if (emTela) fecharPaineis(); setPrintScope({ accountId, label, parcelas }); }}
-        onJuntar={podeJuntar ? () => { if (emTela) fecharPaineis(); setJuntarPre([]); } : undefined}
-        onExcluirCarne={(carne) => { if (emTela) fecharPaineis(); setExcluirAlvo(carne); }}
+        onImprimir={(accountId, label, parcelas) => { fecharAoAbrirPainel(); setPrintScope({ accountId, label, parcelas }); }}
+        onJuntar={podeJuntar ? () => { fecharAoAbrirPainel(); setJuntarPre([]); } : undefined}
+        onExcluirCarne={(carne) => { fecharAoAbrirPainel(); setExcluirAlvo(carne); }}
         openInstallmentPix={openInstallmentPix}
         prefill={receberDaAba}
         openBalance={totalBalance}
@@ -1240,7 +1248,7 @@ export function ClienteCrediarioModal({
   // cartão mira o carnê dele, e este é o recebimento livre (parcela mais
   // antiga primeiro).
   function abrirReceberLivre() {
-    if (emTela) fecharPaineis();
+    fecharAoAbrirPainel();
     setFreeAccountId(undefined);
     setReceberOpen(true);
   }
@@ -1854,6 +1862,114 @@ export function ClienteCrediarioModal({
     </View>
   );
 
+  // ── F5 (23/11/2026): a ficha no celular, página inteira ──────────────
+  // Mockup aprovado (seção e): cabeçalho de uma linha ("‹ Crediário", nome,
+  // "⋯"), "Falta pagar" com a frase do que vem agora, telefone, duas abas
+  // (Parcelas, Movimentações) e rodapé fixo com Cobrar e Receber pagamento.
+  // É um Modal de tela cheia: as janelas que abrem por cima (Editar
+  // cliente, Cobrar, Devolução) continuam empilhando como hoje.
+  if (emPagina) {
+    const pedirFechar = () => {
+      if (ocupado) return;
+      // A mesma ordem da tela larga: diálogo, pergunta do Receber, Pix,
+      // "⋯", painel; só depois a ficha.
+      if (recusaExclusao) setRecusaExclusao(null);
+      else if (excluirAlvo) setExcluirAlvo(null);
+      else if (repetidoServidor) setRepetidoServidor(null);
+      else if (receberGate) setReceberGate(false);
+      else if (pixInstId) { setPixInstId(null); setPixData(null); }
+      else if (menuFicha) setMenuFicha(false);
+      else if (painelAberto) fecharPaineis();
+      else onClose();
+    };
+    const fraseScore = fatoLimite.tom === "sem"
+      ? fatoLimite.valor + (fatoLimite.detalhe ? ` · ${fatoLimite.detalhe.toLowerCase()}` : "")
+      : `${fatoLimite.titulo} ${fatoLimite.valor}${fatoLimite.detalhe.includes(" · ") ? ` · ${fatoLimite.detalhe.split(" · ").slice(1).join(" · ")}` : ""}`;
+    return (
+      <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={pedirFechar}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={pg.raiz} testID="ficha-pagina">
+          <View style={pg.topo}>
+            <Pressable onPress={onClose} style={pg.voltar} accessibilityRole="button" accessibilityLabel="Voltar para a lista do crediário" testID="ficha-voltar">
+              <View style={{ transform: [{ rotate: "180deg" }] }}>
+                <Icon name="chevron_right" size={15} color={Colors.violet3} />
+              </View>
+              <Text style={m.crumbTxt}>Crediário</Text>
+            </Pressable>
+            <Text style={pg.nome} numberOfLines={1}>{name}</Text>
+            <BotaoMais aberto={menuFicha} onPress={() => setMenuFicha(v => !v)} rotulo="Mais ações da ficha" testID="ficha-mais" />
+          </View>
+          <ScrollView style={pg.rolagem} contentContainerStyle={pg.rolagemConteudo} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
+            {/* A lista do "⋯" rola com a página (fixa no topo, cortaria). */}
+            {listaDoMenuDaFicha}
+            {tab === "historico" ? (
+              <View style={pg.heroCurto}>
+                <Text style={pg.heroK}>{fatoFalta.titulo}</Text>
+                <Text style={[pg.heroCurtoV, fatoFalta.tom === "credito" && { color: Colors.green }]}>{fatoFalta.valor}</Text>
+              </View>
+            ) : (
+              <View style={pg.hero} testID="ficha-pagina-hero">
+                <Text style={pg.heroK}>{fatoFalta.titulo}</Text>
+                <Text style={[pg.heroV, fatoFalta.tom === "credito" && { color: Colors.green }]} testID="ficha-pagina-falta">{fatoFalta.valor}</Text>
+                {!detailQ.isLoading && (
+                  <Text style={[pg.agora, fatoAgora.atrasado && { color: Colors.red }]} testID="crediario-ficha-status">
+                    {`${fatoAgora.titulo} ${fatoAgora.valor}${fatoAgora.detalhe ? ` · ${fatoAgora.detalhe}` : ""}`}
+                  </Text>
+                )}
+                {!!profile && (
+                  <View style={f.fatoSubLinha} testID="crediario-ficha-limite">
+                    <Text style={[pg.limite, { flexShrink: 1, marginTop: 0 }]}>{`${fraseScore} ·`}</Text>
+                    <Pressable onPress={abrirLimite} style={f.fatoVerArea} accessibilityRole="button" accessibilityLabel="Ver limite e regras" testID="ficha-fato-ver-limite">
+                      <Text style={[f.fatoVer, { fontSize: 12 }]}>ver</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {isBlocked && (
+                  <View style={[m.pill, { backgroundColor: Colors.red + "22", alignSelf: "flex-start", marginTop: 6 }]}>
+                    <Text style={[m.pillTxt, { color: Colors.red }]}>Bloqueado</Text>
+                  </View>
+                )}
+                {!detailQ.isLoading && (
+                  <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+                )}
+              </View>
+            )}
+            {tab !== "historico" && avisoEl}
+
+            <View style={pg.seg} accessibilityRole="tablist">
+              {(["parcelas", "historico"] as Tab[]).map(k => (
+                <Pressable
+                  key={k}
+                  onPress={() => setTab(k)}
+                  style={[pg.segItem, tab === k && pg.segOn]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tab === k }}
+                  testID={`ficha-aba-${k}`}
+                >
+                  <Text style={[pg.segTxt, tab === k && { color: "#fff" }]}>{k === "parcelas" ? "Parcelas" : "Movimentações"}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {carregandoFicha ? carregandoEl : tab === "historico" ? historicoEl : parcelasEl}
+          </ScrollView>
+
+          {!detailQ.isLoading && (
+            <View style={pg.rodape} testID="ficha-rodape">
+              {botaoCobrar}
+              <Pressable style={[m.cta, pg.receber]} onPress={abrirReceberLivre} accessibilityRole="button" testID="ficha-receber">
+                <Text style={m.ctaTxt}>Receber pagamento</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {limiteAberto && painelLimite}
+          {paineis}
+          {dialogos}
+        </KeyboardAvoidingView>
+      </Modal>
+    );
+  }
+
   if (!emTela) return (
     // 12/10/2026: com painel interno aberto (Receber, Renegociar, Juntar, Alterar
     // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
@@ -2041,6 +2157,41 @@ function TravaDaLista() {
     />
   );
 }
+
+// F5 (23/11/2026): casca do celular, página inteira. Alvos de 44 px ou
+// mais; nada em largura fixa (320 px sem rolagem para o lado).
+const pg = StyleSheet.create({
+  raiz: { flex: 1, backgroundColor: Colors.bg },
+  topo: {
+    flexDirection: "row", alignItems: "center", gap: 6, minHeight: 56,
+    paddingHorizontal: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg2,
+  },
+  voltar: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, minWidth: 44, paddingHorizontal: 6, borderRadius: 10 },
+  nome: { fontFamily: Fonts.heading, flex: 1, minWidth: 0, fontSize: 19, color: Colors.ink },
+  rolagem: { flex: 1, minHeight: 0 },
+  rolagemConteudo: { paddingHorizontal: 12, paddingBottom: 24 },
+  hero: { paddingHorizontal: 4, paddingTop: 14, paddingBottom: 10 },
+  heroK: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink2 },
+  heroV: { fontFamily: Fonts.mono, fontSize: 28, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
+  agora: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink2, marginTop: 2 },
+  limite: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  heroCurto: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 10 },
+  heroCurtoV: { fontFamily: Fonts.mono, fontSize: 18, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
+  seg: {
+    flexDirection: "row", padding: 3, marginBottom: 12, borderRadius: 11,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3,
+  },
+  segItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  segOn: { backgroundColor: Colors.violet },
+  segTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink2 },
+  rodape: {
+    flexDirection: "row", alignItems: "stretch", gap: 8,
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 14,
+    borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.bg2,
+  },
+  receber: { flex: 1, minHeight: 46, justifyContent: "center", paddingVertical: 10 },
+});
 
 // F3 (23/11/2026): casca da tela cheia.
 const t = StyleSheet.create({

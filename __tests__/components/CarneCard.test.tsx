@@ -33,6 +33,14 @@ const porId = (t: renderer.ReactTestRenderer, id: string) => t.root.findAllByPro
 const apertarRotulo = (t: renderer.ReactTestRenderer, rotulo: string) =>
   act(() => { t.root.findAllByProps({ accessibilityLabel: rotulo }, { deep: false })[0].props.onPress(); });
 
+// F5: no celular (e no jsdom, que mede 0 px) o Imprimir mora no "⋯".
+function apertarImprimir(t: renderer.ReactTestRenderer, key = "c1") {
+  const visivel = t.root.findAllByProps({ accessibilityLabel: "Imprimir" }, { deep: false });
+  if (visivel.length) { act(() => { visivel[0].props.onPress(); }); return; }
+  act(() => { porId(t, `carne-${key}-mais`)[0].props.onPress(); });
+  apertarRotulo(t, "Imprimir este carnê");
+}
+
 const parcela = (over: Record<string, any> = {}) => ({
   id: "a3", sale_id: null, customer_id: "cli", company_id: "emp",
   installment_number: 3, total_installments: 4, amount_due: 70, amount_paid: 0, covered_amount: 0,
@@ -100,7 +108,7 @@ describe("CarneCard (F4: sem sanfona)", () => {
 
   it("Imprimir à vista; o raro no ⋯ (Mudar as parcelas, Receber o carnê inteiro)", () => {
     const { t, props } = montarCartao(CONTA, abertas);
-    apertarRotulo(t, "Imprimir");
+    apertarImprimir(t);
     expect(props.onImprimir).toHaveBeenCalled();
     expect(porId(t, "carne-c1-menu")).toHaveLength(0);
     act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
@@ -233,7 +241,7 @@ describe("TabParcelas — aba de carnês", () => {
     act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     apertarRotulo(t, "Receber o carnê inteiro");
     expect(props.prefill).toHaveBeenCalledWith(140, "c1");
-    apertarRotulo(t, "Imprimir");
+    apertarImprimir(t);
     expect(props.onImprimir).toHaveBeenCalledWith("c1", "Compra de 13/09", 2);
     act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     apertarRotulo(t, "Mudar as parcelas (renegociar)");

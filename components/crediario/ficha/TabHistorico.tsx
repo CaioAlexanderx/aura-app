@@ -478,15 +478,15 @@ const lc = StyleSheet.create({
   lnVal: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink, ...NUM },
   antigo: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 5, lineHeight: 16 },
   acoes: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 7 },
-  // Alvo ≥40px (toque).
+  // Alvo ≥44px (toque; F5 da ficha).
   acao: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, minHeight: 40, borderRadius: 9,
+    paddingHorizontal: 12, minHeight: 44, borderRadius: 9,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
   acaoTxt: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
   mais: {
-    width: 40, minHeight: 40, borderRadius: 9, alignItems: "center", justifyContent: "center",
+    width: 44, minHeight: 44, borderRadius: 9, alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
   maisOn: { borderColor: Colors.violet2, backgroundColor: Colors.violetD },
@@ -495,6 +495,6 @@ const lc = StyleSheet.create({
     marginTop: 6, padding: 4, borderRadius: 11, gap: 2,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
   },
-  menuItem: { minHeight: 40, justifyContent: "center", paddingHorizontal: 10, borderRadius: 8 },
+  menuItem: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10, borderRadius: 8 },
   menuTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "600", color: Colors.ink },
 });
