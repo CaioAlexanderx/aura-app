@@ -462,10 +462,10 @@ function ReviewStep({
         }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, color: FoodColors.ink, fontWeight: "700" }}>
-              Taxa de servico ({serviceFeePct}%)
+              Taxa de serviço ({serviceFeePct}%)
             </Text>
             <Text style={{ fontSize: 11, color: FoodColors.ink3, marginTop: 2 }}>
-              Gorjeta opcional pro garcom — fora da NFC-e
+              Gorjeta opcional pro garçom — fora da NFC-e
             </Text>
           </View>
           <Switch
