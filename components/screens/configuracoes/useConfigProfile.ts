@@ -5,6 +5,7 @@ import { useFocusEffect } from "expo-router";
 import { companiesApi } from "@/services/api";
 import { validateEmail, validatePhone, syncProfileCache } from "./shared";
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
+import { toast } from "@/components/Toast";
 import type { ProfileField } from "./shared";
 
 export function useConfigProfile() {
@@ -102,6 +103,9 @@ export function useConfigProfile() {
         address: res.address || address,
       });
       setSavedOk(true); setTimeout(() => setSavedOk(false), 2500);
+      // 23/11/2026 (decisão do Caio): o backend renomeia a loja online quando
+      // o nome dela era o nome antigo da loja, e avisa em site_name_atualizado.
+      if (res.site_name_atualizado === true) toast.info("O nome da sua loja online também mudou.");
     } catch (err: any) {
       const { toast } = await import("@/components/Toast");
       toast.error(err?.message || "Erro ao salvar");
