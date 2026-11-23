@@ -72,6 +72,7 @@ import {
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
+import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
 import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
@@ -154,6 +155,8 @@ export function ClienteCrediarioModal({
   const [termsInterest, setTermsInterest] = useState("");
   const [termsDirty, setTermsDirty] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
+  // QA 23/11: o erro ao salvar as regras fica na tela (o toast sumia).
+  const [erroTermos, setErroTermos] = useState<string | null>(null);
 
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
@@ -270,6 +273,15 @@ export function ClienteCrediarioModal({
     queryFn: () => creditApi.getCustomerProfile(companyId, customerId!),
     enabled: visible && !!companyId && !!customerId,
     staleTime: 15_000,
+  });
+
+  // QA 23/11: o "(regra da loja)" mostra o valor da LOJA (plan-config), não
+  // o que vale para a cliente. Mesma chave da tela de configurações.
+  const regraDaLojaQ = useQuery({
+    queryKey: ["credit-plan-config", companyId],
+    queryFn: () => creditApi.getPlanConfig(companyId),
+    enabled: visible && !!companyId,
+    staleTime: 5 * 60_000,
   });
 
   const detailQ = useQuery({
@@ -434,25 +446,19 @@ export function ClienteCrediarioModal({
 
   async function saveTerms() {
     setSavingTerms(true);
+    setErroTermos(null);
     try {
-      const hasOverride = termsMaxInst.trim() || termsInterest.trim();
-      if (!hasOverride) {
-        await creditApi.updateCustomerTerms(companyId, customerId!, null as any);
-      } else {
-        const body: Partial<CustomerTermsOverrides> = {};
-        if (termsMaxInst.trim()) body.max_installments = parseInt(termsMaxInst, 10) || null;
-        if (termsInterest.trim()) {
-          const v = parseFloat(termsInterest.replace(",", "."));
-          body.interest_rate = isFinite(v) ? v / 100 : null;
-        }
-        await creditApi.updateCustomerTerms(companyId, customerId!, body);
-      }
-      toast.success("Termos salvos!");
+      // QA 23/11: os dois campos vão sempre; em branco = null = regra da
+      // loja (utils/crediarioRegrasDaCliente). Antes, em branco mandava o
+      // corpo null (400) e um campo só deixava o outro preso.
+      const body: Partial<CustomerTermsOverrides> = corpoDasRegras(termsMaxInst, termsInterest);
+      await creditApi.updateCustomerTerms(companyId, customerId!, body);
+      toast.success("Regras salvas.");
       setTermsDirty(false);
       qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
       onChanged?.();
     } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao salvar termos");
+      setErroTermos(erroAoSalvarRegras(err));
     } finally {
       setSavingTerms(false);
     }
@@ -1235,9 +1241,10 @@ export function ClienteCrediarioModal({
       profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
       availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
       nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
+      regraDaLoja={regraDaLojaQ.data ? { max_installments: regraDaLojaQ.data.max_installments, interest_rate: regraDaLojaQ.data.interest_rate } : null}
       ajustes={{
         termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
-        termsDirty, setTermsDirty, savingTerms, saveTerms,
+        termsDirty, setTermsDirty, savingTerms, saveTerms, erroTermos,
         blockReason, setBlockReason, blockingAction, setBlockingAction,
         handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
       }}

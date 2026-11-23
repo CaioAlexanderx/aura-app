@@ -30,6 +30,8 @@ export type AjustesProps = {
   setTermsDirty: (v: boolean) => void;
   savingTerms: boolean;
   saveTerms: () => void;
+  /** Erro ao salvar as regras, na tela. */
+  erroTermos?: string | null;
   blockReason: string;
   setBlockReason: (v: string) => void;
   blockingAction: "block" | "unblock" | null;
@@ -50,12 +52,14 @@ export type TabContaProps = {
   hasTermsOverride: boolean;
   realCarnes: CreditAccount[];
   ajustes: AjustesProps;
+  /** Regra da LOJA (plan-config): o que vale quando o campo fica em branco. */
+  regraDaLoja?: { max_installments: number | null; interest_rate: number | null } | null;
 };
 
 const pct = (taxa: number) => `${(taxa * 100).toFixed(2).replace(".", ",")}%`;
 
 export function TabConta({
-  profile, isBlocked, scoreLabel, availableLimit, ajustes,
+  profile, isBlocked, scoreLabel, availableLimit, ajustes, regraDaLoja,
 }: TabContaProps) {
   const creditLimit = Number(profile?.credit_limit) || 0;
   const creditUsed = Number(profile?.credit_used ?? Math.max(0, creditLimit - (availableLimit ?? 0))) || 0;
@@ -65,6 +69,10 @@ export function TabConta({
   const frase = fraseDoScore(scoreLabel);
   const ov = profile?.terms?.overrides || {};
   const ef = profile?.terms?.effective;
+  // Valor da loja: plan-config; sem ele, o efetivo quando a cliente não tem
+  // regra própria naquele campo (aí efetivo = loja).
+  const lojaMax = regraDaLoja?.max_installments ?? (ov.max_installments == null ? ef?.max_installments : null);
+  const lojaJuros = regraDaLoja?.interest_rate ?? (ov.interest_rate == null ? ef?.interest_rate : null);
 
   return (
 <View>
@@ -131,7 +139,7 @@ export function TabConta({
       <TextInput
         style={m.termsInput}
         value={ajustes.termsMaxInst}
-        placeholder={ef?.max_installments ? `${ef.max_installments} (regra da loja)` : "regra da loja"}
+        placeholder={lojaMax != null ? `${lojaMax} (regra da loja)` : "regra da loja"}
         placeholderTextColor={Colors.ink3}
         keyboardType="numeric"
         onChangeText={v => { ajustes.setTermsMaxInst(v.replace(/\D/g, "").slice(0, 3)); ajustes.setTermsDirty(true); }}
@@ -140,7 +148,7 @@ export function TabConta({
       <TextInput
         style={m.termsInput}
         value={ajustes.termsInterest}
-        placeholder={ef ? `${(ef.interest_rate * 100).toFixed(2).replace(".", ",")} (regra da loja)` : "regra da loja"}
+        placeholder={lojaJuros != null ? `${(Number(lojaJuros) * 100).toFixed(2).replace(".", ",")} (regra da loja)` : "regra da loja"}
         placeholderTextColor={Colors.ink3}
         keyboardType="decimal-pad"
         onChangeText={v => { ajustes.setTermsInterest(v.replace(/[^\d,.]/g, "")); ajustes.setTermsDirty(true); }}
@@ -155,6 +163,9 @@ export function TabConta({
           ? <ActivityIndicator color="#fff" />
           : <Text style={[m.ctaTxt, { fontFamily: Fonts.body }]}>Salvar regras</Text>}
       </Pressable>
+      {!!ajustes.erroTermos && (
+        <Text style={c.erro} testID="limite-regras-erro" accessibilityRole="alert">{ajustes.erroTermos}</Text>
+      )}
     </View>
   </View>
 
@@ -221,6 +232,7 @@ const c = StyleSheet.create({
   texto: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
   frase: { fontFamily: Fonts.body, fontSize: 14, fontWeight: "700", color: Colors.ink },
   dica: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  erro: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.red, marginTop: 8, lineHeight: 17 },
   par: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 6 },
   parK: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink2 },
   parV: { fontFamily: Fonts.mono, fontSize: 12.5, color: Colors.ink, fontVariant: ["tabular-nums"] as any },
