@@ -6,14 +6,23 @@
 // Ordem do tamanho:
 //   1. letras: PP, P, M, G, GG, XG, depois XXG / XGG / EG / EGG
 //   2. números (36, 38, 40; aceita decimal "1,5"), em ordem numérica
-//   3. o resto (U, Único, G1, 33/34, 10 anos, 500ml...), em ordem alfabética
+//   3. o resto (G1, 33/34, 10 anos, 500ml...), em ordem alfabética
 //      natural ("2 anos" antes de "10 anos"), sem diferenciar maiúscula/acento
+//   4. tamanho único (U, Único, TU, Tamanho único) por último
+//
+// 23/11/2026 (p-200): a grade do cadastro voltava na ordem do banco
+// (36, 44, 42, 38, 40, 34; M, P, G). A ordem vale também ao LER a grade
+// (ItemFormModal) e nas listas de variantes (ordenarPeloTamanhoNaCor), sem
+// mudar o que está gravado. EXG entrou com os extragrandes.
 // ============================================================
 
 var LETRAS: Record<string, number> = {
   PP: 0, P: 1, M: 2, G: 3, GG: 4, XG: 5,
-  XXG: 6, XGG: 6, EG: 6, EGG: 6,
+  XXG: 6, XGG: 6, EG: 6, EGG: 6, EXG: 6,
 };
+
+// Tamanho único vai para o fim da lista, depois de tudo.
+var UNICO: Record<string, true> = { U: true, "ÚNICO": true, UNICO: true, TU: true, "TAMANHO ÚNICO": true, "TAMANHO UNICO": true };
 
 var colador: { compare: (a: string, b: string) => number } | null = null;
 function compararTexto(a: string, b: string): number {
@@ -37,6 +46,9 @@ type Chave = { grupo: number; num: number; texto: string };
 function chaveDoTamanho(t: string): Chave {
   var limpo = String(t == null ? "" : t).trim();
   var maiusc = limpo.toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(UNICO, maiusc.replace(/\s+/g, " "))) {
+    return { grupo: 3, num: 0, texto: limpo };
+  }
   if (Object.prototype.hasOwnProperty.call(LETRAS, maiusc)) {
     return { grupo: 0, num: LETRAS[maiusc], texto: maiusc };
   }
@@ -76,6 +88,29 @@ export function ordenarVariantes<T>(lista: T[], chave: (v: T) => ChaveDeVariante
     var kb = chaves.get(b)!;
     var c = compararOpcional(ka.cor, kb.cor, compararTexto);
     if (c !== 0) return c;
+    return compararOpcional(ka.tamanho, kb.tamanho, compararTamanhos);
+  });
+}
+
+/**
+ * Ordena variantes só pelo tamanho, sem mexer na ordem das cores: as cores
+ * ficam na ordem em que aparecem na lista e, dentro de cada cor, os
+ * tamanhos seguem compararTamanhos. Sem tamanho vem depois na cor. Empate
+ * mantém a ordem original. Devolve cópia.
+ */
+export function ordenarPeloTamanhoNaCor<T>(lista: T[], chave: (v: T) => ChaveDeVariante): T[] {
+  var ordemDaCor = new Map<string, number>();
+  var chaves = new Map<T, { cor: number; tamanho: string | null }>();
+  (lista || []).forEach(function(v) {
+    var k = chave(v);
+    var cor = k.cor == null ? "" : String(k.cor).trim().toLocaleUpperCase("pt-BR");
+    if (!ordemDaCor.has(cor)) ordemDaCor.set(cor, ordemDaCor.size);
+    chaves.set(v, { cor: ordemDaCor.get(cor)!, tamanho: k.tamanho });
+  });
+  return estavel(lista || [], function(a, b) {
+    var ka = chaves.get(a)!;
+    var kb = chaves.get(b)!;
+    if (ka.cor !== kb.cor) return ka.cor - kb.cor;
     return compararOpcional(ka.tamanho, kb.tamanho, compararTamanhos);
   });
 }

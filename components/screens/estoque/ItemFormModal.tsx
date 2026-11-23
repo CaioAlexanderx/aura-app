@@ -62,6 +62,7 @@ import { nfceApi } from "@/services/nfceApi";
 import { productImagesApi } from "@/services/productImagesApi";
 import { productsVariationsApi, matrixKey, type MatrixMap } from "@/services/productsVariationsApi";
 import { hexToName, nameToHex } from "@/utils/colorNames";
+import { ordenarTamanhos } from "@/utils/ordemDeTamanhos";
 import type { CategorySelection } from "@/components/catalog/CategoryTreePicker";
 import { IS_WEB, webOnly } from "@/components/screens/pdv/types";
 import type { Product } from "./types";
@@ -550,7 +551,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       return;
     }
     setCores(m.cores);
-    setTamanhos(m.tamanhos);
+    // 23/11/2026 (p-200): o banco devolve os tamanhos fora de ordem
+    // (36, 44, 42...; M, P, G). Ordena ao ler; as cores ficam como vieram.
+    setTamanhos(ordenarTamanhos(m.tamanhos));
     // A grade nasce com o que está no banco e daí em diante é local: só
     // o Salvar a manda de volta.
     setCelulas(m.celulas);
