@@ -19,6 +19,8 @@ type Fmt = (n: number) => string;
 /** Parcela aberta como a ficha recebe (só o que os fatos usam). */
 export type ParcelaDosFatos = {
   due_date: string;
+  is_overdue?: boolean;
+  charges_total?: number;
   remaining?: number;
   amount_due?: number;
   covered_amount?: number;
@@ -27,10 +29,21 @@ export type ParcelaDosFatos = {
   days_charged?: number;
 };
 
-/** O que hoje se paga por ela: com multa e juros quando houver. */
-export function valorDeHoje(p: ParcelaDosFatos): number {
-  const rem = p.remaining ?? (Number(p.amount_due || 0) - Number(p.covered_amount || 0));
-  return Number(p.total_due ?? rem) || 0;
+/** Principal em aberto da parcela. */
+export function restanteDaParcela(p: ParcelaDosFatos): number {
+  return Number(p.remaining ?? (Number(p.amount_due || 0) - Number(p.covered_amount || 0))) || 0;
+}
+
+/**
+ * O que hoje se paga por ela. Multa e juros só quando ela está em atraso
+ * (mesma regra da linha da parcela: encargos só com is_overdue). `atrasada`
+ * vem da regra única (isInstallmentOverdue) de quem chama.
+ */
+export function valorDeHoje(p: ParcelaDosFatos, atrasada: boolean = p.is_overdue === true): number {
+  const rem = restanteDaParcela(p);
+  if (!atrasada) return rem;
+  const enc = Number(p.charges_total ?? 0);
+  return Number(p.total_due ?? (rem + enc)) || 0;
 }
 
 /**
@@ -87,6 +100,8 @@ export function fatoOQueVemAgora(p: {
   atrasadas: ParcelaDosFatos[];
   /** A próxima a vencer (não atrasada, não "a conferir"), se houver. */
   proxima: ParcelaDosFatos | null;
+  /** Parcelas vencidas antes de o carnê ser cadastrado (needsReview). */
+  aConferir?: number;
   saldo: number;
   /** Hoje em São Paulo, YYYY-MM-DD. */
   hoje: string;
@@ -100,12 +115,17 @@ export function fatoOQueVemAgora(p: {
     const venceu = dataDoVencimento(antiga.due_date, p.hoje);
     const ha = dias > 0 ? `, há ${plural(dias, "dia", "dias")}` : "";
     const n = ordem.length;
+    const total = ordem.reduce((s, i) => s + valorDeHoje(i, true), 0);
+    // Com encargos o "Atrasado" fica maior que a soma das parcelas: a frase
+    // diz quanto é multa e juros, para não parecer conta errada.
+    const encargos = +(total - ordem.reduce((s, i) => s + restanteDaParcela(i), 0)).toFixed(2);
+    const comEncargos = encargos > 0.009 ? `com ${p.fmt(encargos)} de multa e juros · ` : "";
     return {
       titulo: "Atrasado",
-      valor: p.fmt(ordem.reduce((s, i) => s + valorDeHoje(i), 0)),
-      detalhe: n === 1
+      valor: p.fmt(total),
+      detalhe: comEncargos + (n === 1
         ? `1 parcela · venceu ${venceu}${ha}`
-        : `${n} parcelas · a mais antiga venceu ${venceu}${ha}`,
+        : `${n} parcelas · a mais antiga venceu ${venceu}${ha}`),
       atrasado: true,
     };
   }
@@ -113,10 +133,17 @@ export function fatoOQueVemAgora(p: {
     const dia = diaEmSaoPaulo(p.proxima.due_date);
     return {
       titulo: "Próxima parcela",
-      valor: p.fmt(valorDeHoje(p.proxima)),
-      detalhe: dia === p.hoje ? "vence hoje" : `vence ${dataDoVencimento(p.proxima.due_date, p.hoje)}`,
+      valor: p.fmt(valorDeHoje(p.proxima, false)),
+      // Vencida dentro da carência não está "em atraso", mas também não
+      // "vence" numa data que já passou.
+      detalhe: dia === p.hoje ? "vence hoje"
+        : dia && dia < p.hoje ? `venceu ${dataDoVencimento(p.proxima.due_date, p.hoje)}`
+        : `vence ${dataDoVencimento(p.proxima.due_date, p.hoje)}`,
       atrasado: false,
     };
+  }
+  if ((p.aConferir ?? 0) > 0) {
+    return { titulo: "O que vem agora", valor: "Parcelas a conferir", detalhe: "veja o aviso abaixo", atrasado: false };
   }
   if (p.saldo > 0.009) {
     return {

@@ -195,18 +195,37 @@ describe("TabParcelas — aba de carnês", () => {
     expect(texto(t.toJSON())).toContain("Compra de 02/08 · Slide Alta 42/43");
   });
 
-  it("parcelas a pagar direto, sem sanfona: data com lápis e Receber na linha", () => {
-    const { t, props } = montarAba();
+  it("parcelas a pagar direto, sem sanfona: data com lápis, Receber e Pix na linha", () => {
+    const { t, props } = montarAba({
+      openInst: [parcela({ due_date: "2099-11-10" }), parcela({ id: "a4", installment_number: 4, due_date: "2099-12-10" })],
+    });
     const txt = texto(t.toJSON());
     expect(txt).toContain("3 de 4");
-    expect(txt).toContain("vence 10/11");
-    // nada de Pix nem "Alterar data" na linha (o Pix está no Receber pagamento)
+    expect(txt).toContain("vence 10/11/99");
     expect(txt).not.toContain("Alterar data");
-    expect(t.root.findAllByProps({ accessibilityLabel: "Pix" })).toHaveLength(0);
     apertarRotulo(t, "Mudar a data da parcela 3 de 4");
     expect(props.handleEditDueDateOpen).toHaveBeenCalled();
+    // o Pix da parcela continua na linha
+    apertarRotulo(t, "Pix da parcela 3 de 4");
+    expect(props.openInstallmentPix).toHaveBeenCalledWith("a3");
+  });
+
+  it("MUDANÇA (revisão da F4): o Receber da linha mira o carnê da parcela", () => {
+    const { t, props } = montarAba();
     apertarRotulo(t, "Receber R$ 70,00 da parcela 3 de 4");
-    expect(props.prefill).toHaveBeenCalledWith(70);
+    expect(props.prefill).toHaveBeenCalledWith(70, "c1");
+  });
+
+  it("vencida dentro da carência (não atrasada): 'venceu', não 'vence'", () => {
+    const { t } = montarAba({ openInst: [parcela({ due_date: "2026-01-10", is_overdue: false })] });
+    expect(texto(t.toJSON())).toContain("venceu 10/01");
+  });
+
+  it("Criar carnê vazio tem Cancelar", () => {
+    const { t, props } = montarAba({ showNewAccount: true });
+    act(() => { porId(t, "carnes-novo-carne-cancelar")[0].props.onPress(); });
+    expect(props.setShowNewAccount).toHaveBeenCalled();
+    expect(props.setNewAccountName).toHaveBeenCalledWith("");
   });
 
   it("Receber o carnê inteiro mira o carnê; Imprimir e Mudar as parcelas levam o carnê", () => {

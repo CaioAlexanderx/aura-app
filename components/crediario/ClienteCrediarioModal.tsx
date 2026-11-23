@@ -1066,9 +1066,17 @@ export function ClienteCrediarioModal({
       : []),
     ...(podeJuntar ? [{ rotulo: "Juntar carnês", onPress: () => { if (emTela) fecharPaineis(); setJuntarPre([]); }, testID: "carnes-juntar" }] : []),
     ...(comCartoes
-      ? [{ rotulo: "Criar carnê vazio", onPress: () => { setTab("parcelas"); setShowNewAccount(true); setNewAccountName(""); }, testID: "carnes-novo-carne" }]
+      ? [{ rotulo: "Criar carnê vazio", onPress: () => { setTab("parcelas"); setShowNewAccount(v => !v); setNewAccountName(""); }, testID: "carnes-novo-carne" }]
       : []),
   ];
+
+  // A lista do "⋯": na tela cheia logo abaixo do nome; na janela, no alto da
+  // área que rola (o cabeçalho fixo da janela cortaria a lista).
+  const listaDoMenuDaFicha = menuFicha && (
+    <View style={{ marginTop: 8, marginBottom: emTela ? 0 : 12 }}>
+      <ListaDoMenu itens={itensDaFicha} onEscolher={() => setMenuFicha(false)} testID="ficha-menu" />
+    </View>
+  );
 
   const identidade = (
     <View style={{ marginBottom: 12 }}>
@@ -1095,11 +1103,7 @@ export function ClienteCrediarioModal({
           <BotaoMais aberto={menuFicha} onPress={() => setMenuFicha(v => !v)} rotulo="Mais ações da ficha" testID="ficha-mais" />
         </View>
       </View>
-      {menuFicha && (
-        <View style={{ marginTop: 8 }}>
-          <ListaDoMenu itens={itensDaFicha} onEscolher={() => setMenuFicha(false)} testID="ficha-menu" />
-        </View>
-      )}
+      {emTela && listaDoMenuDaFicha}
     </View>
   );
 
@@ -1111,10 +1115,14 @@ export function ClienteCrediarioModal({
   const parcelasAtrasadas = openInst.filter(i => isInstallmentOverdue(i));
   const proximaParcela = openInst.find(i => !isInstallmentOverdue(i) && !needsReview(i)
     && (i.remaining ?? (i.amount_due - (i.covered_amount || 0))) > 0.009) || null;
-  const fatoFalta = fatoFaltaPagar({ saldo: totalBalance, comprasEmAberto: carnesAbertos.length, fmt });
+  // Carnê vazio (criado à mão, sem nada lançado) não é compra em aberto.
+  const fatoFalta = fatoFaltaPagar({ saldo: totalBalance, comprasEmAberto: carnesAbertos.filter(c => !c.vazio).length, fmt });
   const fatoAgora = semSaldoNoRazao
     ? { titulo: "O que vem agora", valor: "Conferir as contas", detalhe: "veja o aviso abaixo", atrasado: false }
-    : fatoOQueVemAgora({ atrasadas: parcelasAtrasadas, proxima: proximaParcela, saldo: totalBalance, hoje: hojeSP, fmt });
+    : fatoOQueVemAgora({
+        atrasadas: parcelasAtrasadas, proxima: proximaParcela, aConferir: hasOverdue ? 0 : toReviewCount,
+        saldo: totalBalance, hoje: hojeSP, fmt,
+      });
   const fatoLimite = fatoPodeComprarMais({
     limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit, scoreLabel, fmt,
   });
@@ -1139,10 +1147,13 @@ export function ClienteCrediarioModal({
           >
             {fatoLimite.valor}
           </Text>
-          <Text style={f.fatoSub} numberOfLines={2}>
-            {fatoLimite.detalhe ? `${fatoLimite.detalhe} · ` : ""}
-            <Text style={f.fatoVer} onPress={abrirLimite} accessibilityRole="link" testID="ficha-fato-ver-limite">ver</Text>
-          </Text>
+          <View style={f.fatoSubLinha}>
+            {!!fatoLimite.detalhe && <Text style={[f.fatoSub, { flexShrink: 1 }]} numberOfLines={2}>{`${fatoLimite.detalhe} ·`}</Text>}
+            {/* Área de toque de 44 px sem crescer o cartão (margem negativa). */}
+            <Pressable onPress={abrirLimite} style={f.fatoVerArea} accessibilityRole="button" accessibilityLabel="Ver limite e regras" testID="ficha-fato-ver-limite">
+              <Text style={f.fatoVer}>ver</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -1886,6 +1897,7 @@ export function ClienteCrediarioModal({
           </View>
 
           <ScrollView style={m.body} contentContainerStyle={{ padding: 18, paddingTop: 6 }} showsVerticalScrollIndicator={true}>
+            {listaDoMenuDaFicha}
             {carregandoFicha ? carregandoEl : (
               <>
                 {tab === "parcelas" && parcelasEl}
@@ -2102,7 +2114,9 @@ const f = StyleSheet.create({
   fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
   fatoSub: { fontFamily: Fonts.body, fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
-  fatoVer: { fontFamily: Fonts.body, fontWeight: "700", color: Colors.violet3 },
+  fatoVer: { fontFamily: Fonts.body, fontSize: 11.5, fontWeight: "700", color: Colors.violet3 },
+  fatoSubLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 2, marginTop: 2 },
+  fatoVerArea: { minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 6, marginVertical: -14 },
 });
 
 export default ClienteCrediarioModal;
