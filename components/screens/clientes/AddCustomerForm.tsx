@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
 import { maskPhone } from "@/utils/masks";
@@ -22,9 +23,16 @@ type Props = {
   onSave: (c: Customer) => void;
   onCancel: () => void;
   initialData?: Customer;
+  /** 23/11/2026 (ficha do crediário): abre com o cursor no telefone — o
+   *  "Sem telefone · adicionar" e o Cobrar sem telefone levam direto a ele. */
+  focoNoTelefone?: boolean;
+  /** 23/11/2026 (ficha do crediário): avisa, uma vez, que a pessoa começou a
+   *  mexer — quem abre o formulário pode então parar de recarregá-lo quando o
+   *  cadastro chega atualizado do servidor. */
+  onEditou?: () => void;
 };
 
-export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
+export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou }: Props) {
   const isEdit = !!initialData;
   const [name, setName] = useState(initialData?.name || "");
   const [phone, setPhone] = useState(initialData?.phone || "");
@@ -33,6 +41,11 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
   const [birthday, setBirthday] = useState(initialData?.birthday || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [endereco, setEndereco] = useState<Endereco>(initialData?.endereco || ENDERECO_VAZIO);
+  const editou = name !== (initialData?.name || "") || phone !== (initialData?.phone || "")
+    || email !== (initialData?.email || "") || instagram !== (initialData?.instagram || "")
+    || birthday !== (initialData?.birthday || "") || notes !== (initialData?.notes || "")
+    || JSON.stringify(endereco) !== JSON.stringify(initialData?.endereco || ENDERECO_VAZIO);
+  useEffect(() => { if (editou) onEditou?.(); }, [editou]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome"); return; }
@@ -63,7 +76,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.title}>{isEdit ? "Editar cliente" : "Adicionar cliente"}</Text>
+        <Text style={[s.title, { fontFamily: Fonts.heading }]}>{isEdit ? "Editar cliente" : "Adicionar cliente"}</Text>
         <Pressable onPress={onCancel} style={s.closeBtn}><Text style={s.closeText}>x</Text></Pressable>
       </View>
       <Text style={s.hint}>Campos com * são obrigatórios.</Text>
@@ -75,9 +88,9 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Telefone / WhatsApp</Text>
-          <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} testID="cliente-telefone" />
+          <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} testID="cliente-telefone" autoFocus={focoNoTelefone} />
           {phone !== (initialData?.phone || "") && erroDoTelefone(phone) && (
-            <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }} testID="cliente-telefone-erro">{erroDoTelefone(phone)}</Text>
+            <Text style={{ fontFamily: Fonts.body, color: Colors.red, fontSize: 12, marginTop: 4 }} testID="cliente-telefone-erro">{erroDoTelefone(phone)}</Text>
           )}
           <View style={{ height: 16 }} />
         </View>
@@ -119,18 +132,18 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
 const s = StyleSheet.create({
   container: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, marginBottom: 24 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  title: { fontSize: 20, color: Colors.ink, fontWeight: "700" },
+  title: { fontFamily: Fonts.heading, fontSize: 24, color: Colors.ink, fontWeight: "400" },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  closeText: { fontSize: 16, color: Colors.ink3, fontWeight: "600" },
-  hint: { fontSize: 12, color: Colors.ink3, marginBottom: 16 },
-  label: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
-  input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
+  closeText: { fontFamily: Fonts.body, fontSize: 16, color: Colors.ink3, fontWeight: "600" },
+  hint: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, marginBottom: 16 },
+  label: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
+  input: { fontFamily: Fonts.body, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   row2: { flexDirection: IS_WIDE ? "row" : "column", gap: IS_WIDE ? 12 : 0 },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 16 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
-  cancelText: { fontSize: 13, color: Colors.ink3, fontWeight: "500" },
+  cancelText: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3, fontWeight: "500" },
   saveBtn: { backgroundColor: Colors.violet, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
-  saveText: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  saveText: { fontFamily: Fonts.body, fontSize: 13, color: "#fff", fontWeight: "700" },
 });
 
 export default AddCustomerForm;

@@ -56,6 +56,8 @@ import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
+import { TelefoneDaFicha } from "./ficha/TelefoneDaFicha";
+import { EditarClienteDaFicha } from "./ficha/EditarClienteDaFicha";
 import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
 import { JuntarCarnesPanel } from "./ficha/JuntarCarnesPanel";
 import { carregarVendaParaDevolucao } from "./ficha/vendaParaDevolucao";
@@ -162,6 +164,9 @@ export function ClienteCrediarioModal({
   >(null);
   const [abrindoDevolucao, setAbrindoDevolucao] = useState(false);
   const [devolucaoVenda, setDevolucaoVenda] = useState<DevolucaoSale | null>(null);
+
+  // 23/11/2026 (F2): "Editar cliente" por cima da ficha. foco = abrir no telefone.
+  const [editarCliente, setEditarCliente] = useState<{ foco: boolean } | null>(null);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -271,6 +276,7 @@ export function ClienteCrediarioModal({
       setFreePreview(null);
       setPixInstId(null);
       setPixData(null);
+      setEditarCliente(null);
     }
   }, [visible, customerId]);
 
@@ -880,10 +886,10 @@ export function ClienteCrediarioModal({
 
           <View style={m.fixedHeader}>
             <View style={m.cust}>
-              <View style={m.custL}>
+              <View style={[m.custL, { flex: 1, minWidth: 0 }]}>
                 <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
-                <View>
-                  <Text style={m.custName}>{name}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[m.custName, f.nome, { fontFamily: Fonts.heading }]} numberOfLines={2}>{name}</Text>
                   <View style={m.custSub}>
                     <View style={[m.dot, { backgroundColor: corStatus }]} />
                     <View style={[m.pill, { backgroundColor: corStatus + "22" }]} testID="crediario-ficha-status">
@@ -897,13 +903,35 @@ export function ClienteCrediarioModal({
                       </View>
                     )}
                   </View>
+                  {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
+                  {!detailQ.isLoading && (
+                    <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+                  )}
                 </View>
               </View>
-              {!!phone && !!onCobrar && (
-                <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)}>
-                  <Icon name="whatsapp" size={16} color={Colors.green} />
-                  <Text style={m.waTxt}>Cobrar</Text>
-                </Pressable>
+              {/* 23/11/2026 (F2): o Cobrar não some sem telefone — fica apagado e
+                  explica, abrindo a edição no campo do telefone. */}
+              {!!onCobrar && !detailQ.isLoading && (
+                phone ? (
+                  <Pressable style={m.waBtn} onPress={() => onCobrar(customerId!, name, phone)} accessibilityRole="button" testID="ficha-cobrar">
+                    <Icon name="whatsapp" size={16} color={Colors.green} />
+                    <Text style={m.waTxt}>Cobrar</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={[m.waBtn, f.cobrarApagado]}
+                    onPress={() => {
+                      toast.info("Adicione o telefone para cobrar pelo WhatsApp");
+                      if (customerId) setEditarCliente({ foco: true });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cobrar. Adicione o telefone para cobrar pelo WhatsApp"
+                    testID="ficha-cobrar-sem-telefone"
+                  >
+                    <Icon name="whatsapp" size={16} color={Colors.ink3} />
+                    <Text style={[m.waTxt, { color: Colors.ink3 }]}>Cobrar</Text>
+                  </Pressable>
+                )
               )}
             </View>
 
@@ -1622,6 +1650,15 @@ export function ClienteCrediarioModal({
             />
           )}
 
+          <EditarClienteDaFicha
+            visible={!!editarCliente}
+            companyId={companyId}
+            customerId={customerId}
+            focoNoTelefone={!!editarCliente?.foco}
+            onClose={() => setEditarCliente(null)}
+            onSaved={() => onChanged?.()}
+          />
+
     </ResponsiveSheet>
   );
 }
@@ -1632,6 +1669,9 @@ const f = StyleSheet.create({
   metaHero: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginTop: 2 },
   metaSm: { alignItems: "flex-end" },
   metaSmVal: { fontSize: 13, fontWeight: "700", marginTop: 3 },
+  // 23/11/2026 (F2): nome da cliente é o título da ficha (Instrument Serif).
+  nome: { fontSize: 22, fontWeight: "400", lineHeight: 26 },
+  cobrarApagado: { opacity: 0.6, borderStyle: "dashed", borderColor: Colors.border2, backgroundColor: "transparent" },
 });
 
 export default ClienteCrediarioModal;
