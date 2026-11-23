@@ -234,7 +234,9 @@ export function paraOndeFoiODinheiro(
 
     const sobra = quitouAlguma && valor > 0 && valor <= LIMITE_DA_SOBRA;
     const tipo: TipoDaLinha = sobra ? "sobra" : "abateu";
-    const rotulo = sobra ? `${nome} · sobra do pagamento` : `${nome} · abateu ${brl(valor)}`;
+    // QA 23/11 (P2): o valor já está à direita da linha; "abateu R$ 30,00 …
+    // R$ 30,00" repetia.
+    const rotulo = sobra ? `${nome} · sobra do pagamento` : `${nome} · abateu`;
 
     const aberta = porId.get(a.installment_id);
     let detalhe: string;

@@ -91,7 +91,7 @@ describe("para onde foi o dinheiro", () => {
       "2026-11-21",
     );
     expect(g[0].linhas[1]).toMatchObject({
-      tipo: "abateu", rotulo: "Parcela 3 de 4 · abateu R$ 20,00",
+      tipo: "abateu", rotulo: "Parcela 3 de 4 · abateu",
       detalhe: "venceu 02/11 · hoje faltam R$ 62,11",
     });
   });
@@ -105,7 +105,7 @@ describe("para onde foi o dinheiro", () => {
       [{ id: "q2", due_date: "2026-12-20", remaining: 99.5 }],
       "2026-11-23",
     );
-    expect(g[0].linhas[1]).toMatchObject({ tipo: "abateu", rotulo: "Parcela 2 de 3 · abateu R$ 0,50" });
+    expect(g[0].linhas[1]).toMatchObject({ tipo: "abateu", rotulo: "Parcela 2 de 3 · abateu", valor: 0.5 });
   });
 
   test("vencimento de outro ano mostra o ano", () => {
