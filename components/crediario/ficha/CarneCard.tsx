@@ -36,6 +36,8 @@ export type InfoDaLinha<P> = {
   numero: string;
   /** Parcelas abertas do carnê que vêm antes desta (o Receber abate por elas). */
   anteriores: P[];
+  /** Todas as abertas do carnê (os encargos de todas vêm primeiro). */
+  todas: P[];
 };
 
 export type CarneCardProps<P extends ParcelaAbertaDoCarne> = {
@@ -85,14 +87,16 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   // QA 23/11/2026: numeração pela posição no carnê, por data (pagas
   // primeiro, depois as abertas). Backend antigo (sem as pagas na resposta):
   // o número gravado, que é o único que se conhece.
-  const pagas = c.temCamposNovos
+  // Grupo sem carnê: o número gravado (revisão #1360).
+  const porPosicao = c.temCamposNovos && !c.semCarne;
+  const pagas = porPosicao
     ? c.parcelasPagas.slice().sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)) || a.installment_number - b.installment_number)
     : c.parcelasPagas;
   const totalNoCarne = pagas.length + c.parcelasAbertas.length;
   const numeroDaPaga = (p: (typeof pagas)[number], j: number) =>
-    c.temCamposNovos ? `${j + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
+    porPosicao ? `${j + 1} de ${totalNoCarne}` : `${p.installment_number} de ${p.total_installments}`;
   const numeroDaAberta = (p: P, i: number) =>
-    c.temCamposNovos ? `${pagas.length + i + 1} de ${totalNoCarne}`
+    porPosicao ? `${pagas.length + i + 1} de ${totalNoCarne}`
       : `${(p as any).installment_number ?? i + 1} de ${(p as any).total_installments ?? c.parcelasAbertas.length}`;
   const resumoPagas = pagas.length > 0
     ? `${pagas.length} ${pagas.length === 1 ? "paga" : "pagas"}${datasDasPagas(pagas.map(p => diaMes(p.paid_at))) ? ` · ${datasDasPagas(pagas.map(p => diaMes(p.paid_at)))}` : ""}`
@@ -215,7 +219,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         <Text style={[s.nota, { paddingHorizontal: 14 }]}>Carnês juntados: {c.juntadoDe.join(", ")}</Text>
       )}
 
-      {c.parcelasAbertas.map((p, i) => renderParcela(p, i, { numero: numeroDaAberta(p, i), anteriores: c.parcelasAbertas.slice(0, i) }))}
+      {c.parcelasAbertas.map((p, i) => renderParcela(p, i, { numero: numeroDaAberta(p, i), anteriores: c.parcelasAbertas.slice(0, i), todas: c.parcelasAbertas }))}
 
       {c.semParcelas && (
         <View style={s.semParcelas}>

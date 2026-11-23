@@ -29,6 +29,44 @@ export function contaParaOValor(
   return accountId;
 }
 
+type ParcelaComEncargos = {
+  remaining?: number; amount_due?: number; covered_amount?: number;
+  charges_total?: number; total_due?: number;
+};
+
+/**
+ * Quanto receber para deixar uma parcela do carnê em dia (revisão #1360),
+ * na ordem do backend (ledger.applyPayment com account_id): primeiro os
+ * encargos (multa e juros) de TODAS as abertas atrasadas do carnê, depois o
+ * principal da mais antiga em diante, até esta.
+ */
+export function valorParaQuitarAte<P extends ParcelaComEncargos>(
+  todasDoCarne: P[], ateEsta: P[], atrasada: (p: P) => boolean,
+): number {
+  const principal = (p: P) => Number(p.remaining ?? (Number(p.amount_due || 0) - Number(p.covered_amount || 0))) || 0;
+  const encargos = todasDoCarne.filter(atrasada).reduce((s, p) => s + (Number(p.charges_total) || 0), 0);
+  return +(encargos + ateEsta.reduce((s, p) => s + principal(p), 0)).toFixed(2);
+}
+
+/** Chave da prévia: valor e carnê que ela calculou (revisão #1360). */
+export function chaveDaPrevia(valor: number, conta: string | null | undefined): string {
+  return `${(+valor || 0).toFixed(2)}|${conta ?? ""}`;
+}
+
+/**
+ * Crédito que o pagamento gera de verdade (revisão #1360). O credit_generated
+ * da prévia é "o que sobrou depois das parcelas abertas" — o fiado sem
+ * parcela absorve esse valor. Só há crédito com o saldo novo negativo, e no
+ * máximo o quanto ele fica negativo.
+ */
+export function creditoDeVerdade(plano: { new_balance: number; credit_generated: number } | null | undefined): number {
+  if (!plano) return 0;
+  const nb = Number(plano.new_balance);
+  const cg = Number(plano.credit_generated) || 0;
+  if (!(nb < -0.009) || cg <= 0.009) return 0;
+  return +Math.min(cg, -nb).toFixed(2);
+}
+
 /** Aviso quando o valor passa do que falta no carnê escolhido. */
 export function avisoPassaDoCarne(
   nomeDoCarne: string, faltaDoCarne: number, fmt: (n: number) => string,

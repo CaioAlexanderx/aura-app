@@ -695,7 +695,8 @@ describe("QA P2: a busca da lista não pisca '0 clientes'", () => {
   test("a carteira mantém a lista anterior enquanto a busca nova carrega", () => {
     const fonte = fs.readFileSync(path.join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
     const i = fonte.indexOf('queryKey: ["credit-balances", company?.id, searchQ]');
-    expect(fonte.slice(i, i + 600)).toContain("placeholderData: (anterior) => anterior,");
+    // só da mesma loja (revisão #1360)
+    expect(fonte.slice(i, i + 800)).toContain("consultaAnterior?.queryKey?.[1] === company?.id ? anterior : undefined");
   });
 });
 
@@ -753,5 +754,77 @@ describe("QA P2: valor acima do saldo", () => {
     const txt = JSON.stringify(tree.toJSON());
     expect(txt).toContain("R$ 160,10 vão virar crédito na loja, no nome de Maria.");
     creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+});
+
+describe("revisão #1360 na ficha", () => {
+  function arvoreDaFicha(extra: any = {}) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (p: any) => (
+      <QueryClientProvider client={qc}>
+        <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" onClose={jest.fn()} {...extra} {...p} />
+      </QueryClientProvider>
+    );
+  }
+  async function esperar() { await act(async () => { await new Promise(r => setTimeout(r, 0)); }); }
+
+  test("prévia de outro valor: a pergunta não anuncia crédito", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: -160.1, credit_generated: 160.1 }));
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = () => tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo().props.onChangeText("730,76"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    // valor novo, prévia ainda não chegou
+    act(() => { campo().props.onChangeText("100"); });
+    jest.useRealTimers();
+    const rotulo = tree.root.findAll((n: any) => n.props && n.props.children === "Confirmar R$ 100,00")[0];
+    let alvo: any = rotulo;
+    while (alvo && typeof alvo.props.onPress !== "function") alvo = alvo.parent;
+    act(() => { alvo.props.onPress(); });
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).toContain("Confirmar recebimento de R$ 100,00 em dinheiro?");
+    expect(txt).not.toContain("vão virar crédito");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+
+  test("prévia em que o fiado absorve a sobra (saldo novo 0): sem crédito", async () => {
+    const { creditApi } = jest.requireMock("@/services/creditApi");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve({ applied: [], new_balance: 0, credit_generated: 80 }));
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
+    const campo = tree.root.findAll((n: any) => n.props && n.props.placeholder === "0,00" && typeof n.props.onChangeText === "function")[0];
+    jest.useFakeTimers();
+    act(() => { campo.props.onChangeText("200"); });
+    await act(async () => { jest.advanceTimersByTime(600); });
+    jest.useRealTimers();
+    await esperar();
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).not.toContain("Crédito gerado");
+    creditApi.previewPayment.mockImplementation(() => Promise.resolve(null));
+  });
+
+  test("o limite digitado num cadastro não aparece no outro", async () => {
+    const F = arvoreDaFicha();
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(<F customerId="c1" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
+    act(() => { porId(tree, "limite-regras-limite-campo")[0].props.onChangeText("5"); });
+    expect(porId(tree, "limite-regras-limite-campo")[0].props.value).toBe("5");
+    await act(async () => { tree.update(<F customerId="c2" />); });
+    await esperar();
+    act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
+    act(() => { porId(tree, "ficha-abrir-limite")[0].props.onPress(); });
+    expect(porId(tree, "limite-regras-limite-campo")[0].props.value).not.toBe("5");
   });
 });

@@ -42,7 +42,8 @@ describe("contaParaOValor", () => {
 describe("a ficha usa a regra na prévia, no envio e no Quitar", () => {
   const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
   test("prévia e envio", () => {
-    expect(fonte).toContain("account_id: contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId)),");
+    expect(fonte).toContain("const conta = contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId));");
+    expect(fonte).toContain("account_id: conta,");
     expect(fonte).toContain("account_id: contaParaOValor(freeAccountId, amt, faltaDoCarneRef.current(freeAccountId)),");
   });
   test("Quitar", () => {

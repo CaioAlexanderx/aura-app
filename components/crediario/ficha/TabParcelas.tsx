@@ -44,6 +44,7 @@ import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard, type InfoDaLinha } from "./CarneCard";
+import { valorParaQuitarAte } from "@/utils/crediarioReceberCarne";
 import { fmt } from "./fichaHelpers";
 import { m, CorDaFicha } from "./fichaStyles";
 
@@ -219,8 +220,17 @@ export function TabParcelas({
     // "Receber até esta" preenche as anteriores + esta — o que de fato vai
     // ser pago para esta ficar em dia. Antes abria com o valor desta e
     // pagava a 1ª.
-    const anteriores = info?.anteriores ?? [];
-    const valorAteAqui = +(anteriores.reduce((s, a) => s + valorHoje(a), 0) + totalHoje).toFixed(2);
+    // Revisão #1360:
+    //  - grupo "Compras sem carnê" (sem account_id): "Receber" simples;
+    //  - com multa e juros, o backend (ledger.applyPayment) cobra primeiro os
+    //    encargos de TODAS as abertas do carnê e só depois o principal, da
+    //    mais antiga em diante. O valor que deixa ESTA em dia é: encargos de
+    //    todas + principal das anteriores e desta (utils/crediarioReceberCarne).
+    const doCarne = !!ins.account_id;
+    const anteriores = doCarne ? (info?.anteriores ?? []) : [];
+    const valorAteAqui = doCarne
+      ? valorParaQuitarAte(info?.todas ?? [ins], [...anteriores, ins], isInstallmentOverdue)
+      : totalHoje;
     return (
       <LinhaDaParcela
         key={ins.id}
@@ -235,7 +245,8 @@ export function TabParcelas({
         // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
         // quem toca Receber no carnê B espera abater o B. Antes ia para a
         // parcela mais antiga de qualquer carnê.
-        onReceber={() => prefill(anteriores.length > 0 ? valorAteAqui : totalHoje, ins.account_id ?? undefined)}
+        onReceber={() => prefill(valorAteAqui, ins.account_id ?? undefined)}
+        valorDoReceber={fmt(valorAteAqui)}
         // O Pix da parcela volta (o Caio não aprovou tirar).
         onPix={() => openInstallmentPix(ins.id)}
       />
@@ -417,8 +428,10 @@ const c = StyleSheet.create({
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui }: {
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber }: {
   numero: string; data: string; porque: string; valor: string;
+  /** O que o Receber preenche (pode incluir encargos das outras do carnê). */
+  valorDoReceber?: string;
   /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
   ateAqui?: string | null;
   atrasada: boolean; principal: boolean;
@@ -450,7 +463,7 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
         accessibilityRole="button"
         accessibilityLabel={ateAqui
           ? `Receber até esta: ${ateAqui}, as parcelas anteriores deste carnê e a ${numero}`
-          : `Receber ${valor} da parcela ${numero}`}
+          : `Receber ${valorDoReceber ?? valor} da parcela ${numero}`}
       >
         <Text style={[l.receberT, principal && { color: "#fff" }]}>{ateAqui ? "Receber até esta" : "Receber"}</Text>
       </Pressable>

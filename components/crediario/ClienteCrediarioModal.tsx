@@ -68,14 +68,14 @@ import {
   textoConfirmarExclusao, lerErroDaExclusao, mensagemDosRecebimentos, MENSAGEM_CARNE_DE_VENDA,
 } from "@/utils/crediarioExcluirCarne";
 import {
-  organizarCarnes, carnesParaJuntar, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
+  organizarCarnes, carnesParaJuntar, numerosPorPosicao, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
 } from "@/utils/crediarioCarne";
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
 import { primeiroNome } from "@/utils/crediarioMensagem";
 import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
-import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
+import { avisoPassaDoCarne, chaveDaPrevia, contaParaOValor, creditoDeVerdade, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
 import { MARCA_DA_FICHA, useAnelDeFocoDaFicha } from "./ficha/anelDeFoco";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
@@ -248,6 +248,8 @@ export function ClienteCrediarioModal({
   const [freeDateBr, setFreeDateBr] = useState(todayBrSp());
   const [freeAccountId, setFreeAccountId] = useState<string | null | undefined>(undefined);
   const [freePreview, setFreePreview] = useState<PaymentPlan | null>(null);
+  // Revisão #1360: de que valor e carnê é a prévia na tela ("valor|carnê").
+  const [freePreviewChave, setFreePreviewChave] = useState<string | null>(null);
   const [freePreviewLoading, setFreePreviewLoading] = useState(false);
   const [freeSubmitting, setFreeSubmitting] = useState(false);
   // 15/09/2026: depois de receber, o painel mostra o que foi pago e oferece o
@@ -359,6 +361,7 @@ export function ClienteCrediarioModal({
       setMenuTelefone(false);
       setLimiteDirty(false);
       setErroLimite(null);
+      setLimiteInput("");
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -383,7 +386,8 @@ export function ClienteCrediarioModal({
       setTermsMaxInst(ov.max_installments != null ? String(ov.max_installments) : "");
       setTermsInterest(ov.interest_rate != null ? String(+(ov.interest_rate * 100).toFixed(4)).replace(".", ",") : "");
     }
-  }, [profileQ.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileQ.data, customerId]);
 
   const detail = detailQ.data;
   const profile = profileQ.data;
@@ -437,7 +441,15 @@ export function ClienteCrediarioModal({
   faltaDoCarneRef.current = (id) => {
     if (!id) return null;
     const a = accounts.find(x => x.id === id);
-    return a ? Number(a.remaining ?? a.balance ?? 0) : null;
+    if (!a) return null;
+    // Revisão #1360: com multa e juros ligados, o carnê deve também os
+    // encargos das atrasadas (o backend cobra primeiro os encargos de todas
+    // as abertas do carnê). Sem isso, "Receber até esta" na última linha
+    // passava do "falta" e perdia o carnê.
+    const encargos = openInst
+      .filter(i => i.account_id === id && isInstallmentOverdue(i))
+      .reduce((s, i) => s + Number(i.charges_total ?? 0), 0);
+    return +(Number(a.remaining ?? a.balance ?? 0) + encargos).toFixed(2);
   };
 
   const nextDueDate = openInst.length > 0
@@ -461,6 +473,16 @@ export function ClienteCrediarioModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [detail?.accounts, openInst],
   );
+  // Revisão #1360: o mesmo "N de M" por posição da linha do carnê no painel
+  // "Mudar a data" e na prévia do Receber (antes "4 de 5" na linha e
+  // "Parcela 1/3" no painel). Grupo sem carnê: o número gravado.
+  const numeroDaParcela = useMemo(() => numerosPorPosicao(carnesAbertos), [carnesAbertos]);
+  const rotuloDaLinha = (line: Parameters<typeof installmentLabel>[0] & { installment_id?: string }) => {
+    const n = line.installment_id ? numeroDaParcela.get(line.installment_id) : undefined;
+    if (!n) return installmentLabel(line);
+    const venc = installmentLabel({ ...line, number: null, total_installments: null }).replace(/^Parcela/, "");
+    return `Parcela ${n}${venc}`;
+  };
 
   const isBlocked = profile?.status === "blocked";
 
@@ -717,20 +739,23 @@ export function ClienteCrediarioModal({
   const triggerPreview = useCallback((amtStr: string, accountId?: string | null) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     const amt = parseAmount(amtStr);
-    if (amt <= 0) { setFreePreview(null); return; }
+    if (amt <= 0) { setFreePreview(null); setFreePreviewChave(null); return; }
     previewTimerRef.current = setTimeout(async () => {
       setFreePreviewLoading(true);
+      const conta = contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId));
       try {
         const plan = await creditApi.previewPayment(companyId, customerId!, {
           amount: amt,
           // Acima do que falta no carnê, a prévia é de "todas as compras" —
           // a mesma conta que o envio faz (P1-4).
-          account_id: contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId)),
+          account_id: conta,
           paid_at: parseBrDate(freeDateBr) || undefined,
         });
         setFreePreview(plan);
+        setFreePreviewChave(chaveDaPrevia(amt, conta));
       } catch {
         setFreePreview(null);
+        setFreePreviewChave(null);
       } finally {
         setFreePreviewLoading(false);
       }
@@ -1017,7 +1042,13 @@ export function ClienteCrediarioModal({
   const repetido = receberGate ? recebimentoRecente(detail?.transactions, ultimoRecebimento, freeAmtValue) : null;
   // QA 23/11 (P2): valor acima do que falta — a pergunta diz quanto vira
   // crédito na loja (antes só a prévia dizia, e o saldo aparecia negativo).
-  const creditoNaPrevia = freePreview && freePreview.credit_generated > 0.009 ? freePreview.credit_generated : 0;
+  // Revisão #1360: credit_generated é o que sobra depois das PARCELAS; o
+  // fiado sem parcela absorve esse valor. Crédito de verdade só com o saldo
+  // novo negativo, e só se a prévia é do valor e do carnê de agora.
+  const previaAtual = !!freePreview && freePreviewChave === chaveDaPrevia(
+    freeAmtValue, contaParaOValor(freeAccountId, freeAmtValue, faltaDoCarneRef.current(freeAccountId)),
+  );
+  const creditoNaPrevia = previaAtual ? creditoDeVerdade(freePreview) : 0;
   const gateMessage = repetido
     ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
     : `Confirmar recebimento de ${fmt(freeAmtValue)} ${formaComPreposicao(methodLabel)}?`
@@ -1371,7 +1402,7 @@ export function ClienteCrediarioModal({
                     <Text style={m.previewTitle}>Parcelas pagas</Text>
                     {receiptResult.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
+                        <Text style={m.previewLbl}>{rotuloDaLinha(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           <Text style={m.previewVal}>{fmt((line.principal_paid || 0) + (line.charges_paid || 0))}</Text>
                           <Text style={[m.previewVal, { fontSize: 10, color: CorDaFicha.secundario }]}>
@@ -1514,7 +1545,7 @@ export function ClienteCrediarioModal({
                     <Text style={[m.previewTitle, { fontFamily: Fonts.body }]}>Para onde vai o dinheiro</Text>
                     {freePreview.applied.map((line, i) => (
                       <View key={line.installment_id + i} style={m.previewRow}>
-                        <Text style={m.previewLbl}>{installmentLabel(line)}</Text>
+                        <Text style={m.previewLbl}>{rotuloDaLinha(line)}</Text>
                         <View style={{ alignItems: "flex-end" }}>
                           {line.charges_paid > 0 && (
                             <Text style={[m.previewVal, { fontSize: 10, color: Colors.amber }]}>
@@ -1535,10 +1566,10 @@ export function ClienteCrediarioModal({
                         {fmt(Math.max(0, freePreview.new_balance))}
                       </Text>
                     </View>
-                    {freePreview.credit_generated > 0 && (
+                    {creditoNaPrevia > 0 && (
                       <View style={m.previewRow}>
                         <Text style={m.previewLbl}>Crédito gerado</Text>
-                        <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(freePreview.credit_generated)}</Text>
+                        <Text style={[m.previewVal, { color: Colors.green }]}>{fmt(creditoNaPrevia)}</Text>
                       </View>
                     )}
                   </View>
@@ -1835,7 +1866,7 @@ export function ClienteCrediarioModal({
               </View>
               <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 10 }} showsVerticalScrollIndicator={true}>
               <Text style={m.editDueDateSub}>
-                Parcela {editingDueDateInst.installment_number}/{editingDueDateInst.total_installments} · parcelas seguintes serão recalculadas.
+                Parcela {numeroDaParcela.get(editingDueDateInst.id) ?? `${editingDueDateInst.installment_number}/${editingDueDateInst.total_installments}`} · parcelas seguintes serão recalculadas.
               </Text>
               <Text style={[m.fieldLabel, { marginBottom: 6, marginTop: 4 }]}>NOVA DATA (DD/MM/AAAA)</Text>
               <DateInput
@@ -2242,7 +2273,7 @@ export function ClienteCrediarioModal({
 
       {!larga && trocarAberto && !!listaLateral && (
         <>
-          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista das clientes" />
+          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista" />
           <View style={t.trocarLista} testID="ficha-trocar-lista">
             {listaLateral}
             {ocupado && <TravaDaLista />}
