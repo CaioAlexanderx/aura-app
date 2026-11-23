@@ -72,6 +72,8 @@ import {
 import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 import { avisoDaFicha } from "@/utils/crediarioAvisoDaFicha";
+import { corpoDasRegras, erroAoSalvarRegras } from "@/utils/crediarioRegrasDaCliente";
+import { avisoPassaDoCarne, contaParaOValor, valorDeQuitar } from "@/utils/crediarioReceberCarne";
 import { useTeclasDaFicha } from "./ficha/useTeclasDaFicha";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./ficha/MenuMais";
 import { fatoFaltaPagar, fatoOQueVemAgora, fatoPodeComprarMais } from "@/utils/crediarioTresFatos";
@@ -131,6 +133,23 @@ export function ClienteCrediarioModal({
   casca = "janela", layout = "larga", listaLateral, navegacao, abertaPeloEndereco = false,
 }: Props) {
   const qc = useQueryClient();
+  // QA 23/11 (P1-5): depois de receber, remover ou corrigir pagamento,
+  // juntar, mudar as parcelas ou a data, TUDO o que mostra dinheiro desta
+  // cliente recarrega — a ficha, o perfil, a carteira (a lista ao lado, que
+  // fica escondida atrás da ficha: refetchType "all") e os indicadores.
+  // Antes cada ação invalidava uma parte, e "Falta pagar", o carnê e a lista
+  // ficavam com os números antigos.
+  function atualizarFicha(cliente: string | null | undefined = customerId) {
+    const todas = { refetchType: "all" as const };
+    if (cliente) {
+      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, cliente], ...todas });
+      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, cliente], ...todas });
+    }
+    qc.invalidateQueries({ queryKey: ["credit-balances", companyId], ...todas });
+    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId], ...todas });
+    qc.invalidateQueries({ queryKey: ["credit-aging", companyId], ...todas });
+    onChanged?.();
+  }
   // F3 (23/11/2026): na tela cheia o Histórico vira a coluna da direita
   // (sempre à vista) e os painéis abrem nela; o centro fica com as parcelas.
   const emTela = casca === "tela";
@@ -154,6 +173,8 @@ export function ClienteCrediarioModal({
   const [termsInterest, setTermsInterest] = useState("");
   const [termsDirty, setTermsDirty] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
+  // QA 23/11: o erro ao salvar as regras fica na tela (o toast sumia).
+  const [erroTermos, setErroTermos] = useState<string | null>(null);
 
   const [editingDueDateInst, setEditingDueDateInst] = useState<CreditInstallment | null>(null);
   const [editDueDateInput, setEditDueDateInput] = useState("");
@@ -196,6 +217,8 @@ export function ClienteCrediarioModal({
   const [trocarAberto, setTrocarAberto] = useState(false);
   // F4: o "⋯" do alto da ficha.
   const [menuFicha, setMenuFicha] = useState(false);
+  // QA 23/11 (P1-7): o menu do telefone (celular) entra na pilha do Esc.
+  const [menuTelefone, setMenuTelefone] = useState(false);
   // Resposta do Histórico que chega depois de trocar de cliente (setas) não
   // pode pintar a ficha da cliente nova.
   const clienteAtualRef = useRef<string | null>(customerId);
@@ -272,6 +295,15 @@ export function ClienteCrediarioModal({
     staleTime: 15_000,
   });
 
+  // QA 23/11: o "(regra da loja)" mostra o valor da LOJA (plan-config), não
+  // o que vale para a cliente. Mesma chave da tela de configurações.
+  const regraDaLojaQ = useQuery({
+    queryKey: ["credit-plan-config", companyId],
+    queryFn: () => creditApi.getPlanConfig(companyId),
+    enabled: visible && !!companyId,
+    staleTime: 5 * 60_000,
+  });
+
   const detailQ = useQuery({
     queryKey: ["credit-customer", companyId, customerId],
     queryFn: () => creditApi.getCustomerHistory(companyId, customerId!),
@@ -313,6 +345,7 @@ export function ClienteCrediarioModal({
       setLimiteAberto(false);
       setTrocarAberto(false);
       setMenuFicha(false);
+      setMenuTelefone(false);
       // F3 (revisão): diálogo de excluir, envio e recibo são da cliente
       // anterior — confirmar depois da troca excluiria o carnê dela na ficha
       // da cliente nova.
@@ -381,6 +414,14 @@ export function ClienteCrediarioModal({
   const useCarneLayout = realCarnes.length > 0;
   // Chips de carnê do "Receber pagamento": quitados ficam de fora.
   const carnesParaReceber = realCarnes.filter(a => (a.remaining ?? a.balance) > 0.009 || a.id === freeAccountId);
+  // QA 23/11 (P1-4): o que falta em cada carnê, para o "Quitar" e para o
+  // valor que passa do carnê (utils/crediarioReceberCarne).
+  const faltaDoCarneRef = useRef<(id: string | null | undefined) => number | null>(() => null);
+  faltaDoCarneRef.current = (id) => {
+    if (!id) return null;
+    const a = accounts.find(x => x.id === id);
+    return a ? Number(a.remaining ?? a.balance ?? 0) : null;
+  };
 
   const nextDueDate = openInst.length > 0
     ? openInst.reduce((best, i) => {
@@ -413,9 +454,7 @@ export function ClienteCrediarioModal({
       toast.success(isBlocked ? "Cliente desbloqueado" : "Cliente bloqueado");
       setBlockReason("");
       setBlockingAction(null);
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      onChanged?.();
+      atualizarFicha();
     },
     onError: (err: any) => toast.error(err?.data?.error || "Erro ao alterar bloqueio"),
   });
@@ -434,25 +473,18 @@ export function ClienteCrediarioModal({
 
   async function saveTerms() {
     setSavingTerms(true);
+    setErroTermos(null);
     try {
-      const hasOverride = termsMaxInst.trim() || termsInterest.trim();
-      if (!hasOverride) {
-        await creditApi.updateCustomerTerms(companyId, customerId!, null as any);
-      } else {
-        const body: Partial<CustomerTermsOverrides> = {};
-        if (termsMaxInst.trim()) body.max_installments = parseInt(termsMaxInst, 10) || null;
-        if (termsInterest.trim()) {
-          const v = parseFloat(termsInterest.replace(",", "."));
-          body.interest_rate = isFinite(v) ? v / 100 : null;
-        }
-        await creditApi.updateCustomerTerms(companyId, customerId!, body);
-      }
-      toast.success("Termos salvos!");
+      // QA 23/11: os dois campos vão sempre; em branco = null = regra da
+      // loja (utils/crediarioRegrasDaCliente). Antes, em branco mandava o
+      // corpo null (400) e um campo só deixava o outro preso.
+      const body: Partial<CustomerTermsOverrides> = corpoDasRegras(termsMaxInst, termsInterest);
+      await creditApi.updateCustomerTerms(companyId, customerId!, body);
+      toast.success("Regras salvas.");
       setTermsDirty(false);
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      onChanged?.();
+      atualizarFicha();
     } catch (err: any) {
-      toast.error(err?.data?.error || "Erro ao salvar termos");
+      setErroTermos(erroAoSalvarRegras(err));
     } finally {
       setSavingTerms(false);
     }
@@ -489,7 +521,7 @@ export function ClienteCrediarioModal({
       toast.success("Carnê criado!");
       setShowNewAccount(false);
       setNewAccountName("");
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      atualizarFicha();
     } catch (err: any) {
       toast.error(err?.data?.error || "Erro ao criar carnê");
     } finally {
@@ -503,8 +535,7 @@ export function ClienteCrediarioModal({
     onSuccess: (_res, vars) => {
       // A cliente mudou durante o envio: atualiza a ficha dela e não mexe na tela.
       if (vars.cliente !== clienteAtualRef.current) {
-        qc.invalidateQueries({ queryKey: ["credit-customer", companyId, vars.cliente] });
-        qc.invalidateQueries({ queryKey: ["credit-profile", companyId, vars.cliente] });
+        atualizarFicha(vars.cliente);
         toast.success("Vencimento atualizado!");
         return;
       }
@@ -512,8 +543,7 @@ export function ClienteCrediarioModal({
       setEditDueDateInput("");
       setEditDueDateError("");
       toast.success("Vencimento atualizado!");
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
       setHistLoaded(false);
     },
@@ -606,12 +636,7 @@ export function ClienteCrediarioModal({
       );
       renegKeyRef.current = null;
       setRenegScope(null);
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-      onChanged?.();
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
       setHistLoaded(false);
     } catch (err: any) {
@@ -663,7 +688,9 @@ export function ClienteCrediarioModal({
       try {
         const plan = await creditApi.previewPayment(companyId, customerId!, {
           amount: amt,
-          account_id: accountId,
+          // Acima do que falta no carnê, a prévia é de "todas as compras" —
+          // a mesma conta que o envio faz (P1-4).
+          account_id: contaParaOValor(accountId, amt, faltaDoCarneRef.current(accountId)),
           paid_at: parseBrDate(freeDateBr) || undefined,
         });
         setFreePreview(plan);
@@ -691,7 +718,7 @@ export function ClienteCrediarioModal({
     try {
       const res = await creditApi.receiveFreePayment(companyId, customerId!, {
         amount: amt,
-        account_id: freeAccountId,
+        account_id: contaParaOValor(freeAccountId, amt, faltaDoCarneRef.current(freeAccountId)),
         method: freeMethod,
         paid_at: paidAt,
         ...(confirmarRepetido ? { confirmar_repetido: true } : {}),
@@ -717,12 +744,7 @@ export function ClienteCrediarioModal({
       setFreePreview(null);
       setFreeDateBr(todayBrSp());
       setReceberGate(false);
-      qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-      qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-      qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-      onChanged?.();
+      atualizarFicha();
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1):
       // antes o recebimento só aparecia reabrindo a ficha.
       setHistLoaded(false);
@@ -887,23 +909,12 @@ export function ClienteCrediarioModal({
   // F3 (revisão): resposta que chegou depois de trocar de cliente — atualiza
   // os dados DELA (e a carteira) sem tocar na tela da cliente nova.
   function atualizarDaCliente(cliente: string | null) {
-    if (!cliente) return;
-    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, cliente] });
-    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, cliente] });
-    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-    onChanged?.();
+    atualizarFicha(cliente);
   }
 
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
-    qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
-    qc.invalidateQueries({ queryKey: ["credit-profile", companyId, customerId] });
-    qc.invalidateQueries({ queryKey: ["credit-balances", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-dashboard", companyId] });
-    qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
-    onChanged?.();
+    atualizarFicha(customerId);
   }
 
   // F3 (revisão): o ?cliente= sobrevive à troca de loja (reloadAfterSwitch).
@@ -988,18 +999,19 @@ export function ClienteCrediarioModal({
     setLimiteAberto(false);
     setTrocarAberto(false);
     setMenuFicha(false);
+    setMenuTelefone(false);
   }
   const fecharDoPainel = emTela || emPagina ? fecharPaineis : onClose;
   // Abrir um painel fecha o que estava aberto (tela cheia e página: os
   // painéis ficam lado a lado com a ficha) e, em qualquer casca, o "⋯".
   function fecharAoAbrirPainel() {
     if (emTela || emPagina) fecharPaineis();
-    else setMenuFicha(false);
+    else { setMenuFicha(false); setMenuTelefone(false); }
   }
   // Diálogos de excluir carnê (View fixa, não Modal: o detector de janela
   // não os vê) também contam como painel: Esc fecha o diálogo e as setas param.
   const painelAberto = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
-    || limiteAberto || trocarAberto || menuFicha || !!excluirAlvo || !!recusaExclusao;
+    || limiteAberto || trocarAberto || menuFicha || menuTelefone || !!excluirAlvo || !!recusaExclusao;
   // F3 (revisão): com um envio em andamento a ficha não troca de cliente
   // (lista, setas e teclado) — a resposta cairia na ficha de outra.
   const ocupado = freeSubmitting || renegSubmitting || excluindo || editDueDateMut.isPending || abrindoDevolucao
@@ -1019,6 +1031,7 @@ export function ClienteCrediarioModal({
         else if (repetidoServidor) setRepetidoServidor(null);
         else if (receberGate) setReceberGate(false);
         else if (pixInstId) { setPixInstId(null); setPixData(null); }
+        else if (menuTelefone) setMenuTelefone(false);
         else if (menuFicha) setMenuFicha(false);
         else fecharPaineis();
       } else if (acao === "fechar-ficha") onClose();
@@ -1102,7 +1115,7 @@ export function ClienteCrediarioModal({
             </View>
             {/* 23/11/2026 (F2): telefone do cadastro à vista e Editar cliente. */}
             {!detailQ.isLoading && (
-              <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+              <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} opcoesAbertas={menuTelefone} onOpcoesAbertas={setMenuTelefone} />
             )}
           </View>
         </View>
@@ -1235,9 +1248,10 @@ export function ClienteCrediarioModal({
       profile={profile} isBlocked={isBlocked} scoreLabel={scoreLabel}
       availableLimit={availableLimit} totalBalance={totalBalance} openInst={openInst}
       nextDueDate={nextDueDate} hasTermsOverride={hasTermsOverride} realCarnes={realCarnes}
+      regraDaLoja={regraDaLojaQ.data ? { max_installments: regraDaLojaQ.data.max_installments, interest_rate: regraDaLojaQ.data.interest_rate } : null}
       ajustes={{
         termsMaxInst, setTermsMaxInst, termsInterest, setTermsInterest,
-        termsDirty, setTermsDirty, savingTerms, saveTerms,
+        termsDirty, setTermsDirty, savingTerms, saveTerms, erroTermos,
         blockReason, setBlockReason, blockingAction, setBlockingAction,
         handleBlockToggle, confirmBlock, blockPending: blockMut.isPending,
       }}
@@ -1387,11 +1401,21 @@ export function ClienteCrediarioModal({
                     </Pressable>
                   ))}
                   {totalBalance > 0 && (
-                    <Pressable style={m.qChip} onPress={() => prefill(totalBalance)}>
-                      <Text style={m.qChipTxt}>Quitar ({fmt(totalBalance)})</Text>
+                    <Pressable style={m.qChip} onPress={() => prefill(valorDeQuitar(totalBalance, faltaDoCarneRef.current(freeAccountId)))}>
+                      <Text style={m.qChipTxt}>Quitar ({fmt(valorDeQuitar(totalBalance, faltaDoCarneRef.current(freeAccountId)))})</Text>
                     </Pressable>
                   )}
                 </View>
+
+                {(() => {
+                  const falta = faltaDoCarneRef.current(freeAccountId);
+                  const nome = accounts.find(a => a.id === freeAccountId)?.name || "este carnê";
+                  return falta != null && freeAmtValue > falta + 0.009 ? (
+                    <Text style={[m.dateHint, { color: Colors.amber }]} testID="receber-passa-do-carne">
+                      {avisoPassaDoCarne(nome, falta, fmt)}
+                    </Text>
+                  ) : null;
+                })()}
 
                 <Text style={[m.fieldLabel, { marginTop: 12, fontFamily: Fonts.body }]}>Dia do pagamento</Text>
                 <DateInput
@@ -1878,6 +1902,7 @@ export function ClienteCrediarioModal({
       else if (repetidoServidor) setRepetidoServidor(null);
       else if (receberGate) setReceberGate(false);
       else if (pixInstId) { setPixInstId(null); setPixData(null); }
+      else if (menuTelefone) setMenuTelefone(false);
       else if (menuFicha) setMenuFicha(false);
       else if (painelAberto) fecharPaineis();
       else onClose();
@@ -1929,7 +1954,7 @@ export function ClienteCrediarioModal({
                   </View>
                 )}
                 {!detailQ.isLoading && (
-                  <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} />
+                  <TelefoneDaFicha phone={phone} onEditar={customerId ? (foco) => setEditarCliente({ foco }) : undefined} opcoesAbertas={menuTelefone} onOpcoesAbertas={setMenuTelefone} />
                 )}
               </View>
             )}

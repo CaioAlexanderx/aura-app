@@ -98,7 +98,9 @@ export function ParcelaRow({
         </Animated.View>
       </Pressable>
 
-      <Collapsible open={expanded}>
+      {/* 23/11/2026 (QA): fechada, a sanfona não renderiza — os botões
+          escondidos (Receber, Pix) recebiam Tab e Enter. */}
+      {expanded && <Collapsible open={expanded}>
         {!!breakdown?.length && (
           <View style={s.breakdown}>
             {breakdown.map((l, i) => (
@@ -110,7 +112,7 @@ export function ParcelaRow({
           </View>
         )}
         {!!actions && <View style={s.actions}>{actions}</View>}
-      </Collapsible>
+      </Collapsible>}
     </View>
   );
 }

@@ -87,6 +87,9 @@ describe("layoutDaFicha", () => {
   });
   test("pela largura útil: 1366 com o menu aberto (~1086) dá três colunas", () => {
     expect(layoutDaFicha(1086, 1366)).toBe("larga");
+    // QA 23/11: 1366 − 280 do menu − 6 da barra de rolagem = 1079
+    expect(layoutDaFicha(1079, 1366)).toBe("larga");
+    expect(layoutDaFicha(1366 - 280 - 17, 1366)).toBe("larga");
     expect(layoutDaFicha(LARGURA_UTIL_LARGA, 1400)).toBe("larga");
   });
   test("entre 700 e 1079 de largura útil, duas colunas", () => {
@@ -548,6 +551,18 @@ describe("F5: celular, página inteira", () => {
     expect(estilos).toContain("xBtn: { width: 44, height: 44");
   });
 
+  test("QA P1-7: Esc/voltar com o menu do telefone aberto fecha só o menu", async () => {
+    const { tree, onClose } = await montarPagina();
+    act(() => { porId(tree, "ficha-telefone")[0].props.onPress(); });
+    expect(porId(tree, "ficha-telefone-opcoes")).toHaveLength(1);
+    const modal = tree.root.findAll((n: any) => n.props && typeof n.props.onRequestClose === "function" && n.props.transparent === false)[0];
+    act(() => { modal.props.onRequestClose(); });
+    expect(porId(tree, "ficha-telefone-opcoes")).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { modal.props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test("voltar do Android / Esc com painel aberto fecha o painel, não a ficha", async () => {
     const { tree, onClose } = await montarPagina();
     act(() => { porId(tree, "ficha-receber")[0].props.onPress(); });
@@ -580,5 +595,30 @@ describe("crediario.tsx: ?cliente= fica no endereço", () => {
   });
   test("a lista de baixo não desmonta: só some enquanto a ficha está em tela cheia", () => {
     expect(fonte).toContain('style={[s.screen, fichaEmTela && { display: "none" }]}');
+  });
+});
+
+describe("QA 23/11 (P1-5): depois de mexer no dinheiro, tudo recarrega", () => {
+  const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "crediario", "ClienteCrediarioModal.tsx"), "utf8");
+  test("um ajudante só invalida ficha, perfil, carteira (mesmo escondida) e indicadores", () => {
+    const i = fonte.indexOf("function atualizarFicha(");
+    const corpo = fonte.slice(i, fonte.indexOf("onChanged?.();", i));
+    for (const k of ['"credit-customer"', '"credit-profile"', '"credit-balances"', '"credit-dashboard"', '"credit-aging"']) {
+      expect(corpo).toContain(k);
+    }
+    expect(corpo).toContain('refetchType: "all"');
+    // fora do ajudante ninguém invalida pela metade
+    expect(fonte.match(/qc\.invalidateQueries/g)?.length).toBe(5);
+  });
+  test("receber, mudar as parcelas, mudar a data, juntar e Movimentações (remover/corrigir/devolver) usam o ajudante", () => {
+    const trecho = (marca: string) => fonte.slice(fonte.indexOf(marca), fonte.indexOf("catch", fonte.indexOf(marca)));
+    expect(trecho("async function confirmFreePayment(")).toContain("atualizarFicha();");
+    expect(trecho("async function confirmRenegociar(")).toContain("atualizarFicha();");
+    const data = fonte.slice(fonte.indexOf("const editDueDateMut = useMutation({"), fonte.indexOf("onError", fonte.indexOf("const editDueDateMut = useMutation({")));
+    expect(data).toContain("atualizarFicha();");
+    expect(fonte).toMatch(/function handleHistoricRefresh\(\) \{\s*atualizarFicha\(customerId\);/);
+    const i = fonte.indexOf("function handleJuntou(");
+    const juntou = fonte.slice(i, i + 1400);
+    expect(juntou).toContain("handleHistoricRefresh();");
   });
 });

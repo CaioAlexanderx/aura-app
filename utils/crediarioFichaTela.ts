@@ -14,8 +14,11 @@
 
 /** Abaixo disto (largura da janela) o app está no layout de celular. */
 export const JANELA_DO_CELULAR = 768;
-/** Largura útil mínima para três colunas (lista 224 + centro ~520 + direita 340). */
-export const LARGURA_UTIL_LARGA = 1080;
+/** Largura útil mínima para três colunas (lista 224 + centro ~500 + direita 340).
+ *  QA de 23/11: 1366 com o menu aberto mede 1079 (1366 − 280 do menu − a
+ *  barra de rolagem); com 1080 caía no layout médio por 1 px. A folga cobre
+ *  barras de rolagem de até ~25 px. */
+export const LARGURA_UTIL_LARGA = 1060;
 /** Largura útil mínima para duas colunas (centro ~380 + direita 320). */
 export const LARGURA_UTIL_MEDIA = 700;
 

@@ -26,14 +26,24 @@ export type TelefoneDaFichaProps = {
   phone: string | null | undefined;
   /** Abre a edição do cadastro. `focoNoTelefone` = veio do "adicionar". */
   onEditar?: (focoNoTelefone: boolean) => void;
+  /** QA 23/11 (P1-7): o menu do número controlado pela ficha, para o Esc e o
+   *  voltar fecharem só ele (e não a ficha junto). Sem isso, estado próprio. */
+  opcoesAbertas?: boolean;
+  onOpcoesAbertas?: (aberto: boolean) => void;
 };
 
 export const LARGURA_DO_CELULAR = 768;
 
-export function TelefoneDaFicha({ phone, onEditar }: TelefoneDaFichaProps) {
+export function TelefoneDaFicha({ phone, onEditar, opcoesAbertas, onOpcoesAbertas }: TelefoneDaFichaProps) {
   const { width } = useWindowDimensions();
   const celular = width < LARGURA_DO_CELULAR;
-  const [opcoes, setOpcoes] = useState(false);
+  const [opcoesProprias, setOpcoesProprias] = useState(false);
+  const controlado = opcoesAbertas !== undefined && !!onOpcoesAbertas;
+  const opcoes = controlado ? !!opcoesAbertas : opcoesProprias;
+  const setOpcoes = (v: boolean | ((a: boolean) => boolean)) => {
+    const novo = typeof v === "function" ? v(opcoes) : v;
+    if (controlado) onOpcoesAbertas!(novo); else setOpcoesProprias(novo);
+  };
   const numero = formatarTelefone(phone || "");
   const temTelefone = !!numero;
   // Número que o wa.me não aceita (curto, DDI estrangeiro): sem o atalho.
