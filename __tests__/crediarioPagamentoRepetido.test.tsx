@@ -21,6 +21,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import {
   pagamentoRepetidoDoErro, mensagemPagamentoRepetido, hojeEmBrasilia, CODIGO_PAGAMENTO_REPETIDO,
+  recebimentoRecente, confirmarRepetidoNoEnvio,
 } from "@/utils/crediarioRecebimento";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -194,6 +195,28 @@ describe("ClienteCrediarioModal (ficha) usa a regra", () => {
     // freeKeyRef só zera no sucesso e quando valor/forma/data/carnê mudam
     const catchBloco = fonte.slice(fonte.indexOf("const rep = pagamentoRepetidoDoErro(err);"));
     expect(catchBloco.slice(0, 120)).not.toContain("freeKeyRef.current = null");
+  });
+
+  test("uma pergunta só: 'Sim, é outro' já envia com confirmar_repetido", () => {
+    // O aviso de 07/10 acusa R$260 há 25 s no razão → a lojista vê "Sim, é outro"…
+    const T0 = Date.parse("2026-11-23T15:00:00.000Z");
+    const recente = recebimentoRecente(
+      [{ type: "payment", amount: 260, payment_method: "pix", created_at: new Date(T0 - 25_000).toISOString() }],
+      null, 260, T0,
+    );
+    expect(recente).not.toBeNull();
+    // …e esse "sim" vira confirmar_repetido no envio (o backend não procura
+    // o igual e não manda 409: credito.pagamentoRepetido.test.js no backend).
+    expect(confirmarRepetidoNoEnvio(recente)).toBe(true);
+    // Sem aviso local, o envio vai sem confirmar: a pergunta é a do servidor.
+    expect(confirmarRepetidoNoEnvio(recebimentoRecente([], null, 260, T0))).toBe(false);
+
+    // A ficha liga o "Sim, é outro" a esse envio, e o gate do servidor só
+    // abre a partir de um 409.
+    expect(fonte).toContain('confirmLabel={repetido ? "Sim, é outro" : undefined}');
+    expect(fonte).toContain("onConfirm={() => { setReceberGate(false); confirmFreePayment(confirmarRepetidoNoEnvio(repetido)); }}");
+    expect(fonte).toContain("...(confirmarRepetido ? { confirmar_repetido: true } : {}),");
+    expect(fonte.match(/setRepetidoServidor\(rep\)/g)).toHaveLength(1);
   });
 
   test("não usa window.confirm/alert", () => {

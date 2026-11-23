@@ -95,6 +95,15 @@ export function novaChaveDeRecebimento(companyId: string, customerId: string, no
 
 export const CODIGO_PAGAMENTO_REPETIDO = "PAGAMENTO_REPETIDO";
 
+/**
+ * Uma pergunta só: se a lojista já respondeu "Sim, é outro" ao aviso de
+ * repetição desta tela (recebimentoRecente acusou), o envio vai com
+ * confirmar_repetido: true e o servidor não pergunta de novo.
+ */
+export function confirmarRepetidoNoEnvio(repetidoLocal: RecebimentoRepetido | null | undefined): boolean {
+  return !!repetidoLocal;
+}
+
 export type PagamentoRepetido = { data_pagamento: string; valor: number };
 
 /** O 409 PAGAMENTO_REPETIDO do backend, ou null para qualquer outro erro. */

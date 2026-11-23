@@ -44,7 +44,7 @@ import { ModalPop } from "@/components/anim";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import {
   recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
-  pagamentoRepetidoDoErro, mensagemPagamentoRepetido, type PagamentoRepetido,
+  pagamentoRepetidoDoErro, mensagemPagamentoRepetido, confirmarRepetidoNoEnvio, type PagamentoRepetido,
 } from "@/utils/crediarioRecebimento";
 import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
@@ -1230,7 +1230,9 @@ export function ClienteCrediarioModal({
                   visible={receberGate}
                   message={gateMessage}
                   confirmLabel={repetido ? "Sim, é outro" : undefined}
-                  onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
+                  // "Sim, é outro" já respondeu à repetição: vai confirmado, sem
+                  // a segunda pergunta do servidor (23/11/2026).
+                  onConfirm={() => { setReceberGate(false); confirmFreePayment(confirmarRepetidoNoEnvio(repetido)); }}
                   onCancel={() => setReceberGate(false)}
                   loading={freeSubmitting}
                 />
