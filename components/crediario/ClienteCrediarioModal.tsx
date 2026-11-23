@@ -932,7 +932,7 @@ export function ClienteCrediarioModal({
   );
   useEffect(() => {
     if (!clienteForaDaLoja) return;
-    toast.info("Esta cliente não tem ficha nesta loja.");
+    toast.info("Este cadastro não tem ficha nesta loja.");
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteForaDaLoja]);
@@ -1104,8 +1104,8 @@ export function ClienteCrediarioModal({
 
   // F4: o "⋯" do alto da ficha — o raro mora aqui (mockup aprovado).
   const itensDaFicha: ItemDoMenu[] = [
-    ...(customerId ? [{ rotulo: "Editar cadastro da cliente", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
-    { rotulo: "Limite e regras desta cliente", onPress: abrirLimite, testID: "ficha-abrir-limite" },
+    ...(customerId ? [{ rotulo: "Editar cadastro", onPress: () => setEditarCliente({ foco: false }), testID: "ficha-menu-editar" }] : []),
+    { rotulo: "Limite e regras desta ficha", onPress: abrirLimite, testID: "ficha-abrir-limite" },
     ...(openInst.length > 0 || realCarnes.length > 0
       ? [{ rotulo: "Imprimir todos os carnês", onPress: () => { fecharAoAbrirPainel(); setPrintScope({ accountId: undefined, label: name, parcelas: openInst.length }); }, testID: "carnes-imprimir-todos" }]
       : []),
@@ -2115,7 +2115,7 @@ export function ClienteCrediarioModal({
             disabled={!nav.onAnterior}
             style={[t.seta, !nav.onAnterior && { opacity: 0.4 }]}
             accessibilityRole="button"
-            accessibilityLabel="Cliente anterior"
+            accessibilityLabel="Ficha anterior"
             testID="ficha-anterior"
           >
             <Text style={t.setaTxt}>‹</Text>
@@ -2128,7 +2128,7 @@ export function ClienteCrediarioModal({
             disabled={!nav.onProxima}
             style={[t.seta, !nav.onProxima && { opacity: 0.4 }]}
             accessibilityRole="button"
-            accessibilityLabel="Próxima cliente"
+            accessibilityLabel="Próxima ficha"
             testID="ficha-proxima"
           >
             <Text style={t.setaTxt}>›</Text>

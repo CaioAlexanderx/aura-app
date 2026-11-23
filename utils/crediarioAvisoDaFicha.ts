@@ -24,7 +24,7 @@ export function avisoDaFicha(e: EntradaDoAviso): AvisoDaFicha {
   if (e.divergencia) {
     return {
       tipo: "divergencia",
-      texto: `As parcelas somam ${e.fmt(e.somaDasParcelas)}, mas a conta dela mostra ${e.fmt(e.saldoDaConta)}. Veja os lançamentos em Movimentações.`,
+      texto: `As parcelas somam ${e.fmt(e.somaDasParcelas)}, mas a conta mostra ${e.fmt(e.saldoDaConta)}. Veja os lançamentos em Movimentações.`,
     };
   }
   if (e.aConferir > 0) {
@@ -36,7 +36,7 @@ export function avisoDaFicha(e: EntradaDoAviso): AvisoDaFicha {
     };
   }
   if (e.costumaAtrasar) {
-    return { tipo: "score", texto: "Esta cliente costuma atrasar. Você pode vender normalmente: é só um aviso." };
+    return { tipo: "score", texto: "Os pagamentos deste cadastro costumam atrasar. Você pode vender normalmente: é só um aviso." };
   }
   return null;
 }

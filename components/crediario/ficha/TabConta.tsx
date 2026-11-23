@@ -106,18 +106,18 @@ export function TabConta({
         </Text>
       </>
     ) : (
-      <Text style={c.texto}>Esta cliente não tem limite definido.</Text>
+      <Text style={c.texto}>Sem limite definido para este cadastro.</Text>
     )}
   </View>
 
   {/* ── Score em frase + a nota (só aqui) ── */}
   {!!profile && (
     <View style={c.bloco} testID="limite-regras-score">
-      <Text style={c.rotulo}>Como ela costuma pagar</Text>
+      <Text style={c.rotulo}>Como costuma pagar</Text>
       <View style={c.caixa}>
         {!!frase && <Text style={c.frase}>{frase}</Text>}
         <Text style={[c.texto, { marginTop: frase ? 4 : 0 }]}>
-          A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.
+          A Aura olha os pagamentos deste cadastro e dá uma nota. A nota só avisa você: nunca impede a venda.
         </Text>
         {profile.credit_score != null && (
           <View style={c.par}>
@@ -131,17 +131,17 @@ export function TabConta({
 
   {/* ── Regras só para esta cliente (Termos) ── */}
   <View style={c.bloco}>
-    <Text style={c.rotulo}>Regras só para esta cliente</Text>
+    <Text style={c.rotulo}>Regras só para este cadastro</Text>
     <View style={c.caixa}>
       {!!ef && (
         <>
           <View style={c.par}>
             <Text style={c.parK}>Máximo de parcelas</Text>
-            <Text style={c.parV}>{`${ef.max_installments} ${ov.max_installments != null ? "(só dela)" : "(regra da loja)"}`}</Text>
+            <Text style={c.parV}>{`${ef.max_installments} ${ov.max_installments != null ? "(só deste cadastro)" : "(regra da loja)"}`}</Text>
           </View>
           <View style={c.par}>
             <Text style={c.parK}>Juros ao mês</Text>
-            <Text style={c.parV}>{`${pct(ef.interest_rate)} ${ov.interest_rate != null ? "(só dela)" : "(regra da loja)"}`}</Text>
+            <Text style={c.parV}>{`${pct(ef.interest_rate)} ${ov.interest_rate != null ? "(só deste cadastro)" : "(regra da loja)"}`}</Text>
           </View>
         </>
       )}
@@ -186,7 +186,7 @@ export function TabConta({
     <View style={c.caixa}>
       <View style={[c.par, { alignItems: "center" }]}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={c.parK}>{isBlocked ? "Bloqueadas para esta cliente" : "Liberadas para esta cliente"}</Text>
+          <Text style={c.parK}>{isBlocked ? "Bloqueadas para este cadastro" : "Liberadas para este cadastro"}</Text>
           {isBlocked && !!profile?.blocked_reason && (
             <Text style={m.blockReason}>Motivo: {profile.blocked_reason}</Text>
           )}
@@ -199,12 +199,12 @@ export function TabConta({
           trackColor={{ false: Colors.red, true: Colors.green }}
           thumbColor="#fff"
           disabled={ajustes.blockPending}
-          accessibilityLabel={isBlocked ? "Vendas a prazo bloqueadas para esta cliente. Toque para liberar" : "Vendas a prazo liberadas para esta cliente. Toque para bloquear"}
+          accessibilityLabel={isBlocked ? "Vendas a prazo bloqueadas para este cadastro. Toque para liberar" : "Vendas a prazo liberadas para este cadastro. Toque para bloquear"}
           testID="limite-regras-vendas-a-prazo"
         />
       </View>
       <Text style={[c.dica, { marginTop: 6 }]}>
-        Ao bloquear, ela não compra mais a prazo até você liberar de novo.
+        Ao bloquear, este cadastro não compra mais a prazo até você liberar de novo.
       </Text>
       {pedindoBloqueio && (
         <View nativeID="limite-regras-motivo" testID="limite-regras-motivo">

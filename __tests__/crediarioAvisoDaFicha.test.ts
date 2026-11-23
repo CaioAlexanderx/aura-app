@@ -16,7 +16,7 @@ describe("avisoDaFicha", () => {
   test("tudo junto: só as contas que não batem", () => {
     const a = avisoDaFicha({ ...base, divergencia: true, somaDasParcelas: 410.66, saldoDaConta: 380, aConferir: 2, costumaAtrasar: true });
     expect(a?.tipo).toBe("divergencia");
-    expect(a?.texto).toBe("As parcelas somam R$ 410,66, mas a conta dela mostra R$ 380,00. Veja os lançamentos em Movimentações.");
+    expect(a?.texto).toBe("As parcelas somam R$ 410,66, mas a conta mostra R$ 380,00. Veja os lançamentos em Movimentações.");
   });
   test("a conferir vem antes do costuma atrasar", () => {
     expect(avisoDaFicha({ ...base, aConferir: 1, costumaAtrasar: true })?.texto)
@@ -26,7 +26,7 @@ describe("avisoDaFicha", () => {
   });
   test("só o score", () => {
     expect(avisoDaFicha({ ...base, costumaAtrasar: true })?.texto)
-      .toBe("Esta cliente costuma atrasar. Você pode vender normalmente: é só um aviso.");
+      .toBe("Os pagamentos deste cadastro costumam atrasar. Você pode vender normalmente: é só um aviso.");
   });
 });
 

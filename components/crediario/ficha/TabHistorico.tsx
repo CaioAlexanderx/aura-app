@@ -305,7 +305,7 @@ export function TabHistorico({
                       method: ev.payment?.method || null,
                       paidAt: diaSP(ev.occurred_at),
                       customerId,
-                      customerName: customerName || "esta cliente",
+                      customerName: customerName || "este cadastro",
                     });
                   }}
                   disabled={isRemoving}

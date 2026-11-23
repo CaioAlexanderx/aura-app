@@ -96,7 +96,7 @@ export function ListaDaFicha({
 
       <ScrollView style={s.lista} contentContainerStyle={{ paddingHorizontal: 6, paddingBottom: 8 }}>
         {clientes.length === 0 && !carregando && (
-          <Text style={s.vazio}>{busca ? "Ninguém com esse nome." : "Nenhuma cliente neste filtro."}</Text>
+          <Text style={s.vazio}>{busca ? "Ninguém com esse nome." : "Ninguém neste filtro."}</Text>
         )}
         {clientes.map((c) => {
           const on = c.id === selecionadaId;

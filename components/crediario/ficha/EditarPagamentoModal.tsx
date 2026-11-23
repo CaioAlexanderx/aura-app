@@ -176,14 +176,14 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
               style={s.input}
               value={busca}
               onChangeText={setBusca}
-              placeholder="Nome, telefone ou CPF da cliente certa"
+              placeholder="Nome, telefone ou CPF de quem pagou"
               placeholderTextColor={CorDaFicha.secundario}
               autoFocus
               testID="editar-pagamento-busca"
             />
             {buscando && <ActivityIndicator size="small" color={Colors.violet3} style={{ marginTop: 8 }} />}
             {!buscando && busca.trim().length >= 2 && achados.length === 0 && (
-              <Text style={s.vazio}>Nenhuma cliente encontrada.</Text>
+              <Text style={s.vazio}>Nenhum cadastro encontrado.</Text>
             )}
             {achados.map((c) => (
               <Pressable
@@ -201,7 +201,7 @@ export function EditarPagamentoModal({ visible, companyId, pagamento, onClose, o
 
         <Text style={s.nota}>
           {mudouCliente
-            ? `O pagamento sai da ficha de ${pagamento.customerName} (as parcelas dela voltam a ficar em aberto) e entra na de ${cliente?.name}, nas parcelas mais antigas.`
+            ? `O pagamento sai da ficha de ${pagamento.customerName} (as parcelas que ele pagou voltam a ficar em aberto) e entra na de ${cliente?.name}, nas parcelas mais antigas.`
             : "Ao salvar, o pagamento é relançado e as parcelas são redistribuídas a partir da mais antiga."}
         </Text>
 

@@ -149,7 +149,7 @@ export function fatoOQueVemAgora(p: {
     return {
       titulo: "Próxima parcela",
       valor: "Sem data marcada",
-      detalhe: "compras sem carnê: receba quando ela pagar",
+      detalhe: "compras sem carnê: receba quando vier o pagamento",
       atrasado: false,
     };
   }

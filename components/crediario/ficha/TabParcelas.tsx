@@ -355,7 +355,7 @@ export function TabParcelas({
     <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
       <Text style={m.cardTitle}>Saldo em aberto sem parcelas</Text>
       <Text style={[m.emptyTxt, { textAlign: "center", marginTop: 6, lineHeight: 18 }]}>
-        Este cliente tem {fmt(openBalance)} em aberto de venda no crediário sem
+        Este cadastro tem {fmt(openBalance)} em aberto de venda no crediário sem
         parcelamento. Registre recebimentos de qualquer valor pelo botão abaixo.
       </Text>
       <View style={{ marginTop: 14, alignSelf: "stretch", flexDirection: "row", gap: 8 }}>

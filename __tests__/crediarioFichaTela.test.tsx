@@ -445,20 +445,20 @@ describe("F4: cabeçalho de três fatos e o ⋯ da ficha", () => {
     expect(porId(tree, "ficha-menu")).toHaveLength(0);
     act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     const menu = texto(tree.toJSON());
-    expect(menu).toContain("Editar cadastro da cliente");
-    expect(menu).toContain("Limite e regras desta cliente");
+    expect(menu).toContain("Editar cadastro");
+    expect(menu).toContain("Limite e regras desta ficha");
     act(() => { porId(tree, "ficha-mais")[0].props.onPress(); });
     act(() => { porId(tree, "ficha-fato-ver-limite")[0].props.onPress(); });
     expect(porId(tree, "ficha-painel-limite")).toHaveLength(1);
     const painel = texto(tree.toJSON());
     expect(painel).toContain("Usou R$ 570,66 de R$ 1.000,00. ");
     expect(painel).toContain("Pode comprar mais R$ 429,34.");
-    expect(painel).toContain("Como ela costuma pagar");
+    expect(painel).toContain("Como costuma pagar");
     expect(painel).toContain("Às vezes atrasa");
-    expect(painel).toContain("A Aura olha os pagamentos dela e dá uma nota. A nota só avisa você: nunca impede a venda.");
+    expect(painel).toContain("A Aura olha os pagamentos deste cadastro e dá uma nota. A nota só avisa você: nunca impede a venda.");
     expect(painel).toContain("640");
     expect(painel).toContain("Deixe em branco para usar a regra da loja.");
-    expect(painel).toContain("Liberadas para esta cliente");
+    expect(painel).toContain("Liberadas para este cadastro");
   });
 
   test("na janela, a lista do ⋯ vai para a área que rola (o cabeçalho fixo cortaria)", () => {
@@ -506,7 +506,7 @@ describe("F5: celular, página inteira", () => {
     expect(tudo).toContain("Maria Aparecida Souza");
     expect(tudo).toContain("Falta pagar");
     expect(texto(porId(tree, "ficha-pagina-falta")[0].props.children)).toBe("R$ 570,66");
-    expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando ela pagar");
+    expect(tudo).toContain("Próxima parcela Sem data marcada · compras sem carnê: receba quando vier o pagamento");
     expect(tudo).toContain("Pode comprar mais R$ 429,34 · às vezes atrasa ·ver");
     expect(porId(tree, "ficha-aba-parcelas")).toHaveLength(1);
     expect(porId(tree, "ficha-aba-historico")).toHaveLength(1);

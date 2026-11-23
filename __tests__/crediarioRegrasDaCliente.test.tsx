@@ -86,7 +86,7 @@ describe("Vendas a prazo (QA P2)", () => {
   test("ligado = liberadas, com rótulo para leitor de tela", () => {
     const sw = montar(false).root.findAllByProps({ testID: "limite-regras-vendas-a-prazo" }, { deep: false } as any)[0];
     expect(sw.props.value).toBe(true);
-    expect(sw.props.accessibilityLabel).toBe("Vendas a prazo liberadas para esta cliente. Toque para bloquear");
+    expect(sw.props.accessibilityLabel).toBe("Vendas a prazo liberadas para este cadastro. Toque para bloquear");
     const bloq = montar(true).root.findAllByProps({ testID: "limite-regras-vendas-a-prazo" }, { deep: false } as any)[0];
     expect(bloq.props.value).toBe(false);
   });

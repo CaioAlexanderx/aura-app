@@ -106,7 +106,7 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
             <Text style={[s.titulo, { fontFamily: Fonts.heading }]}>Editar cliente</Text>
             <Text style={s.txt}>
               {listaCarregada
-                ? "Não achamos o cadastro desta cliente. Ele pode ter sido excluído na tela Clientes."
+                ? "Não achamos este cadastro. Ele pode ter sido excluído na tela Clientes."
                 : "Não consegui abrir o cadastro agora. Tente de novo em instantes."}
             </Text>
             <View style={s.botoes}>
