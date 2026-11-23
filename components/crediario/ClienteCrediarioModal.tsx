@@ -44,6 +44,7 @@ import { ModalPop } from "@/components/anim";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import {
   recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
+  pagamentoRepetidoDoErro, mensagemPagamentoRepetido, confirmarRepetidoNoEnvio, type PagamentoRepetido,
 } from "@/utils/crediarioRecebimento";
 import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
@@ -191,6 +192,10 @@ export function ClienteCrediarioModal({
   // Chave de idempotência do recebimento: uma por pedido, descartada só no
   // sucesso ou quando valor/forma/data mudam. Antes era gerada a cada chamada.
   const freeKeyRef = useRef<string | null>(null);
+  // 23/11/2026 (Looks Da Jenny): o backend achou pagamento igual (mesmo valor,
+  // mesma data de pagamento) e não gravou. A pergunta fica no rodapé até a
+  // lojista decidir; "Lançar mesmo assim" reenvia com confirmar_repetido.
+  const [repetidoServidor, setRepetidoServidor] = useState<PagamentoRepetido | null>(null);
   // Chave de idempotência da renegociação: gerada uma vez por sessão de
   // submissão e SÓ descartada no sucesso (ou ao fechar o painel). É isso que
   // permite o backend deduplicar o retry em vez de cancelar e recriar o carnê
@@ -207,8 +212,9 @@ export function ClienteCrediarioModal({
   // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo)
   // e descarta a chave de idempotência: é outro pedido.
   useEffect(() => { setReceberGate(false); freeKeyRef.current = null; }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
-  useEffect(() => { setUltimoRecebimento(null); freeKeyRef.current = null; }, [visible, customerId]);
-  useEffect(() => { if (!receberOpen) setReceiptResult(null); }, [receberOpen]);
+  useEffect(() => { setRepetidoServidor(null); }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
+  useEffect(() => { setUltimoRecebimento(null); setRepetidoServidor(null); freeKeyRef.current = null; }, [visible, customerId]);
+  useEffect(() => { if (!receberOpen) { setReceiptResult(null); setRepetidoServidor(null); } }, [receberOpen]);
   useEffect(() => { setReceiptResult(null); }, [customerId]);
 
   // ── B2: Pix overlay — compartilhado entre parcela e valor livre ────────
@@ -591,7 +597,7 @@ export function ClienteCrediarioModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [freeDateBr]);
 
-  async function confirmFreePayment() {
+  async function confirmFreePayment(confirmarRepetido = false) {
     const amt = parseAmount(freeAmt);
     if (amt <= 0) { toast.error("Informe um valor maior que zero"); return; }
     const paidAt = parseBrDate(freeDateBr) || undefined;
@@ -604,9 +610,11 @@ export function ClienteCrediarioModal({
         account_id: freeAccountId,
         method: freeMethod,
         paid_at: paidAt,
+        ...(confirmarRepetido ? { confirmar_repetido: true } : {}),
       }, freeKeyRef.current);
       freeKeyRef.current = null;
       setUltimoRecebimento({ amount: amt, method: freeMethod, at: new Date().toISOString() });
+      setRepetidoServidor(null);
       toast.success(
         res.credit_generated > 0
           ? `Recebido! Crédito gerado: ${fmt(res.credit_generated)}`
@@ -629,6 +637,10 @@ export function ClienteCrediarioModal({
       qc.invalidateQueries({ queryKey: ["credit-aging", companyId] });
       onChanged?.();
     } catch (err: any) {
+      // Pagamento igual já gravado: nada entrou; a chave segue a mesma para o
+      // "Lançar mesmo assim" (é o mesmo pedido).
+      const rep = pagamentoRepetidoDoErro(err);
+      if (rep) { setRepetidoServidor(rep); return; }
       console.error("[crediário] confirmFreePayment error:", err);
       // 16/09/2026: a mensagem genérica "Confira os dados" não dizia o que
       // conferir (Davi / Mary Lucy). Cada causa conhecida diz o que fazer.
@@ -1218,11 +1230,22 @@ export function ClienteCrediarioModal({
                   visible={receberGate}
                   message={gateMessage}
                   confirmLabel={repetido ? "Sim, é outro" : undefined}
-                  onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
+                  // "Sim, é outro" já respondeu à repetição: vai confirmado, sem
+                  // a segunda pergunta do servidor (23/11/2026).
+                  onConfirm={() => { setReceberGate(false); confirmFreePayment(confirmarRepetidoNoEnvio(repetido)); }}
                   onCancel={() => setReceberGate(false)}
                   loading={freeSubmitting}
                 />
-                {!receberGate && (
+                <ConfirmGate
+                  visible={!!repetidoServidor}
+                  message={mensagemPagamentoRepetido(repetidoServidor?.data_pagamento ?? "")}
+                  confirmLabel="Lançar mesmo assim"
+                  cancelLabel="Cancelar"
+                  onConfirm={() => confirmFreePayment(true)}
+                  onCancel={() => setRepetidoServidor(null)}
+                  loading={freeSubmitting}
+                />
+                {!receberGate && !repetidoServidor && (
                   <View style={{ flexDirection: "row", gap: 10 }}>
                     <Pressable
                       style={[

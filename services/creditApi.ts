@@ -470,8 +470,8 @@ export type ManualEntryResult = {
 // ─── Recebimento (F3) ───────────────────────────────────────────────────────
 export type PaymentAllocation = { account_id: string | null; amount: number };
 export type ReceivePaymentBody =
-  | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null }
-  | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[] };
+  | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null; confirmar_repetido?: boolean }
+  | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[]; confirmar_repetido?: boolean };
 
 export type ReceivePaymentResult = {
   mode: "global" | "account" | "allocations";
@@ -842,7 +842,8 @@ export const creditApi = {
   },
   receiveFreePayment(
     companyId: string, customerId: string,
-    body: { amount: number; account_id?: string | null; method?: string; paid_at?: string },
+    // confirmar_repetido (23/11/2026): a lojista viu o 409 PAGAMENTO_REPETIDO e confirmou.
+    body: { amount: number; account_id?: string | null; method?: string; paid_at?: string; confirmar_repetido?: boolean },
     idempotencyKey?: string,
   ) {
     // Idempotency-Key: o chamador passa uma chave ESTÁVEL entre as tentativas
