@@ -183,7 +183,8 @@ export function fatoPodeComprarMais(p: {
 
 /** Datas das parcelas pagas para a linha "2 pagas · 01/09 e 05/10". */
 export function datasDasPagas(dias: string[]): string {
-  const ds = dias.filter(Boolean);
+  // QA 23/11 (P2): duas pagas no mesmo dia viravam "23/11 e 23/11".
+  const ds = dias.filter(Boolean).filter((d, i, todos) => todos.indexOf(d) === i);
   if (ds.length === 0) return "";
   if (ds.length === 1) return ds[0];
   if (ds.length <= 3) return `${ds.slice(0, -1).join(", ")} e ${ds[ds.length - 1]}`;
