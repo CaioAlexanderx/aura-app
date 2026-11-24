@@ -7,6 +7,10 @@
 // do Decreto 24.492 proíbe o mesmo óptico em dois estabelecimentos), e as
 // três automações de WhatsApp da ótica.
 //
+// 23/11/2026 (p-207): termos da venda, escritos pela loja e impressos nas
+// duas vias da OS. O campo só aparece quando o servidor devolve a chave
+// sale_terms (utils/oticaTermos.ts); sem ela a tela é a de antes.
+//
 // Chave própria (otica.config, Essencial): qualquer plano com a ótica ligada
 // consegue cadastrar laboratório, como food.config.
 // ============================================================
@@ -23,6 +27,7 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { oticaApi, OTICA_SETTINGS_DEFAULTS, type OpticalLab, type OticaSettings } from "@/services/oticaApi";
 import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
+import { termosAceitos, termosLongos, normalizarTermos, TERMOS_MAX } from "@/utils/oticaTermos";
 
 type LabDraft = { name: string; contact_name: string; phone: string; email: string; portal_url: string; lead_days: string; notes: string };
 const EMPTY_LAB: LabDraft = { name: "", contact_name: "", phone: "", email: "", portal_url: "", lead_days: "7", notes: "" };
@@ -51,12 +56,17 @@ export default function OticaConfigScreen() {
   useEffect(() => { if (sData?.settings) { setForm({ ...OTICA_SETTINGS_DEFAULTS, ...sData.settings }); setDirty(false); } }, [sData]);
 
   const set = (patch: Partial<OticaSettings>) => { setForm((f) => ({ ...f, ...patch })); setDirty(true); };
+  // p-207: o campo dos termos só existe quando o servidor devolve a chave.
+  const comTermos = termosAceitos(sData?.settings);
+  const termosGrandes = comTermos && termosLongos(form.sale_terms);
 
   async function saveSettings() {
     if (!company?.id || saving) return;
+    if (termosGrandes) { toast.error(`Os termos passaram de ${TERMOS_MAX} letras. Encurte o texto para caber na folha.`); return; }
     setSaving(true);
     try {
-      await oticaApi.saveSettings(company.id, form);
+      const { sale_terms, ...resto } = form;
+      await oticaApi.saveSettings(company.id, comTermos ? { ...resto, sale_terms: normalizarTermos(sale_terms) } : resto);
       qc.invalidateQueries({ queryKey: ["otica-settings"] });
       setDirty(false);
       toast.success("Configurações da ótica salvas");
@@ -213,6 +223,32 @@ export default function OticaConfigScreen() {
         <Text style={st.hint}>Por CNPJ: o mesmo óptico não pode responder por dois estabelecimentos (Decreto 24.492, art. 11). Sai na impressão da OS.</Text>
       </View>
 
+      {/* ══ TERMOS DA VENDA (p-207) ══
+          O texto é da loja, por CNPJ (otica_settings de cada empresa). O
+          Aura não escreve termo jurídico: só guarda e imprime nas duas vias. */}
+      {comTermos && (
+      <>
+      <Text style={st.sectionTitle}>Termos da venda</Text>
+      <View style={st.card}>
+        <Text style={st.lbl}>Texto que sai impresso nas duas vias da OS</Text>
+        <TextInput
+          style={[st.input, st.textarea]}
+          value={form.sale_terms || ""}
+          onChangeText={(v) => set({ sale_terms: v })}
+          placeholder="Escreva aqui os termos da sua loja: prazo, encomenda, troca, garantia da adaptação…"
+          placeholderTextColor={Colors.ink3}
+          multiline
+          textAlignVertical="top"
+          testID="otica-cfg-termos"
+        />
+        <Text style={[st.hint, termosGrandes && { color: Colors.red }]} testID="otica-cfg-termos-contador">
+          {normalizarTermos(form.sale_terms).length} de {TERMOS_MAX} letras
+        </Text>
+        <Text style={st.hint}>O Aura não escreve o texto por você: cancelamento, devolução e garantia dependem da sua loja. Se tiver dúvida, valide com seu contador ou advogado. Em branco, a folha sai sem o quadro de termos.</Text>
+      </View>
+      </>
+      )}
+
       {/* ══ WHATSAPP ══
           18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
           os três avisos automáticos só aparecem quando a Meta aprovar. A tela
@@ -289,6 +325,7 @@ const st = StyleSheet.create({
   col: { flex: 1, minWidth: 150 },
   lbl: { fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 7 },
   input: { backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: Colors.ink },
+  textarea: { minHeight: 140, lineHeight: 20 },
 
   labRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, flexWrap: "wrap" },
   labName: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
