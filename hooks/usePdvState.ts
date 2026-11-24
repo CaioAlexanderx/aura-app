@@ -624,6 +624,27 @@ export function usePdvState() {
     },
   });
 
+  // ── p-208 (23/11/2026): OS de ótica SEM sinal vai ao carrinho ──────────
+  // A OS aberta sem sinal não tem venda nenhuma: o Caixa cobra como venda
+  // nova (a primeira e única) e, na tela final, "Entregar e imprimir" vincula
+  // a OS a ela (OsActions). A armação do estoque entra com o product_id e
+  // baixa o estoque agora; lente e montagem entram como item avulso, com
+  // chave sintética (mesmo idioma do orçamento acima). A OS COM sinal nunca
+  // passa por aqui: o saldo dela é recebido na faixa, sem venda nova.
+  function lancarOsNoCarrinho(osId: string, itens: { description: string; product_id?: string | null; quantity: number | string; unit_price: number | string }[]) {
+    itens.forEach((it, idx) => {
+      const key = it.product_id || ("os-" + osId + "-" + idx);
+      const doCatalogo = it.product_id ? products.find(p => p.id === it.product_id) : undefined;
+      addToCart({
+        id: key, name: it.description, price: Number(it.unit_price) || 0,
+        cardPrice: doCatalogo?.cardPrice ?? null,
+        refPrice: doCatalogo ? doCatalogo.price : undefined,
+        notaFiscal: doCatalogo?.notaFiscal ?? null,
+      });
+      setQty(key, Number(it.quantity) || 1);
+    });
+  }
+
   // ── Viewport ──────────────────────────────────────────────────────────────
   const vp         = useViewport();
   const wide        = vp.wide;
@@ -1545,6 +1566,8 @@ export function usePdvState() {
     // Matcon M3 — chip "Indicado por" do Caixa (IndicadoPorChip)
     referral: matconReferral,
     selectedCustomerId, selectedCustomerName, selectCustomer,
+    // p-208: a OS de ótica sem sinal vira venda no carrinho.
+    lancarOsNoCarrinho,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     couponApplied, setCouponApplied, clearCoupon, setCouponCode,

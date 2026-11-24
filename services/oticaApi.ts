@@ -286,6 +286,10 @@ export type OpticalDetails = {
   lens: { type: "pronta" | "surfacada"; brand: string; design: string; material: string; treatments: string[]; notes?: string };
   use: LensUse;
   adaptation_warranty_days: number;
+  /** p-205 (23/11/2026): par ou uma lente só. Ausente nas OS antigas. */
+  quantity?: "par" | "unidade";
+  /** p-205: o que o laboratório faz. Ausente nas OS antigas. */
+  service_type?: "lente" | "montagem" | "lente_montagem";
 };
 
 /** A OS de ótica é a OS comum com kind='otica' e os campos de laboratório. */

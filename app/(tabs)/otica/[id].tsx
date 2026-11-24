@@ -135,10 +135,15 @@ export default function OticaOsDetailScreen() {
     }
   }
 
-  function handlePrint() {
+  // p-206 (23/11/2026): a folha A4 da ótica sai em 2 vias iguais
+  // (laboratório e cliente). O menu oferece também 1 via e o PDF para o
+  // laboratório. PDF e papel são os canais da receita — nunca WhatsApp.
+  const [menuImpressao, setMenuImpressao] = useState(false);
+  function handlePrint(via?: "cliente" | "laboratorio") {
     if (!company?.id || !os) return;
+    setMenuImpressao(false);
     if (Platform.OS !== "web") { toast.info("Impressão disponível apenas na versão web"); return; }
-    printOs(company.id, os.id);
+    printOs(company.id, os.id, via ? { via } : undefined);
   }
 
   async function handleNotify() {
@@ -234,9 +239,9 @@ export default function OticaOsDetailScreen() {
           </Text>
         </View>
         <View style={st.headActions}>
-          <Pressable onPress={handlePrint} style={st.ghostBtn} testID="otica-imprimir">
+          <Pressable onPress={() => setMenuImpressao((v) => !v)} style={st.ghostBtn} testID="otica-imprimir" accessibilityState={{ expanded: menuImpressao }}>
             <Icon name="receipt" size={14} color={Colors.ink} />
-            <Text style={st.ghostBtnText}>Imprimir A4</Text>
+            <Text style={st.ghostBtnText}>Imprimir OS · 2 vias</Text>
           </Pressable>
           {!!os.tracker_token && (
             <Pressable onPress={copyTrack} style={st.ghostBtn} testID="otica-link">
@@ -246,6 +251,24 @@ export default function OticaOsDetailScreen() {
           )}
         </View>
       </View>
+
+      {menuImpressao && (
+        <View style={st.menuImpressao} testID="otica-menu-impressao">
+          <Pressable onPress={() => handlePrint()} style={st.menuItem} testID="otica-imprimir-2-vias">
+            <Text style={st.menuItemT}>Imprimir 2 vias iguais</Text>
+            <Text style={st.menuItemS}>laboratório + cliente</Text>
+          </Pressable>
+          <Pressable onPress={() => handlePrint("cliente")} style={st.menuItem} testID="otica-imprimir-1-via">
+            <Text style={st.menuItemT}>Imprimir só 1 via</Text>
+            <Text style={st.menuItemS}>uma folha</Text>
+          </Pressable>
+          <Pressable onPress={() => handlePrint("laboratorio")} style={st.menuItem} testID="otica-imprimir-pdf">
+            <Text style={st.menuItemT}>Salvar em PDF</Text>
+            <Text style={st.menuItemS}>para enviar ao laboratório: no diálogo de impressão, escolha "Salvar como PDF"</Text>
+          </Pressable>
+          <Text style={st.hint}>PDF e papel são os canais para a receita. Ela nunca vai no corpo de uma mensagem de WhatsApp.</Text>
+        </View>
+      )}
 
       {!enabled && !fechada && (
         <View style={st.warn}><Text style={st.warnText}>Módulo Ótica desligado: a OS fica só para leitura. Ligue em Configurações › Vendas para mudar de etapa.</Text></View>
@@ -350,20 +373,26 @@ export default function OticaOsDetailScreen() {
           <>
             {os.deposit_paid != null && Number(os.deposit_paid) > 0 ? (
               <>
-                <Row k={`Sinal recebido · venda #${String(os.deposit_sale_id).slice(0, 8).toUpperCase()}`} v={fmt(os.deposit_paid)} />
-                <Row k="Saldo na entrega" v={fmt(Math.max(0, deposit - Number(os.deposit_paid)))} />
+                {/* p-208: o saldo recebido no Caixa entra nesta MESMA venda (sem venda nova),
+                    então o "recebido" soma sinal e saldo. */}
+                <Row k={`Recebido · venda #${String(os.deposit_sale_id).slice(0, 8).toUpperCase()}`} v={fmt(os.deposit_paid)} />
+                <Row k="Saldo em aberto" v={fmt(Math.max(0, deposit - Number(os.deposit_paid)))} />
               </>
             ) : (
               <Row k="Venda com sinal" v={`#${String(os.deposit_sale_id).slice(0, 8).toUpperCase()} · ${fmt(deposit)}`} />
             )}
-            <Text style={st.hint}>O sinal entrou no caixa na abertura; o saldo virou parcela no crediário com vencimento na data prometida e aparece no link de acompanhamento com Pix.</Text>
+            <Text style={st.hint}>O sinal entrou no caixa na abertura; o saldo virou parcela no crediário com vencimento na data prometida e aparece no link de acompanhamento com Pix. No Caixa, escolha o cliente: em "Óculos deste cliente" o saldo é recebido sem venda nova.</Text>
           </>
         ) : fechada ? (
-          <Text style={st.hint}>OS aberta sem sinal: não há venda vinculada a ela.</Text>
+          <Text style={st.hint}>
+            {os.sale_id
+              ? `OS aberta sem sinal, paga na entrega · venda #${String(os.sale_id).slice(0, 8).toUpperCase()}.`
+              : "OS aberta sem sinal: não há venda vinculada a ela."}
+          </Text>
         ) : (
           <View style={[st.warn, { marginTop: 10, marginBottom: 0 }]} testID="otica-sem-venda-aviso">
             <Text style={st.warnText}>
-              Esta OS foi aberta sem sinal: ainda não há venda. Entregar aqui só fecha a OS — o valor não entra no caixa{optical?.frame?.source === "estoque" ? " e a armação continua no estoque" : ""}. Registre a venda no Caixa quando o cliente pagar.
+              Esta OS foi aberta sem sinal: ainda não há venda. Entregar aqui só fecha a OS — o valor não entra no caixa{optical?.frame?.source === "estoque" ? " e a armação continua no estoque" : ""}. Quando o cliente vier buscar, cobre no Caixa: escolha o cliente, lance os óculos no carrinho e, na tela final, entregue vinculando a venda.
             </Text>
             <Pressable onPress={() => router.push("/pdv" as any)} style={[st.ghostBtn, { alignSelf: "flex-start", marginTop: 8 }]} testID="otica-ir-ao-caixa">
               <Icon name="cart" size={14} color={Colors.ink} />
@@ -462,6 +491,10 @@ const st = StyleSheet.create({
   pageTitle: { fontFamily: Fonts.heading, fontSize: 30, lineHeight: 34, color: Colors.ink, letterSpacing: -0.5 },
   pageSubtitle: { fontSize: 13, color: Colors.ink3, lineHeight: 19, marginTop: 6 },
   headActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  menuImpressao: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, padding: 6, marginBottom: 14, gap: 2 },
+  menuItem: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
+  menuItemT: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  menuItemS: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
   ghostBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   ghostBtnText: { fontSize: 12, color: Colors.ink, fontWeight: "700" },
   primaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderWidth: 1, borderColor: Colors.violet, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, alignSelf: "flex-start" },
