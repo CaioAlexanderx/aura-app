@@ -200,6 +200,10 @@ function AuthGuard() {
     // /acompanhar/[token]. Link vai na mensagem da venda — o cliente final
     // não tem conta, então exigir login mataria a função.
     const onPublicTrack = segments[0] === "acompanhar";
+    // p-210 (23/11/2026): cadastro do cliente por link em /cadastro/[token].
+    // Quem abre é o cliente da loja, sem conta; o token de uso único é a
+    // credencial (app/cadastro/[token].tsx).
+    const onPublicCadastro = segments[0] === "cadastro";
     // Hub P2.1 (23/08/2026): mesa PÚBLICA do mesário em /mesa?t=<token>.
     // O mesário do campeonato NÃO tem conta Aura — o acesso é o token
     // opaco da convocação (aura-backend PR #579). Sem este pass-through
@@ -235,7 +239,7 @@ function AuthGuard() {
       segments[1] === "roster-self" ||
       segments[1] === "pix"          // página pública de pagamento PIX (Fase F4/PIX)
     );
-    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onVitrinePublica || onPublicApproval || onPublicOrcamento || onPublicTrack || onPublicMesa || onKaratePublic) return;
+    if (onInvite || onPublicDental || onPublicReport || onPublicQrTable || onPublicCardapio || onVitrinePublica || onPublicApproval || onPublicOrcamento || onPublicTrack || onPublicCadastro || onPublicMesa || onKaratePublic) return;
 
     const onDentalClinic = segments[0] === "dental";
     const onFoodSalao    = segments[0] === "food";
