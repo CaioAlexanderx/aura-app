@@ -607,7 +607,9 @@ export default function EstoqueScreen() {
     [availableCompanies, company?.id, products],
   );
   const [lojaEstoque, setLojaEstoque] = useFiltroDeLoja("estoque", company?.id, ctxLojas);
-  const nomeDaLojaDe = ctxLojas ? (p: Product) => nomeDaLojaDona(ctxLojas, lojaDonaDoProduto(p)) : undefined;
+  // 24/11/2026: nome local diferente do nomeDaLojaDe de utils/nomeDaLoja (o main
+  // usa os dois na mesma tela; com o mesmo nome a tela quebrava ao abrir).
+  const seloDaLojaDe = ctxLojas ? (p: Product) => nomeDaLojaDona(ctxLojas, lojaDonaDoProduto(p)) : undefined;
 
   const filtered = useMemo(() => {
     const q = (search || "").trim();
@@ -1326,7 +1328,7 @@ export default function EstoqueScreen() {
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
-                    nomeDaLojaDe={nomeDaLojaDe}
+                    nomeDaLojaDe={seloDaLojaDe}
                   />
                 ) : (
                   <ProductGridWeb
@@ -1339,7 +1341,7 @@ export default function EstoqueScreen() {
                     onSelect={toggleBulkSelect}
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
-                    nomeDaLojaDe={nomeDaLojaDe}
+                    nomeDaLojaDe={seloDaLojaDe}
                   />
                 )}
               </View>
@@ -1359,7 +1361,7 @@ export default function EstoqueScreen() {
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
-                    nomeDaLoja={nomeDaLojaDe ? nomeDaLojaDe(p) : null}
+                    nomeDaLoja={seloDaLojaDe ? seloDaLojaDe(p) : null}
                   />
                 ))}
                 {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
