@@ -2,10 +2,11 @@
 // Janela de congelamento — a conta de datas (13/10/2026).
 //
 // O que aqui segura:
-//   1. as duas janelas do plano: 24/11/2026 a 01/12/2026 e 20/12/2026 a
-//      02/01/2027, bordas INCLUSIVAS, no horário de Brasília;
+//   1. a janela do plano: 20/12/2026 a 02/01/2027, bordas INCLUSIVAS, no
+//      horário de Brasília. A da Black Friday (24/11 a 01/12/2026) foi
+//      encerrada pelo Caio em 24/11/2026 e não congela mais nada;
 //   2. a virada do dia é a de Brasília, não a da máquina nem a do UTC: às
-//      23h59 de 01/12 em Brasília ainda é janela (já é 02/12 em UTC);
+//      23h59 de 02/01 em Brasília ainda é janela (já é 03/01 em UTC);
 //   3. proximaJanela devolve a vigente, senão a próxima, senão null;
 //   4. a linha para a equipe diz "até dd/mm (temporada)".
 // ============================================================
@@ -20,29 +21,21 @@ import {
 const d = (iso: string) => new Date(iso);
 
 describe("as janelas do plano", () => {
-  test("são as duas combinadas, em ordem", () => {
+  test("só a de fim de ano (a da Black Friday foi encerrada em 24/11/2026)", () => {
     expect(JANELAS_DE_CONGELAMENTO.map((j) => [j.inicio, j.fim])).toEqual([
-      ["2026-11-24", "2026-12-01"],
       ["2026-12-20", "2027-01-02"],
     ]);
   });
 });
 
-describe("emCongelamento: bordas da Black Friday", () => {
-  test("23/11 às 23h59 (Brasília) ainda não", () => {
-    expect(emCongelamento(d("2026-11-23T23:59:59-03:00"))).toBe(false);
+describe("emCongelamento: a Black Friday não congela mais", () => {
+  test("25/11/2026 e 01/12/2026 ficam FORA de congelamento", () => {
+    expect(emCongelamento(d("2026-11-25T12:00:00-03:00"))).toBe(false);
+    expect(emCongelamento(d("2026-12-01T12:00:00-03:00"))).toBe(false);
   });
-  test("24/11 às 00h00 já é janela (borda inclusiva)", () => {
-    expect(emCongelamento(d("2026-11-24T00:00:00-03:00"))).toBe(true);
-  });
-  test("01/12 às 23h59 ainda é janela (borda inclusiva)", () => {
-    expect(emCongelamento(d("2026-12-01T23:59:59-03:00"))).toBe(true);
-  });
-  test("02/12 às 00h00 já saiu", () => {
-    expect(emCongelamento(d("2026-12-02T00:00:00-03:00"))).toBe(false);
-  });
-  test("no meio da janela", () => {
-    expect(emCongelamento(d("2026-11-27T10:00:00-03:00"))).toBe(true);
+  test("nem as antigas bordas, 24/11 00h00 e 01/12 23h59", () => {
+    expect(emCongelamento(d("2026-11-24T00:00:00-03:00"))).toBe(false);
+    expect(emCongelamento(d("2026-12-01T23:59:59-03:00"))).toBe(false);
   });
 });
 
@@ -67,15 +60,15 @@ describe("emCongelamento: bordas do fim de ano", () => {
 
 describe("emCongelamento: o dia é o de Brasília, em qualquer fuso", () => {
   test("instantes em UTC: a borda é 03:00Z", () => {
-    expect(emCongelamento(d("2026-11-24T02:59:59Z"))).toBe(false); // 23/11 23h59 em Brasília
-    expect(emCongelamento(d("2026-11-24T03:00:00Z"))).toBe(true); //  24/11 00h00 em Brasília
-    expect(emCongelamento(d("2026-12-02T02:59:59Z"))).toBe(true); //  01/12 23h59 em Brasília
-    expect(emCongelamento(d("2026-12-02T03:00:00Z"))).toBe(false); // 02/12 00h00 em Brasília
+    expect(emCongelamento(d("2026-12-20T02:59:59Z"))).toBe(false); // 19/12 23h59 em Brasília
+    expect(emCongelamento(d("2026-12-20T03:00:00Z"))).toBe(true); //  20/12 00h00 em Brasília
+    expect(emCongelamento(d("2027-01-03T02:59:59Z"))).toBe(true); //  02/01 23h59 em Brasília
+    expect(emCongelamento(d("2027-01-03T03:00:00Z"))).toBe(false); // 03/01 00h00 em Brasília
   });
 
   test("diaDeBrasilia", () => {
-    expect(diaDeBrasilia(d("2026-12-02T01:00:00Z"))).toBe("2026-12-01");
-    expect(diaDeBrasilia(d("2026-12-02T03:00:00Z"))).toBe("2026-12-02");
+    expect(diaDeBrasilia(d("2027-01-03T01:00:00Z"))).toBe("2027-01-02");
+    expect(diaDeBrasilia(d("2027-01-03T03:00:00Z"))).toBe("2027-01-03");
     expect(diaDeBrasilia(new Date("lixo"))).toBeNull();
   });
 
@@ -91,13 +84,14 @@ describe("emCongelamento: o dia é o de Brasília, em qualquer fuso", () => {
 });
 
 describe("proximaJanela", () => {
-  test("antes de tudo: a Black Friday", () => {
-    expect(proximaJanela(d("2026-10-13T12:00:00-03:00"))?.inicio).toBe("2026-11-24");
+  test("antes de tudo: a de fim de ano", () => {
+    expect(proximaJanela(d("2026-10-13T12:00:00-03:00"))?.inicio).toBe("2026-12-20");
   });
   test("dentro de uma janela: ela mesma", () => {
-    expect(proximaJanela(d("2026-11-25T12:00:00-03:00"))?.fim).toBe("2026-12-01");
+    expect(proximaJanela(d("2026-12-25T12:00:00-03:00"))?.fim).toBe("2027-01-02");
   });
-  test("entre as duas: a de fim de ano", () => {
+  test("na antiga Black Friday e logo depois: a de fim de ano", () => {
+    expect(proximaJanela(d("2026-11-25T12:00:00-03:00"))?.inicio).toBe("2026-12-20");
     expect(proximaJanela(d("2026-12-10T12:00:00-03:00"))?.inicio).toBe("2026-12-20");
   });
   test("no último dia da última: ainda ela; no dia seguinte: null", () => {
@@ -111,14 +105,12 @@ describe("proximaJanela", () => {
 
 describe("avisoDeAtualizacoesPausadas: a linha da equipe", () => {
   test("dentro da janela, com o fim dela", () => {
-    expect(avisoDeAtualizacoesPausadas(d("2026-11-25T12:00:00-03:00"))).toBe(
-      "Atualizações pausadas até 01/12 (temporada)",
-    );
     expect(avisoDeAtualizacoesPausadas(d("2026-12-25T12:00:00-03:00"))).toBe(
       "Atualizações pausadas até 02/01 (temporada)",
     );
   });
-  test("fora da janela, nada", () => {
+  test("fora da janela, nada (inclusive na antiga Black Friday)", () => {
     expect(avisoDeAtualizacoesPausadas(d("2026-10-13T12:00:00-03:00"))).toBeNull();
+    expect(avisoDeAtualizacoesPausadas(d("2026-11-25T12:00:00-03:00"))).toBeNull();
   });
 });

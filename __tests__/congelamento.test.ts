@@ -22,7 +22,7 @@ const cong = require("../scripts/congelamento.js");
 
 const RAIZ = path.join(__dirname, "..");
 const SCRIPT = path.join(RAIZ, "scripts", "congelamento.js");
-const DENTRO = new Date("2026-11-25T12:00:00-03:00");
+const DENTRO = new Date("2026-12-25T12:00:00-03:00");
 const FORA = new Date("2026-10-13T12:00:00-03:00");
 
 function guardarComProcesso(mensagem: string, agora: string) {
@@ -55,31 +55,44 @@ describe("decidirGuarda", () => {
   test("dentro da janela sem hotfix: REPROVA e explica", () => {
     const r = cong.decidirGuarda({ agora: DENTRO, mensagem: "feat: coisa nova" });
     expect(r.ok).toBe(false);
-    expect(r.motivo).toMatch(/2026-11-24 a 2026-12-01/);
+    expect(r.motivo).toMatch(/2026-12-20 a 2027-01-02/);
     expect(r.motivo).toMatch(/\[hotfix\]/);
     expect(r.motivo).toMatch(/CONGELAMENTO\.md/);
   });
   test("dentro da janela com hotfix: passa", () => {
     expect(cong.decidirGuarda({ agora: DENTRO, mensagem: "fix: [hotfix] caixa fora do ar" }).ok).toBe(true);
   });
-  test("bordas: 01/12 23h59 reprova, 02/12 00h00 passa", () => {
+  test("bordas: 19/12 23h59 passa, 20/12 00h00 reprova", () => {
     const m = "feat: x";
-    expect(cong.decidirGuarda({ agora: new Date("2026-12-01T23:59:59-03:00"), mensagem: m }).ok).toBe(false);
-    expect(cong.decidirGuarda({ agora: new Date("2026-12-02T00:00:00-03:00"), mensagem: m }).ok).toBe(true);
+    expect(cong.decidirGuarda({ agora: new Date("2026-12-19T23:59:59-03:00"), mensagem: m }).ok).toBe(true);
+    expect(cong.decidirGuarda({ agora: new Date("2026-12-20T00:00:00-03:00"), mensagem: m }).ok).toBe(false);
+  });
+  test("bordas: 02/01 23h59 reprova, 03/01 00h00 passa", () => {
+    const m = "feat: x";
+    expect(cong.decidirGuarda({ agora: new Date("2027-01-02T23:59:59-03:00"), mensagem: m }).ok).toBe(false);
+    expect(cong.decidirGuarda({ agora: new Date("2027-01-03T00:00:00-03:00"), mensagem: m }).ok).toBe(true);
+  });
+  test("a Black Friday não congela mais: 25/11 e 01/12/2026 passam sem hotfix", () => {
+    const m = "feat: x";
+    expect(cong.decidirGuarda({ agora: new Date("2026-11-25T12:00:00-03:00"), mensagem: m }).ok).toBe(true);
+    expect(cong.decidirGuarda({ agora: new Date("2026-12-01T12:00:00-03:00"), mensagem: m }).ok).toBe(true);
   });
 });
 
 describe("o processo (o que o GitHub Actions enxerga)", () => {
   test("dentro da janela sem hotfix: sai com 1 e escreve ::error::", () => {
-    const r = guardarComProcesso("feat: coisa nova", "2026-11-25T12:00:00-03:00");
+    const r = guardarComProcesso("feat: coisa nova", "2026-12-25T12:00:00-03:00");
     expect(r.codigo).toBe(1);
     expect(r.saida).toMatch(/^::error::/m);
   });
   test("dentro da janela com hotfix: sai com 0", () => {
-    expect(guardarComProcesso("fix: [hotfix] urgente", "2026-11-25T12:00:00-03:00").codigo).toBe(0);
+    expect(guardarComProcesso("fix: [hotfix] urgente", "2026-12-25T12:00:00-03:00").codigo).toBe(0);
   });
   test("fora da janela: sai com 0", () => {
     expect(guardarComProcesso("feat: coisa nova", "2026-10-13T12:00:00-03:00").codigo).toBe(0);
+  });
+  test("na antiga Black Friday (25/11/2026), sem hotfix: sai com 0", () => {
+    expect(guardarComProcesso("feat: coisa nova", "2026-11-25T12:00:00-03:00").codigo).toBe(0);
   });
 });
 
@@ -172,7 +185,7 @@ describe("a fiação", () => {
     expect(cfg).toMatch(/"command": "npx expo export -p web && node scripts\/congelamento\.js gerar-versao"/);
   });
 
-  test("a doc cita as duas janelas do JSON", () => {
+  test("a doc cita a janela do JSON e o histórico da Black Friday", () => {
     const doc = fs.readFileSync(path.join(RAIZ, "docs", "CONGELAMENTO.md"), "utf8");
     expect(doc).toMatch(/24\/11\/2026/);
     expect(doc).toMatch(/01\/12\/2026/);
