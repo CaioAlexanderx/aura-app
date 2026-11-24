@@ -101,7 +101,20 @@ function SessaoCard({ sessao }: { sessao: CaixaSessaoHistorico }) {
 
           <View style={sc.divider} />
 
-          {/* Conferência de dinheiro */}
+          {/* Conferência de dinheiro. 20/11/2026: reforço e retirada entram
+              no esperado, com os mesmos rótulos do PDF do fechamento. */}
+          {Number(sessao.total_suprimentos) > 0 && (
+            <View style={sc.metaRow}>
+              <Text style={sc.metaLabel}>Reforços de troco</Text>
+              <Text style={sc.metaValue}>{"+ " + fmt(sessao.total_suprimentos)}</Text>
+            </View>
+          )}
+          {Number(sessao.total_sangrias) > 0 && (
+            <View style={sc.metaRow}>
+              <Text style={sc.metaLabel}>Retiradas (sangrias)</Text>
+              <Text style={sc.metaValue}>{"- " + fmt(sessao.total_sangrias)}</Text>
+            </View>
+          )}
           <View style={sc.metaRow}>
             <Text style={sc.metaLabel}>Esperado em dinheiro</Text>
             <Text style={sc.metaValue}>{fmt(sessao.dinheiro_esperado)}</Text>

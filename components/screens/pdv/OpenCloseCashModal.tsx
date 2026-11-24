@@ -42,6 +42,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 import { openCashClosePdf, type CashClosePaymentRow } from "@/utils/cashClosePdf";
+import { formasDoFechamento } from "@/utils/formasDoFechamento";
+import { VendasPorForma } from "./VendasPorForma";
 import { esperadoNaGaveta, podeRetirar, rotuloDoMovimento, type TipoDeMovimento } from "@/utils/caixaMovimentos";
 import {
   contaDoFechamento, linhasDaDiferenca, nomeComQuantidade, resumoDasTrocas, temTrocas,
@@ -137,6 +139,15 @@ export function OpenCloseCashModal({
   useEffect(() => {
     if (sessaoAtiva) setSessaoSnapshot(sessaoAtiva);
   }, [sessaoAtiva]);
+
+  // 23/11/2026: o status do caixa (useCaixa) pode ter até 60 s. Ao abrir o
+  // fechamento, busca de novo para a prévia das formas e a gaveta trazerem
+  // a venda que acabou de sair.
+  const temSessaoAoAbrir = !!sessaoAtiva;
+  useEffect(() => {
+    if (visible && temSessaoAoAbrir) qc.invalidateQueries({ queryKey: ["caixa-status"] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   // 14/11/2026 (pedido do Caio): quem abre o caixa escolhe o responsável
   // entre "Você" e as pessoas cadastradas (inclusive a vendedora criada no
@@ -287,14 +298,8 @@ export function OpenCloseCashModal({
     if (!closeResult) return;
     const operatorName = sessaoEff?.opened_by?.name || "Operador";
     const openedAtIso = sessaoEff?.opened_at || closeResult.closed_at || new Date().toISOString();
-    const paymentMix: CashClosePaymentRow[] = [
-      { label: "Pix", amount: toNum(closeResult.total_pix) },
-      { label: "Crédito", amount: toNum(closeResult.total_cartao_credito) },
-      { label: "Débito", amount: toNum(closeResult.total_cartao_debito) },
-      { label: "Dinheiro", amount: toNum(closeResult.total_dinheiro) },
-      { label: "Fiado", amount: toNum(closeResult.total_fiado) },
-      { label: "Outros", amount: toNum(closeResult.total_outros) },
-    ].filter((p) => p.amount > 0);
+    // 23/11/2026: a mesma lista que a prévia mostra (utils/formasDoFechamento.ts).
+    const paymentMix: CashClosePaymentRow[] = formasDoFechamento(closeResult);
 
     openCashClosePdf({
       companyName, companyCnpj: companyCnpj || null,
@@ -560,6 +565,11 @@ export function OpenCloseCashModal({
             </Text>
           </View>
         )}
+        {/* 23/11/2026: as outras formas do período, depois da contagem para
+            não empurrar o campo do valor para baixo em tela pequena. */}
+        <View style={{ marginTop: 12 }}>
+          <VendasPorForma totais={sessaoEff.totais_ao_vivo} />
+        </View>
       </>
     );
     footerNode = (
@@ -639,6 +649,9 @@ export function OpenCloseCashModal({
           <Text style={[s.netVal, { color: diferenca === 0 ? Colors.green : diferenca > 0 ? "#a78bfa" : Colors.red }]}>
             {diferenca === 0 ? "Exato" : (diferenca > 0 ? "+ " : "- ") + fmt(Math.abs(diferenca))}
           </Text>
+        </View>
+        <View style={{ marginTop: 12 }}>
+          <VendasPorForma totais={sessaoEff.totais_ao_vivo} testID="caixa-formas-revisar" />
         </View>
       </>
     );
@@ -829,7 +842,7 @@ function TrocasDoFechamento({ vendas, entradas, trocas, resumo }: {
         </View>
       </View>
       <Text style={s.helpTxt}>
-        A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não é falta no caixa.
+        A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário e venda com data anterior paga nesta sessão também fazem os dois números diferirem — isso não é falta no caixa.
       </Text>
 
       <Text style={[s.sectionTitle, { marginTop: 12 }]} testID="fechamento-trocas">

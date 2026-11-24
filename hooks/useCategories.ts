@@ -149,6 +149,11 @@ export function useCategories() {
     isCreating: createMutation.isPending,
     assignProductCategories: (productId: string, body: AssignProductCategoriesBody) =>
       assignMutation.mutate({ productId, body }),
+    // 20/11/2026 (em qual loja o produto entra, A1): a cópia para a outra
+    // loja leva a categoria da origem, então precisa esperar o vínculo.
+    // Mesmos toasts do mutate; lança em erro (quem chama decide).
+    assignProductCategoriesAsync: (productId: string, body: AssignProductCategoriesBody) =>
+      assignMutation.mutateAsync({ productId, body }),
     isAssigning: assignMutation.isPending,
   };
 }

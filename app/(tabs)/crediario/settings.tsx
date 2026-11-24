@@ -10,6 +10,8 @@ import { toast } from "@/components/Toast";
 import { waApi, WA_CREDIARIO_TEMPLATES, type WaStatus } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal";
+import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { MensagensDeCobranca } from "@/components/crediario/mensagens/MensagensDeCobranca";
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
@@ -54,6 +56,12 @@ import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal
 //   - O toggle salva sozinho (PUT collection/rules) e não depende do
 //     botão "Salvar configurações": ligar ou desligar envio pago não
 //     pode ficar pendurado num rascunho.
+// Modelos de mensagem (21/11/2026): os 5 campos de texto da régua saem da
+//   tela (nenhum caminho usava o texto; o automático manda o template da
+//   Meta). No lugar, "Mensagens de cobrança": os modelos do Cobrar, por
+//   loja (components/crediario/mensagens/MensagensDeCobranca). A régua fica
+//   com dias e liga/desliga. O `template` de cada etapa continua no estado
+//   e volta igual no PUT: nada do que está gravado é apagado.
 // ============================================================
 
 type Rule = { id: string; name: string; days_relative: number; template: string; channel: string; enabled: boolean };
@@ -352,6 +360,12 @@ export default function CrediarioSettingsScreen() {
     },
   });
   const waTravado = !waAuto && (waLoading || waBlockers.length > 0);
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // até a Meta aprovar, o bloco do envio automático só aparece para a loja
+  // que já tem o número conectado. Escondido, a régua fala do wa.me, que é
+  // o que de fato sai. O whatsapp_auto gravado não muda (o PUT ecoa waAuto).
+  const waOficial = whatsappOficialVisivel(waStatus);
+  const waAutoNaTela = waOficial && waAuto;
 
   /**
    * Salva SÓ o interruptor: manda de volta a régua persistida (não o
@@ -617,6 +631,7 @@ export default function CrediarioSettingsScreen() {
             </View>
 
             {/* ── Fase 6: envio automático pelo WhatsApp oficial ── */}
+            {waOficial && (
             <View style={st.waBox} testID="crediario-wa-bloco">
               <View style={st.waHead}>
                 <View style={{ flex: 1 }}>
@@ -675,12 +690,15 @@ export default function CrediarioSettingsScreen() {
 
               {!!waErr && <Text style={st.waErr} testID="crediario-wa-erro">{waErr}</Text>}
             </View>
+            )}
+
+            <MensagensDeCobranca companyId={company?.id} />
 
             <Text style={[st.lbl, { marginTop: 18 }]}>Régua de cobrança</Text>
             <Text style={st.reguaSub}>
-              Mensagens por etapa. {waAuto
-                ? "As etapas de WhatsApp saem sozinhas pelo número oficial da loja; o texto enviado é o template aprovado pela Meta, não o rascunho abaixo."
-                : "Hoje o envio é manual pelo WhatsApp (wa.me) ao tocar em \"Cobrar\"."} Variáveis: {"{"}nome{"}"}, {"{"}valor{"}"}, {"{"}vencimento{"}"}, {"{"}pix{"}"}, {"{"}dias{"}"}.
+              {waAutoNaTela
+                ? "Etapas e dias da cobrança automática. As etapas de WhatsApp saem sozinhas pelo número oficial da loja, com o template aprovado pela Meta."
+                : "Etapas e dias da cobrança. Hoje o envio é manual pelo WhatsApp, ao tocar em \"Cobrar\", com as mensagens acima."}
             </Text>
 
             {rules.map((r, i) => (
@@ -690,9 +708,9 @@ export default function CrediarioSettingsScreen() {
                     <View style={st.stageNameRow}>
                       <Text style={st.stageName}>{r.name}</Text>
                       {r.channel === "whatsapp" && (
-                        <View style={[st.canalChip, waAuto && st.canalChipAuto]} testID={`crediario-canal-${r.id}`}>
-                          <Text style={[st.canalChipTxt, waAuto && st.canalChipTxtAuto]}>
-                            {waAuto ? "automático" : "manual (wa.me)"}
+                        <View style={[st.canalChip, waAutoNaTela && st.canalChipAuto]} testID={`crediario-canal-${r.id}`}>
+                          <Text style={[st.canalChipTxt, waAutoNaTela && st.canalChipTxtAuto]}>
+                            {waAutoNaTela ? "automático" : "manual (wa.me)"}
                           </Text>
                         </View>
                       )}
@@ -707,9 +725,6 @@ export default function CrediarioSettingsScreen() {
                   <Switch value={r.enabled} onValueChange={(v) => updateRule(i, { enabled: v })}
                     trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff" />
                 </View>
-                <TextInput style={st.template} value={r.template} multiline
-                  onChangeText={(v) => updateRule(i, { template: v })}
-                  placeholder="Mensagem desta etapa" placeholderTextColor={Colors.ink3} />
               </View>
             ))}
           </View>
@@ -722,7 +737,7 @@ export default function CrediarioSettingsScreen() {
         </>
       )}
 
-      {!!company?.id && (
+      {!!company?.id && waOficial && (
         <PreviaCrediarioModal
           visible={previewOpen}
           companyId={company.id}

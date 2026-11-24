@@ -39,13 +39,18 @@ export type BatchProductsResponse = {
   total_requested: number;
   duplicates: number;
   errors: Array<{ index: number; message: string }>;
+  /** 20/11/2026 (B2): só quando o pedido levou `lojas`. */
+  por_loja?: Array<{ company_id: string; nome: string; criados: number; ja_existiam: number; erros?: any[] }>;
 };
 
+/** 20/11/2026 (A2, D14): em quais lojas o lote nasce. Ausente = o pedido de hoje. */
+export type LojasDoPedidoEmLote = { lojas: string[]; estoque_em?: string };
+
 export var productsBatchApi = {
-  batchCreate: function(companyId: string, products: BatchProductInput[]) {
+  batchCreate: function(companyId: string, products: BatchProductInput[], nasLojas?: LojasDoPedidoEmLote | null) {
     return request<BatchProductsResponse>(
       "/companies/" + companyId + "/products/batch-create",
-      { method: "POST", body: { products: products }, retry: 0 }
+      { method: "POST", body: nasLojas ? { products: products, ...nasLojas } : { products: products }, retry: 0 }
     );
   },
 };

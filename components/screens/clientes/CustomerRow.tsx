@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
@@ -102,7 +103,7 @@ export function CustomerRow({
   // cliente foi cadastrado (multi-CNPJ: e onde o saldo/historico existem),
   // nao a current da sessao.
   const targetCompanyId = c.company_id || company?.id || "";
-  const storeName = company?.name || "nossa loja";
+  const storeName = nomeDaLojaDe(company) || "nossa loja";
   const phoneOk = hasUsablePhone(c.phone);
 
   const [showPagamento, setShowPagamento] = useState(false);

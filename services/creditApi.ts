@@ -26,6 +26,7 @@
 import { request, BASE_URL } from "@/services/api";
 import type { GroupOpenItem } from "@/utils/creditoOutraLoja";
 import { useAuthStore } from "@/stores/auth";
+import type { ModeloDeMensagem, Situacao } from "@/utils/crediarioMensagem";
 import { openPrintWindow } from "@/services/printWindow";
 import {
   carnePrintPath, type OpcoesDeImpressao, type CompraDoCarne, type ParcelaPagaDoCarne,
@@ -469,8 +470,8 @@ export type ManualEntryResult = {
 // ─── Recebimento (F3) ───────────────────────────────────────────────────────
 export type PaymentAllocation = { account_id: string | null; amount: number };
 export type ReceivePaymentBody =
-  | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null }
-  | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[] };
+  | { amount: number; payment_method?: string; notes?: string; paid_at?: string; account_id?: string | null; confirmar_repetido?: boolean }
+  | { payment_method?: string; paid_at?: string; allocations: PaymentAllocation[]; confirmar_repetido?: boolean };
 
 export type ReceivePaymentResult = {
   mode: "global" | "account" | "allocations";
@@ -558,6 +559,17 @@ export function valorAPagarParcela(inst: CreditInstallment): number {
   const rem = inst.remaining ?? (Number(inst.amount_due || 0) - Number(inst.covered_amount || 0));
   return Number(inst.total_due ?? rem);
 }
+
+/** GET /credit/message-templates. source 'aura' = a loja ainda não salvou modelo. */
+export type MessageTemplatesList = {
+  source: "aura" | "loja";
+  templates: ModeloDeMensagem[];
+  limit: number;
+  max_body: number;
+  variables?: string[];
+  schema_pending?: boolean;
+  imported_from_regua?: number;
+};
 
 const base = (companyId: string) => `/companies/${companyId}/credit`;
 
@@ -725,6 +737,31 @@ export const creditApi = {
   getAging(companyId: string) {
     return request<AgingRow[]>(`${base(companyId)}/dashboard/aging`);
   },
+  // ── Modelos de mensagem do Cobrar (21/11/2026, migration 462) ──
+  // Toda escrita devolve a lista inteira já atualizada (mesmo shape do GET).
+  listMessageTemplates(companyId: string) {
+    return request<MessageTemplatesList>(`${base(companyId)}/message-templates`);
+  },
+  createMessageTemplate(companyId: string, body: { name: string; body: string; situation?: Situacao | null; replaces_aura?: string | null }) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates`, { method: "POST", body }
+    );
+  },
+  updateMessageTemplate(companyId: string, templateId: string, patch: { name?: string; body?: string; situation?: Situacao | null }) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates/${templateId}`, { method: "PATCH", body: patch }
+    );
+  },
+  setDefaultMessageTemplate(companyId: string, templateId: string, situation: Situacao | null) {
+    return request<MessageTemplatesList & { template: ModeloDeMensagem }>(
+      `${base(companyId)}/message-templates/${templateId}/default`, { method: "POST", body: { situation } }
+    );
+  },
+  deleteMessageTemplate(companyId: string, templateId: string) {
+    return request<MessageTemplatesList & { deleted: boolean }>(
+      `${base(companyId)}/message-templates/${templateId}`, { method: "DELETE" }
+    );
+  },
   getCollectionRules(companyId: string) {
     return request<CollectionRules>(`${base(companyId)}/collection/rules`);
   },
@@ -805,7 +842,8 @@ export const creditApi = {
   },
   receiveFreePayment(
     companyId: string, customerId: string,
-    body: { amount: number; account_id?: string | null; method?: string; paid_at?: string },
+    // confirmar_repetido (23/11/2026): a lojista viu o 409 PAGAMENTO_REPETIDO e confirmou.
+    body: { amount: number; account_id?: string | null; method?: string; paid_at?: string; confirmar_repetido?: boolean },
     idempotencyKey?: string,
   ) {
     // Idempotency-Key: o chamador passa uma chave ESTÁVEL entre as tentativas

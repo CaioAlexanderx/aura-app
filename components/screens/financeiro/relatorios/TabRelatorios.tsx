@@ -15,6 +15,7 @@
 // - p-116: Baixar PDF / Baixar planilha (BaixarRelatorio.tsx), com todas
 //   as linhas do filtro (todas=1).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
@@ -148,7 +149,7 @@ export function TabRelatorios({ hrefCustos }: Props) {
   // p-116: quem emite e de quem é o documento. No consolidado, o grupo.
   var { profile } = useCompanyProfile();
   var nomeDoUsuario = useAuthStore(function(a: any) { return (a.user && (a.user.name || a.user.email)) || ""; });
-  var nomeDaEmpresa = useAuthStore(function(a: any) { return (a.company && a.company.name) || ""; });
+  var nomeDaEmpresa = useAuthStore(function(a: any) { return nomeDaLojaDe(a.company); });
   var companyCount = useAuthStore(function(a: any) { return a.companyCount || 0; });
   var pf: any = profile || {};
   var empresa: Empresa = consolidado

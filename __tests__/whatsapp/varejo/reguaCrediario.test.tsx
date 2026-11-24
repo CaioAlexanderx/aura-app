@@ -72,6 +72,18 @@ jest.mock("@/services/waApi", () => {
   };
 });
 
+// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado).
+// Os casos acima são de loja conectada (a exceção da trava) ou ligam a
+// trava explicitamente; o caso da trava desligada fica no fim.
+var mockLiberado = false;
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  const m: any = { ...real, whatsappOficialVisivel: (s: any) => real.whatsappOficialVisivel(s, mockLiberado) };
+  // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
+  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
+  return m;
+});
+
 import CrediarioSettingsScreen from "@/app/(tabs)/crediario/settings";
 
 const STATUS_LIBERADO = {
@@ -119,6 +131,7 @@ describe("interruptor do WhatsApp oficial na régua do crediário", () => {
     mockPreview = { date: "2026-09-14", would_send: 4, skipped: { OPT_OUT: 1 }, items: [] };
     mockUpdateRules.mockClear();
     mockGetPreview.mockClear();
+    mockLiberado = false;
   });
 
   it("sem os templates aprovados: travado e com o motivo na tela", async () => {
@@ -160,7 +173,8 @@ describe("interruptor do WhatsApp oficial na régua do crediário", () => {
     tree.unmount();
   });
 
-  it("status fora do ar: travado, sem liberar por omissão", async () => {
+  it("status fora do ar (trava ligada): travado, sem liberar por omissão", async () => {
+    mockLiberado = true;
     mockStatus = null;
     let tree: any;
     await act(async () => { tree = montar(); });
@@ -252,5 +266,20 @@ describe("interruptor do WhatsApp oficial na régua do crediário", () => {
     await flush();
     expect(JSON.stringify(tree2.toJSON())).toContain("automático");
     tree2.unmount();
+  });
+
+  it("trava desligada e loja sem o número: o bloco some e a régua fala do wa.me", async () => {
+    mockStatus = { ...STATUS_LIBERADO, connected: false };
+    mockRules = { ...mockRules, whatsapp_auto: true };
+    let tree: any;
+    await act(async () => { tree = montar(); });
+    await flush();
+    expect(temTestId(tree, "crediario-wa-bloco")).toBe(false);
+    const txt = JSON.stringify(tree.toJSON());
+    expect(txt).not.toContain("WhatsApp oficial");
+    expect(txt).toContain("manual (wa.me)");
+    expect(txt).not.toContain("saem sozinhas pelo número oficial");
+    tree.unmount();
+    mockRules = { ...mockRules, whatsapp_auto: false };
   });
 });

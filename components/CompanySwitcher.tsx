@@ -7,6 +7,7 @@
 //   - variant "sidebar": versão antiga compacta (fallback)
 //   - variant "mobile": layout horizontal pra MBar mobile
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useMemo } from "react";
 import {
   View,
@@ -64,7 +65,7 @@ export function CompanySwitcher({ collapsed = false, variant = "sidebar" }: Prop
 
   const currentName = consolidatedView
     ? "Todas as empresas"
-    : company?.name || company?.legal_name || (companiesLoading ? "Carregando…" : "Sem empresa");
+    : nomeDaLojaDe(company) || (companiesLoading ? "Carregando…" : "Sem empresa");
   const currentPlan = consolidatedView ? "Consolidado" : company?.plan ? planLabel(company.plan) : "—";
   const currentBadgeColor = consolidatedView ? "#7c3aed" : planBadgeColor(company?.plan || "");
   const crestLetter = consolidatedView ? "T" : (currentName || "?").charAt(0).toUpperCase();
@@ -530,7 +531,7 @@ function DropdownModal({
                         style={{ fontSize: 13, fontWeight: "600", color: C.ink, flexShrink: 1 }}
                         numberOfLines={1}
                       >
-                        {c.name || c.legal_name}
+                        {nomeDaLojaDe(c as any)}
                       </Text>
                       {c.is_primary && (
                         <View

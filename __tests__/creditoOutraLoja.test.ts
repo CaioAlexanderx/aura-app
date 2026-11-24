@@ -17,7 +17,7 @@ const MARY = "8fbde0b9-2ec0-4bc9-be58-f86c31465fa6";
 describe("mensagemErroRecebimento", () => {
   it("cliente fora do cadastro do grupo diz o que fazer", () => {
     const msg = mensagemErroRecebimento({ status: 404, data: { code: "CUSTOMER_NOT_FOUND", error: "x" } });
-    expect(msg).toMatch(/cadastro desta loja/);
+    expect(msg).toMatch(/Este cadastro não está nesta loja/);
     expect(msg).toMatch(/abra de novo pela lista/);
   });
 
@@ -26,9 +26,9 @@ describe("mensagemErroRecebimento", () => {
     expect(msg).toMatch(/Configurações → PDV/);
   });
 
-  it("sem conexão manda conferir o Histórico antes de repetir", () => {
+  it("sem conexão manda conferir Movimentações antes de repetir", () => {
     expect(mensagemErroRecebimento({ status: 0, isNetworkError: true, message: "x" }))
-      .toMatch(/Histórico/);
+      .toMatch(/Movimentações/);
   });
 
   it("400 fala do valor e da data, nunca do texto cru do backend", () => {

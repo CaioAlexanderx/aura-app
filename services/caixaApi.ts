@@ -156,6 +156,22 @@ export type CaixaSessaoHistorico = {
   total_outros:         number | null;
   total_geral:          number | null;
   obs_fechamento:       string | null;
+  /** Retiradas e reforços da sessão (migration 422); ausentes em backend antigo. */
+  total_sangrias?:      number | null;
+  total_suprimentos?:   number | null;
+};
+
+/** 23/11/2026: GET /caixa/sessao/:id de sessão fechada traz também os
+ *  campos do relatório que não ficam no snapshot (o backend recalcula com a
+ *  mesma conta do /fechar). Ausentes = backend antigo. */
+export type CaixaSessaoDetalhe = CaixaSessaoHistorico & {
+  sessao_label?:        string | null;
+  sales_count?:         number;
+  new_customers_count?: number;
+  total_vendas?:        number;
+  total_devolucoes?:    number;
+  trocas?:              CaixaTrocaDaSessao[];
+  trocas_resumo?:       CaixaTrocasResumo;
 };
 
 export type CaixaHistoricoResponse = {
@@ -232,7 +248,7 @@ export var caixaApi = {
 
   /** Detalhe de uma sessão específica */
   sessao: function(companyId: string, sessaoId: string) {
-    return request<{ sessao: CaixaSessaoHistorico }>(
+    return request<{ sessao: CaixaSessaoDetalhe }>(
       "/companies/" + companyId + "/caixa/sessao/" + sessaoId,
       { retry: 1 }
     );

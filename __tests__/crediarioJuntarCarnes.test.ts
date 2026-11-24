@@ -81,7 +81,7 @@ describe("mensagemErroJuncao", () => {
     ["INVALID_INSTALLMENTS", 400, /parcelas/],
     ["INVALID_TOTAL", 400, /maior que zero/],
     ["INVALID_FIRST_DUE_DATE", 400, /primeiro vencimento/],
-    ["CUSTOMER_NOT_FOUND", 404, /cliente/i],
+    ["CUSTOMER_NOT_FOUND", 404, /cadastro/i],
     ["CREDIT_ACCOUNT_NOT_FOUND", 404, /não existe mais/],
     ["CREDIT_ACCOUNT_CLOSED", 409, /quitado ou encerrado/],
     ["NOTHING_OPEN", 422, /nada em aberto/],

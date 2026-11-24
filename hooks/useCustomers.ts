@@ -119,6 +119,28 @@ function mapApiCustomer(c: any): Customer {
   };
 }
 
+/**
+ * Corpo do PATCH de cliente a partir do formulário (AddCustomerForm).
+ *
+ * Bug B fix (15/06/2026): null em vez de undefined para que o backend
+ * processe como SET field = NULL, permitindo limpar campos opcionais.
+ * undefined e omitido pelo JSON.stringify; null e enviado e o backend
+ * atualiza para NULL (fieldMap cobre email/phone/notes/instagram_handle).
+ * 09/11/2026: o formulário sempre manda o endereço inteiro (vazio apaga).
+ * Sem `endereco`, os campos nem vão e nada muda.
+ */
+export function corpoDaEdicaoDoCliente(c: Partial<Customer>) {
+  return {
+    name: c.name,
+    email: c.email || null,
+    phone: c.phone || null,
+    instagram_handle: c.instagram || null,
+    birth_date: c.birthday ? parseBirthday(c.birthday) : null,
+    notes: c.notes || null,
+    ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
+  };
+}
+
 function parseBirthday(val: string): string | undefined {
   if (!val) return undefined;
   const parts = val.split("/");
@@ -284,24 +306,20 @@ export function useCustomers(options?: UseCustomersOptions) {
     // pro endpoint correto. Customer.company_id e preenchido pelo backend.
     const existing = customers.find(function (x) { return x.id === id; });
     const sourceCompanyId = existing?.company_id || null;
-    updateMutation.mutate({
+    updateMutation.mutate({ id, sourceCompanyId, body: corpoDaEdicaoDoCliente(c) });
+  }
+
+  // 23/11/2026 (ficha do crediário, "Editar cliente"): o mesmo PATCH, com o
+  // mesmo corpo e os mesmos avisos, mas devolvendo a promessa — a ficha
+  // precisa saber que gravou para fechar a janela e recarregar o cabeçalho.
+  // `sourceCompanyId` explícito ganha da lista (a ficha sabe a loja dela).
+  function updateCustomerAsync(id: string, c: Partial<Customer>, sourceCompanyId?: string | null) {
+    if (isDemo) return Promise.reject(new Error("Modo demonstração"));
+    const existing = customers.find(function (x) { return x.id === id; });
+    return updateMutation.mutateAsync({
       id,
-      sourceCompanyId,
-      body: {
-        name: c.name,
-        // Bug B fix (15/06/2026): null em vez de undefined para que o backend
-        // processe como SET field = NULL, permitindo limpar campos opcionais.
-        // undefined e omitido pelo JSON.stringify; null e enviado e o backend
-        // atualiza para NULL (fieldMap cobre email/phone/notes/instagram_handle).
-        email: c.email || null,
-        phone: c.phone || null,
-        instagram_handle: c.instagram || null,
-        birth_date: c.birthday ? parseBirthday(c.birthday) : null,
-        notes: c.notes || null,
-        // 09/11/2026: o formulário sempre manda o endereço inteiro (vazio
-        // apaga). Sem `endereco`, os campos nem vão e nada muda.
-        ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
-      },
+      sourceCompanyId: sourceCompanyId || existing?.company_id || null,
+      body: corpoDaEdicaoDoCliente(c),
     });
   }
 
@@ -358,6 +376,7 @@ export function useCustomers(options?: UseCustomersOptions) {
     bulkDeleting,
     addCustomer,
     updateCustomer,
+    updateCustomerAsync,
     deleteCustomer,
     bulkDeleteCustomers,
     // MULTICNPJ Onda 2.3: info pra UI condicionar badge da loja

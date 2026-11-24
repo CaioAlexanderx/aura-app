@@ -34,7 +34,7 @@ import {
   INTERVALOS_DA_JUNCAO, type CarneDerivado, type IntervaloDaJuncao,
 } from "@/utils/crediarioCarne";
 import { fmt, parseAmount } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 /** Espera depois da última mudança antes de pedir o preview. */
 export const DEBOUNCE_DO_PREVIEW_MS = 450;
@@ -171,7 +171,7 @@ export function JuntarCarnesPanel({
             <Text style={s.headSub}>{customerName}</Text>
           </View>
           <Pressable onPress={onClose} style={m.xBtn}>
-            <Icon name="x" size={13} color={Colors.ink3} />
+            <Icon name="x" size={13} color={CorDaFicha.secundario} />
           </Pressable>
         </View>
 
@@ -251,7 +251,7 @@ export function JuntarCarnesPanel({
                     value={totalStr}
                     onChangeText={(v) => setTotalStr(v.replace(/[^\d,.]/g, ""))}
                     placeholder="0,00"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={CorDaFicha.secundario}
                     keyboardType="decimal-pad"
                     testID="juntar-total-input"
                   />
@@ -372,7 +372,7 @@ export function JuntarCarnesPanel({
                     {plano.produtos > 0 ? `, com ${plano.produtos} produto${plano.produtos > 1 ? "s" : ""}` : ""}
                     . As parcelas em aberto antigas somem; o que já foi pago continua no histórico.
                   </>
-                : "Para mudar as parcelas de um carnê só, use o Renegociar dele."}
+                : "Para mudar as parcelas de um carnê só, use o Mudar as parcelas dele."}
             </Text>
           </View>
         </ScrollView>
@@ -401,11 +401,11 @@ export function JuntarCarnesPanel({
 }
 
 const s = StyleSheet.create({
-  headSub: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
+  headSub: { fontSize: 12, color: CorDaFicha.secundario, marginTop: 1 },
   step: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 2, marginBottom: 9, marginTop: 4 },
   stepN: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
   stepNT: { fontSize: 11, fontWeight: "800", color: "#fff" },
-  stepT: { fontSize: 11, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: Colors.ink3 },
+  stepT: { fontSize: 11, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase", color: CorDaFicha.secundario },
 
   pick: {
     flexDirection: "row", alignItems: "flex-start", gap: 12,
@@ -418,20 +418,20 @@ const s = StyleSheet.create({
   l1: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 10 },
   nome: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: "700", color: Colors.ink },
   valor: { fontSize: 14, fontWeight: "800", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
-  meta: { fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
+  meta: { fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 1 },
   prods: { marginTop: 7, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border, borderStyle: "dashed" as any },
   prod: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, paddingVertical: 1.5 },
   prodK: { flex: 1, minWidth: 0, fontSize: 12.5, color: Colors.ink2 },
-  prodV: { fontSize: 12.5, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+  prodV: { fontSize: 12.5, color: CorDaFicha.secundario, fontVariant: ["tabular-nums"] as any },
 
   card: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 10 },
   tot: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" },
-  totLbl: { fontSize: 12, color: Colors.ink3 },
+  totLbl: { fontSize: 12, color: CorDaFicha.secundario },
   totVal: { fontSize: 20, fontWeight: "800", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   // Link de texto com alvo de toque de 44px.
   link: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   linkT: { fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
-  fl: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.ink3, marginTop: 14, marginBottom: 6 },
+  fl: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: CorDaFicha.secundario, marginTop: 14, marginBottom: 6 },
   stepper: { flexDirection: "row", alignItems: "center", gap: 12 },
   stepBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   stepVal: { fontSize: 22, fontWeight: "800", color: Colors.ink, fontVariant: ["tabular-nums"] as any },

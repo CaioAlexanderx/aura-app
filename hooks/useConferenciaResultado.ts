@@ -10,6 +10,7 @@
 //   · as lojas da transferência, com o mesmo critério do Estoque
 //     (lojasDaTransferencia: 2+ lojas, loja específica, fora do consulta).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
@@ -60,7 +61,7 @@ export function useConferenciaContexto(lojaDaRota?: string | null): ContextoConf
 
   var companyId: string | null = lojaDaRota || (consolidado ? null : (company && company.id) || null);
   var atual = disponiveis.find(function (c) { return c && c.id === companyId; });
-  var nome = atual ? nomeDaLoja(atual) : String((company && company.id === companyId && company.name) || "Esta loja");
+  var nome = atual ? nomeDaLoja(atual) : ((company && company.id === companyId && nomeDaLojaDe(company)) || "Esta loja");
 
   var lojas = lojasDaTransferencia(disponiveis, companyId, {
     consolidado: consolidado, consulta: consulta, demo: !!auth.isDemo, nomeAtual: nome,

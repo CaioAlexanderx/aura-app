@@ -23,7 +23,7 @@ export type RespostaDaExclusao =
   | { tipo: "erro"; mensagem: string };
 
 const MSG_RECEBIMENTOS =
-  "Este carnê já tem recebimentos. Desfaça cada um na Linha do tempo e depois exclua o carnê.";
+  "Este carnê já tem recebimentos. Remova cada um em Movimentações e depois exclua o carnê.";
 const MSG_VENDA =
   "A dívida deste carnê vem de uma venda do Caixa. Para tirá-la, faça a devolução da venda: ela também devolve os produtos ao estoque.";
 const MSG_DIVERGENTE =
@@ -31,10 +31,12 @@ const MSG_DIVERGENTE =
 const MSG_GENERICA = "Não foi possível excluir o carnê. Tente novamente.";
 
 /** Texto do diálogo de confirmação. */
-export function textoConfirmarExclusao(falta: number, fmt: (n: number) => string): string {
+export function textoConfirmarExclusao(falta: number, fmt: (n: number) => string, nome?: string | null): string {
+  // QA 23/11/2026 (P2): diz QUAL carnê; sem gênero ("do cliente" saiu).
+  const qual = nome ? `o carnê "${nome}"` : "este carnê";
   return falta > 0.009
-    ? `Excluir este carnê? As parcelas em aberto (${fmt(falta)}) saem do saldo do cliente.`
-    : "Excluir este carnê? Ele sai da ficha do cliente.";
+    ? `Excluir ${qual}? As parcelas em aberto (${fmt(falta)}) saem do saldo.`
+    : `Excluir ${qual}? Ele sai da ficha.`;
 }
 
 /** Lê o erro do DELETE e diz o que a tela faz. */

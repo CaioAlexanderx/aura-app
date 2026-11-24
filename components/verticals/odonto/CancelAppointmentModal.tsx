@@ -8,6 +8,7 @@
 // próprio clique (antes do PATCH, senão o navegador bloqueia o pop-up).
 // Nada é apagado: PATCH status=cancelado + cancel_reason.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useState } from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
@@ -57,7 +58,7 @@ export function CancelAppointmentModal({ visible, appointment, onBack, onCancell
   const when = new Date(appointment.scheduled_at);
   const valid = isCancelValid(reason, other);
   const hasPhone = !!appointment.patient_phone;
-  const message = cancellationText({ patientName: appointment.patient_name || "", clinicName: company?.name, when, reason });
+  const message = cancellationText({ patientName: appointment.patient_name || "", clinicName: nomeDaLojaDe(company) || undefined, when, reason });
 
   function confirm() {
     if (!valid || !reason || !appointment) return;

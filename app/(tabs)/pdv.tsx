@@ -42,6 +42,7 @@
 //     antes 610px até a grade (entrava meio par de produtos);
 //     agora 272px, e os cards `dense` deixam dois pares inteiros na dobra.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
@@ -395,7 +396,7 @@ function CaixaScreenInner() {
       products={st.products}
       onCloseTroca={st.closeTroca}
       showCaixaModal={st.showCaixaModal}
-      companyName={company?.name || "Sua empresa"}
+      companyName={nomeDaLojaDe(company) || "Sua empresa"}
       companyCnpj={(company as any)?.cnpj || (company as any)?.profile?.cnpj || null}
       sessaoAtiva={sessaoAtiva}
       onCloseCaixa={st.closeCaixaModal}
@@ -504,7 +505,7 @@ function CaixaScreenInner() {
                       {/* 29/08/2026: era "· venda #12345" com um numero
                           aleatorio que trocava a cada render. Enquanto a venda
                           e rascunho nao ha numero real pra mostrar. */}
-                      {(company?.name || "Sua loja") + " · " + orderLabel}
+                      {(nomeDaLojaDe(company) || "Sua loja") + " · " + orderLabel}
                       {autoEmitNfce ? " · NFC-e auto" : ""}
                     </Text>
                   </View>
@@ -634,7 +635,7 @@ function CaixaScreenInner() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.title}>Caixa</Text>
             <Text style={s.titleSubTxt} numberOfLines={1}>
-              {(company?.name || "Sua loja") + " · " + orderLabel}
+              {(nomeDaLojaDe(company) || "Sua loja") + " · " + orderLabel}
             </Text>
           </View>
         </View>

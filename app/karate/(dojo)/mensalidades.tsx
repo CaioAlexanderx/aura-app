@@ -22,6 +22,7 @@ import { CobrancasTab } from "@/components/karate/dojoMensalidades/CobrancasTab"
 import { PlanosSection } from "@/components/karate/dojoMensalidades/PlanosSection";
 import { ReguaSection } from "@/components/karate/dojoMensalidades/regua/ReguaSection";
 import { WhatsAppCloudSection } from "@/components/karate/dojoWhatsapp/WhatsAppCloudSection";
+import { useWhatsappOficialVisivel } from "@/hooks/useWhatsappOficialVisivel";
 
 type TabKey = "cobrancas" | "planos" | "regua" | "whatsapp";
 
@@ -35,6 +36,12 @@ const TABS: [TabKey, string][] = [
 export default function DojoMensalidades() {
   const { dojoName } = useKarateDojo();
   const [tab, setTab] = useState<TabKey>("cobrancas");
+  // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+  // a aba "WhatsApp" (Cloud API) só aparece para o dojô que já tem o número
+  // conectado. A fila manual (wa.me) segue na aba "Régua".
+  const waOficial = useWhatsappOficialVisivel();
+  const abas = waOficial ? TABS : TABS.filter(([key]) => key !== "whatsapp");
+  const ativa: TabKey = !waOficial && tab === "whatsapp" ? "cobrancas" : tab;
 
   return (
     <View style={styles.page}>
@@ -43,25 +50,25 @@ export default function DojoMensalidades() {
         <Text style={styles.title}>Mensalidades</Text>
         <Text style={styles.lead}>Planos, assinaturas e cobranças dos alunos do seu dojô. Pagamento por Pix, direto com você.</Text>
         <View style={styles.tabs} accessibilityRole="tablist">
-          {TABS.map(([key, label]) => (
+          {abas.map(([key, label]) => (
             <TouchableOpacity
               key={key}
-              style={[styles.tab, tab === key && styles.tabOn]}
+              style={[styles.tab, ativa === key && styles.tabOn]}
               onPress={() => setTab(key)}
               accessibilityRole="tab"
-              accessibilityState={{ selected: tab === key }}
+              accessibilityState={{ selected: ativa === key }}
             >
-              <Text style={[styles.tabTxt, tab === key && styles.tabTxtOn]}>{label}</Text>
+              <Text style={[styles.tabTxt, ativa === key && styles.tabTxtOn]}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
       <View style={styles.body}>
-        {tab === "cobrancas" ? (
+        {ativa === "cobrancas" ? (
           <CobrancasTab onGoToPlanos={() => setTab("planos")} />
-        ) : tab === "planos" ? (
+        ) : ativa === "planos" ? (
           <PlanosSection />
-        ) : tab === "regua" ? (
+        ) : ativa === "regua" ? (
           <ReguaSection />
         ) : (
           <WhatsAppCloudSection />

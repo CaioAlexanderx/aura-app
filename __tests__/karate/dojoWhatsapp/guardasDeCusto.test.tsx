@@ -74,6 +74,18 @@ jest.mock("@/services/waApi", () => ({
   },
 }));
 
+// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado).
+// Dojô conectado (o Kondei) vê o toggle com a trava desligada; os casos de
+// dojô sem número ligam a trava para seguir testando as guardas.
+var mockLiberado = false;
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  const m: any = { ...real, whatsappOficialVisivel: (s: any) => real.whatsappOficialVisivel(s, mockLiberado) };
+  // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
+  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
+  return m;
+});
+
 import { ReguaSection } from "@/components/karate/dojoMensalidades/regua/ReguaSection";
 import {
   mapWaError, waAutoBlockers, waPreviewSkippedSummary, waPreviewSkippedTotal,
@@ -218,6 +230,27 @@ describe("ReguaSection — o toggle do WhatsApp na tela", () => {
     mockPreview = { date: "2026-09-13", template_name: "mensalidade_lembrete", would_send: 7, skipped: { OPT_OUT: 1 }, items: [] };
     mockUpdate.mockClear();
     mockGetPreview.mockClear();
+    mockLiberado = false;
+  });
+
+  it("trava desligada e dojô sem número: o toggle do WhatsApp automático some", async () => {
+    mockStatus = { ...STATUS_LIBERADO, connected: false };
+    let tree: any;
+    await act(async () => { tree = renderer.create(<ReguaSection />); });
+    await flush();
+    expect(temTestId(tree, "regua-wa-auto")).toBe(false);
+    expect(JSON.stringify(tree.toJSON())).not.toContain("Enviar também por WhatsApp");
+    tree.unmount();
+  });
+
+  it("trava desligada e dojô conectado (Kondei): tudo como antes", async () => {
+    mockStatus = STATUS_LIBERADO;
+    let tree: any;
+    await act(async () => { tree = renderer.create(<ReguaSection />); });
+    await flush();
+    expect(temTestId(tree, "regua-wa-auto")).toBe(true);
+    expect(temTestId(tree, "regua-wa-switch")).toBe(true);
+    tree.unmount();
   });
 
   it("sem a liberação do plano: switch travado e o motivo escrito na tela", async () => {
@@ -237,7 +270,8 @@ describe("ReguaSection — o toggle do WhatsApp na tela", () => {
     tree.unmount();
   });
 
-  it("status fora do ar: switch travado, sem liberar por omissão", async () => {
+  it("status fora do ar (trava ligada): switch travado, sem liberar por omissão", async () => {
+    mockLiberado = true;
     mockStatus = null;
     let tree: any;
     await act(async () => { tree = renderer.create(<ReguaSection />); });
@@ -286,6 +320,7 @@ describe("ReguaSection — o toggle do WhatsApp na tela", () => {
   it("DESLIGAR é livre e imediato, mesmo com as guardas reprovando", async () => {
     // Já estava ligado e o addon caiu: o sensei tem que conseguir desligar.
     mockConfig = { enabled: true, offsets: [-3], send_email: true, send_whatsapp_auto: true, updated_at: null };
+    mockLiberado = true;
     mockStatus = { ...STATUS_LIBERADO, addon_active: false, connected: false };
     let tree: any;
     await act(async () => { tree = renderer.create(<ReguaSection />); });

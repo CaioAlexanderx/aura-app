@@ -52,8 +52,7 @@ const PARCELAS = [parcela(), parcela({ id: "a2", installment_number: 2, due_date
 function montarCartao(conta: any, parcelas: any[], props: Record<string, any> = {}) {
   const all = {
     carne: derivarCarne(conta, parcelas),
-    expanded: true,
-    onToggle: jest.fn(), onReceber: jest.fn(), onImprimir: jest.fn(), onRenegociar: jest.fn(), onCobrar: jest.fn(),
+    onReceber: jest.fn(), onImprimir: jest.fn(), onRenegociar: jest.fn(), onCobrar: jest.fn(),
     renderParcela: (p: any) => <Text key={p.id}>{`[parcela ${p.installment_number}]`}</Text>,
     ...props,
   };
@@ -63,16 +62,19 @@ function montarCartao(conta: any, parcelas: any[], props: Record<string, any> = 
 }
 
 describe("CarneCard — Excluir carnê", () => {
-  it("aparece por último na linha de ações, com texto vermelho, e chama onExcluir", () => {
+  it("F4: é o último item do ⋯ do carnê, com texto vermelho, e chama onExcluir", () => {
     const onExcluir = jest.fn();
     const { t } = montarCartao(CONTA, PARCELAS, { onExcluir });
+    expect(porId(t, "carne-c1-excluir")).toHaveLength(0);
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     const botao = porId(t, "carne-c1-excluir");
     expect(botao).toHaveLength(1);
 
-    // Último rótulo da linha de ações.
-    const rotulos = t.root.findAll((n: any) => n.props && n.props.accessibilityRole === "button" && typeof n.props.accessibilityLabel === "string", { deep: false })
+    // Último item do menu.
+    const rotulos = porId(t, "carne-c1-menu")[0]
+      .findAll((n: any) => n.props && n.props.accessibilityRole === "button" && typeof n.props.accessibilityLabel === "string", { deep: false })
       .map((n: any) => n.props.accessibilityLabel);
-    expect(rotulos[rotulos.length - 1]).toBe("Excluir carnê");
+    expect(rotulos[rotulos.length - 1]).toBe("Excluir este carnê");
 
     const rotulo = botao[0].findAllByType(Text)[0];
     expect(StyleSheet.flatten(rotulo.props.style).color).toBe(Colors.red);
@@ -83,13 +85,15 @@ describe("CarneCard — Excluir carnê", () => {
 
   it("sem onExcluir não há botão", () => {
     const { t } = montarCartao(CONTA, PARCELAS);
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     expect(porId(t, "carne-c1-excluir")).toHaveLength(0);
-    expect(texto(t.toJSON())).not.toContain("Excluir carnê");
+    expect(texto(t.toJSON())).not.toContain("Excluir este carnê");
   });
 
   it("carnê vazio (sem as outras ações) também pode ser excluído", () => {
     const vazio = { ...CONTA, balance: 0, open_count: 0, total_count: 0, total_amount: 0, purchases_total: 0, open_remaining: 0, remaining: 0 };
     const { t } = montarCartao(vazio, [], { onExcluir: jest.fn() });
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     expect(porId(t, "carne-c1-excluir")).toHaveLength(1);
   });
 });
@@ -119,19 +123,22 @@ describe("TabParcelas — Excluir carnê", () => {
   }
 
   it("o toque leva ao shell id, nome e quanto falta", () => {
-    const { t, props } = montarAba({ expandedAccountId: "c1" });
+    const { t, props } = montarAba();
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     act(() => { porId(t, "carne-c1-excluir")[0].props.onPress(); });
     expect(props.onExcluirCarne).toHaveBeenCalledWith({ id: "c1", nome: "Lançamento de 01/11", falta: 300 });
   });
 
   it("o grupo sem carnê não tem o botão", () => {
-    const { t } = montarAba({ expandedAccountId: null });
-    expect(porId(t, "carne-general-corpo")).toHaveLength(1);
+    const { t } = montarAba();
+    expect(porId(t, "carne-general")).toHaveLength(1);
     expect(porId(t, "carne-general-excluir")).toHaveLength(0);
   });
 
   it("carnê que não está aberto não tem o botão", () => {
-    const { t } = montarAba({ expandedAccountId: "c1", accounts: [{ ...CONTA, status: "closed" }] });
+    const { t } = montarAba({ accounts: [{ ...CONTA, status: "closed" }] });
+    const mais = porId(t, "carne-c1-mais");
+    if (mais.length) act(() => { mais[0].props.onPress(); });
     expect(porId(t, "carne-c1-excluir")).toHaveLength(0);
   });
 });
@@ -139,8 +146,11 @@ describe("TabParcelas — Excluir carnê", () => {
 describe("utils/crediarioExcluirCarne", () => {
   it("confirmação diz quanto sai do saldo", () => {
     expect(textoConfirmarExclusao(300, fmt))
-      .toBe("Excluir este carnê? As parcelas em aberto (R$ 300,00) saem do saldo do cliente.");
-    expect(textoConfirmarExclusao(0, fmt)).toBe("Excluir este carnê? Ele sai da ficha do cliente.");
+      .toBe("Excluir este carnê? As parcelas em aberto (R$ 300,00) saem do saldo.");
+    expect(textoConfirmarExclusao(0, fmt)).toBe("Excluir este carnê? Ele sai da ficha.");
+    // QA P2: diz qual carnê
+    expect(textoConfirmarExclusao(300, fmt, "Compra de 19/10"))
+      .toBe('Excluir o carnê "Compra de 19/10"? As parcelas em aberto (R$ 300,00) saem do saldo.');
   });
 
   it("409 com recebimento: lista com dia e valor", () => {
@@ -151,7 +161,7 @@ describe("utils/crediarioExcluirCarne", () => {
     expect(r).toEqual({ tipo: "recebimentos", recebimentos: [{ id: "p1", date: "2026-11-05T15:00:00.000Z", amount: 100 }] });
     if (r.tipo !== "recebimentos") throw new Error("tipo");
     const msg = mensagemDosRecebimentos(r.recebimentos, fmt);
-    expect(msg).toContain("Desfaça cada um na Linha do tempo e depois exclua o carnê.");
+    expect(msg).toContain("Remova cada um em Movimentações e depois exclua o carnê.");
     expect(msg).toContain("05/11 · R$ 100,00");
   });
 

@@ -9,7 +9,7 @@ import { companiesApi } from "@/services/api";
 // 14/11/2026: rótulo da variante com o nome da cor do Caixa (CP2b).
 import { rotuloDaVariante } from "@/utils/nomeDaCor";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
-import { faltaEstoqueParaVender, lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
+import { controlaEstoque, faltaEstoqueParaVender, lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
 
 // ============================================================
@@ -95,7 +95,8 @@ export function AddItemPicker({
 
     // 06/10/2026: loja com "vender sem estoque" ligado não é barrada aqui —
     // o backend (POST sale-items) segue a mesma chave.
-    if (faltaEstoqueParaVender(stockToCheck, parsedQty, vendeSemEstoque)) {
+    // 18/11/2026 (INC-2026-11-18-02): serviço não tem saldo e nunca é barrado.
+    if (controlaEstoque(product) && faltaEstoqueParaVender(stockToCheck, parsedQty, vendeSemEstoque)) {
       toast.error("Estoque insuficiente: disponível " + stockToCheck + " un");
       return;
     }

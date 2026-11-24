@@ -171,6 +171,11 @@ export type SaleForTrocaItem = {
   // 27/10/2026: item de pedido da loja online (digital_order_items.id, texto).
   original_digital_order_item_id?: string;
   total_price?: number;
+  // 19/11/2026 (INC-2026-11-19-01): o que a cliente pagou (desconto do item +
+  // rateio do desconto da venda), por unidade e pela linha. undefined em
+  // backend antigo.
+  valor_pago_unit?: number;
+  valor_pago_total?: number;
 };
 
 export type SaleForTroca = {

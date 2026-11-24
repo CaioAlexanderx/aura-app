@@ -41,19 +41,27 @@ export function ConfirmGate({
   const c = tone === "red" ? Colors.red : Colors.amber;
   const bg = tone === "red" ? Colors.redD : Colors.amberD;
 
+  // 23/11/2026 (QA da ficha, P1): fechada, a pergunta NÃO existe. Antes ela
+  // ficava no DOM com altura 0 e opacidade 0 e os botões continuavam
+  // focáveis: Tab + Enter em "Sim, remover" escondido removia um pagamento
+  // sem pergunta. Perde-se a animação de fechar; abrir continua animado.
+  if (!visible) return null;
+
   return (
     <Collapsible open={visible} duration={Motion.base}>
       <View style={[s.box, { backgroundColor: bg, borderColor: c + "66" }]}>
         <Text style={[s.msg, { color: c }]}>{message}</Text>
         <View style={s.row}>
-          <Button title={cancelLabel} variant="ghost" onPress={onCancel} disabled={loading} full />
+          {/* QA 23/11 (P2): sem "full" (flex:1 espremia); com base mínima e
+              quebra de linha, em 320 px os dois botões empilham em vez de
+              cortar "Lançar mesmo assim" / "Sim, remover". */}
+          <Button title={cancelLabel} variant="ghost" onPress={onCancel} disabled={loading} style={s.cancelar} />
           <Button
             title={confirmLabel}
             variant={tone === "red" ? "danger" : "primary"}
             onPress={onConfirm}
             loading={loading}
-            full
-            style={{ flex: 2 }}
+            style={s.confirmar}
           />
         </View>
       </View>
@@ -64,7 +72,9 @@ export function ConfirmGate({
 const s = StyleSheet.create({
   box: { marginTop: 12, borderWidth: 1, borderRadius: 12, padding: 14 },
   msg: { fontSize: 13, fontWeight: "700", marginBottom: 10, lineHeight: 18 },
-  row: { flexDirection: "row", gap: 8 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  cancelar: { flexGrow: 1, flexBasis: 110, minHeight: 44 },
+  confirmar: { flexGrow: 2, flexBasis: 170, minHeight: 44 },
 });
 
 export default ConfirmGate;

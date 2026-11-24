@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -259,7 +260,7 @@ export function ClinicHoursCard() {
           </Text>
           {companyCount > 1 && (
             <Text style={s.multiHint}>
-              Horário da unidade ativa ({company?.name || "empresa atual"}). Para editar outra unidade, troque de
+              Horário da unidade ativa ({nomeDaLojaDe(company) || "empresa atual"}). Para editar outra unidade, troque de
               empresa no menu.
             </Text>
           )}

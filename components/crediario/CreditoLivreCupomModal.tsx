@@ -21,6 +21,7 @@
 // dentro de conteúdo scrollável, o position:fixed se resolveria contra um
 // ancestral com transform e o modal colaria no topo da página.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView,
@@ -76,7 +77,7 @@ export function CreditoLivreCupomModal({ visible, onClose, lead }: Props) {
     setSending(false);
 
     const first = (lead.name || "").split(" ")[0] || lead.name;
-    const empresa = company?.name || "nossa loja";
+    const empresa = nomeDaLojaDe(company) || "nossa loja";
     const d = new Date();
     d.setDate(d.getDate() + 15);
     setMessageText(
@@ -86,7 +87,7 @@ export function CreditoLivreCupomModal({ visible, onClose, lead }: Props) {
       `válido até ${formatExpiresAt(d.toISOString())}.\n\n` +
       `Seu crediário está liberado de novo, se precisar. 😊`
     );
-  }, [visible, lead, company?.name]);
+  }, [visible, lead, nomeDaLojaDe(company)]);
 
   if (!visible || !lead) return null;
 

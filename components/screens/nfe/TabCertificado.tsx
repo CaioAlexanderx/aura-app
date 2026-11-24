@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -151,7 +152,7 @@ export function TabCertificado({ companyId, onEmitir }: Props) {
   const [seletorAberto, setSeletorAberto] = useState(false);
 
   const empresa: Empresa = {
-    nome: company?.name || "Sua empresa",
+    nome: nomeDaLojaDe(company) || "Sua empresa",
     cnpj: formatarCnpj(data?.empresa_cnpj || (company as any)?.cnpj || ""),
   };
   const maisDeUma = (availableCompanies || []).length > 1;

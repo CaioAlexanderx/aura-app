@@ -31,8 +31,14 @@ describe("nome que vai no topo", () => {
     expect(nomeDaLojaDaEmpresa({ name: "Doce Encanto Confeitaria LTDA" })).toBe("Doce Encanto Confeitaria LTDA");
   });
 
-  test("nome fantasia vazio cai no name, depois na razão social; nada = vazio", () => {
-    expect(nomeDaLojaDaEmpresa({ trade_name: "  ", name: "Loja da Ana", legal_name: "Ana ME" })).toBe("Loja da Ana");
+  // 21/11/2026: regra única (utils/nomeDaLoja.ts) — sem nome fantasia vale a
+  // razão social; `name` só para sessão antiga sem os dois campos. Empresa
+  // com fantasia em branco e `name` diferente da razão social não existe no
+  // store (o login mandava name = razão social; a troca de loja, o fantasia),
+  // então nenhuma etiqueta real muda (nomeDaLojaUnico.test.ts, byte a byte).
+  test("nome fantasia vazio cai na razão social, depois no name; nada = vazio", () => {
+    expect(nomeDaLojaDaEmpresa({ trade_name: "  ", name: "Loja da Ana", legal_name: "Ana ME" })).toBe("Ana ME");
+    expect(nomeDaLojaDaEmpresa({ trade_name: "  ", name: "Loja da Ana", legal_name: "" })).toBe("Loja da Ana");
     expect(nomeDaLojaDaEmpresa({ trade_name: null, name: "", legal_name: "Ana ME" })).toBe("Ana ME");
     expect(nomeDaLojaDaEmpresa({})).toBe("");
     expect(nomeDaLojaDaEmpresa(null)).toBe("");

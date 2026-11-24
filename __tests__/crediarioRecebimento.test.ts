@@ -59,7 +59,7 @@ describe("recebimentoRecente", () => {
 describe("mensagemDeRepeticao", () => {
   test("segundos, com a forma de pagamento", () => {
     expect(mensagemDeRepeticao({ amount: 260, method: "pix", segundos: 25 }, fmt, label))
-      .toBe("Você registrou R$ 260,00 em pix há 25 segundos. Registrar outro recebimento de R$ 260,00?");
+      .toBe("Você registrou R$ 260,00 no Pix há 25 segundos. Registrar outro recebimento de R$ 260,00?");
   });
   test("minutos, sem forma conhecida", () => {
     expect(mensagemDeRepeticao({ amount: 50, method: null, segundos: 95 }, fmt, label))

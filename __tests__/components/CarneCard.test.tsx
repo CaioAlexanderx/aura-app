@@ -1,15 +1,14 @@
 // ============================================================
 // Ficha do crediário · cartão do carnê e aba de carnês (10/10/2026)
 //
-// CarneCard:
-//   - fechado: nome, itens, quanto falta, barra, "N de M pagas", chip;
-//     o corpo (itens, parcelas, ações) não está na tela;
-//   - aberto: itens com total, parcelas pagas, parcelas a pagar pelo
-//     renderParcela, Receber/Imprimir/Renegociar/Cobrar;
+// CarneCard (F4, 23/11/2026: sem sanfona — o cartão está sempre aberto):
+//   - nome, itens, "Falta R$ X de R$ Y", barra, parcelas a pagar direto;
+//   - pagas numa linha só que abre com toque (com os itens da compra);
+//   - Imprimir à vista; Mudar as parcelas e Receber o carnê inteiro no ⋯;
 //   - fiado (sem parcelas): sem barra, com o aviso, sem Renegociar;
 //   - backend antigo: nome, saldo e parcelas, sem quebrar.
 // TabParcelas:
-//   - um cartão por carnê em aberto, "Compras anteriores" e Quitados
+//   - um cartão por carnê em aberto, "Compras sem carnê" e Quitados
 //     recolhido; Receber do cartão mira o carnê dele; Imprimir todos.
 // ============================================================
 import React from "react";
@@ -33,6 +32,14 @@ function texto(node: any): string {
 const porId = (t: renderer.ReactTestRenderer, id: string) => t.root.findAllByProps({ testID: id }, { deep: false });
 const apertarRotulo = (t: renderer.ReactTestRenderer, rotulo: string) =>
   act(() => { t.root.findAllByProps({ accessibilityLabel: rotulo }, { deep: false })[0].props.onPress(); });
+
+// F5: no celular (e no jsdom, que mede 0 px) o Imprimir mora no "⋯".
+function apertarImprimir(t: renderer.ReactTestRenderer, key = "c1") {
+  const visivel = t.root.findAllByProps({ accessibilityLabel: "Imprimir" }, { deep: false });
+  if (visivel.length) { act(() => { visivel[0].props.onPress(); }); return; }
+  act(() => { porId(t, `carne-${key}-mais`)[0].props.onPress(); });
+  apertarRotulo(t, "Imprimir este carnê");
+}
 
 const parcela = (over: Record<string, any> = {}) => ({
   id: "a3", sale_id: null, customer_id: "cli", company_id: "emp",
@@ -60,8 +67,7 @@ const CONTA = {
 function montarCartao(conta: any, parcelas: any[], props: Record<string, any> = {}) {
   const all = {
     carne: derivarCarne(conta, parcelas),
-    expanded: false,
-    onToggle: jest.fn(), onReceber: jest.fn(), onImprimir: jest.fn(), onRenegociar: jest.fn(), onCobrar: jest.fn(),
+    onReceber: jest.fn(), onImprimir: jest.fn(), onRenegociar: jest.fn(), onCobrar: jest.fn(),
     renderParcela: (p: any) => <Text key={p.id}>{`[parcela ${p.installment_number}/${p.total_installments}]`}</Text>,
     ...props,
   };
@@ -70,95 +76,93 @@ function montarCartao(conta: any, parcelas: any[], props: Record<string, any> = 
   return { t, props: all };
 }
 
-describe("CarneCard", () => {
+describe("CarneCard (F4: sem sanfona)", () => {
   const abertas = [parcela(), parcela({ id: "a4", installment_number: 4, due_date: "2026-12-10" })];
 
-  it("fechado: o essencial, sem o corpo", () => {
-    const { t, props } = montarCartao(CONTA, abertas);
+  it("aberto sempre: nome, itens, Falta de quanto, barra e as parcelas a pagar", () => {
+    const { t } = montarCartao(CONTA, abertas);
     const txt = texto(t.toJSON());
     expect(txt).toContain("Compra de 13/09");
     expect(txt).toContain("Vans Hylane 40/41 · 2× Slide Alta 40/41");
-    expect(txt).toContain("R$ 140,00");
-    expect(txt).toContain("2 de 4 pagas · próx. 10/11");
-    expect(txt).toContain("Em dia");
+    expect(txt).toContain("Falta R$ 140,00");
+    expect(txt).toContain("de R$ 280,00");
+    expect(txt).toContain("2 de 4 pagas");
     expect(porId(t, "carne-c1-progresso")).toHaveLength(1);
-    expect(porId(t, "carne-c1-corpo")).toHaveLength(0);
-    expect(txt).not.toContain("Receber");
-    act(() => { porId(t, "carne-c1-cabecalho")[0].props.onPress(); });
-    expect(props.onToggle).toHaveBeenCalled();
-  });
-
-  it("aberto: itens com total, pagas, a pagar e as ações do carnê", () => {
-    const { t, props } = montarCartao(CONTA, abertas, { expanded: true });
-    const txt = texto(t.toJSON());
-    expect(txt).toContain("Itens da compra");
-    expect(txt).toContain("Total da compra");
-    expect(txt).toContain("R$ 280,00");
-    expect(txt).toContain("1/4 · paga em 13/09");
-    expect(txt).toContain("2/4 · paga em 08/10");
     expect(txt).toContain("[parcela 3/4]");
     expect(txt).toContain("[parcela 4/4]");
-    expect(porId(t, "carne-c1-paga")).toHaveLength(2);
-
-    apertarRotulo(t, "Receber R$ 140,00");
-    expect(props.onReceber).toHaveBeenCalled();
-    apertarRotulo(t, "Imprimir");
-    expect(props.onImprimir).toHaveBeenCalled();
-    apertarRotulo(t, "Renegociar");
-    expect(props.onRenegociar).toHaveBeenCalled();
-    apertarRotulo(t, "Cobrar");
-    expect(props.onCobrar).toHaveBeenCalled();
-  });
-
-  it("em atraso: chip vermelho no lugar do Em dia", () => {
-    const { t } = montarCartao({ ...CONTA, overdue: true }, abertas);
-    const txt = texto(t.toJSON());
-    expect(txt).toContain("Em atraso");
+    // o selo "Em dia" saiu (repetia o topo)
     expect(txt).not.toContain("Em dia");
   });
 
-  it("fiado: sem barra, com o aviso; sem Renegociar nem Cobrar quando não há", () => {
+  it("parcelas pagas numa linha só, que abre com toque junto com os itens", () => {
+    const { t } = montarCartao(CONTA, abertas);
+    expect(texto(t.toJSON())).toContain("2 pagas · 13/09 e 08/10");
+    expect(porId(t, "carne-c1-corpo")).toHaveLength(0);
+    act(() => { porId(t, "carne-c1-detalhe")[0].props.onPress(); });
+    const txt = texto(t.toJSON());
+    expect(txt).toContain("Itens da compra");
+    expect(txt).toContain("Total da compra");
+    expect(txt).toContain("Parcela 1 de 4 · paga em 13/09");
+    expect(porId(t, "carne-c1-paga")).toHaveLength(2);
+  });
+
+  it("Imprimir à vista; o raro no ⋯ (Mudar as parcelas, Receber o carnê inteiro)", () => {
+    const { t, props } = montarCartao(CONTA, abertas);
+    apertarImprimir(t);
+    expect(props.onImprimir).toHaveBeenCalled();
+    expect(porId(t, "carne-c1-menu")).toHaveLength(0);
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
+    apertarRotulo(t, "Mudar as parcelas (renegociar)");
+    expect(props.onRenegociar).toHaveBeenCalled();
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
+    apertarRotulo(t, "Receber o carnê inteiro");
+    expect(props.onReceber).toHaveBeenCalled();
+    // um Cobrar só, no alto da ficha — o carnê não cobra.
+    expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
+  });
+
+  it("em atraso: selo Atrasado", () => {
+    const { t } = montarCartao({ ...CONTA, overdue: true }, abertas);
+    expect(texto(t.toJSON())).toContain("Atrasado");
+  });
+
+  it("fiado num carnê: sem barra, com o aviso e o Receber à vista", () => {
     const fiado = { ...CONTA, total_count: 0, paid_count: 0, paid_installments: [], remaining: 220 };
-    const { t } = montarCartao(fiado, [], { expanded: true, onRenegociar: undefined, onCobrar: undefined });
+    const { t } = montarCartao(fiado, [], { onRenegociar: undefined });
     const txt = texto(t.toJSON());
     expect(porId(t, "carne-c1-progresso")).toHaveLength(0);
     expect(porId(t, "carne-c1-sem-parcelas")).toHaveLength(1);
-    expect(txt).toContain("sem parcelas — à vista no crediário");
+    expect(txt).toContain("Sem parcelas — à vista no crediário");
     expect(txt).toContain("Receber R$ 220,00");
-    expect(t.root.findAllByProps({ accessibilityLabel: "Renegociar" })).toHaveLength(0);
-    expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
   });
 
   it("backend antigo: nome, saldo e parcelas — sem itens, sem barra", () => {
     const antigo = { id: "c1", name: "Carnê da Maria", status: "open", balance: 140, open_count: 2, next_due_date: "2026-11-10", overdue: false, period_unit: "month", period_count: 1 };
-    const { t } = montarCartao(antigo, abertas, { expanded: true });
+    const { t } = montarCartao(antigo, abertas);
     const txt = texto(t.toJSON());
     expect(txt).toContain("Carnê da Maria");
-    expect(txt).toContain("R$ 140,00");
-    expect(txt).toContain("2 parcelas em aberto · próx. 10/11");
-    expect(txt).not.toContain("Itens da compra");
+    expect(txt).toContain("Falta R$ 140,00");
     expect(porId(t, "carne-c1-progresso")).toHaveLength(0);
     expect(txt).toContain("[parcela 3/4]");
-    expect(txt).toContain("Receber R$ 140,00");
   });
 
-  it("grupo sem carnê: Compras anteriores, chip Sem carnê e compras por compra", () => {
+  it("grupo sem carnê com fiado: Compras sem carnê, Receber e Dividir em parcelas à vista", () => {
     const geral = {
-      id: null, name: "Conta geral", balance: 180, remaining: 180, total_count: 1, paid_count: 0,
+      id: null, name: "Conta geral", balance: 180, remaining: 180, total_count: 0, paid_count: 0,
       purchases: [
         { date: "2026-09-13T15:00:00Z", description: "Slide Asuna 40/41", quantity: 1, amount: 80 },
-        { date: "2026-09-13T15:00:00Z", description: "Slide Alta 40/41", quantity: 1, amount: 80 },
-        { date: "2026-09-02T12:00:00Z", description: "", quantity: 1, amount: 20, manual: true },
+        { date: "2026-09-02T12:00:00Z", description: "", quantity: 1, amount: 100, manual: true },
       ],
     };
-    const { t } = montarCartao(geral, [parcela({ id: "g1", account_id: null, installment_number: 1, total_installments: 1 })], { expanded: true });
+    const { t, props } = montarCartao(geral, [], { renegociarLabel: "Dividir em parcelas" });
     const txt = texto(t.toJSON());
-    expect(txt).toContain("Compras anteriores");
-    expect(txt).toContain("Sem carnê");
-    expect(txt).toContain("2 compras de antes dos carnês por compra");
-    expect(txt).toContain("13/09 · Slide Asuna 40/41, Slide Alta 40/41");
-    expect(txt).toContain("02/09 · Lançamento manual");
-    expect(porId(t, "carne-general-corpo")).toHaveLength(1);
+    expect(txt).toContain("Compras sem carnê");
+    expect(txt).toContain("Compras sem parcelas definidas.");
+    expect(txt).toContain("Você pode receber qualquer valor, ou dividir esse saldo em parcelas.");
+    apertarRotulo(t, "Dividir em parcelas");
+    expect(props.onRenegociar).toHaveBeenCalled();
+    act(() => { porId(t, "carne-general-detalhe")[0].props.onPress(); });
+    expect(texto(t.toJSON())).toContain("02/09 · Lançamento manual");
   });
 });
 
@@ -186,63 +190,124 @@ describe("TabParcelas — aba de carnês", () => {
     return { t, props };
   }
 
-  it("um cartão por carnê em aberto, Compras anteriores e Quitados recolhido", () => {
+  it("um cartão por carnê em aberto, Compras sem carnê e Quitados recolhido", () => {
     const { t } = montarAba();
     const txt = texto(t.toJSON());
-    expect(txt).toContain("Em aberto · 2");
     expect(porId(t, "carne-c1")).toHaveLength(1);
     expect(porId(t, "carne-general")).toHaveLength(1);
     expect(porId(t, "carne-c2")).toHaveLength(0);
-    expect(txt).toContain("Quitados · 1");
+    expect(txt).toContain("1 carnê quitado");
     expect(porId(t, "carne-quitado")).toHaveLength(0);
     act(() => { porId(t, "carnes-quitados-toggle")[0].props.onPress(); });
     expect(porId(t, "carne-quitado")).toHaveLength(1);
     expect(texto(t.toJSON())).toContain("Compra de 02/08 · Slide Alta 42/43");
   });
 
-  it("abrir um cartão pede ao shell para expandir aquele carnê", () => {
-    const { t, props } = montarAba();
-    act(() => { porId(t, "carne-c1-cabecalho")[0].props.onPress(); });
-    expect(props.setExpandedAccountId).toHaveBeenCalledWith("c1");
+  it("parcelas a pagar direto, sem sanfona: data com lápis, Receber e Pix na linha", () => {
+    const { t, props } = montarAba({
+      openInst: [parcela({ due_date: "2099-11-10" }), parcela({ id: "a4", installment_number: 4, due_date: "2099-12-10" })],
+    });
+    const txt = texto(t.toJSON());
+    expect(txt).toContain("3 de 4");
+    expect(txt).toContain("vence 10/11/99");
+    expect(txt).not.toContain("Alterar data");
+    apertarRotulo(t, "Mudar a data da parcela 3 de 4");
+    expect(props.handleEditDueDateOpen).toHaveBeenCalled();
+    // o Pix da parcela continua na linha
+    apertarRotulo(t, "Pix da parcela 3 de 4");
+    expect(props.openInstallmentPix).toHaveBeenCalledWith("a3");
   });
 
-  it("aberto: Receber mira o carnê; Imprimir e Renegociar levam o carnê; parcela usa o ParcelaRow", () => {
-    const { t, props } = montarAba({ expandedAccountId: "c1" });
-    expect(texto(t.toJSON())).toContain("Parcela 3/4");
-    apertarRotulo(t, "Receber R$ 140,00");
+  it("MUDANÇA (revisão da F4): o Receber da linha mira o carnê da parcela", () => {
+    const { t, props } = montarAba();
+    apertarRotulo(t, "Receber R$ 70,00 da parcela 3 de 4");
+    expect(props.prefill).toHaveBeenCalledWith(70, "c1");
+  });
+
+  it("QA: Receber na 2ª linha é 'Receber até esta' e preenche as anteriores + esta", () => {
+    const { t, props } = montarAba();
+    apertarRotulo(t, "Receber até esta: R$ 140,00, as parcelas anteriores deste carnê e a 4 de 4");
     expect(props.prefill).toHaveBeenCalledWith(140, "c1");
-    apertarRotulo(t, "Imprimir");
-    expect(props.onImprimir).toHaveBeenCalledWith("c1", "Compra de 13/09", 2);
-    apertarRotulo(t, "Renegociar");
-    expect(props.onRenegociar).toHaveBeenCalledWith("c1", "Compra de 13/09", 140);
-    apertarRotulo(t, "Cobrar");
-    expect(props.onCobrar).toHaveBeenCalledWith("cli", "Alexander Olivier", "66999990000");
+    expect(texto(t.toJSON())).toContain("Receber até esta");
   });
 
-  it("Compras anteriores sem parcela: Receber sem mirar carnê e Parcelar saldo", () => {
-    const { t, props } = montarAba({ expandedAccountId: null });
-    apertarRotulo(t, "Receber R$ 50,00");
-    expect(props.prefill).toHaveBeenCalledWith(50, undefined);
-    apertarRotulo(t, "Parcelar saldo");
-    expect(props.onRenegociar).toHaveBeenCalledWith(null, "Saldo em aberto", 50);
-    apertarRotulo(t, "Imprimir");
-    expect(props.onImprimir).toHaveBeenCalledWith(null, "Compras anteriores", 0);
+  it("QA: depois de juntar carnês, numera pela posição no carnê (não '1 de 2, 2 de 2, 1 de 3')", () => {
+    const juntado = {
+      ...CONTA, id: "j1", name: "Carnês juntados", paid_count: 0, total_count: 4, paid_installments: [],
+      remaining: 280, total_amount: 280,
+    };
+    const abertas = [
+      parcela({ id: "x1", account_id: "j1", installment_number: 1, total_installments: 2, due_date: "2099-01-10" }),
+      parcela({ id: "x2", account_id: "j1", installment_number: 2, total_installments: 2, due_date: "2099-02-10" }),
+      parcela({ id: "x3", account_id: "j1", installment_number: 1, total_installments: 3, due_date: "2099-03-10" }),
+      parcela({ id: "x4", account_id: "j1", installment_number: 2, total_installments: 3, due_date: "2099-04-10" }),
+    ];
+    const { t } = montarAba({ accounts: [juntado], openInst: abertas });
+    const txt = texto(t.toJSON());
+    expect(txt).toContain("1 de 4");
+    expect(txt).toContain("2 de 4");
+    expect(txt).toContain("3 de 4");
+    expect(txt).toContain("4 de 4");
+    expect(txt).not.toContain("1 de 3");
   });
 
-  it("Imprimir todos não manda carnê; Novo carnê continua acessível", () => {
-    const { t, props } = montarAba();
-    act(() => { porId(t, "carnes-imprimir-todos")[0].props.onPress(); });
-    expect(props.onImprimir).toHaveBeenCalledWith(undefined, "Alexander Olivier", 2);
-    act(() => { porId(t, "carnes-novo-carne")[0].props.onPress(); });
+  it("vencida dentro da carência (não atrasada): 'venceu', não 'vence'", () => {
+    const { t } = montarAba({ openInst: [parcela({ due_date: "2026-01-10", is_overdue: false })] });
+    expect(texto(t.toJSON())).toContain("venceu 10/01");
+  });
+
+  it("Criar carnê vazio tem Cancelar", () => {
+    const { t, props } = montarAba({ showNewAccount: true });
+    act(() => { porId(t, "carnes-novo-carne-cancelar")[0].props.onPress(); });
     expect(props.setShowNewAccount).toHaveBeenCalled();
+    expect(props.setNewAccountName).toHaveBeenCalledWith("");
   });
 
-  it("Juntar carnês só aparece quando o shell diz que há 2+ com saldo", () => {
-    expect(porId(montarAba().t, "carnes-juntar")).toHaveLength(0);
-    const onJuntar = jest.fn();
-    const { t } = montarAba({ onJuntar });
-    act(() => { porId(t, "carnes-juntar")[0].props.onPress(); });
-    expect(onJuntar).toHaveBeenCalled();
+  it("Receber o carnê inteiro mira o carnê; Imprimir e Mudar as parcelas levam o carnê", () => {
+    const { t, props } = montarAba();
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
+    apertarRotulo(t, "Receber o carnê inteiro");
+    expect(props.prefill).toHaveBeenCalledWith(140, "c1");
+    apertarImprimir(t);
+    expect(props.onImprimir).toHaveBeenCalledWith("c1", "Compra de 13/09", 2);
+    act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
+    apertarRotulo(t, "Mudar as parcelas (renegociar)");
+    expect(props.onRenegociar).toHaveBeenCalledWith("c1", "Compra de 13/09", 140);
+    // 23/11/2026: um Cobrar só, no alto da ficha — o cartão não tem mais.
+    expect(t.root.findAllByProps({ accessibilityLabel: "Cobrar" })).toHaveLength(0);
+    expect(props.onCobrar).not.toHaveBeenCalled();
+  });
+
+  it("Compras sem carnê sem parcela: Receber sem mirar carnê e Dividir em parcelas", () => {
+    const { t, props } = montarAba();
+    apertarRotulo(t, "Dividir em parcelas");
+    expect(props.onRenegociar).toHaveBeenCalledWith(null, "Saldo em aberto", 50);
+    expect(texto(t.toJSON())).toContain("Compras sem parcelas definidas.");
+    expect(texto(t.toJSON())).toContain("Você pode receber qualquer valor, ou dividir esse saldo em parcelas.");
+    act(() => { t.root.findAll((n: any) => n.props && n.props.accessibilityLabel === "Receber R$ 50,00")[0].props.onPress(); });
+    expect(props.prefill).toHaveBeenCalledWith(50, undefined);
+  });
+
+  it("Imprimir todos, Juntar e Criar carnê vazio saíram da aba (moram no ⋯ do alto da ficha)", () => {
+    const { t } = montarAba({ onJuntar: jest.fn() });
+    expect(porId(t, "carnes-imprimir-todos")).toHaveLength(0);
+    expect(porId(t, "carnes-juntar")).toHaveLength(0);
+    expect(porId(t, "carnes-novo-carne")).toHaveLength(0);
+    // o campo do carnê vazio continua aqui quando o shell pede
+    const { t: t2 } = montarAba({ showNewAccount: true });
+    expect(t2.root.findAll((n: any) => n.props && n.props.placeholder === "Nome do carnê").length).toBeGreaterThan(0);
+  });
+
+  it("parcela atrasada: dias de atraso antes da multa e juros, e o ano só fora do ano corrente", () => {
+    const { dataDoVencimento, diaEmSaoPaulo } = require("@/utils/crediarioMovimentacao");
+    const atrasada = parcela({
+      id: "a9", due_date: "2026-11-02", is_overdue: true, days_late: 19,
+      amount_due: 80, remaining: 80, charges_total: 2.11, total_due: 82.11,
+    });
+    const { t } = montarAba({ accounts: [], useCarneLayout: false, openInst: [atrasada] });
+    const venc = dataDoVencimento("2026-11-02", diaEmSaoPaulo(new Date().toISOString()));
+    expect(texto(t.toJSON())).toContain(`venceu ${venc} · 19 dias de atraso · R$ 80,00 + R$ 2,11 de multa e juros`);
+    expect(dataDoVencimento("2027-12-20", "2026-11-23")).toBe("20/12/27");
   });
 
   it("backend antigo sem carnê: a lista de parcelas de sempre", () => {
@@ -250,6 +315,6 @@ describe("TabParcelas — aba de carnês", () => {
     const txt = texto(t.toJSON());
     expect(txt).toContain("Parcelas em aberto");
     expect(txt).not.toContain("Em aberto ·");
-    expect(txt).toContain("Parcela 3/4");
+    expect(txt).toContain("Parcela 3 de 4");
   });
 });

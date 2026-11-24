@@ -35,6 +35,10 @@ import {
   type ResumoImport,
 } from "@/utils/importPrevia";
 import { lerArquivoPlanilha, MAX_FILE_SIZE, MAX_ROWS } from "@/hooks/useServerImport";
+// 20/11/2026 (A2, D14): em quais lojas o lote entra. Com 1 loja (ou sem o
+// campo), o corpo do import é o de hoje, byte a byte.
+import { useLojasDoLote } from "@/hooks/useLojasDoLote";
+import { porLojaDaResposta, type PorLojaDoLote } from "@/components/screens/estoque/item-form/lojasDoCadastro";
 
 export type FaseImport = "fechado" | "lendo" | "conferindo" | "gravando" | "pronto";
 
@@ -51,6 +55,8 @@ export function useImportProdutos(onComplete?: (resultado: ResultadoImport) => v
   const [resultado, setResultado] = useState<ResultadoImport | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null);
+  const [porLoja, setPorLoja] = useState<PorLojaDoLote[]>([]);
+  const lojas = useLojasDoLote(company?.id, fase !== "fechado");
   const rowsRef = useRef<Record<string, string>[]>([]);
   const ctxRef = useRef<ContextoLeitura | null>(null);
   // Cada leitura ganha um número; se o lojista cancelar enquanto a prévia
@@ -65,6 +71,7 @@ export function useImportProdutos(onComplete?: (resultado: ResultadoImport) => v
     setResultado(null);
     setErro(null);
     setNomeArquivo(null);
+    setPorLoja([]);
     setFase("fechado");
   }, []);
 
@@ -166,13 +173,17 @@ export function useImportProdutos(onComplete?: (resultado: ResultadoImport) => v
     const minha = tentativaRef.current;
     setErro(null);
     setFase("gravando");
+    // A2: só com 2 ou mais lojas escolhidas; senão nem a chave vai.
+    const nasLojas = lojas.corpo(true);
     try {
       const resp = await postar({
         rows: rowsRef.current,
         // O mapa que a prévia mostrou — grava exatamente o que foi conferido.
         ...(Object.keys(resumo.mapaColunas).length > 0 ? { column_map: resumo.mapaColunas } : {}),
+        ...(nasLojas ? nasLojas : {}),
       });
       if (tentativaRef.current !== minha) return;
+      setPorLoja(nasLojas ? porLojaDaResposta(resp) : []);
       const r = montarResultadoImport(resp, resumo, ctxRef.current);
       setResultado(r);
       setFase("pronto");
@@ -206,6 +217,8 @@ export function useImportProdutos(onComplete?: (resultado: ResultadoImport) => v
     resultado,
     erro,
     nomeArquivo,
+    lojas,
+    porLoja,
     escolherArquivo,
     importar,
     fechar,

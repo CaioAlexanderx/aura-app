@@ -10,6 +10,7 @@
 // - no celular (< 768 px) um cartão por paciente com botões grandes.
 // O contador do atalho usa o mesmo cache (useTomorrowAppointments).
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useQuery } from "@tanstack/react-query";
@@ -68,7 +69,7 @@ export function ConfirmTomorrowView({ onOpen }: { onOpen?: (a: TomorrowAppointme
   const dayTitle = day ? `${WEEKDAYS[day.getDay()]}, ${day.getDate()} de ${MONTHS[day.getMonth()]}` : "Amanhã";
 
   function textFor(a: TomorrowAppointment) {
-    return confirmationText({ patientName: a.patient_name || "", clinicName: company?.name, when: new Date(a.scheduled_at) });
+    return confirmationText({ patientName: a.patient_name || "", clinicName: nomeDaLojaDe(company) || undefined, when: new Date(a.scheduled_at) });
   }
 
   function openWa(a: TomorrowAppointment) {

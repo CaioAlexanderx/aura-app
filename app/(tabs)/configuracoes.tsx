@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform, ActivityIndicator, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -61,11 +62,11 @@ function PerCompanyGate({ availableCompanies, switchToCompany, titulo, descricao
             style={pcg.item}
           >
             <View style={pcg.itemIcon}>
-              <Text style={pcg.itemIconText}>{(c.trade_name || c.legal_name || "E").charAt(0).toUpperCase()}</Text>
+              <Text style={pcg.itemIconText}>{(nomeDaLojaDe(c) || "E").charAt(0).toUpperCase()}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={pcg.itemTitle} numberOfLines={1}>
-                {c.trade_name || c.legal_name || "Empresa"}
+                {nomeDaLojaDe(c) || "Empresa"}
               </Text>
               <Text style={pcg.itemDesc} numberOfLines={1}>
                 {c.is_primary ? "Empresa principal" : "Empresa secundária"}

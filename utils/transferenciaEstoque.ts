@@ -5,6 +5,7 @@
 // a pessoa digita a quantidade, e estas funções validam, montam o corpo do
 // POST, dividem em lotes de até 1.000 itens e leem os erros do backend.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import type { ItemParaTransferir } from "@/services/estoqueTransferenciasApi";
 
 /** Limite do backend por envio. Seleção maior vai em lotes, um depois do outro. */
@@ -216,7 +217,7 @@ export function textoDosNumeros(numeros: Array<string | number>): string {
 type LojaDoSwitcher = { id: string; trade_name?: string | null; name?: string | null; legal_name?: string | null };
 
 export function nomeDaLoja(c: LojaDoSwitcher | null | undefined): string {
-  return String((c && (c.trade_name || c.name || c.legal_name)) || "Loja");
+  return nomeDaLojaDe(c) || "Loja";
 }
 
 export type LojasDaTransferencia = {

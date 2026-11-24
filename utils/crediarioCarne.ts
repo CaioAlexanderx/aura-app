@@ -192,7 +192,24 @@ export type CarneDerivado<P extends ParcelaAbertaDoCarne = ParcelaAbertaDoCarne>
   juntadoDe: string[];
 };
 
-export const NOME_SEM_CARNE = "Compras anteriores";
+/**
+ * Revisão #1360: "N de M" de cada parcela ABERTA pela posição no carnê, por
+ * data (pagas antes, depois as abertas) — o mesmo da linha do cartão. Depois
+ * de juntar carnês o número gravado repetia. Grupo sem carnê e backend
+ * antigo (sem as pagas): fora do mapa (vale o gravado).
+ */
+export function numerosPorPosicao<P extends ParcelaAbertaDoCarne>(carnes: CarneDerivado<P>[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+  for (const c of carnes) {
+    if (c.semCarne || !c.temCamposNovos) continue;
+    const total = c.parcelasPagas.length + c.parcelasAbertas.length;
+    c.parcelasAbertas.forEach((p, i) => mapa.set(p.id, `${c.parcelasPagas.length + i + 1} de ${total}`));
+  }
+  return mapa;
+}
+
+/** 23/11/2026 (F1 da ficha): era "Compras anteriores", que não dizia o quê. */
+export const NOME_SEM_CARNE = "Compras sem carnê";
 /** Como o grupo sem carnê vai em account_ids do juntar e na URL do preview. */
 export const CHAVE_SEM_CARNE = "general";
 
@@ -219,7 +236,9 @@ function restante(p: ParcelaAbertaDoCarne): number {
 }
 
 function rotuloDoItem(c: CompraDoCarne): string {
-  const desc = String(c.description || "").trim() || (c.manual ? "Lançamento manual" : "Compra");
+  // QA 23/11 (P2): o backend grava "Lancamento manual" (sem cedilha).
+  const bruto = String(c.description || "").trim();
+  const desc = (/^lan[cç]amento manual$/i.test(bruto) ? "Lançamento manual" : bruto) || (c.manual ? "Lançamento manual" : "Compra");
   const q = Number(c.quantity) || 0;
   return q > 1 ? `${q}× ${desc}` : desc;
 }
@@ -461,7 +480,7 @@ const ERROS_DA_JUNCAO: Record<string, string> = {
   INVALID_INSTALLMENTS: "Número de parcelas inválido. Confira e tente de novo.",
   INVALID_TOTAL: "O total precisa ser maior que zero.",
   INVALID_FIRST_DUE_DATE: "Confira a data do primeiro vencimento.",
-  CUSTOMER_NOT_FOUND: "Este cliente não foi encontrado nesta loja. Feche a ficha e abra de novo pela lista.",
+  CUSTOMER_NOT_FOUND: "Este cadastro não foi encontrado nesta loja. Feche a ficha e abra de novo pela lista.",
   CREDIT_ACCOUNT_NOT_FOUND: "Um dos carnês marcados não existe mais. Feche a ficha e abra de novo para atualizar a lista.",
   CREDIT_ACCOUNT_CLOSED: "Um dos carnês marcados já foi quitado ou encerrado. Feche a ficha e abra de novo para atualizar a lista.",
   NOTHING_OPEN: "Não há nada em aberto nos carnês marcados.",
@@ -474,7 +493,7 @@ export function juncaoIndisponivel(err: ErroDeApi): boolean {
 }
 
 export const MSG_JUNCAO_INDISPONIVEL =
-  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Renegociar de cada carnê continua funcionando.";
+  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Mudar as parcelas de cada carnê continua funcionando.";
 
 /** Erro do preview/apply do juntar em português claro. */
 export function mensagemErroJuncao(err: ErroDeApi): string {

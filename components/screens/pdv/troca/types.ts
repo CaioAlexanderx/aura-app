@@ -36,6 +36,9 @@ export type ReturnableSaleItemExtra = {
   lot_id?: string | null;
   unit?: string | null;
   purchase_factor?: number | null;
+  // 19/11/2026 (INC-2026-11-19-01): o que a cliente pagou por unidade
+  // (backend, busca da troca). undefined em backend antigo.
+  valor_pago_unit?: number | null;
 };
 
 // ─── Sale selection (Step 1 → Step 2) ──────────────────────────

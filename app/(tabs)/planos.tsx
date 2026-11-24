@@ -10,6 +10,7 @@ import { discountInEffectText } from "@/components/billing/couponText";
 import { FaixaDoTrial } from "@/components/billing/FaixaDoTrial";
 import { router } from "expo-router";
 import { waAura } from "@/constants/suporteAura";
+import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
 const AURA_WHATSAPP = waAura("Olá, gostaria de saber mais sobre a consultoria da Aura");
@@ -154,7 +155,23 @@ const PLANS = [
 const PLANOS_OCULTOS = ["expansao"];
 const PLANOS_VISIVEIS = PLANS.filter((p) => !PLANOS_OCULTOS.includes(p.key));
 
-const ADDONS = [
+// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
+// até a Meta aprovar o app, nenhuma loja conecta o número oficial. As
+// linhas que prometem o envio automático/oficial saem da vitrine (e o
+// pacote de promocionais, que só existe com ele). A cobrança manual pelo
+// wa.me do Essencial fica. Ligar a trava devolve tudo como era.
+const FEATURES_WHATSAPP_OFICIAL = new Set<string>([
+  "Reativação automática de clientes inativos pelo WhatsApp oficial",
+  "Cobranças automáticas pelo WhatsApp oficial da sua loja: inclusas",
+  "100 mensagens promocionais por mês inclusas (pacotes extras de 100 por R$ 49)",
+]);
+const ADDON_WHATSAPP_OFICIAL = "Mensagens promocionais extras";
+
+function featuresDaVitrine(features: string[], liberado: boolean = WHATSAPP_OFICIAL_LIBERADO): string[] {
+  return liberado ? features : features.filter((f) => !FEATURES_WHATSAPP_OFICIAL.has(f));
+}
+
+const ADDONS_TODOS = [
   {
     name: "Mensagens promocionais extras",
     price: "R$ 49",
@@ -164,6 +181,9 @@ const ADDONS = [
   { name: "Módulo vertical extra", price: "R$ 39/mês", desc: "A partir do Negócio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) além do incluso no seu plano" },
   { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuração, treinamento, automações e integrações personalizadas para o seu negócio", cta: true },
 ];
+function addonsDaVitrine(liberado: boolean = WHATSAPP_OFICIAL_LIBERADO) {
+  return liberado ? ADDONS_TODOS : ADDONS_TODOS.filter((a) => a.name !== ADDON_WHATSAPP_OFICIAL);
+}
 
 const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
@@ -247,7 +267,7 @@ export default function PlanosScreen() {
               {annual && <Text style={s.yearlyTotal}>Total anual: {fmtR(yr)}</Text>}
               {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
-                {plan.features.map((f, idx) => {
+                {featuresDaVitrine(plan.features).map((f, idx) => {
                   // "Tudo do X, e mais:" vira heading destacado.
                   const isHeading = f.startsWith("Tudo do");
                   return (
@@ -274,7 +294,7 @@ export default function PlanosScreen() {
 
       <Text style={s.sectionTitle}>Add-ons</Text>
       <View style={s.addonsRow}>
-        {ADDONS.map(a => (
+        {addonsDaVitrine().map(a => (
           <View key={a.name} style={s.addonCard}>
             <Text style={s.addonName}>{a.name}</Text>
             <Text style={[s.addonPrice, (a as any).cta && { color: Colors.ink }]}>{a.price}</Text>

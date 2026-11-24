@@ -27,7 +27,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ModalPop } from "@/components/anim";
 import { lerFormatoCarne, salvarFormatoCarne, type FormatoCarne } from "@/utils/crediarioCarne";
-import { m } from "./fichaStyles";
+import { m, CorDaFicha } from "./fichaStyles";
 
 export type ImprimirCarnePanelProps = {
   /** "Compra de 13/09" ou o nome do cliente quando imprime todos. */
@@ -75,7 +75,7 @@ export function ImprimirCarnePanel({
           </Pressable>
           <Text style={m.panelTitle}>Imprimir carnê</Text>
           <Pressable onPress={onClose} style={m.xBtn}>
-            <Icon name="x" size={13} color={Colors.ink3} />
+            <Icon name="x" size={13} color={CorDaFicha.secundario} />
           </Pressable>
         </View>
 
@@ -147,10 +147,10 @@ const s = StyleSheet.create({
   },
   optOn: { borderColor: Colors.violet3, backgroundColor: Colors.violetD },
   icBox: { width: 40, alignItems: "center" },
-  ic: { width: 36, height: 46, borderWidth: 1.5, borderColor: Colors.ink3, borderRadius: 3 },
+  ic: { width: 36, height: 46, borderWidth: 1.5, borderColor: CorDaFicha.secundario, borderRadius: 3 },
   icNarrow: { width: 20 },
   optT: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  optS: { fontSize: 12, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
+  optS: { fontSize: 12, color: CorDaFicha.secundario, marginTop: 2, lineHeight: 16 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   radioOn: { borderColor: Colors.violet3 },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.violet3 },

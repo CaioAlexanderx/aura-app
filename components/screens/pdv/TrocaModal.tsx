@@ -129,6 +129,7 @@ import { buscarVendaDoVale } from "./troca/valeTrocaBusca";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { VALE_TROCA_PRAZO_PADRAO_DIAS, lerPrazoDoValeEmDias } from "@/utils/valeTroca";
 import { isPedidoOnline, montarOrigensDaTroca } from "./troca/pedidoOnline";
+import { valorUnitDevolvido } from "./troca/devolucaoUtil";
 import {
   subtotalDosNovos, descontoDaTroca, camposDoDesconto, itemNovoDoPayload,
   acertarSplits, type TipoDesconto,
@@ -189,12 +190,15 @@ function genIdempotencyKey(): string {
 //     sales-for-troca e sales-by-product-barcode não devolvem o campo —
 //     Number(undefined)=NaN zerava o crédito da devolução na UI e
 //     propagava NaN pro netAmount, desarmando o gate de pagamento.
-function effectiveUnitPrice(item: { unit_price: number; total_price?: number | null; quantity: number }): number {
+// 19/11/2026 (INC-2026-11-19-01): com `valor_pago_unit` do backend (o que a
+// cliente pagou, já com o desconto da venda inteira), vale ele; o cálculo
+// acima fica de fallback para backend antigo (devolucaoUtil.valorUnitDevolvido).
+function effectiveUnitPrice(item: { unit_price: number; total_price?: number | null; quantity: number; valor_pago_unit?: number | null }): number {
   const qty = Number(item.quantity);
-  if (!qty || qty <= 0) return Number(item.unit_price);
+  if (!qty || qty <= 0) return valorUnitDevolvido(item, Number(item.unit_price));
   const total = Number(item.total_price);
-  if (item.total_price == null || !Number.isFinite(total)) return Number(item.unit_price);
-  return total / qty;
+  if (item.total_price == null || !Number.isFinite(total)) return valorUnitDevolvido(item, Number(item.unit_price));
+  return valorUnitDevolvido(item, total / qty);
 }
 
 // 22/09/2026 (M4 — docs/CONTRACT_MATCON.md §"Devolução de sobra de obra

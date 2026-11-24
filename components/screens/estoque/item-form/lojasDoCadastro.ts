@@ -1,0 +1,387 @@
+// ============================================================
+// AURA. — Cadastro de item · "Em quais lojas este produto entra?"
+//
+// 20/11/2026 (plano empresa-do-produto, D1–D15; mockup aprovado). Regras
+// puras, sem React, para o ItemFormModal e os testes.
+//
+// O QUE NÃO PODE MUDAR (D9): loja sem grupo, funcionário de uma loja só,
+// resposta com menos de 2 lojas, erro ao ler a lista, edição, consolidado
+// ou demo -> o campo não existe e o corpo do POST /products é o de hoje.
+// A cópia para as outras lojas é uma chamada À PARTE, depois de tudo
+// gravado na loja ativa (produto, grade, fornecedores, lotes e fotos).
+// ============================================================
+import type { LojaParaCadastro, PedidoDeCopia, ResultadoDaCopia, RespostaLojasParaCadastro } from "@/services/lojasDoProdutoApi";
+import { normalizarChaveDaGrade, numeroDaCelula } from "./types";
+
+export type ModoDoCampo = "nenhum" | "aviso" | "escolha";
+
+export type CampoDeLojas = {
+  modo: ModoDoCampo;
+  /** A loja ativa primeiro; depois as outras, na ordem do servidor. */
+  lojas: LojaParaCadastro[];
+};
+
+const NENHUM: CampoDeLojas = { modo: "nenhum", lojas: [] };
+
+/**
+ * O que o cadastro mostra. A loja ativa precisa estar na lista que o
+ * servidor devolveu: sem ela não há loja de origem, e o campo some.
+ */
+export function campoDeLojas(resp: RespostaLojasParaCadastro | null | undefined, ativaId: string | null | undefined): CampoDeLojas {
+  if (!resp || !ativaId || !Array.isArray(resp.lojas)) return NENHUM;
+  const lojas = resp.lojas.filter((l) => l && l.company_id);
+  // Uma loja por id (o servidor não deveria repetir; se repetir, a
+  // contagem do botão mentiria).
+  const vistos = new Set<string>();
+  const unicas = lojas.filter((l) => {
+    const id = String(l.company_id);
+    if (vistos.has(id)) return false;
+    vistos.add(id);
+    return true;
+  });
+  if (unicas.length < 2) return NENHUM;
+  const ativa = unicas.find((l) => String(l.company_id) === String(ativaId));
+  if (!ativa) return NENHUM;
+  const ordenadas = [ativa, ...unicas.filter((l) => l !== ativa)];
+  return { modo: resp.estoque_unico ? "aviso" : "escolha", lojas: ordenadas };
+}
+
+/** Marcadas na ordem da lista (a ativa primeiro). */
+export function lojasEscolhidas(campo: CampoDeLojas, marcadas: string[]): LojaParaCadastro[] {
+  if (campo.modo !== "escolha") return [];
+  const set = new Set(marcadas.map(String));
+  return campo.lojas.filter((l) => set.has(String(l.company_id)));
+}
+
+export function pecasTxt(n: number): string {
+  const v = Number(n) || 0;
+  return v === 1 ? "1 peça" : fmtNumero(v) + " peças";
+}
+
+function fmtNumero(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(n).replace(".", ",");
+}
+
+function juntarComE(itens: string[]): string {
+  if (itens.length <= 1) return itens.join("");
+  return itens.slice(0, -1).join(", ") + " e " + itens[itens.length - 1];
+}
+
+/** "Salvar nas 2 lojas" (mockup b e f). */
+export function rotuloSalvarNasLojas(n: number): string {
+  return "Salvar nas " + n + " lojas";
+}
+
+/** "Estoque mínimo (vale para as duas)" (mockup b). */
+export function rotuloDoMinimo(n: number): string {
+  return n === 2 ? "Estoque mínimo (vale para as duas)" : "Estoque mínimo (vale para as " + n + ")";
+}
+
+/** "Matriz · 12" no seletor da grade (mockup b). */
+export function rotuloDaLojaNaGrade(nome: string, total: number): string {
+  return nome + " · " + fmtNumero(Number(total) || 0);
+}
+
+export type FraseDoRodape = { antes: string; forte: string; depois: string };
+
+/**
+ * Rodapé do cadastro com o campo à vista (mockup a, b e f):
+ *   1 loja:  "Entra na **Matriz**."
+ *   N lojas: "Entra em **2 lojas**: Matriz (12) e Filial Centro (0)."
+ *   celular: "Entra em **2 lojas**"
+ * `qtd` null (serviço, lote): a lista sai sem os números.
+ */
+export function fraseDoRodape(
+  lojas: Array<{ nome: string; qtd: number | null }>,
+  narrow: boolean
+): FraseDoRodape | null {
+  if (!lojas.length) return null;
+  if (lojas.length === 1) return { antes: "Entra na ", forte: lojas[0].nome, depois: "." };
+  const forte = lojas.length + " lojas";
+  if (narrow) return { antes: "Entra em ", forte, depois: "" };
+  const lista = juntarComE(lojas.map((l) => (l.qtd == null ? l.nome : l.nome + " (" + fmtNumero(l.qtd) + ")")));
+  return { antes: "Entra em ", forte, depois: ": " + lista + "." };
+}
+
+// ── resultado por loja (D15) ─────────────────────────────────
+
+export type LinhaDoResultado = {
+  company_id: string;
+  nome: string;
+  estado: "criando" | "criado" | "ja_existia" | "erro";
+  texto: string;
+  /** "Tentar de novo" (D15). Código já em uso não adianta repetir. */
+  podeTentar: boolean;
+  avisoFiscal: boolean;
+};
+
+export const TEXTO_CRIANDO = "Criando nesta loja…";
+export const TEXTO_FALHA_GERAL = "Não deu para criar nesta loja. Tente de novo.";
+export const TEXTO_JA_EXISTIA = "Já estava nesta loja";
+export const TEXTO_AVISO_FISCAL = "Confira o fiscal deste produto nesta loja.";
+
+export function textoDeCriado(pecas: number | null): string {
+  return pecas == null ? "Criado" : "Criado com " + pecasTxt(pecas);
+}
+
+// Contrato, "Mudanças" de 20/11 (B1): repetir não resolve estes. Os outros
+// (ERRO_AO_CRIAR, ou um código que o app ainda não conhece) têm "Tentar de novo".
+const SEM_REPETIR_NA_LOJA = ["BARCODE_EM_USO", "CODIGO_EM_USO", "MESMA_LOJA", "SEM_ACESSO", "LIMITE_PLANO"];
+// Erros do pedido inteiro (nada gravado): só estes valem repetir.
+const REPETIR_O_PEDIDO = ["TENTE_DE_NOVO", "SCHEMA_PENDENTE"];
+
+export function linhaDoResultado(r: ResultadoDaCopia): LinhaDoResultado {
+  const avisoFiscal = Array.isArray(r.avisos) && r.avisos.indexOf("fiscal_conferir") >= 0;
+  if (r.status === "criado") {
+    return { company_id: r.company_id, nome: r.nome, estado: "criado", texto: textoDeCriado(Number(r.stock_qty) || 0), podeTentar: false, avisoFiscal };
+  }
+  if (r.status === "ja_existia") {
+    return { company_id: r.company_id, nome: r.nome, estado: "ja_existia", texto: TEXTO_JA_EXISTIA, podeTentar: false, avisoFiscal };
+  }
+  const code = r.erro?.code || "";
+  return {
+    company_id: r.company_id, nome: r.nome, estado: "erro",
+    texto: (r.erro?.message || "").trim() || TEXTO_FALHA_GERAL,
+    podeTentar: SEM_REPETIR_NA_LOJA.indexOf(code) < 0,
+    avisoFiscal,
+  };
+}
+
+/**
+ * Falha da chamada inteira: cada loja pedida vira erro. Sem resposta (rede,
+ * 5xx) ou com TENTE_DE_NOVO: "Tentar de novo" e o texto geral. Recusa com
+ * código (PRODUTO_COMPARTILHADO, VARIANTE_INVALIDA, SEM_ACESSO...): o texto
+ * do servidor, sem repetir.
+ */
+export function linhasDeFalhaGeral(lojas: Array<{ company_id: string; nome: string }>, erro?: any): LinhaDoResultado[] {
+  const code = String((erro && (erro.code || (erro.data && erro.data.code))) || "");
+  const status = Number(erro && erro.status) || 0;
+  const recusa = !!code && REPETIR_O_PEDIDO.indexOf(code) < 0 && status >= 400 && status < 500;
+  const msg = recusa ? String((erro.data && erro.data.error) || erro.message || "").trim() : "";
+  return lojas.map((l) => ({
+    company_id: l.company_id, nome: l.nome, estado: "erro" as const,
+    texto: msg || TEXTO_FALHA_GERAL, podeTentar: !recusa, avisoFiscal: false,
+  }));
+}
+
+export function linhasCriando(lojas: Array<{ company_id: string; nome: string }>): LinhaDoResultado[] {
+  return lojas.map((l) => ({
+    company_id: l.company_id, nome: l.nome, estado: "criando" as const,
+    texto: TEXTO_CRIANDO, podeTentar: false, avisoFiscal: false,
+  }));
+}
+
+/** Troca, pelo id da loja, as linhas que voltaram; as outras ficam. */
+export function mesclarResultado(atual: LinhaDoResultado[], novas: LinhaDoResultado[]): LinhaDoResultado[] {
+  const porId: Record<string, LinhaDoResultado> = {};
+  novas.forEach((l) => { porId[String(l.company_id)] = l; });
+  const out = atual.map((l) => porId[String(l.company_id)] || l);
+  // Loja que o servidor devolveu e não estava na tela (não deveria): entra no fim.
+  novas.forEach((l) => { if (!atual.some((a) => String(a.company_id) === String(l.company_id))) out.push(l); });
+  return out;
+}
+
+// ── corpo da cópia (POST …/products/:pid/lojas) ──────────────
+
+/**
+ * Variante da origem por chave da grade ("#HEX|M"), a partir do GET
+ * /products/:pid/variants (atributos 'Cor' e 'Tamanho').
+ */
+export function idsDasVariantes(variants: Array<{ id: string; attributes?: Array<{ attribute: string; value: string }> }> | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  (variants || []).forEach((v) => {
+    if (!v || !v.id) return;
+    let cor: string | null = null;
+    let tam: string | null = null;
+    (v.attributes || []).forEach((a) => {
+      const n = String(a?.attribute || "").toLowerCase();
+      if (n === "cor" || n === "color") cor = a.value;
+      else if (n === "tamanho" || n === "size") tam = a.value;
+    });
+    if (cor == null && tam == null) return;
+    out[normalizarChaveDaGrade((cor || "") + "|" + (tam || ""))] = String(v.id);
+  });
+  return out;
+}
+
+export type EstoqueDaLojaNaCopia =
+  | { tipo: "simples"; qtd: number }
+  | { tipo: "grade"; matriz: Record<string, number> }
+  | { tipo: "zero" };
+
+/**
+ * Monta o pedido. Com grade, cada combinação vai com o id da variante da
+ * origem; combinação com peças e sem id (a grade da origem não voltou
+ * inteira) faz o pedido falhar antes de sair, para não criar a loja com
+ * estoque a menos sem ninguém saber.
+ */
+export function pedidoDeCopia(
+  lojas: Array<{ company_id: string; estoque: EstoqueDaLojaNaCopia }>,
+  idsPorChave: Record<string, string> | null
+): { pedido: PedidoDeCopia; faltouVariante: boolean } {
+  let faltou = false;
+  const out = lojas.map((l) => {
+    const e = l.estoque;
+    if (e.tipo === "simples") return { company_id: l.company_id, stock_qty: Math.max(0, Number(e.qtd) || 0) };
+    if (e.tipo === "zero") return { company_id: l.company_id, stock_qty: 0 };
+    const variantes: Array<{ variant_id: string; stock_qty: number }> = [];
+    let total = 0;
+    Object.keys(e.matriz).forEach((k) => {
+      const qtd = Math.max(0, numeroDaCelula(e.matriz[k]));
+      const id = (idsPorChave || {})[normalizarChaveDaGrade(k)];
+      if (!id) { if (qtd > 0) faltou = true; return; }
+      variantes.push({ variant_id: id, stock_qty: qtd });
+      total += qtd;
+    });
+    return { company_id: l.company_id, stock_qty: total, variantes };
+  });
+  return { pedido: { lojas: out }, faltouVariante: faltou };
+}
+
+// ── cadastro em massa (A2, D14) ───────────────────────────────
+//
+// Planilha e lista: uma escolha para o lote inteiro, com a loja ativa
+// marcada, e "O estoque da planilha entra em qual loja?" (as outras nascem
+// com 0). Chegou mercadoria: a entrada é sempre na loja ativa; os produtos
+// NOVOS podem nascer também nas outras lojas, sem estoque.
+// Com 1 loja escolhida (ou sem o campo), nada vai no corpo: o pedido é o
+// de hoje, byte a byte.
+
+export type CorpoDasLojasDoLote = { lojas: string[]; estoque_em?: string };
+
+export function corpoDasLojasDoLote(
+  campo: CampoDeLojas,
+  marcadas: string[],
+  ativaId: string,
+  estoqueEm: string | null | undefined,
+  comEstoque: boolean
+): CorpoDasLojasDoLote | null {
+  const escolhidas = lojasEscolhidas(campo, [ativaId, ...marcadas]);
+  if (escolhidas.length < 2) return null;
+  const lojas = escolhidas.map((l) => String(l.company_id));
+  if (!comEstoque) return { lojas };
+  const em = estoqueEm && lojas.indexOf(String(estoqueEm)) >= 0 ? String(estoqueEm) : ativaId;
+  return { lojas, estoque_em: em };
+}
+
+/** "Em quais lojas estes 48 produtos entram?" (mockup d). */
+export function tituloDoLote(n: number): string {
+  return n === 1 ? "Em quais lojas este produto entra?" : "Em quais lojas estes " + n + " produtos entram?";
+}
+
+/** "48 produtos em **2 lojas**. Estoque na Matriz." (mockup d). */
+export function rodapeDoLote(n: number, nLojas: number, lojaDoEstoque: string): FraseDoRodape {
+  return {
+    antes: (n === 1 ? "1 produto" : n + " produtos") + " em ",
+    forte: nLojas + " lojas",
+    depois: ". Estoque na " + lojaDoEstoque + ".",
+  };
+}
+
+/** "Importar nas 2 lojas" (mockup d). */
+export function rotuloImportarNasLojas(nLojas: number): string {
+  return "Importar nas " + nLojas + " lojas";
+}
+
+/** Dica embaixo da escolha do estoque (mockup d; plural para 3 ou mais lojas). */
+export function textoDasOutrasComZero(nOutras: number): string {
+  return nOutras <= 1
+    ? "A outra loja recebe os produtos com estoque 0. Depois, use \"Transferir\" para mandar as peças."
+    : "As outras lojas recebem os produtos com estoque 0. Depois, use \"Transferir\" para mandar as peças.";
+}
+
+/** "Cadastrar os 6 produtos novos também na Filial Centro" (mockup d, Chegou). */
+export function textoDaLojaNoChegou(nNovos: number, nome: string): string {
+  return nNovos === 1
+    ? "Cadastrar o produto novo também na " + nome
+    : "Cadastrar os " + nNovos + " produtos novos também na " + nome;
+}
+
+/** "A entrada é na **Matriz**, onde a mercadoria chegou. 6 produtos são novos." */
+export function avisoDoChegou(nomeDaAtiva: string, nNovos: number): FraseDoRodape {
+  return {
+    antes: "A entrada é na ",
+    forte: nomeDaAtiva,
+    depois: ", onde a mercadoria chegou. " + (nNovos === 1 ? "1 produto é novo." : nNovos + " produtos são novos."),
+  };
+}
+
+export const TEXTO_CHEGOU_SEM_ESTOQUE = "Sem estoque. O custo e o fornecedor ficam na ";
+
+export type PorLojaDoLote = {
+  company_id: string;
+  nome: string;
+  criados: number;
+  ja_existiam: number;
+  erros?: Array<{ message?: string; error?: string } | string>;
+};
+
+/** "48 criados · 2 já existiam · 1 com erro" — uma linha por loja, no resultado. */
+export function textoPorLoja(p: PorLojaDoLote): string {
+  const partes: string[] = [];
+  const c = Number(p.criados) || 0;
+  const j = Number(p.ja_existiam) || 0;
+  const e = Array.isArray(p.erros) ? p.erros.length : 0;
+  partes.push(c === 1 ? "1 criado" : c + " criados");
+  if (j > 0) partes.push(j === 1 ? "1 já existia" : j + " já existiam");
+  if (e > 0) partes.push(e === 1 ? "1 com erro" : e + " com erro");
+  return partes.join(" · ");
+}
+
+/** O motivo do primeiro erro da loja, como o servidor mandou (erro.message). "" sem motivo. */
+export function primeiroErroDaLoja(p: PorLojaDoLote): string {
+  const e = Array.isArray(p.erros) && p.erros.length ? p.erros[0] : null;
+  if (!e) return "";
+  if (typeof e === "string") return e.trim();
+  const msg = (e as any).message || ((e as any).erro && (e as any).erro.message) || (e as any).error || "";
+  return String(msg).trim();
+}
+
+/** Toast da loja com erro no lote: a contagem e, depois, o motivo do servidor. */
+export function toastDaLojaComErro(p: PorLojaDoLote): string {
+  const motivo = primeiroErroDaLoja(p);
+  return p.nome + ": " + textoPorLoja(p) + (motivo ? ". " + motivo : "");
+}
+
+export function porLojaDaResposta(resp: any): PorLojaDoLote[] {
+  const lista = resp && Array.isArray(resp.por_loja) ? resp.por_loja : [];
+  return lista.filter((p: any) => p && p.company_id).map((p: any) => ({
+    company_id: String(p.company_id),
+    nome: String(p.nome || ""),
+    criados: Number(p.criados) || 0,
+    ja_existiam: Number(p.ja_existiam) || 0,
+    erros: Array.isArray(p.erros) ? p.erros : [],
+  }));
+}
+
+// ── edição (A4, D13) ──────────────────────────────────────────
+
+/** "Matriz · Filial Centro" (mockup "Na edição"); a loja ativa primeiro. */
+export function lojasDoProdutoTxt(em: Array<{ company_id: string; nome: string }>, ativaId: string): string {
+  const ativa = em.filter((l) => String(l.company_id) === ativaId);
+  const outras = em.filter((l) => String(l.company_id) !== ativaId);
+  return [...ativa, ...outras].map((l) => l.nome).join(" · ");
+}
+
+/** "O que você alterar aqui vale para a Matriz. Para mandar peças, use "Transferir"." */
+export function dicaDaEdicao(nomeDaAtiva: string): string {
+  return "O que você alterar aqui vale para a " + nomeDaAtiva + ". Para mandar peças, use \"Transferir\".";
+}
+
+/** Campos de cadastro que mudaram e podem ir para as outras lojas (pergunta 5 do plano). */
+export function camposParaAplicar(antes: { name?: string | null; price?: number | string | null }, depois: { name: string; price: number }): Array<"price" | "name"> {
+  const out: Array<"price" | "name"> = [];
+  if (Math.abs((Number(antes.price) || 0) - (Number(depois.price) || 0)) > 0.0001) out.push("price");
+  if (String(antes.name || "").trim() !== String(depois.name || "").trim()) out.push("name");
+  return out;
+}
+
+export function tituloDaOferta(nomes: string[]): string {
+  return "Aplicar também na " + juntarComE(nomes) + "?";
+}
+
+export function textoDaOferta(campos: Array<"price" | "name">, nomes: string[]): string {
+  const oQue = campos.length === 2 ? "o preço e o nome" : campos[0] === "price" ? "o preço" : "o nome";
+  const lojas = juntarComE(nomes);
+  return "Você mudou " + oQue + ". A " + lojas + (nomes.length === 1 ? " continua" : " continuam") + " com o de antes até você aplicar lá. O estoque não muda.";
+}

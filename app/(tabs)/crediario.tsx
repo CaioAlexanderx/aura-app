@@ -1,3 +1,4 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Animated,
@@ -14,7 +15,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
 import { request } from "@/services/api";
-import { chavePixDoQr, ROTA_DA_CHAVE_PIX_DO_QR } from "@/utils/crediarioCarne";
+import { chavePixDoQr, diaMes, ROTA_DA_CHAVE_PIX_DO_QR } from "@/utils/crediarioCarne";
 import { waApi, WA_CREDIARIO_TEMPLATES } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { toast } from "@/components/Toast";
@@ -22,7 +23,15 @@ import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
 import { escolherRecentes } from "@/components/crediario/lancamento/calculos";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
+import { ListaDaFicha, type ClienteDaLista } from "@/components/crediario/ficha/ListaDaFicha";
+import { JANELA_DO_CELULAR, layoutDaFicha, posicaoNaLista, vizinhaNaLista } from "@/utils/crediarioFichaTela";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
+import { useModelosDeMensagem, salvarSobre } from "@/hooks/useModelosDeMensagem";
+import {
+  MODELO_DE_RESERVA, chavePixDaMensagem, diasDeAtraso, modeloInicial, parcelaDaCobranca, preencher,
+  primeiroNome, situacaoDaParcela,
+  type DadosDaMensagem, type Situacao,
+} from "@/utils/crediarioMensagem";
 import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/Button";
@@ -56,18 +65,13 @@ var fmt = function(n: number) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// A1-FE: data de calendário não passa por new Date() (meia-noite UTC vira o
+// dia anterior em São Paulo). QA 23/11/2026 (P1-6): o vencimento chega também
+// como "2026-11-27T00:00:00.000Z" — só "YYYY-MM-DD" era tratado como data
+// pura, e a prévia do Cobrar mandava "vence 26/11" para a cliente de uma
+// parcela de 27/11. Agora é o mesmo diaMes da ficha (utils/crediarioCarne).
 var fmtDate = function(iso: string) {
-  // A1-FE: date-only strings (YYYY-MM-DD) parsed as UTC midnight by new Date(),
-  // causing off-by-one in UTC-3 (Brazil). Split string instead to avoid the issue.
-  if (!iso) return "";
-  try {
-    const s = String(iso);
-    if (s.length === 10) {
-      const [, m, d] = s.split("-");
-      return d + "/" + m;
-    }
-    return new Date(s).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
-  } catch { return ""; }
+  return diaMes(iso);
 };
 
 /** Hoje em America/Sao_Paulo no formato YYYY-MM-DD (tz-safe). */
@@ -131,6 +135,10 @@ const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima
 
 const IS_WEB = Platform.OS === "web";
 
+// F3 da ficha (23/11/2026): a ficha em tela cheia ocupa a área útil, como o
+// Caixa (pdv.tsx): a viewport menos a barra do sininho (46 px).
+const FICHA_ALTURA = IS_WEB ? ({ height: "calc(100vh - 46px)" } as any) : { flex: 1 };
+
 // F4.1: no modo claro o Glass.heroGradSoft é um gradiente violeta DENSO
 // (feito para texto branco, como no Painel) — os tokens ink/ink3/violet3
 // invertem para cores escuras e perderiam contraste sobre ele.
@@ -150,6 +158,11 @@ type CobrancaPreviewState = {
    * o que enfileirar: o botão do canal oficial nem aparece.
    */
   installmentId?: string | null;
+  /** Modelos (21/11/2026): os dados das variáveis e a situação da parcela. */
+  dados: DadosDaMensagem;
+  situacao: Situacao;
+  /** Código Pix copia e cola (EMV) do valor cobrado. null = sem chave/sem valor. */
+  pixCopiaECola: string | null;
 };
 
 type SortOrder = "balance" | "az";
@@ -275,7 +288,8 @@ export default function CrediarioScreen() {
       try { router.setParams({ novo: undefined } as any); } catch {}
     }
   }
-  const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
+  // doEndereco: aberta pelo ?cliente= (recarga, troca de loja), não por um toque.
+  const [modalCust, setModalCust] = useState<{ id: string; name: string; doEndereco?: boolean } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
 
   // ── Cliente com dívida em outra loja do grupo (16/09/2026) ────────────
@@ -290,12 +304,25 @@ export default function CrediarioScreen() {
     if (!availableCompanies?.length && !companiesLoading) loadCompanies().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // F3 (23/11/2026): ?cliente=<id> fica no endereço enquanto a ficha está
+  // aberta (antes abria a ficha e era apagado): recarregar a página continua
+  // nela, e o redirect da troca de loja (rotaFichaNaLoja) reabre a ficha na
+  // loja nova. Sem o parâmetro, a ficha fecha.
   useEffect(() => {
+    if (!company?.id) return;
     const cid = clienteDaRota(params.cliente);
-    if (!cid || !company?.id) return;
-    setModalCust({ id: cid, name: "" });
-    try { router.setParams({ cliente: undefined } as any); } catch {}
+    if (!cid) { setModalCust(null); return; }
+    setModalCust((prev) => (prev?.id === cid ? prev : { id: cid, name: "", doEndereco: true }));
   }, [params.cliente, company?.id]);
+
+  const abrirFicha = useCallback((c: { id: string; name: string }) => {
+    setModalCust(c);
+    try { router.setParams({ cliente: c.id } as any); } catch {}
+  }, []);
+  const fecharFicha = useCallback(() => {
+    setModalCust(null);
+    try { router.setParams({ cliente: undefined } as any); } catch {}
+  }, []);
 
   async function handleOpenInCompany(targetCompanyId: string, customerId: string) {
     const web = Platform.OS === "web" && typeof window !== "undefined";
@@ -348,6 +375,25 @@ export default function CrediarioScreen() {
   const isWide   = width > 720;
   const isNarrow = width < 500;
 
+  // ── F3 (23/11/2026): ficha em tela cheia ──────────────────────────────
+  // A casca sai da largura ÚTIL (ao lado do menu do app), medida no onLayout
+  // da raiz; até medir, vale a janela. Celular e telas estreitas seguem com a
+  // janela de sempre (até a F5).
+  const [larguraUtil, setLarguraUtil] = useState(width);
+  const layoutFicha = layoutDaFicha(larguraUtil, width);
+  const fichaEmTela = !!modalCust && layoutFicha !== "janela";
+  // A lista de baixo não desmonta (busca, filtro e ordem ficam); a rolagem
+  // dela volta para onde estava quando a ficha fecha.
+  const listaRef = useRef<ScrollView>(null);
+  const rolagemDaLista = useRef(0);
+  useEffect(() => {
+    if (fichaEmTela) return;
+    const y = rolagemDaLista.current;
+    if (y <= 0) return;
+    const raf = requestAnimationFrame(() => { try { listaRef.current?.scrollTo({ y, animated: false }); } catch {} });
+    return () => cancelAnimationFrame(raf);
+  }, [fichaEmTela]);
+
   const dashQ = useQuery({
     queryKey: ["credit-dashboard", company?.id],
     queryFn: () => creditApi.getDashboard(company!.id),
@@ -367,6 +413,12 @@ export default function CrediarioScreen() {
     queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true, q: searchQ || undefined }),
     enabled: !!company?.id,
     staleTime: 60_000,
+    // QA 23/11 (P2): enquanto a busca nova carrega, fica a lista anterior —
+    // a lista ao lado da ficha piscava "0 clientes" a cada letra.
+    // Só da mesma loja (revisão #1360): trocar de loja não mostra a carteira
+    // da outra enquanto carrega.
+    placeholderData: (anterior, consultaAnterior) =>
+      consultaAnterior?.queryKey?.[1] === company?.id ? anterior : undefined,
   });
 
   // 10/10/2026: config do canal digital — de onde sai a chave Pix do QR do
@@ -427,55 +479,92 @@ export default function CrediarioScreen() {
     setRefreshing(false);
   }, [company?.id, searchQ]);
 
-  const handleCobrar = useCallback(async (customerId: string, customerName: string, phone: string | null) => {
+  // Modelos de mensagem da LOJA ativa (multi-CNPJ: a chave leva o id).
+  // Falhou a rota: o hook entrega os prontos da Aura embutidos no app.
+  const modelosMsg = useModelosDeMensagem(company?.id);
+
+  /**
+   * Monta a prévia do Cobrar. `carne` (21/11/2026): o Cobrar do cartão de um
+   * carnê cobra a parcela DAQUELE carnê (id null = grupo sem carnê). Antes
+   * caía sempre na parcela mais antiga da cliente, de qualquer carnê.
+   */
+  const handleCobrar = useCallback(async (
+    customerId: string, customerName: string, phone: string | null, carne?: { id: string | null },
+  ) => {
     if (!phone) { toast.error("Cliente sem telefone cadastrado"); return; }
     setTriggeringId(customerId);
     try {
       const detail = await creditApi.getCustomerHistory(company!.id, customerId);
-      const store  = company?.name || "nossa loja";
-      const pixKey = String((rulesQ.data as any)?.pix_key || "").trim();
-      const debit  = (detail.transactions || []).find(t => t.type === "debit");
-      const prodMatch = debit?.notes ? debit.notes.match(/\(([^)]+)\)/) : null;
-      const products  = prodMatch ? prodMatch[1] : "";
-      const buyDate   = debit ? fmtDate(debit.created_at) : "";
-      const open = (detail.open_installments || []).slice()
-        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-      const nextDue = open[0];
-
-      const lines: string[] = [
-        `Olá, ${customerName}! Tudo bem? Passando pra lembrar do seu crediário aqui na ${store}.`,
-      ];
-      if (debit) lines.push(`Referente à compra do dia ${buyDate}${products ? ` (${products})` : ""}.`);
+      const store  = nomeDaLojaDe(company) || "nossa loja";
+      // Uma chave só: a do canal digital (a do código copia e cola e do QR)
+      // quando existe; senão a da régua.
+      const pixKey = chavePixDaMensagem(chavePixDoQr(canalQ), (rulesQ.data as any)?.pix_key);
+      const nextDue = parcelaDaCobranca(detail.open_installments, carne);
 
       let valorLabel: string | undefined;
       let valorDesc: string | undefined;
+      const dados: DadosDaMensagem = {
+        nome: primeiroNome(customerName) || customerName,
+        loja: store,
+        saldo: fmt(detail.balance),
+        pix: pixKey || null,
+      };
+      let situacao: Situacao = "a_vencer";
 
       if (nextDue) {
         const valor = valorAPagarParcela(nextDue);
+        const atraso = diasDeAtraso(nextDue.due_date);
+        situacao = situacaoDaParcela(nextDue.due_date);
+        const parcela = `${nextDue.installment_number}/${nextDue.total_installments}`;
         valorLabel = fmt(valor);
-        valorDesc = `Parcela ${nextDue.installment_number}/${nextDue.total_installments} · vence ${fmtDate(nextDue.due_date)}`;
-        lines.push(`A parcela ${nextDue.installment_number}/${nextDue.total_installments} de ${fmt(valor)} vence em ${fmtDate(nextDue.due_date)}.`);
+        // "vence 10/10" de parcela vencida era o defeito do texto antigo.
+        valorDesc = situacao === "em_atraso"
+          ? `Parcela ${parcela} · venceu ${fmtDate(nextDue.due_date)} · ${pluralize(atraso, "dia", "dias")} de atraso`
+          : situacao === "vence_hoje"
+            ? `Parcela ${parcela} · vence hoje`
+            : `Parcela ${parcela} · vence ${fmtDate(nextDue.due_date)}`;
+        dados.valor = fmt(valor);
+        dados.vencimento = fmtDate(nextDue.due_date);
+        dados.parcela = parcela;
+        dados.dias = atraso > 0 ? String(atraso) : null;
       } else {
         valorLabel = fmt(detail.balance);
-        lines.push(`Seu saldo em aberto é de ${fmt(detail.balance)}.`);
       }
-      if (pixKey) lines.push(`Chave Pix para pagamento: ${pixKey}`);
-      lines.push(`— ${store}`);
 
+      // Pix copia e cola (21/11/2026): o código vai numa 2ª mensagem, só com
+      // ele. Usa a chave do canal digital (a do QR do carnê). Sem chave
+      // conhecida (null) nem pergunta; falhou: a prévia segue sem o código.
+      let pixCopiaECola: string | null = null;
+      if (chavePixDoQr(canalQ) !== null) {
+        try {
+          const pix = nextDue
+            ? await creditApi.getInstallmentPix(company!.id, nextDue.id)
+            : Number(detail.balance) > 0
+              ? await creditApi.getFreePix(company!.id, customerId, Number(detail.balance))
+              : null;
+          pixCopiaECola = pix && pix.emv ? String(pix.emv) : null;
+        } catch { pixCopiaECola = null; }
+      }
+
+      // Sem parcela (só saldo) abre no modelo do {saldo}; nunca texto vazio.
+      const padrao = modeloInicial(modelosMsg.modelos, situacao, dados) || MODELO_DE_RESERVA;
       setCobrancaPreview({
         recipientName: customerName,
         phone,
         valorLabel,
         valorDesc,
-        message: lines.join("\n\n"),
+        message: preencher(padrao.body, dados).texto,
         installmentId: nextDue?.id || null,
+        dados,
+        situacao,
+        pixCopiaECola,
       });
     } catch {
       toast.error("Erro ao montar a cobrança");
     } finally {
       setTriggeringId(null);
     }
-  }, [company?.id, company?.name, rulesQ.data]);
+  }, [company?.id, nomeDaLojaDe(company), rulesQ.data, modelosMsg.modelos, canalQ]);
 
   const kpis = dashQ.data?.kpis;
   const aging: AgingRow[] = agingQ.data || [];
@@ -550,11 +639,90 @@ export default function CrediarioScreen() {
 
   const clearOrLabel = filterSel !== "todos" ? "toque de novo p/ limpar" : "toque numa faixa p/ filtrar";
 
+  // F3: a lista estreita ao lado da ficha usa a MESMA carteira da página
+  // (busca, filtro e ordem); as setas andam nela.
+  const idsDaLista = carteira.map((c) => c.id);
+  const naLista = posicaoNaLista(idsDaLista, modalCust?.id ?? null);
+  const irPara = (delta: 1 | -1) => {
+    const id = vizinhaNaLista(idsDaLista, modalCust?.id ?? null, delta);
+    const alvo = id ? carteira.find((c) => c.id === id) : null;
+    return alvo ? () => abrirFicha({ id: alvo.id, name: alvo.name }) : undefined;
+  };
+  const clientesDaLista: ClienteDaLista[] = fichaEmTela
+    ? carteira.map((cust) => {
+        const overdue = isCustomerOverdue(cust as any);
+        const conferir = statusDaCarteira(cust as any) === "conferir";
+        const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
+        return {
+          id: cust.id,
+          nome: cust.name,
+          atrasada: overdue,
+          situacao: overdue
+            ? (dl > 0 ? `Em atraso · ${pluralize(dl, "dia", "dias")}` : "Em atraso")
+            : conferir ? "Conferir" : "Em dia",
+          valor: conferir ? m(fmt(cust.open_installments || 0)) : m(fmt(cust.balance)),
+        };
+      })
+    : [];
+
+  const propsDaFicha = {
+    companyId: company?.id || "",
+    customerId: modalCust?.id || null,
+    customerName: modalCust?.name || null,
+    // A chave do QR do carnê é a do canal digital, NÃO a pix_key da régua
+    // (essa só entra no texto da cobrança). undefined enquanto carrega ou
+    // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
+    pixKey: chavePixDoQr(canalQ),
+    storeName: nomeDaLojaDe(company) || null,
+    onOpenSettings: () => { fecharFicha(); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); },
+    onCobrar: handleCobrar,
+    onChanged: () => {
+      qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });
+      qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] });
+      qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
+    },
+    onClose: fecharFicha,
+    abertaPeloEndereco: !!modalCust?.doEndereco,
+    cobrando: !!modalCust && triggeringId === modalCust.id,
+    accessibleCompanyIds,
+    onOpenInCompany: handleOpenInCompany,
+    switchingCompany: switching,
+  };
+
   return (
+    <View style={{ flex: 1 }} onLayout={(e) => setLarguraUtil(e.nativeEvent.layout.width)}>
+    {fichaEmTela && (
+      <View style={FICHA_ALTURA} testID="crediario-ficha-em-tela">
+        <ClienteCrediarioModal
+          {...propsDaFicha}
+          visible
+          casca="tela"
+          layout={layoutFicha === "larga" ? "larga" : "media"}
+          navegacao={{ posicao: naLista.posicao, total: naLista.total, onAnterior: irPara(-1), onProxima: irPara(1) }}
+          listaLateral={
+            <ListaDaFicha
+              clientes={clientesDaLista}
+              selecionadaId={modalCust?.id ?? null}
+              onEscolher={(id, nome) => abrirFicha({ id, name: nome })}
+              onVoltar={fecharFicha}
+              busca={searchInput}
+              onBusca={setSearchInput}
+              filtro={filterSel}
+              onFiltro={(f) => setFilterSel(f)}
+              rotuloDaFaixa={AGING_LABELS[filterSel] || null}
+              carregando={carteiraQ.isLoading}
+            />
+          }
+        />
+      </View>
+    )}
     <ScrollView
-      style={s.screen}
+      ref={listaRef}
+      style={[s.screen, fichaEmTela && { display: "none" }]}
       contentContainerStyle={[s.content, { padding: pad }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.violet3} />}
+      onScroll={fichaEmTela ? undefined : (e) => { rolagemDaLista.current = e.nativeEvent.contentOffset.y; }}
+      scrollEventThrottle={64}
     >
       {/* ── Header (01/09/2026, QA onda 2 — cabeçalho unificado) ──
           A tela já tinha eyebrow + título próprios, quase o desenho certo.
@@ -615,7 +783,7 @@ export default function CrediarioScreen() {
         <CreditoLivreTab
           companyId={company?.id}
           consolidated={consolidatedView}
-          onOpenCustomer={(c) => setModalCust(c)}
+          onOpenCustomer={(c) => abrirFicha(c)}
         />
       )}
 
@@ -801,7 +969,7 @@ export default function CrediarioScreen() {
               return (
                 <Pressable
                   key={cust.id}
-                  onPress={() => setModalCust({ id: cust.id, name: cust.name })}
+                  onPress={() => abrirFicha({ id: cust.id, name: cust.name })}
                   accessibilityRole="button"
                   accessibilityLabel={`Abrir ficha de ${cust.name}, saldo ${m(fmt(cust.balance))}`}
                   style={({ hovered, pressed }: any) => [
@@ -912,28 +1080,13 @@ export default function CrediarioScreen() {
 
       <CriarLancamentoModal visible={showCriar} onClose={fecharCriar} recentes={recentesDoLancamento} />
 
-      <ClienteCrediarioModal
-        visible={!!modalCust}
-        companyId={company?.id || ""}
-        customerId={modalCust?.id || null}
-        customerName={modalCust?.name || null}
-        // A chave do QR do carnê é a do canal digital, NÃO a pix_key da régua
-        // (essa só entra no texto da cobrança). undefined enquanto carrega ou
-        // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
-        pixKey={chavePixDoQr(canalQ)}
-        storeName={company?.name || null}
-        onOpenSettings={() => { setModalCust(null); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); }}
-        onCobrar={handleCobrar}
-        onChanged={() => {
-          qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });
-          qc.invalidateQueries({ queryKey: ["credit-dashboard", company?.id] });
-          qc.invalidateQueries({ queryKey: ["credit-aging", company?.id] });
-        }}
-        onClose={() => setModalCust(null)}
-        accessibleCompanyIds={accessibleCompanyIds}
-        onOpenInCompany={handleOpenInCompany}
-        switchingCompany={switching}
-      />
+      {/* F5 (23/11/2026): no celular (janela ≤ 768 px) a ficha é página
+          inteira (era folha de 94%). Computador com a janela estreita ao lado
+          do menu continua com o diálogo de 700 px. Na tela larga e média a
+          ficha está acima. */}
+      {!fichaEmTela && (
+        <ClienteCrediarioModal {...propsDaFicha} visible={!!modalCust} casca={width > JANELA_DO_CELULAR ? "janela" : "pagina"} />
+      )}
 
       {cobrancaPreview && (
         <CobrancaPreviewModal
@@ -950,9 +1103,28 @@ export default function CrediarioScreen() {
               : undefined
           }
           onClose={() => setCobrancaPreview(null)}
+          modelos={modelosMsg.modelos}
+          modelosDaAura={modelosMsg.daAura}
+          limiteDeModelos={modelosMsg.limite}
+          dados={cobrancaPreview.dados}
+          situacao={cobrancaPreview.situacao}
+          pixCopiaECola={cobrancaPreview.pixCopiaECola}
+          onGerenciarModelos={() => {
+            setCobrancaPreview(null);
+            fecharFicha();
+            router.push("/crediario/settings" as any);
+          }}
+          onSalvarModelo={async (como, base, m) => {
+            const salvo = como === "novo"
+              ? await modelosMsg.criar({ name: m.name, body: m.body, situation: m.situation })
+              : await salvarSobre(modelosMsg, base, m);
+            toast.success("Modelo salvo.");
+            return salvo;
+          }}
         />
       )}
     </ScrollView>
+    </View>
   );
 }
 

@@ -1,14 +1,18 @@
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Modal, Platform } from "react-native";
 import { useQueries } from "@tanstack/react-query";
 
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
 import { Pagination } from "@/components/Pagination";
 import { useAuthStore } from "@/stores/auth";
 import { caixaApi, type CaixaSessaoHistorico } from "@/services/caixaApi";
 import { montarPagina, totalDePaginas, TAMANHO_DA_PAGINA } from "@/utils/fechamentosPaginados";
+import { imprimirFechamento, TEXTO_POPUP, type LojaDoRelatorio } from "@/utils/fechamentoReimpresso";
+import { toast } from "@/components/Toast";
 
 // ============================================================
 // AURA. — FechamentosTab (Vendas › Fechamentos de Caixa)
@@ -30,6 +34,11 @@ import { montarPagina, totalDePaginas, TAMANHO_DA_PAGINA } from "@/utils/fechame
 // apareciam. Regras da página em utils/fechamentosPaginados.ts. Os números do
 // topo (mês corrente) continuam da primeira consulta de cada loja, como antes:
 // a página não mexe neles.
+//
+// 23/11/2026 (pedido do Caio): o drawer do detalhe ganha "Imprimir
+// fechamento", que remonta o relatório do dia (o mesmo do fim do
+// fechamento) a partir do detalhe da sessão. Regras em
+// utils/fechamentoReimpresso.ts. No consolidado, vale a loja da linha.
 // ============================================================
 
 type Row = CaixaSessaoHistorico & {
@@ -93,10 +102,10 @@ export function FechamentosTab() {
   const companiesToFetch = useMemo(function() {
     if (consolidatedView) {
       return (availableCompanies || []).map(function(c: any) {
-        return { id: c.id, name: c.trade_name || c.legal_name || c.name || "Empresa" };
+        return { id: c.id, name: nomeDaLojaDe(c) || "Empresa" };
       });
     }
-    if (company?.id) return [{ id: company.id, name: (company as any).trade_name || company.name || "Empresa" }];
+    if (company?.id) return [{ id: company.id, name: nomeDaLojaDe(company) || "Empresa" }];
     return [];
   }, [consolidatedView, availableCompanies, company]);
 
@@ -211,6 +220,20 @@ export function FechamentosTab() {
   // Drawer
   const [selected, setSelected] = useState<Row | null>(null);
 
+  // 23/11/2026: nome e CNPJ da loja da linha no cabeçalho do relatório. O
+  // nome é o da linha (a mesma regra de nome da loja do Caixa); o CNPJ, como
+  // o Caixa passa no dia (company.cnpj) ou o da lista de lojas.
+  const lojaDoRelatorio = function(row: Row): LojaDoRelatorio {
+    if (company?.id === row.company_id) {
+      return {
+        companyName: row.company_name,
+        companyCnpj: (company as any).cnpj || (company as any).profile?.cnpj || null,
+      };
+    }
+    const outra: any = (availableCompanies || []).find(function(c: any) { return c.id === row.company_id; });
+    return { companyName: row.company_name, companyCnpj: (outra && outra.cnpj) || null };
+  };
+
   return (
     <View style={s.wrap}>
       <Hero kpis={kpis} consolidated={consolidatedView} />
@@ -280,7 +303,11 @@ export function FechamentosTab() {
         />
       ) : null}
 
-      <DrawerModal row={selected} onClose={function() { setSelected(null); }} />
+      <DrawerModal
+        row={selected}
+        onClose={function() { setSelected(null); }}
+        loja={selected ? lojaDoRelatorio(selected) : null}
+      />
     </View>
   );
 }
@@ -465,8 +492,8 @@ function StatusPill(props: { kind: "ok" | "sobra" | "falta"; children: any }) {
 
 // ── Drawer (modal centralizado em mobile, lateral em web wide) ─────────────
 
-function DrawerModal(props: { row: Row | null; onClose: () => void }) {
-  const { row, onClose } = props;
+function DrawerModal(props: { row: Row | null; onClose: () => void; loja?: LojaDoRelatorio | null }) {
+  const { row, onClose, loja } = props;
   if (!row) {
     return <Modal visible={false} transparent />;
   }
@@ -504,6 +531,15 @@ function DrawerModal(props: { row: Row | null; onClose: () => void }) {
             <DrawerRow k="Total geral" v={fmt(row.total_geral)} mono bold />
 
             <View style={s.drawerSep} />
+            {/* 20/11/2026 (TEKMO): retirada e reforço entram no esperado; sem
+                as linhas, R$ 210 vendidos e "esperado R$ 250" pareciam erro.
+                Mesmos rótulos do PDF do fechamento. */}
+            {Number(row.total_suprimentos) > 0 && (
+              <DrawerRow k="Reforços de troco" v={"+ " + fmt(row.total_suprimentos)} mono />
+            )}
+            {Number(row.total_sangrias) > 0 && (
+              <DrawerRow k="Retiradas (sangrias)" v={"- " + fmt(row.total_sangrias)} mono />
+            )}
             <DrawerRow k="Esperado em dinheiro" v={fmt(row.dinheiro_esperado)} mono />
             <DrawerRow k="Contado" v={fmt(row.dinheiro_contado)} mono />
             <View style={s.drawerDifBox}>
@@ -533,6 +569,33 @@ function DrawerModal(props: { row: Row | null; onClose: () => void }) {
                 <Text style={s.drawerObs}>{row.obs_fechamento}</Text>
               </>
             ) : null}
+
+            {/* 23/11/2026: o relatório do dia, de novo. window.open sai
+                direto deste clique (bloqueio de pop-up). */}
+            <Pressable
+              testID="fechamento-imprimir"
+              accessibilityRole="button"
+              style={s.drawerPrintBtn}
+              onPress={function() {
+                const sessaoId = row.id;
+                const companyId = row.company_id;
+                const abriu = imprimirFechamento(
+                  function() {
+                    return caixaApi.sessao(companyId, sessaoId).then(function(r) {
+                      // A linha do histórico completa o que o detalhe não trouxer.
+                      return { ...row, ...(r && r.sessao) };
+                    });
+                  },
+                  loja || { companyName: row.company_name },
+                  function() { toast.error("Não conseguimos buscar este fechamento agora. Tente de novo em instantes."); },
+                );
+                if (!abriu) toast.error(TEXTO_POPUP);
+              }}
+            >
+              <Icon name="print" size={14} color="#fff" />
+              <Text style={s.drawerPrintTxt}>Imprimir fechamento</Text>
+            </Pressable>
+            <Text style={s.drawerPrintHint}>Abre o mesmo relatório que saiu no dia do fechamento.</Text>
           </ScrollView>
         </View>
       </View>
@@ -655,6 +718,12 @@ const s = StyleSheet.create({
   drawerDifLabel: { fontSize: 13, color: Colors.ink3 },
   drawerObsLabel: { fontSize: 11, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: "600", marginTop: 4, marginBottom: 4 },
   drawerObs: { fontSize: 13, color: Colors.ink, lineHeight: 18 },
+  drawerPrintBtn: {
+    marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    height: 42, borderRadius: 10, backgroundColor: Colors.violet,
+  },
+  drawerPrintTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: "#fff" },
+  drawerPrintHint: { fontFamily: Fonts.body, fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 6 },
 });
 
 export default FechamentosTab;

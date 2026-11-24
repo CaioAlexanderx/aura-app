@@ -6,6 +6,7 @@
 // 05/06/2026: linhas usam o preço de venda efetivo (lineSalePrice) pra
 // refletir o lápis do caixa e bater com o subtotal exibido.
 // ============================================================
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
@@ -36,7 +37,7 @@ export function QuoteModal({
     try {
       const items: QuoteItem[] = cart.map((l) => ({ name: l.product.name, qty: l.qty, unitPrice: lineSalePrice(l) }));
       const profile = company?.profile || {};
-      const companyName = company?.trade_name || company?.legal_name || company?.name || "Estúdio";
+      const companyName = nomeDaLojaDe(company) || "Estúdio";
       openQuotePdf({
         items, customerName: customer.trim() || null, sellerName: operatorName || null, total: subtotal,
         companyName, companyLogoUrl: profile.logo_url || null, companyPhone: profile.phone || null,

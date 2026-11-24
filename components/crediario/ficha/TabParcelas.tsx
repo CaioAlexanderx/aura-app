@@ -18,19 +18,35 @@
 // tem carnê e "Quitados · N" recolhido no fim. A derivação de cada cartão
 // está em utils/crediarioCarne (testada sozinha). O selo de periodicidade
 // (Mensal/Quinzenal) saiu do cartão: não está no desenho aprovado.
+//
+// 23/11/2026 (F1 do redesenho da ficha): o Cobrar saiu do cartão do carnê
+// (um Cobrar só, no alto da ficha) e os nomes mudaram — "Parcela 1 de 3",
+// "vence 20/12" (sem o "· no prazo"), "19 dias de atraso", "Mudar as
+// parcelas", "Dividir em parcelas", "Criar carnê vazio".
+//
+// 23/11/2026 (F4 do redesenho): sem sanfona dentro de sanfona. Nos cartões
+// de carnê a parcela a pagar é uma linha só (<LinhaDaParcela>): número, data
+// com o lápis sempre à vista, multa e juros em frase quando houver, valor e
+// "Receber". O "Pix" da linha saiu (o "Gerar Pix" está no Receber
+// pagamento) e o "Alterar data" também (é o lápis). Juntar, Imprimir todos e
+// Criar carnê vazio foram para o "⋯" do alto da ficha. A ParcelaRow com
+// sanfona continua só na lista do backend antigo (sem carnês).
 // ============================================================
 import { useMemo, useState } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
 import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
+import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
-import { CarneCard } from "./CarneCard";
-import { fmt, fmtDate } from "./fichaHelpers";
-import { m } from "./fichaStyles";
+import { CarneCard, type InfoDaLinha } from "./CarneCard";
+import { valorParaQuitarAte } from "@/utils/crediarioReceberCarne";
+import { fmt } from "./fichaHelpers";
+import { m, CorDaFicha } from "./fichaStyles";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
 function sumRemaining(list: CreditInstallment[]): number {
@@ -85,7 +101,9 @@ export type TabParcelasProps = {
   companyId: string;
   customerId: string;
   phone: string | null;
-  onCobrar?: ((customerId: string, customerName: string, phone: string | null) => void) | undefined;
+  /** 23/11/2026: o carnê não cobra mais (um Cobrar só, no alto da ficha).
+   *  Continua aceito para não mexer em quem já passa. */
+  onCobrar?: ((customerId: string, customerName: string, phone: string | null, carne?: { id: string | null }) => void) | undefined;
   name: string;
 };
 
@@ -93,10 +111,10 @@ export function TabParcelas({
   accounts, openInst, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, onExcluirCarne, prefill, openBalance,
-  customerId, phone, onCobrar, name,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onExcluirCarne, prefill, openBalance,
+  name,
 }: TabParcelasProps) {
-  // Parcela expandida (uma por vez — progressive disclosure)
+  // Parcela expandida (uma por vez) — só na lista do backend antigo.
   const [expandedInstId, setExpandedInstId] = useState<string | null>(null);
   const [verQuitados, setVerQuitados] = useState(false);
 
@@ -126,16 +144,24 @@ export function TabParcelas({
     const chargesTotal = ins.charges_total ?? 0;
     const hasCharges = late && chargesTotal > 0;
     const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
+    const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
+    // Ano só quando não é o corrente ("vence 20/12/27").
+    const venc = dataDoVencimento(ins.due_date, diaEmSaoPaulo(new Date().toISOString()));
     return (
       <ParcelaRow
         key={ins.id}
-        title={`Parcela ${ins.installment_number}/${ins.total_installments}`}
+        title={`Parcela ${ins.installment_number} de ${ins.total_installments}`}
         subtitle={
           late
-            ? `venceu ${fmtDate(ins.due_date)}${(ins.days_late ?? ins.days_charged ?? 0) > 0 ? ` · ${ins.days_late ?? ins.days_charged}d de atraso` : ""}`
+            ? [
+                `venceu ${venc}`,
+                // Os dias vêm antes dos encargos: é o que a lojista procura.
+                diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
+                hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
+              ].filter(Boolean).join(" · ")
             : toReview
-              ? `venceu ${fmtDate(ins.due_date)} · anterior ao cadastro do carnê — confira se já foi paga`
-              : `vence ${fmtDate(ins.due_date)} · no prazo`
+              ? `venceu ${venc} · antes de o carnê ser cadastrado — confira se já foi paga`
+              : `vence ${venc}`
         }
         amount={fmt(totalHoje)}
         overdue={late}
@@ -159,63 +185,111 @@ export function TabParcelas({
     );
   };
 
+  // O que se paga hoje por uma parcela (com multa e juros só em atraso).
+  const valorHoje = (ins: CreditInstallment) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = isInstallmentOverdue(ins);
+    const enc = ins.charges_total ?? 0;
+    return late && enc > 0 ? (ins.total_due ?? (rem + enc)) : rem;
+  };
+
+  // F4: a linha da parcela no cartão do carnê — sem sanfona.
+  const renderLinha = (ins: CreditInstallment, indice: number, info?: InfoDaLinha<CreditInstallment>) => {
+    const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
+    const late = isInstallmentOverdue(ins);
+    const toReview = !late && needsReview(ins);
+    const chargesTotal = ins.charges_total ?? 0;
+    const hasCharges = late && chargesTotal > 0;
+    const totalHoje = hasCharges ? (ins.total_due ?? (rem + chargesTotal)) : rem;
+    const diasDeAtraso = ins.days_late ?? ins.days_charged ?? 0;
+    const hoje = diaEmSaoPaulo(new Date().toISOString());
+    const venc = dataDoVencimento(ins.due_date, hoje);
+    // Vencida dentro da carência: não é atraso, mas a data já passou.
+    const jaVenceu = late || toReview || (diaEmSaoPaulo(ins.due_date) || "9999") < hoje;
+    const jaPago = Number(ins.covered_amount || 0);
+    const porque = late
+      ? [
+          hasCharges ? `${fmt(rem)} + ${fmt(chargesTotal)} de multa e juros` : "",
+          diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
+        ].filter(Boolean).join(" · ")
+      : toReview
+        ? "antes de o carnê ser cadastrado — confira se já foi paga"
+        : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
+    // QA 23/11/2026: o backend abate pela parcela mais antiga do carnê (não
+    // dá para mirar uma parcela). Na 1ª linha "Receber" é esta; nas outras,
+    // "Receber até esta" preenche as anteriores + esta — o que de fato vai
+    // ser pago para esta ficar em dia. Antes abria com o valor desta e
+    // pagava a 1ª.
+    // Revisão #1360:
+    //  - grupo "Compras sem carnê" (sem account_id): "Receber" simples;
+    //  - com multa e juros, o backend (ledger.applyPayment) cobra primeiro os
+    //    encargos de TODAS as abertas do carnê e só depois o principal, da
+    //    mais antiga em diante. O valor que deixa ESTA em dia é: encargos de
+    //    todas + principal das anteriores e desta (utils/crediarioReceberCarne).
+    const doCarne = !!ins.account_id;
+    const anteriores = doCarne ? (info?.anteriores ?? []) : [];
+    const valorAteAqui = doCarne
+      ? valorParaQuitarAte(info?.todas ?? [ins], [...anteriores, ins], isInstallmentOverdue)
+      : totalHoje;
+    return (
+      <LinhaDaParcela
+        key={ins.id}
+        numero={info?.numero ?? `${ins.installment_number} de ${ins.total_installments}`}
+        ateAqui={anteriores.length > 0 ? fmt(valorAteAqui) : null}
+        data={`${jaVenceu ? "venceu" : "vence"} ${venc}`}
+        porque={porque}
+        valor={fmt(totalHoje)}
+        atrasada={late}
+        principal={indice === 0}
+        onData={() => handleEditDueDateOpen(ins)}
+        // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
+        // quem toca Receber no carnê B espera abater o B. Antes ia para a
+        // parcela mais antiga de qualquer carnê.
+        onReceber={() => prefill(valorAteAqui, ins.account_id ?? undefined)}
+        valorDoReceber={fmt(valorAteAqui)}
+        // O Pix da parcela volta (o Caio não aprovou tirar).
+        onPix={() => openInstallmentPix(ins.id)}
+      />
+    );
+  };
+
   return (
 <>
   {cartoes && (
     <View style={{ marginBottom: 13 }}>
-      <View style={c.secRow}>
-        <Text style={m.cardTitle}>Em aberto · {abertos.length}</Text>
-        <View style={c.links}>
-          {!!onJuntar && (
-            <Pressable style={c.link} onPress={onJuntar} accessibilityRole="button" testID="carnes-juntar">
-              <Text style={c.linkT}>Juntar carnês</Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={c.link}
-            onPress={() => onImprimir(undefined, name, openInst.length)}
-            accessibilityRole="button"
-            testID="carnes-imprimir-todos"
-          >
-            <Text style={c.linkT}>Imprimir todos</Text>
-          </Pressable>
-          {/* "Novo carnê" manual continua existindo — discreto: o normal agora
-              é o carnê nascer da venda. */}
-          <Pressable
-            style={c.link}
-            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
-            accessibilityRole="button"
-            testID="carnes-novo-carne"
-          >
-            <Text style={[c.linkT, { color: Colors.ink3 }]}>Novo carnê</Text>
-          </Pressable>
-        </View>
-      </View>
-
       {showNewAccount && (
         <View style={m.newAccRow}>
           <TextInput
             style={m.newAccInput}
             placeholder="Nome do carnê"
-            placeholderTextColor={Colors.ink3}
+            placeholderTextColor={CorDaFicha.secundario}
             value={newAccountName}
             onChangeText={setNewAccountName}
             autoFocus
           />
           <Pressable
-            style={[m.newAccConfirm, creatingAccount && { opacity: 0.5 }]}
+            style={[m.newAccConfirm, { minHeight: 44 }, creatingAccount && { opacity: 0.5 }]}
             onPress={handleCreateAccount}
             disabled={creatingAccount}
+            accessibilityRole="button"
           >
             {creatingAccount
               ? <ActivityIndicator size="small" color="#fff" />
               : <Text style={m.newAccConfirmTxt}>Criar</Text>}
           </Pressable>
+          <Pressable
+            style={c.cancelar}
+            onPress={() => { setShowNewAccount(() => false); setNewAccountName(""); }}
+            disabled={creatingAccount}
+            accessibilityRole="button"
+            testID="carnes-novo-carne-cancelar"
+          >
+            <Text style={c.linkT}>Cancelar</Text>
+          </Pressable>
         </View>
       )}
 
       {abertos.map((carne) => {
-        const isExpanded = expandedAccountId === carne.id;
         // Renegociar precisa de parcela para substituir. No grupo sem carnê o
         // saldo sem agenda ainda pode ser parcelado (10/07, "Parcelar saldo").
         const podeRenegociar = carne.parcelasAbertas.length > 0;
@@ -224,9 +298,7 @@ export function TabParcelas({
           <CarneCard
             key={carne.key}
             carne={carne}
-            expanded={isExpanded}
-            onToggle={() => setExpandedAccountId(isExpanded ? undefined : carne.id)}
-            renderParcela={renderParcela}
+            renderParcela={renderLinha}
             // Receber do carnê cai NESTE carnê; o grupo sem carnê não tem id
             // para mirar e segue a regra de sempre (parcela mais antiga primeiro).
             onReceber={() => prefill(carne.falta, carne.id ?? undefined)}
@@ -236,8 +308,7 @@ export function TabParcelas({
                 : podeParcelar ? () => onRenegociar(null, "Saldo em aberto", carne.falta)
                   : undefined
             }
-            renegociarLabel={podeParcelar ? "Parcelar saldo" : "Renegociar"}
-            onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone) : undefined}
+            renegociarLabel={podeParcelar ? "Dividir em parcelas" : "Mudar as parcelas"}
             onExcluir={onExcluirCarne && carne.id && !carne.semCarne && excluiveis.has(carne.id)
               ? () => onExcluirCarne({ id: carne.id!, nome: carne.nome, falta: carne.falta })
               : undefined}
@@ -252,9 +323,9 @@ export function TabParcelas({
       )}
 
       {quitados.length > 0 && (
-        <View style={{ marginTop: 6 }}>
+        <View style={{ marginTop: 2 }}>
           <View style={c.secRow}>
-            <Text style={m.cardTitle}>Quitados · {quitados.length}</Text>
+            <Text style={c.quitadosT}>{quitados.length} {quitados.length === 1 ? "carnê quitado" : "carnês quitados"}</Text>
             <Pressable
               style={c.link}
               onPress={() => setVerQuitados(v => !v)}
@@ -262,7 +333,7 @@ export function TabParcelas({
               accessibilityState={{ expanded: verQuitados }}
               testID="carnes-quitados-toggle"
             >
-              <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver todos"}</Text>
+              <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver"}</Text>
             </Pressable>
           </View>
           {verQuitados && quitados.map(q => (
@@ -289,7 +360,7 @@ export function TabParcelas({
             onPress={() => onRenegociar(null, "Parcelas em aberto", sumRemaining(openInst))}
           >
             <Icon name="repeat" size={12} color={Colors.violet3} />
-            <Text style={m.newAccTxt}>Renegociar</Text>
+            <Text style={[m.newAccTxt, { fontFamily: Fonts.body }]}>Mudar as parcelas</Text>
           </Pressable>
           <Pressable
             style={[m.newAccBtn, { gap: 4 }]}
@@ -311,14 +382,14 @@ export function TabParcelas({
     <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
       <Text style={m.cardTitle}>Saldo em aberto sem parcelas</Text>
       <Text style={[m.emptyTxt, { textAlign: "center", marginTop: 6, lineHeight: 18 }]}>
-        Este cliente tem {fmt(openBalance)} em aberto de venda no crediário sem
+        Este cadastro tem {fmt(openBalance)} em aberto de venda no crediário sem
         parcelamento. Registre recebimentos de qualquer valor pelo botão abaixo.
       </Text>
       <View style={{ marginTop: 14, alignSelf: "stretch", flexDirection: "row", gap: 8 }}>
         <Button title={`Receber ${fmt(openBalance)}`} variant="primary" size="sm" full onPress={() => prefill(openBalance)} />
         {/* Parcelar saldo (10/07): conecta o fiado a um prazo — abre a renegociação
             com base no saldo sem agenda (backend cai no getUnscheduledBalance). */}
-        <Button title="Parcelar saldo" variant="ghost" size="sm" full onPress={() => onRenegociar(null, "Saldo em aberto", openBalance)} />
+        <Button title="Dividir em parcelas" variant="ghost" size="sm" full onPress={() => onRenegociar(null, "Saldo em aberto", openBalance)} />
       </View>
     </View>
   )}
@@ -343,11 +414,95 @@ const c = StyleSheet.create({
   links: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 14, marginLeft: "auto" as any },
   // Link de texto com alvo de toque de 44px.
   link: { minHeight: 44, justifyContent: "center" },
-  linkT: { fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
+  linkT: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
   done: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
     paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  doneK: { flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
-  doneV: { fontSize: 13, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+  doneK: { fontFamily: Fonts.body, flex: 1, minWidth: 0, fontSize: 13, color: CorDaFicha.secundario },
+  doneV: { fontFamily: Fonts.mono, fontSize: 12.5, color: CorDaFicha.secundario, fontVariant: ["tabular-nums"] as any },
+  quitadosT: { fontFamily: Fonts.body, fontSize: 13, color: CorDaFicha.secundario },
+  cancelar: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10 },
+});
+
+// ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
+// Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
+// linha em vez de espremer: em tela estreita data e Receber descem.
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber }: {
+  numero: string; data: string; porque: string; valor: string;
+  /** O que o Receber preenche (pode incluir encargos das outras do carnê). */
+  valorDoReceber?: string;
+  /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
+  ateAqui?: string | null;
+  atrasada: boolean; principal: boolean;
+  onData: () => void; onReceber: () => void; onPix?: () => void;
+}) {
+  return (
+    <View style={[l.linha, atrasada && l.linhaLate]} testID={`parcela-${numero}`}>
+      <View style={[l.ic, atrasada && l.icLate]}>
+        <Text style={[l.icT, atrasada && { color: Colors.red }]}>{atrasada ? "!" : ""}</Text>
+      </View>
+      <Text style={l.num} accessibilityLabel={`Parcela ${numero}`}>{numero}</Text>
+      <View style={l.meio}>
+        <Pressable
+          onPress={onData}
+          style={({ pressed }: any) => [l.data, pressed && { backgroundColor: Colors.violetD }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Mudar a data da parcela ${numero}`}
+          hitSlop={6}
+        >
+          <Text style={[l.dataT, atrasada && { color: Colors.red }]}>{data}</Text>
+          <Text style={l.lapis}>✎</Text>
+        </Pressable>
+        {!!porque && <Text style={l.porque}>{porque}</Text>}
+      </View>
+      <Text style={[l.valor, atrasada && { color: Colors.red }]}>{valor}</Text>
+      <Pressable
+        onPress={onReceber}
+        style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel={ateAqui
+          ? `Receber até esta: ${ateAqui}, as parcelas anteriores deste carnê e a ${numero}`
+          : `Receber ${valorDoReceber ?? valor} da parcela ${numero}`}
+      >
+        <Text style={[l.receberT, principal && { color: "#fff" }]}>{ateAqui ? "Receber até esta" : "Receber"}</Text>
+      </Pressable>
+      {!!onPix && (
+        <Pressable
+          onPress={onPix}
+          style={({ pressed }: any) => [l.receber, l.receberS, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Pix da parcela ${numero}`}
+          testID={`parcela-${numero}-pix`}
+        >
+          <Text style={[l.receberT, { color: CorDaFicha.verdeTexto }]}>Pix</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const l = StyleSheet.create({
+  linha: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 10, rowGap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  linhaLate: { backgroundColor: Colors.redD },
+  ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: CorDaFicha.secundario, alignItems: "center", justifyContent: "center" },
+  icLate: { borderColor: Colors.red },
+  icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: CorDaFicha.secundario },
+  num: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, minWidth: 48 },
+  meio: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
+  data: {
+    flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44,
+    paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2,
+  },
+  dataT: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink },
+  lapis: { fontFamily: Fonts.body, fontSize: 12, color: Colors.violet3 },
+  porque: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 3 },
+  valor: { fontFamily: Fonts.mono, fontSize: 13.5, fontWeight: "500", color: Colors.ink, textAlign: "right", marginLeft: "auto" as any, fontVariant: ["tabular-nums"] as any },
+  receber: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  receberP: { backgroundColor: Colors.violet },
+  receberS: { borderWidth: 1, borderColor: Colors.border2 },
+  receberT: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "700", color: Colors.ink },
 });

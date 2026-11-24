@@ -11,6 +11,7 @@
 // ============================================================
 import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
+import { CorDaFicha } from "./fichaStyles";
 import { Icon } from "@/components/Icon";
 import { fmt } from "./fichaHelpers";
 import { nomeCurtoDaLoja, type GroupOpenItem } from "@/utils/creditoOutraLoja";
@@ -43,7 +44,7 @@ export function GrupoEmAberto({ name, lojas, storeName, acessiveis, onAbrirNaLoj
                 {name} também deve <Text style={{ fontWeight: "800" }}>{fmt(l.balance)}</Text> na{" "}
                 <Text style={{ fontWeight: "700" }}>{l.company_name}</Text>.
               </Text>
-              <Text style={{ fontSize: 11.5, color: Colors.ink3, lineHeight: 16, marginTop: 2 }}>
+              <Text style={{ fontSize: 11.5, color: CorDaFicha.secundario, lineHeight: 16, marginTop: 2 }}>
                 {podeAbrir
                   ? "Cada loja recebe a própria dívida. Para dar baixa nessa, abra a ficha lá."
                   : "Cada loja recebe a própria dívida. A baixa dessa é feita por quem tem acesso àquela loja."}

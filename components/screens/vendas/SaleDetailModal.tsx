@@ -19,6 +19,8 @@ import { readMatconSettings } from "@/constants/matcon";
 import { matconApi } from "@/services/matconApi";
 import { textoDoErro } from "@/components/matcon/erroMatcon";
 import { EditarVendaModal } from "./EditarVendaModal";
+// 20/11/2026 (hotfix): "Editar produtos" volta ao detalhe da venda.
+import { EditarProdutosDaVenda } from "./EditarProdutosDaVenda";
 import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
 import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
 // 14/11/2026 (NF-e 55, CP4): "Emitir NF-e" ao lado do "Emitir NFC-e".
@@ -77,6 +79,16 @@ import { TEXTOS_PRAZO_NFCE } from "@/constants/textosPrazoNfce";
 // autorizada da venda comum, dentro do prazo de cancelamento, cancela a
 // NFC-e (com confirmação) e abre o assistente da NF-e da mesma venda, na
 // loja da venda. Fora do prazo, uma explicação gentil. Ver TrocarPorNfe.tsx.
+//
+// 20/11/2026 (hotfix, relato do dono) — "Editar produtos": o redesenho de
+// 09/11 tirou o único caminho para remover ou adicionar produto numa venda
+// feita. Volta como ação secundária, só com a lista de produtos do
+// Financeiro (SaleDetailsSection), sem o TransactionModal (que mexia na
+// forma do lançamento). Ver EditarProdutosDaVenda.tsx.
+//   Consolidado: a lista de produtos, a devolução e o catálogo do "Adicionar
+//   produto" usam a empresa ATIVA (auth). Venda de outra empresa fica sem o
+//   botão — mesma regra do antigo "Editar lancamento", que sumia no
+//   consolidado. Venda da empresa ativa mostra normalmente.
 // ============================================================
 
 const FISCAL_STATUS_LABELS: Record<string, string> = {
@@ -128,6 +140,7 @@ export function SaleDetailModal({
   // 17/11/2026: "Cancelar a nota junto" (só aparece dentro do prazo).
   const [cancelarNotaJunto, setCancelarNotaJunto] = useState(true);
   const [editando, setEditando] = useState(false);
+  const [editandoProdutos, setEditandoProdutos] = useState(false);
   const [printingReceipt, setPrintingReceipt] = useState(false);
   const [showDevolucao, setShowDevolucao] = useState(false);
   const [print2via, setPrint2via] = useState(false);
@@ -329,6 +342,10 @@ export function SaleDetailModal({
   const showReceiptBtn = !isCancelled && !isTroca && !isDevolucao && !!saleId;
   const showRefundBtn = !isCancelled && temCrediario && !isTroca && items.length > 0;
   const podeEditar = !!sale && !isCancelled && !isTroca && !isDevolucao;
+  // 20/11/2026 (hotfix): produtos se editam pelo lançamento da venda, na
+  // empresa ativa (ver cabeçalho). Sem lançamento ou de outra empresa: sem botão.
+  const vendaDaEmpresaAtiva = !companyId || companyId === company?.id;
+  const podeEditarProdutos = podeEditar && !!sale?.transaction_id && vendaDaEmpresaAtiva;
 
   // 02/06/2026 (b): estado fiscal — emissão relevante por tipo de venda.
   const fiscalList = detail?.fiscal || [];
@@ -356,6 +373,10 @@ export function SaleDetailModal({
   const cancelLabel = isTroca ? "Cancelar troca" : isDevolucao ? "Desfazer devolução" : "Cancelar venda";
 
   const secundarios: React.ReactNode[] = [];
+  if (podeEditarProdutos) secundarios.push(
+    <Button key="produtos" testID="venda-editar-produtos" title="Editar produtos" icon="package" size="sm" variant="secondary"
+      style={{ minHeight: 44 }} onPress={function() { setEditandoProdutos(true); }} />
+  );
   if (showReceiptBtn) secundarios.push(<Button key="recibo" testID="venda-imprimir-cupom" title="Imprimir cupom" icon="receipt" size="sm" variant="secondary" loading={printingReceipt} onPress={handlePrintReceipt} />);
   if (showRefundBtn) secundarios.push(<Button key="devolver" title="Devolver" icon="rotate_ccw" size="sm" variant="secondary" onPress={function() { setShowDevolucao(true); }} />);
   if (showRefundBtn) secundarios.push(
@@ -771,6 +792,15 @@ export function SaleDetailModal({
           companyId={effectiveCompanyId}
           onClose={function() { setEditando(false); }}
           onPrintReceipt={handlePrintReceipt}
+        />
+      )}
+
+      {editandoProdutos && sale?.transaction_id && (
+        <EditarProdutosDaVenda
+          visible={editandoProdutos}
+          txId={sale.transaction_id}
+          onClose={function() { setEditandoProdutos(false); }}
+          onSair={function() { setEditandoProdutos(false); onClose(); }}
         />
       )}
 
