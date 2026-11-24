@@ -32,9 +32,10 @@ import {
 
 const HASH_RODANDO = "aaaa1111";
 const HASH_SERVIDO = "bbbb2222";
-// Relógio fixo: fora e dentro da janela de congelamento (24/11 a 01/12/2026).
+// Relógio fixo: fora e dentro da janela de congelamento (20/12/2026 a
+// 02/01/2027; a da Black Friday foi encerrada pelo Caio em 24/11/2026).
 const FORA_DA_JANELA = new Date("2026-10-13T12:00:00-03:00");
-const DENTRO_DA_JANELA = new Date("2026-11-25T12:00:00-03:00");
+const DENTRO_DA_JANELA = new Date("2026-12-25T12:00:00-03:00");
 
 function htmlServindo(hash: string): string {
   return `<!DOCTYPE html><html><body><script src="/_expo/static/js/web/entry-${hash}.js" defer></script></body></html>`;
@@ -197,13 +198,33 @@ describe("janela de congelamento: verificarAtualizacao", () => {
     await expect(verificarAtualizacao({ w: w(), buscar: offline, agora: DENTRO_DA_JANELA })).resolves.toBe("indisponivel");
   });
 
-  test("a borda: 01/12 23h59 ainda pausa; 02/12 00h00 libera", async () => {
+  test("a borda de entrada: 19/12 23h59 libera; 20/12 00h00 já pausa", async () => {
     const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
     await expect(
-      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-01T23:59:59-03:00") }),
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-19T23:59:59-03:00") }),
+    ).resolves.toBe("nova");
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-20T00:00:00-03:00") }),
+    ).resolves.toBe("pausada");
+  });
+
+  test("a borda de saída: 02/01 23h59 ainda pausa; 03/01 00h00 libera", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2027-01-02T23:59:59-03:00") }),
     ).resolves.toBe("pausada");
     await expect(
-      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-02T00:00:00-03:00") }),
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2027-01-03T00:00:00-03:00") }),
+    ).resolves.toBe("nova");
+  });
+
+  test("a Black Friday não pausa mais: 25/11 e 01/12/2026 trocam de versão", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-11-25T12:00:00-03:00") }),
+    ).resolves.toBe("nova");
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-01T12:00:00-03:00") }),
     ).resolves.toBe("nova");
   });
 });

@@ -20,7 +20,7 @@ jest.mock("@/services/atualizarApp", () => ({
 const RODANDO = "aaaa1111";
 const SERVIDO = "bbbb2222";
 const FORA = new Date("2026-10-13T12:00:00-03:00").getTime();
-const DENTRO = new Date("2026-11-25T12:00:00-03:00").getTime();
+const DENTRO = new Date("2026-12-25T12:00:00-03:00").getTime();
 
 let script: HTMLScriptElement;
 const fetchOriginal = (global as any).fetch;

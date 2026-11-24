@@ -11,8 +11,13 @@ Horário de Brasília, primeiro e último dia **inclusivos**.
 
 | Janela | De | Até |
 |---|---|---|
-| Black Friday | 24/11/2026 | 01/12/2026 |
 | Fim de ano | 20/12/2026 | 02/01/2027 |
+
+Histórico:
+
+- **24/11/2026** — a janela da Black Friday (24/11/2026 a 01/12/2026) foi
+  encerrada pelo Caio no primeiro dia dela: "superestimamos um pouco o
+  movimento desse período do ano". Saiu do JSON; a de fim de ano fica.
 
 A fonte única é [`constants/janelasDeCongelamento.json`](../constants/janelasDeCongelamento.json).
 Para mudar uma data, edite só esse arquivo: o app
