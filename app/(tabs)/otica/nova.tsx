@@ -30,7 +30,7 @@
 //     caixa nem sai do estoque. A tela agora diz isso com todas as letras,
 //     antes do botão.
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -129,23 +129,64 @@ export default function OticaNovaScreen() {
     queryFn: () => oticaApi.listPrescriptions(company!.id, { customer_id: customerId!, limit: 10 }),
     enabled: !!company?.id && !!customerId,
   });
-  const prescriptions: Prescription[] = rxData?.prescriptions || [];
+  // "Abrir OS com esta receita" (Receitas) manda rx_id. A lista acima traz só
+  // as 10 últimas: a receita pedida pode ser mais antiga, então ela é buscada
+  // pelo id e entra na lista — nunca cai em silêncio na mais recente.
+  const querPedida = !!params.rx_id && !!customerId && customerId === params.customer_id;
+  const { data: pedidaData, isLoading: pedidaCarregando } = useQuery({
+    queryKey: ["otica-prescription", company?.id, params.rx_id],
+    queryFn: () => oticaApi.getPrescription(company!.id, params.rx_id!),
+    enabled: !!company?.id && querPedida,
+    retry: 0,
+  });
+  const prescriptions: Prescription[] = useMemo(() => {
+    const lista: Prescription[] = rxData?.prescriptions || [];
+    const pedida = querPedida ? pedidaData?.prescription : null;
+    if (pedida && pedida.customer_id === customerId && !lista.some((p) => p.id === pedida.id)) return [...lista, pedida];
+    return lista;
+  }, [rxData, pedidaData, querPedida, customerId]);
   const [rxMode, setRxMode] = useState<"existente" | "nova">("nova");
   const [rxId, setRxId] = useState<string | null>(null);
   const [rxDraft, setRxDraft] = useState<RxDraft>(() => emptyRxDraft(settings.prescription_validity_months));
   // Receita registrada por ESTA tela numa tentativa que falhou depois.
   const [createdRx, setCreatedRx] = useState<Prescription | null>(null);
+  const [pedidaNaoAchada, setPedidaNaoAchada] = useState(false);
+  // A escolha automática da receita acontece UMA vez por cliente, quando a
+  // lista chega. Antes ela rodava a cada mudança no tamanho da lista — e a
+  // lista muda quando ESTA tela grava a receita nova: o rx_id voltava a
+  // ganhar, a OS abria com a receita antiga e a nova ficava solta no livro
+  // (revisão do PR #1361).
+  const escolhidaPara = useRef<string | null>(null);
   useEffect(() => {
+    if (!customerId) { escolhidaPara.current = null; setPedidaNaoAchada(false); return; }
+    // Receita gravada por esta tela: é ela a da OS, nada de escolher outra.
+    if (createdRx) return;
+    if (escolhidaPara.current === customerId) return;
+    if (!rxData) return; // a lista ainda não chegou
+    if (querPedida) {
+      const pedida = prescriptions.find((p) => p.id === params.rx_id);
+      if (pedida) {
+        escolhidaPara.current = customerId;
+        setRxMode("existente"); setRxId(pedida.id);
+        return;
+      }
+      if (pedidaCarregando) return; // ainda buscando pelo id
+      setPedidaNaoAchada(true);
+    }
+    escolhidaPara.current = customerId;
     // Cliente com receita válida: usa a mais recente por padrão. Sem receita
     // (ou vencida), digita nova.
-    // 23/11/2026: "Abrir OS com esta receita" manda rx_id — é ESSA a receita
-    // escolhida, mesmo que exista outra mais nova (antes vinha sempre a última).
-    const pedida = params.rx_id && customerId === params.customer_id ? prescriptions.find((p) => p.id === params.rx_id) : null;
-    const valid = pedida || prescriptions.find((p) => (daysUntil(p.valid_until) ?? -1) >= 0);
+    const valid = prescriptions.find((p) => (daysUntil(p.valid_until) ?? -1) >= 0);
     if (valid) { setRxMode("existente"); setRxId(valid.id); }
     else { setRxMode("nova"); setRxId(null); }
-  }, [prescriptions.length, customerId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const rxSelected = prescriptions.find((p) => p.id === rxId) || null;
+  }, [rxData, pedidaData, pedidaCarregando, customerId, createdRx]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A receita gravada aqui vale mesmo antes de a lista recarregar.
+  const rxSelected = prescriptions.find((p) => p.id === rxId) || (createdRx && createdRx.id === rxId ? createdRx : null);
+  // Atalhos: as 3 mais recentes, mais a escolhida se ela for mais antiga.
+  const rxAtalhos = useMemo(() => {
+    const top = prescriptions.slice(0, 3);
+    return rxSelected && !top.some((p) => p.id === rxSelected.id) ? [...top, rxSelected] : top;
+  }, [prescriptions, rxSelected]);
 
   // ── Armação ──
   const [frameSource, setFrameSource] = useState<"estoque" | "cliente">("estoque");
@@ -350,7 +391,7 @@ export default function OticaNovaScreen() {
                 {prescriptions.length === 0 ? "sem receita cadastrada" : `${prescriptions.length} ${prescriptions.length === 1 ? "receita" : "receitas"} · última de ${fmtIsoDate(prescriptions[0].issued_at)}`}
               </Text>
             </View>
-            <Pressable onPress={() => { setCustomerId(null); setCustomerName(""); setRxId(null); }} testID="otica-trocar-cliente" hitSlop={8}>
+            <Pressable onPress={() => { setCustomerId(null); setCustomerName(""); setRxId(null); setCreatedRx(null); }} testID="otica-trocar-cliente" hitSlop={8}>
               <Text style={st.changeLink}>trocar</Text>
             </Pressable>
           </View>
@@ -396,7 +437,7 @@ export default function OticaNovaScreen() {
       <View style={st.card}>
         {prescriptions.length > 0 && (
           <View style={[st.chipsWrap, { marginBottom: 12 }]}>
-            {prescriptions.slice(0, 3).map((p) => {
+            {rxAtalhos.map((p) => {
               const d = daysUntil(p.valid_until) ?? -1;
               const on = rxMode === "existente" && rxId === p.id;
               return (
@@ -410,6 +451,11 @@ export default function OticaNovaScreen() {
             <Pressable onPress={() => setRxMode("nova")} style={[st.chip, rxMode === "nova" && st.chipOn]} testID="otica-rx-nova">
               <Text style={[st.chipText, rxMode === "nova" && st.chipTextOn]}>Digitar nova</Text>
             </Pressable>
+          </View>
+        )}
+        {pedidaNaoAchada && (
+          <View style={[st.warn, { marginBottom: 12 }]} testID="otica-rx-pedida-nao-achada">
+            <Text style={st.warnText}>Não achamos a receita que você escolheu no receituário. Confira abaixo qual receita vai nesta OS.</Text>
           </View>
         )}
         {rxMode === "existente" && rxSelected ? (

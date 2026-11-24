@@ -59,7 +59,10 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
   const qc = useQueryClient();
   const { customers, isLoading, isError, planBlocked, isDemo, refetch, updateCustomerAsync, camposExtras } = useCustomers();
   // 23/11/2026: loja com a ótica ligada edita também os "Dados completos".
-  const oticaLigada = usePdvSettings(companyId).settings.otica_enabled === true;
+  // O formulário só monta depois de as configurações chegarem: assim ele não
+  // muda de "sem ótica" para "com ótica" no meio da edição.
+  const pdv = usePdvSettings(companyId);
+  const oticaLigada = pdv.settings.otica_enabled === true;
   const [salvando, setSalvando] = useState(false);
   const [editou, setEditou] = useState(false);
   const cliente = customers.find(c => c.id === customerId) || null;
@@ -100,7 +103,7 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
         contentContainerStyle={{ padding: 4 }}
         testID="ficha-editar-cliente-janela"
       >
-        {isLoading && !cliente ? (
+        {(isLoading && !cliente) || pdv.isLoading ? (
           <View style={s.centro}>
             <ActivityIndicator color={Colors.violet3} />
             <Text style={s.txt}>Abrindo o cadastro…</Text>

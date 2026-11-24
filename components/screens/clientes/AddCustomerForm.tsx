@@ -45,7 +45,12 @@ type Props = {
 
 const SEM_EXTRAS: CampoExtra[] = [];
 
-export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou, dadosCompletos = false, camposExtras = SEM_EXTRAS }: Props) {
+export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou, dadosCompletos: dadosCompletosAgora = false, camposExtras = SEM_EXTRAS }: Props) {
+  // A decisão "com ou sem Dados completos" vale a de quando o formulário
+  // abriu. Se as configurações da loja chegassem no meio da edição, o
+  // formulário mudaria de cara e passaria a contar como "mexido" sem ninguém
+  // tocar (o nascimento com 1904 muda de "14/03/1904" para "14/03").
+  const [dadosCompletos] = useState(dadosCompletosAgora);
   const isEdit = !!initialData;
   const [name, setName] = useState(initialData?.name || "");
   const [phone, setPhone] = useState(initialData?.phone || "");
