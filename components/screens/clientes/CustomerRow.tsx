@@ -24,6 +24,7 @@ import { MarcarProfissionalModal } from "@/components/matcon/MarcarProfissionalM
 import { TRADE_LABELS, type Professional, type ProfessionalTrade } from "@/services/matconApi";
 // 09/11/2026 — "Endereço para entrega" na ficha (mockup aprovado, seção A).
 import { EnderecoNaFicha } from "@/components/endereco/EnderecoNaFicha";
+import { PedirCadastroPorWhatsApp } from "@/components/cadastroPorLink/PedirCadastroPorWhatsApp";
 
 // Resolve o TokenCor (indireção de ./segmentos.ts — módulo puro, sem
 // import de react-native) pra cor real. O laranja de "Devendo" nunca
@@ -221,6 +222,8 @@ export function CustomerRow({
           {/* O endereço é do cliente: o PATCH vai para a loja onde ele foi
               cadastrado e vale em todas as lojas do mesmo dono. */}
           <EnderecoNaFicha customerId={c.id} companyId={targetCompanyId} endereco={c.endereco} />
+          {/* p-211: cadastro por link (só com a ótica ligada e o aviso pronto). */}
+          <PedirCadastroPorWhatsApp customerId={c.id} phone={c.phone} testID={`cliente-cadastro-link-${c.id}`} />
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
           <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}><Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} /></View></View>
           <View style={s.actions}>

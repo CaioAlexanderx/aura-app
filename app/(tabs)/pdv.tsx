@@ -68,6 +68,7 @@ import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid, type GridProduct } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { CreditoDaClienteBox } from "@/components/screens/pdv/CreditoDaClienteBox";
+import { PedirCadastroPorWhatsApp } from "@/components/cadastroPorLink/PedirCadastroPorWhatsApp";
 import { WarrantyBox } from "@/components/screens/pdv/WarrantyBox";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
@@ -167,7 +168,18 @@ function CaixaScreenInner() {
   ) : null;
   // 17/11/2026 (INC-2026-11-17-03): o crédito a favor da cliente escolhida,
   // nesta loja, com o jeito de abater na venda. null = sem caixa.
-  const creditoSlot = st.credito ? <CreditoDaClienteBox credito={st.credito} disabled={st.isProcessing} onScan={cartProps.onScan} /> : null;
+  const creditoDaCliente = st.credito ? <CreditoDaClienteBox credito={st.credito} disabled={st.isProcessing} onScan={cartProps.onScan} /> : null;
+  // 23/11/2026 (p-211): cadastro por link do cliente da venda. O componente
+  // não desenha nada sem a ótica ligada, sem o aviso de privacidade ou sem
+  // a rota no servidor: fora disso o Caixa fica igual.
+  const cadastroPorLink = st.clientesEnabled && st.selectedCustomerId ? (
+    <PedirCadastroPorWhatsApp
+      customerId={st.selectedCustomerId}
+      phone={st.customers.find((c: any) => c.id === st.selectedCustomerId)?.phone || null}
+      testID="caixa-cadastro-link"
+    />
+  ) : null;
+  const creditoSlot = creditoDaCliente || cadastroPorLink ? <>{creditoDaCliente}{cadastroPorLink}</> : null;
   const pdvPayMethods = crediarioEnabled
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");

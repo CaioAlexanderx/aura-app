@@ -40,6 +40,7 @@ import {
   columnsToEyes, eyesToColumns, fmtIsoDate, fmtEyeShort, parseBrDate, daysUntil, todayIso,
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
+import { PedirCadastroPorWhatsApp } from "@/components/cadastroPorLink/PedirCadastroPorWhatsApp";
 import { RxEditor, emptyRxDraft, validateRxDraft, type RxDraft } from "@/components/otica/RxEditor";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -353,6 +354,10 @@ export default function OticaNovaScreen() {
             )}
           </>
         )}
+        {/* p-211: cadastro por link do cliente escolhido (só com o aviso pronto). */}
+        {customerId ? (
+          <PedirCadastroPorWhatsApp customerId={customerId} phone={customers.find((c) => c.id === customerId)?.phone || null} testID="otica-cadastro-link" />
+        ) : null}
       </View>
 
       {/* ══ RECEITA ══ */}
