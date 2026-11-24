@@ -12,9 +12,14 @@
 // Dados: OS kind='otica' (service_orders) + /otica/dashboard. Sem gate de
 // leitura: com o toggle desligado a tela continua mostrando os óculos que
 // já estão no laboratório — o backend bloqueia só a escrita.
+//
+// 23/11/2026 (polish): estado de erro com "Tentar de novo" (antes, sem
+// conexão, a tela dizia "Nenhum óculos em andamento"); e o cartão no celular
+// empilha — em 375 px o nome do cliente ficava com ~40 px entre o número e a
+// etapa.
 // ============================================================
 import { useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -121,7 +126,10 @@ export default function OticaLaboratorioScreen() {
     staleTime: 30_000,
   });
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { width } = useWindowDimensions();
+  const estreito = width < 560;
+
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ["service-orders", company?.id, "otica", chip, q],
     queryFn: () => serviceOrdersApi.list(company!.id, {
       kind: "otica",
@@ -238,7 +246,8 @@ export default function OticaLaboratorioScreen() {
               <Text style={[st.stationN, isReady && { color: Colors.green }]}>{counts ? n : "–"}</Text>
               <Text style={st.stationL}>{s.label}</Text>
               {isLab && lateCount > 0 && <Text style={st.stationLate}>{lateCount} {lateCount === 1 ? "passou" : "passaram"} do prazo</Text>}
-              {i < STATIONS.length - 1 && <Text style={st.stationArrow}>›</Text>}
+              {/* A seta só faz sentido com as estações numa linha. */}
+              {!estreito && i < STATIONS.length - 1 && <Text style={st.stationArrow}>›</Text>}
             </View>
           );
         })}
@@ -251,6 +260,7 @@ export default function OticaLaboratorioScreen() {
           value={busca}
           onChangeText={setBusca}
           onSubmitEditing={() => setQ(busca.trim())}
+          onBlur={() => setQ(busca.trim())}
           placeholder="Nº da OS, cliente ou pedido do laboratório"
           placeholderTextColor={Colors.ink3}
           returnKeyType="search"
@@ -273,11 +283,18 @@ export default function OticaLaboratorioScreen() {
 
       {isLoading ? (
         <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
+      ) : isError ? (
+        <View style={st.emptyBox} testID="otica-erro">
+          <Icon name="alert" size={28} color={Colors.amber} />
+          <Text style={st.emptyTitle}>Não deu para carregar a esteira</Text>
+          <Text style={st.emptyDesc}>Pode ser a conexão. As OS continuam guardadas.</Text>
+          <Pressable onPress={() => refetch()} style={[st.ghostBtn, { marginTop: 6 }]} testID="otica-tentar"><Text style={st.ghostBtnText}>Tentar de novo</Text></Pressable>
+        </View>
       ) : orders.length === 0 ? (
         <View style={st.emptyBox} testID="otica-vazio">
           <Icon name="glasses" size={30} color={Colors.ink3} />
           <Text style={st.emptyTitle}>
-            {q ? "Nada encontrado" : chip === "atrasadas" ? "Nenhum par atrasado" : chip === "prontas" ? "Nenhum par pronto aguardando retirada" : "Nenhum óculos em andamento"}
+            {q ? "Nada encontrado" : chip === "atrasadas" ? "Nenhum par atrasado" : chip === "prontas" ? "Nenhum par pronto aguardando retirada" : chip === "entregues" ? "Nenhum par entregue no último ano" : chip === "todas" ? "Nenhuma OS de óculos ainda" : "Nenhum óculos em andamento"}
           </Text>
           <Text style={st.emptyDesc}>
             {q
@@ -302,6 +319,7 @@ export default function OticaLaboratorioScreen() {
               busy={busyId === os.id}
               action={quickAction(os)}
               onOpen={() => router.push(("/otica/" + os.id) as any)}
+              estreito={estreito}
             />
           ))}
           {isFetching && <ActivityIndicator color={Colors.violet3} size="small" />}
@@ -311,11 +329,12 @@ export default function OticaLaboratorioScreen() {
   );
 }
 
-function OrderCard({ os, action, busy, onOpen }: {
+function OrderCard({ os, action, busy, onOpen, estreito }: {
   os: OpticalOrder;
   action: { label: string; run: () => void; primary?: boolean } | null;
   busy: boolean;
   onOpen: () => void;
+  estreito: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const late = isLate(os);
@@ -323,7 +342,8 @@ function OrderCard({ os, action, busy, onOpen }: {
   const color = BADGE_COLOR[stage.key] || Colors.ink3;
   const inLabDays = stage.key === "no_laboratorio" || stage.key === "refacao" ? daysSince(os.lab_sent_at) : null;
   const readyDays = stage.key === "pronta" ? daysSince(os.delivered_at || os.lab_received_at || os.created_at) : null;
-  const showActions = TOUCH || hover;
+  // No celular não existe hover: a ação fica sempre à vista (regra 7).
+  const showActions = TOUCH || estreito || hover;
   const deposit = os.deposit_sale_total != null ? Number(os.deposit_sale_total) : null;
   const total = Number(os.estimated_amount || 0);
 
@@ -332,23 +352,23 @@ function OrderCard({ os, action, busy, onOpen }: {
       onPress={onOpen}
       onHoverIn={Platform.OS === "web" ? () => setHover(true) : undefined}
       onHoverOut={Platform.OS === "web" ? () => setHover(false) : undefined}
-      style={[st.card, late && st.cardLate]}
+      style={[st.card, estreito && st.cardEstreito, late && st.cardLate]}
       testID={`otica-os-${os.os_number}`}
     >
-      <View style={st.cardNum}>
+      <View style={[st.cardNum, estreito && st.cardNumEstreito]}>
         <Text style={st.osNumber}>#{os.os_number ?? "—"}</Text>
         <Text style={st.osLab} numberOfLines={1}>
           {os.lab_name ? os.lab_name + (os.lab_order_ref ? " · " + os.lab_order_ref : "") : "sem laboratório"}
         </Text>
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={estreito ? undefined : { flex: 1, minWidth: 0 }}>
         <Text style={st.customer}>{os.customer_name || "Cliente"}</Text>
         <Text style={st.lens} numberOfLines={2}>{lensSummary(os)}</Text>
         {!!os.lab_redo_count && os.lab_redo_count > 0 && (
           <Text style={st.redo}>refação #{os.lab_redo_count}</Text>
         )}
       </View>
-      <View style={st.cardRight}>
+      <View style={[st.cardRight, estreito && st.cardRightEstreito]}>
         <View style={[st.badge, { borderColor: color }]}>
           <Text style={[st.badgeText, { color }]}>
             {stage.label}
@@ -421,6 +441,11 @@ const st = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", gap: 14, alignItems: "center", flexWrap: "wrap" },
   cardLate: { borderLeftWidth: 3, borderLeftColor: Colors.red },
   cardNum: { width: 118 },
+  // Celular: número e laboratório numa linha; cliente e lente embaixo; etapa,
+  // prazo e ação no pé, à esquerda.
+  cardEstreito: { flexDirection: "column", alignItems: "stretch", flexWrap: "nowrap", gap: 8 },
+  cardNumEstreito: { width: "100%", flexDirection: "row", alignItems: "baseline", gap: 8 },
+  cardRightEstreito: { alignItems: "flex-start", minWidth: 0, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   osNumber: { fontSize: 15, color: Colors.ink, fontWeight: "800", letterSpacing: 0.3 },
   osLab: { fontSize: 10, color: Colors.ink3, fontFamily: Fonts.mono, marginTop: 2 },
   customer: { fontSize: 13, color: Colors.ink, fontWeight: "600" },

@@ -1,3 +1,5 @@
+import { formatarDocumento, idadeEmAnos } from "@/utils/clienteDadosCompletos";
+import { useDocumentosDoCliente } from "@/hooks/useDocumentosDoCliente";
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
@@ -51,6 +53,33 @@ function Tag({ tag, cor, motivo }: { tag: string; cor: { bVar: TokenCor; fVar: T
 function Stars({ r }: { r: number | null }) {
   if (r == null) return <Text style={{ fontSize: 10, color: Colors.ink3 }}>Sem avaliação</Text>;
   return <View style={{ flexDirection: "row", gap: 2 }}>{[1, 2, 3, 4, 5].map(i => <Text key={i} style={{ fontSize: 12, color: i <= r ? Colors.amber : Colors.ink3 }}>*</Text>)}</View>;
+}
+
+/**
+ * CPF, idade, RG e profissão na ficha aberta (ótica ligada). 24/11/2026: a
+ * lista manda CPF e RG mascarados; a ficha aberta busca o inteiro no
+ * GET /:cid (hooks/useDocumentosDoCliente.ts). Só monta com a linha aberta,
+ * então a lista fechada não faz chamada nenhuma. Se não der para buscar,
+ * mostra a máscara — nunca um número cortado.
+ */
+function DadosDaOticaNaFicha({ c }: { c: Customer }) {
+  const docs = useDocumentosDoCliente(c);
+  const carregando = docs.estado === "carregando";
+  const cpf = carregando ? "…" : formatarDocumento(docs.cpf) || "---";
+  const rg = carregando ? (c.rg ? "…" : "") : docs.rg;
+  const itens = [
+    ["CPF", cpf],
+    ["Idade", idadeEmAnos(c.birthday) != null ? `${idadeEmAnos(c.birthday)} anos` : "---"],
+    ...(rg ? [["RG", rg]] : []),
+    ...(c.occupation ? [["Profissão", c.occupation]] : []),
+  ];
+  return (
+    <>
+      {itens.map(([l, v]) =>
+        <View key={l} style={s.detailItem} testID={`cliente-ficha-${l}`}><Text style={s.detailLabel}>{l}</Text><Text style={s.detailValue}>{v}</Text></View>
+      )}
+    </>
+  );
 }
 
 export function CustomerRow({
@@ -185,6 +214,9 @@ export function CustomerRow({
             {[["E-mail", c.email], ["Telefone", c.phone], ["Aniversário", c.birthday], ["Instagram", c.instagram || "---"], ["Primeira visita", c.firstVisit], ["Última compra", c.lastPurchase], ["Total gasto", fmt(c.totalSpent)], ["Visitas", String(c.visits)]].map(([l, v]) =>
               <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Total gasto" && { color: Colors.green }, l === "Instagram" && { color: Colors.violet3 }]}>{v}</Text></View>
             )}
+            {/* 23/11/2026 (ótica ligada): a ficha aberta mostra CPF e idade. Só
+                aqui, no detalhe — a linha da lista nunca mostra documento. */}
+            {oticaEnabled && <DadosDaOticaNaFicha c={c} />}
             <View style={s.detailItem}><Text style={s.detailLabel}>Avaliação</Text><Stars r={c.rating} /></View>
             {/* MULTICNPJ Onda 2.3: empresa onde foi cadastrado (so se multi-CNPJ) */}
             {showBadge && (

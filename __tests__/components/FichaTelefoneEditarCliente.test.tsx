@@ -45,6 +45,11 @@ jest.mock("@/hooks/useCustomers", () => ({
 }));
 const mockInvalidate = jest.fn();
 jest.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQueries: mockInvalidate }) }));
+// 23/11/2026: a janela lê pdv_settings.otica_enabled da loja da ficha para
+// ligar o bloco "Dados completos" do cadastro. Aqui, loja sem ótica.
+let mockOtica = false;
+const mockPdvSettings = jest.fn((_companyId?: string | null) => ({ settings: { otica_enabled: mockOtica } }));
+jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: (id?: string | null) => mockPdvSettings(id) }));
 
 import { TelefoneDaFicha } from "@/components/crediario/ficha/TelefoneDaFicha";
 import { EditarClienteDaFicha } from "@/components/crediario/ficha/EditarClienteDaFicha";
@@ -227,5 +232,23 @@ describe("EditarClienteDaFicha", () => {
     const { t } = montarJanela({ visible: false });
     expect(t.toJSON()).toBeNull();
     t.unmount();
+  });
+
+  // 23/11/2026 (ótica): "Dados completos" só com a ótica ligada NA LOJA DA FICHA.
+  test("loja sem ótica abre o formulário de sempre; com ótica, liga os dados completos", () => {
+    mockLista = { customers: [MARIA], isLoading: false, isError: false, camposExtras: ["rg"] };
+    const props = { visible: true, companyId: "loja-a", customerId: "cli-1", onClose: jest.fn() };
+    mockOtica = false;
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<EditarClienteDaFicha {...props} />); });
+    expect(mockPdvSettings).toHaveBeenLastCalledWith("loja-a");
+    expect(mockForm.dadosCompletos).toBe(false);
+    t.unmount();
+    mockOtica = true;
+    act(() => { t = renderer.create(<EditarClienteDaFicha {...props} />); });
+    expect(mockForm.dadosCompletos).toBe(true);
+    expect(mockForm.camposExtras).toEqual(["rg"]);
+    t.unmount();
+    mockOtica = false;
   });
 });

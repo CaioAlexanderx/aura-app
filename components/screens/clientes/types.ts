@@ -32,6 +32,21 @@ export type Customer = {
   // has_address do backend: rua ou CEP + número + cidade. É o que acende
   // o selo "sem endereço" no seletor do Caixa.
   hasAddress?: boolean;
+  // 23/11/2026 — cadastro completo (ótica ligada; utils/clienteDadosCompletos.ts).
+  // LEITURA: o que o servidor devolveu. `cpf` vem só com dígitos (cpf_cnpj).
+  // Não aparecem na lista de clientes; só na ficha aberta e no cadastro.
+  // 24/11/2026: a lista nova devolve CPF e RG mascarados; aí `cpf`/`rg` ficam
+  // com a máscara como veio ("***.***.247-25") e `docsMasked` é true. O
+  // inteiro vem de hooks/useDocumentosDoCliente.ts; máscara nunca é gravada.
+  cpf?: string;
+  rg?: string;
+  docsMasked?: boolean;
+  gender?: string;
+  occupation?: string;
+  // ESCRITA: o que o formulário mexeu no bloco "Dados completos". Ausente =
+  // o formulário não mostrou o bloco (loja sem ótica) e o corpo do POST/PATCH
+  // fica como sempre foi. Chave ausente dentro dele = campo não mexido.
+  dadosCompletos?: { cpf?: string; rg?: string; gender?: string; occupation?: string };
 };
 
 export const TABS = ["Clientes", "Ranking", "Retenção", "Avaliações"];

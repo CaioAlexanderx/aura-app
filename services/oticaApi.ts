@@ -223,6 +223,14 @@ export const OTICA_SETTINGS_DEFAULTS: OticaSettings = {
   wa_revision_auto: false,
 };
 
+/**
+ * 23/11/2026 — o que o servidor avisa que já sabe fazer. Vem junto do GET de
+ * configurações; ausente = não sabe. A tela só mostra o que estiver aqui:
+ * `prescription_photo` liga o anexo da foto do papel da receita (contrato em
+ * docs/otica-cadastro-completo-backend.md, seção 3).
+ */
+export type OticaCapabilities = { prescription_photo?: boolean };
+
 // ─── Etapa de laboratório (sub-status da OS kind='otica') ────
 
 export type LabStatus = "aguardando_envio" | "no_laboratorio" | "recebida" | "em_montagem" | "refacao";
@@ -318,7 +326,7 @@ function qs(params: Record<string, string | number | undefined | null>): string 
 export var oticaApi = {
   // Configuração
   getSettings: (companyId: string) =>
-    request<{ settings: OticaSettings }>(base(companyId) + "/settings", { retry: 1 }),
+    request<{ settings: OticaSettings; capabilities?: OticaCapabilities }>(base(companyId) + "/settings", { retry: 1 }),
   saveSettings: (companyId: string, settings: Partial<OticaSettings>) =>
     request<{ settings: OticaSettings }>(base(companyId) + "/settings", { method: "PUT", body: settings, retry: 0 }),
 
@@ -343,6 +351,14 @@ export var oticaApi = {
     request<{ prescription: Prescription }>(base(companyId) + "/prescriptions/" + rxId, { method: "PATCH", body, retry: 0 }),
   removePrescription: (companyId: string, rxId: string) =>
     request<{ deleted: boolean }>(base(companyId) + "/prescriptions/" + rxId, { method: "DELETE", retry: 0 }),
+
+  // Foto do papel da receita (só com capabilities.prescription_photo). Mesmo
+  // formato da foto do produto: base64 + tipo. A foto é dado de saúde: o
+  // servidor guarda em área privada e devolve `photo_url` assinada e curta.
+  uploadPrescriptionPhoto: (companyId: string, rxId: string, body: { content: string; content_type: string }) =>
+    request<{ prescription: Prescription }>(base(companyId) + "/prescriptions/" + rxId + "/photo", { method: "POST", body, retry: 0 }),
+  removePrescriptionPhoto: (companyId: string, rxId: string) =>
+    request<{ prescription: Prescription }>(base(companyId) + "/prescriptions/" + rxId + "/photo", { method: "DELETE", retry: 0 }),
 
   // Livro de registro (Decreto 24.492, arts. 7º e 8º): por período, com as OS.
   book: (companyId: string, from?: string, to?: string) =>

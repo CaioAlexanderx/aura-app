@@ -13,6 +13,10 @@
 //
 // Chave própria (otica.config, Essencial): qualquer plano com a ótica ligada
 // consegue cadastrar laboratório, como food.config.
+//
+// 23/11/2026: se as configurações não carregam, a tela NÃO mostra o
+// formulário — salvar gravaria os valores padrão por cima do que a loja já
+// tinha (responsável técnico, licença). Mostra o erro e "Tentar de novo".
 // ============================================================
 import { useEffect, useState } from "react";
 import { tourTarget } from "@/utils/tourTarget";
@@ -27,6 +31,7 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { oticaApi, OTICA_SETTINGS_DEFAULTS, type OpticalLab, type OticaSettings } from "@/services/oticaApi";
 import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
+import { maskPhone } from "@/utils/masks";
 import { termosAceitos, termosLongos, normalizarTermos, TERMOS_MAX } from "@/utils/oticaTermos";
 
 type LabDraft = { name: string; contact_name: string; phone: string; email: string; portal_url: string; lead_days: string; notes: string };
@@ -38,12 +43,12 @@ export default function OticaConfigScreen() {
   const { settings: pdv } = usePdvSettings();
   const enabled = pdv.otica_enabled === true;
 
-  const { data: sData, isLoading } = useQuery({
+  const { data: sData, isLoading, isError, refetch } = useQuery({
     queryKey: ["otica-settings", company?.id],
     queryFn: () => oticaApi.getSettings(company!.id),
     enabled: !!company?.id,
   });
-  const { data: lData } = useQuery({
+  const { data: lData, isError: labsComErro, refetch: recarregarLabs } = useQuery({
     queryKey: ["otica-labs", company?.id],
     queryFn: () => oticaApi.listLabs(company!.id),
     enabled: !!company?.id,
@@ -122,8 +127,21 @@ export default function OticaConfigScreen() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || !company?.id) {
     return <View style={[st.screen, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator color={Colors.violet3} /></View>;
+  }
+  if (isError || !sData?.settings) {
+    return (
+      <View style={[st.screen, { justifyContent: "center", alignItems: "center", padding: 24, gap: 8 }]} testID="otica-cfg-erro">
+        <Icon name="alert" size={28} color={Colors.amber} />
+        <Text style={st.erroTitulo}>Não deu para carregar as configurações</Text>
+        <Text style={st.erroTexto}>Pode ser a conexão. Nada foi alterado.</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 6, flexWrap: "wrap", justifyContent: "center" }}>
+          <Pressable onPress={() => refetch()} style={st.miniBtn} testID="otica-cfg-tentar"><Text style={st.miniBtnText}>Tentar de novo</Text></Pressable>
+          <Pressable onPress={() => router.back()} style={st.miniBtn}><Text style={st.miniBtnText}>Voltar</Text></Pressable>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -142,18 +160,23 @@ export default function OticaConfigScreen() {
       {/* ══ LABORATÓRIOS ══ */}
       <Text style={st.sectionTitle}>Laboratórios</Text>
       <View style={st.card}>
-        {labs.length === 0 && editing !== "new" && (
+        {labsComErro && (
+          <Text style={st.hint} testID="otica-labs-erro">
+            Não deu para carregar os laboratórios. <Text style={{ color: Colors.violet3, fontWeight: "700" }} onPress={() => recarregarLabs()}>Tentar de novo</Text>
+          </Text>
+        )}
+        {!labsComErro && labs.length === 0 && editing !== "new" && (
           <Text style={st.hint}>Nenhum laboratório ainda. O prazo em dias vira a previsão de entrega quando você abre uma OS.</Text>
         )}
         {labs.map((l) => (
           <View key={l.id} style={[st.labRow, !l.is_active && { opacity: 0.5 }]}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 180, minWidth: 0 }}>
               <Text style={st.labName}>{l.name} {form.default_lab_id === l.id && <Text style={st.defaultTag}>padrão</Text>}</Text>
               <Text style={st.labMeta}>
                 {l.lead_days} {l.lead_days === 1 ? "dia" : "dias"}{l.contact_name ? ` · ${l.contact_name}` : ""}{l.phone ? ` · ${l.phone}` : ""}{!l.is_active ? " · inativo" : ""}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", gap: 6 }}>
+            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
               {l.is_active && form.default_lab_id !== l.id && (
                 <Pressable onPress={() => set({ default_lab_id: l.id })} style={st.miniBtn}><Text style={st.miniBtnText}>Tornar padrão</Text></Pressable>
               )}
@@ -167,15 +190,15 @@ export default function OticaConfigScreen() {
           <View style={st.labForm}>
             <Text style={st.labFormTitle}>{editing === "new" ? "Novo laboratório" : `Editar ${editing.name}`}</Text>
             <View style={st.row2}>
-              <View style={[st.col, { flex: 2 }]}><Text style={st.lbl}>Nome</Text><TextInput style={st.input} value={lab.name} onChangeText={(v) => setLab({ ...lab, name: v })} placeholder="Zeiss (Visustore), Lab Ótico Central…" placeholderTextColor={Colors.ink3} testID="otica-lab-nome" /></View>
+              <View style={[st.col, { flexGrow: 2, flexBasis: 220 }]}><Text style={st.lbl}>Nome</Text><TextInput style={st.input} value={lab.name} onChangeText={(v) => setLab({ ...lab, name: v })} placeholder="Zeiss (Visustore), Lab Ótico Central…" placeholderTextColor={Colors.ink3} testID="otica-lab-nome" /></View>
               <View style={st.col}><Text style={st.lbl}>Prazo (dias)</Text><TextInput style={st.input} value={lab.lead_days} keyboardType="numeric" onChangeText={(v) => setLab({ ...lab, lead_days: v.replace(/\D/g, "").slice(0, 3) })} testID="otica-lab-prazo" /></View>
             </View>
             <View style={[st.row2, { marginTop: 10 }]}>
               <View style={st.col}><Text style={st.lbl}>Contato</Text><TextInput style={st.input} value={lab.contact_name} onChangeText={(v) => setLab({ ...lab, contact_name: v })} placeholder="Representante" placeholderTextColor={Colors.ink3} /></View>
-              <View style={st.col}><Text style={st.lbl}>Telefone</Text><TextInput style={st.input} value={lab.phone} onChangeText={(v) => setLab({ ...lab, phone: v })} placeholder="(11) 99999-9999" placeholderTextColor={Colors.ink3} /></View>
+              <View style={st.col}><Text style={st.lbl}>Telefone</Text><TextInput style={st.input} value={lab.phone} onChangeText={(v) => setLab({ ...lab, phone: maskPhone(v) })} placeholder="(11) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" /></View>
             </View>
             <View style={[st.row2, { marginTop: 10 }]}>
-              <View style={st.col}><Text style={st.lbl}>E-mail (recebe o PDF da OS)</Text><TextInput style={st.input} value={lab.email} onChangeText={(v) => setLab({ ...lab, email: v })} placeholder="pedidos@laboratorio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" /></View>
+              <View style={st.col}><Text style={st.lbl}>E-mail (recebe o PDF da OS)</Text><TextInput style={st.input} value={lab.email} onChangeText={(v) => setLab({ ...lab, email: v })} placeholder="pedidos@laboratorio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" /></View>
               <View style={st.col}><Text style={st.lbl}>Portal de pedidos</Text><TextInput style={st.input} value={lab.portal_url} onChangeText={(v) => setLab({ ...lab, portal_url: v })} placeholder="https://" placeholderTextColor={Colors.ink3} autoCapitalize="none" /></View>
             </View>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
@@ -322,7 +345,10 @@ const st = StyleSheet.create({
   warnText: { fontSize: 12, color: Colors.amber, lineHeight: 17 },
   hint: { fontSize: 11, color: Colors.ink3, marginTop: 8, lineHeight: 16 },
   row2: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
-  col: { flex: 1, minWidth: 150 },
+  // flexBasis: a 375 px cada campo ocupa a linha inteira em vez de espremer.
+  col: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
+  erroTitulo: { fontSize: 15, color: Colors.ink, fontWeight: "700", textAlign: "center" },
+  erroTexto: { fontSize: 12, color: Colors.ink3, textAlign: "center", maxWidth: 340, lineHeight: 17 },
   lbl: { fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 7 },
   input: { backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: Colors.ink },
   textarea: { minHeight: 140, lineHeight: 20 },

@@ -9,6 +9,7 @@ import { ImportExportBar } from "@/components/ImportExportBar";
 import { Pagination } from "@/components/Pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { AddCustomerForm } from "@/components/screens/clientes/AddCustomerForm";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CustomerRow } from "@/components/screens/clientes/CustomerRow";
 import { contextoDaBase } from "@/components/screens/clientes/segmentos";
 import { RankingTab } from "@/components/screens/clientes/RankingTab";
@@ -127,10 +128,19 @@ export default function ClientesScreen() {
   const {
     customers, isLoading, isError, refetch, isDemo, planBlocked, bulkDeleting,
     addCustomer, updateCustomer, deleteCustomer, bulkDeleteCustomers,
+    camposExtras,
     consolidatedView, companyCount,
     plan, planLimit,
   } = useCustomers();
   const { company, availableCompanies } = useAuthStore();
+  // 23/11/2026: com a ótica ligada o cadastro ganha "Dados completos" (CPF,
+  // nascimento com ano). Sem ela, o formulário é o de sempre.
+  // Multi-CNPJ: vale a ótica da loja ONDE O CLIENTE ESTÁ cadastrado (é para
+  // ela que o PATCH vai), não a da loja ativa — na visão consolidada, cliente
+  // de uma loja com ótica editado a partir de uma principal sem ótica também
+  // ganha o bloco. Cliente novo: a loja ativa. O formulário só monta depois
+  // de as configurações chegarem, para não mudar de cara no meio da edição.
+  // (usePdvSettings é chamado depois de editTarget existir, mais abaixo.)
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
   const [tab, setTab] = useState(0);
@@ -138,6 +148,8 @@ export default function ClientesScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Customer | null>(null);
+  const pdvDoForm = usePdvSettings(editTarget?.company_id || null);
+  const oticaLigada = pdvDoForm.settings.otica_enabled === true;
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const [bulkMode, setBulkMode] = useState(false);
@@ -617,11 +629,20 @@ export default function ClientesScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 32 }}
             >
-              <AddCustomerForm
-                initialData={editTarget || undefined}
-                onSave={editTarget ? handleEdit : handleAdd}
-                onCancel={closeFormModal}
-              />
+              {pdvDoForm.isLoading ? (
+                <View style={{ paddingVertical: 48, alignItems: "center" }} testID="clientes-form-carregando">
+                  <ActivityIndicator color={Colors.violet3} />
+                </View>
+              ) : (
+                <AddCustomerForm
+                  key={editTarget?.id || "novo"}
+                  initialData={editTarget || undefined}
+                  onSave={editTarget ? handleEdit : handleAdd}
+                  onCancel={closeFormModal}
+                  dadosCompletos={oticaLigada}
+                  camposExtras={camposExtras}
+                />
+              )}
             </ScrollView>
           </Pressable>
         </Pressable>

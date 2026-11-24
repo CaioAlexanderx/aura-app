@@ -16,6 +16,11 @@
 // cliente duas vezes. Ver OsActions.tsx (kind='reparo').
 //
 // Mockup aprovado: docs/mockups/otica-modulo.html, tela 3.
+//
+// 23/11/2026: (a) erro de rede deixava a tela girando para sempre — agora
+// tem aviso e "Tentar de novo"; (b) OS aberta SEM SINAL não tem venda: o
+// "Entregar" fecha a OS sem nada entrar no caixa. A regra não mudou, mas a
+// tela passou a avisar antes da entrega e a levar ao Caixa.
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform, Linking } from "react-native";
@@ -102,7 +107,7 @@ export default function OticaOsDetailScreen() {
   const [cancelReason, setCancelReason] = useState("");
   const [notify, setNotify] = useState<{ queued: boolean; skip_reason?: string | null; track_url: string; wa_link: string | null } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["service-order", company?.id, id],
     queryFn: () => serviceOrdersApi.get(company!.id, String(id)),
     enabled: !!company?.id && !!id,
@@ -162,10 +167,25 @@ export default function OticaOsDetailScreen() {
     toast[ok ? "success" : "info"](ok ? "Link de acompanhamento copiado" : url);
   }
 
-  if (isLoading || !os) {
+  if (isLoading || !company?.id) {
     return (
       <View style={[st.screen, { justifyContent: "center", alignItems: "center" }]}>
         <ActivityIndicator color={Colors.violet3} />
+      </View>
+    );
+  }
+  if (isError || !os) {
+    return (
+      <View style={[st.screen, { justifyContent: "center", alignItems: "center", padding: 24, gap: 8 }]} testID="otica-os-erro">
+        <Icon name="alert" size={28} color={Colors.amber} />
+        <Text style={st.erroTitulo}>{isError ? "Não deu para abrir esta OS" : "OS não encontrada"}</Text>
+        <Text style={st.erroTexto}>{isError ? "Pode ser a conexão. A OS continua guardada." : "Ela pode ter sido aberta em outra loja."}</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 6, flexWrap: "wrap", justifyContent: "center" }}>
+          {isError && (
+            <Pressable onPress={() => refetch()} style={st.ghostBtn} testID="otica-os-tentar"><Text style={st.ghostBtnText}>Tentar de novo</Text></Pressable>
+          )}
+          <Pressable onPress={() => router.replace("/otica" as any)} style={st.ghostBtn}><Text style={st.ghostBtnText}>Voltar ao Laboratório</Text></Pressable>
+        </View>
       </View>
     );
   }
@@ -237,7 +257,7 @@ export default function OticaOsDetailScreen() {
         {timeline.map((s, i) => (
           <View key={s.key} style={[st.tl, i < timeline.length - 1 && st.tlLine]}>
             <View style={[st.dot, s.state === "done" && st.dotDone, s.state === "now" && st.dotNow]} />
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 140 }}>
               <Text style={[st.tlTitle, s.state === "now" && { color: Colors.violet3 }, s.state === "todo" && { color: Colors.ink3 }]}>{s.title}</Text>
               {!!s.detail && <Text style={st.tlDetail}>{s.detail}</Text>}
             </View>
@@ -338,8 +358,18 @@ export default function OticaOsDetailScreen() {
             )}
             <Text style={st.hint}>O sinal entrou no caixa na abertura; o saldo virou parcela no crediário com vencimento na data prometida e aparece no link de acompanhamento com Pix.</Text>
           </>
+        ) : fechada ? (
+          <Text style={st.hint}>OS aberta sem sinal: não há venda vinculada a ela.</Text>
         ) : (
-          <Text style={st.hint}>Sem venda vinculada: o caixa fecha na entrega, pelo PDV.</Text>
+          <View style={[st.warn, { marginTop: 10, marginBottom: 0 }]} testID="otica-sem-venda-aviso">
+            <Text style={st.warnText}>
+              Esta OS foi aberta sem sinal: ainda não há venda. Entregar aqui só fecha a OS — o valor não entra no caixa{optical?.frame?.source === "estoque" ? " e a armação continua no estoque" : ""}. Registre a venda no Caixa quando o cliente pagar.
+            </Text>
+            <Pressable onPress={() => router.push("/pdv" as any)} style={[st.ghostBtn, { alignSelf: "flex-start", marginTop: 8 }]} testID="otica-ir-ao-caixa">
+              <Icon name="cart" size={14} color={Colors.ink} />
+              <Text style={st.ghostBtnText}>Abrir o Caixa</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -429,7 +459,7 @@ const st = StyleSheet.create({
   backBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 14 },
   backText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "flex-end", gap: 12, marginBottom: 14, flexWrap: "wrap" },
-  pageTitle: { fontFamily: Fonts.heading, fontSize: 34, lineHeight: 37, color: Colors.ink, letterSpacing: -0.5 },
+  pageTitle: { fontFamily: Fonts.heading, fontSize: 30, lineHeight: 34, color: Colors.ink, letterSpacing: -0.5 },
   pageSubtitle: { fontSize: 13, color: Colors.ink3, lineHeight: 19, marginTop: 6 },
   headActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   ghostBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
@@ -453,14 +483,16 @@ const st = StyleSheet.create({
   multiline: { minHeight: 64, textAlignVertical: "top" },
   hint: { fontSize: 11, color: Colors.ink3, marginTop: 8, lineHeight: 16 },
   txtBody: { fontSize: 13, color: Colors.ink, lineHeight: 19 },
+  erroTitulo: { fontSize: 15, color: Colors.ink, fontWeight: "700", textAlign: "center" },
+  erroTexto: { fontSize: 12, color: Colors.ink3, textAlign: "center", maxWidth: 340, lineHeight: 17 },
   warn: { backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "55", borderRadius: 10, padding: 10, marginBottom: 12 },
   warnText: { fontSize: 12, color: Colors.amber, lineHeight: 17 },
   ok: { backgroundColor: Colors.greenD, borderWidth: 1, borderColor: Colors.green + "55", borderRadius: 10, padding: 10 },
   okText: { fontSize: 12, color: Colors.green, lineHeight: 17 },
 
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 5, gap: 12 },
-  rowK: { fontSize: 12, color: Colors.ink3 },
-  rowV: { fontSize: 12, color: Colors.ink, fontWeight: "600", flex: 1, textAlign: "right" },
+  rowK: { fontSize: 12, color: Colors.ink3, flexShrink: 1 },
+  rowV: { fontSize: 12, color: Colors.ink, fontWeight: "600", flex: 1, textAlign: "right", minWidth: 0 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: Colors.border },
   itemDesc: { fontSize: 13, color: Colors.ink, flex: 1 },
   itemTotal: { fontSize: 13, color: Colors.ink, fontWeight: "700", fontFamily: Fonts.mono },

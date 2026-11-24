@@ -14,8 +14,14 @@
 // Receita é dado de saúde: esta tela é lida por quem tem otica.access.
 //
 // Mockup aprovado: docs/mockups/otica-modulo.html, tela 4.
+//
+// 23/11/2026 (docs/mockups/otica-cadastro-e-receita.html, tela 2): cada
+// receita aberta ganha Editar, Imprimir (ficha em A4) e, quando o servidor
+// guardar o arquivo em área privada, a foto do papel. No celular a tabela
+// vira cartão: cinco colunas não cabem em 375 px.
 // ============================================================
 import { useMemo, useState } from "react";
+import { Platform, useWindowDimensions } from "react-native";
 import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -25,7 +31,6 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ScreenHero } from "@/components/ScreenHero";
-import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
@@ -33,10 +38,15 @@ import { useCustomers } from "@/hooks/useCustomers";
 import { arrayToCSV, downloadCSV } from "@/utils/csv";
 import {
   oticaApi, OTICA_SETTINGS_DEFAULTS, PRESCRIBER_LABEL,
-  type Prescription, columnsToEyes, eyesToColumns, fmtEyeShort, fmtIsoDate, daysUntil, parseBrDate, todayIso,
+  type Prescription, columnsToEyes, fmtEyeShort, fmtIsoDate, daysUntil, todayIso,
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
-import { RxEditor, emptyRxDraft, validateRxDraft, type RxDraft } from "@/components/otica/RxEditor";
+import { ReceitaSheet } from "@/components/otica/ReceitaSheet";
+import { FotoDaReceita } from "@/components/otica/FotoDaReceita";
+import { printReceita } from "@/services/oticaPrint";
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
+import { formatarDocumento } from "@/utils/clienteDadosCompletos";
+import { buscarDocumentosInteiros, lojaDoCliente } from "@/hooks/useDocumentosDoCliente";
 import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 type Chip = "todas" | "vencendo" | "vencidas" | "mes";
@@ -48,7 +58,7 @@ const CHIPS: { key: Chip; label: string }[] = [
 ];
 
 export default function OticaReceitasScreen() {
-  const { company } = useAuthStore();
+  const { company, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const { settings: pdv } = usePdvSettings();
   const enabled = pdv.otica_enabled === true;
@@ -59,7 +69,10 @@ export default function OticaReceitasScreen() {
   const [busca, setBusca] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [sheet, setSheet] = useState<boolean>(params.nova === "1");
+  const [editing, setEditing] = useState<Prescription | null>(null);
   const [toDelete, setToDelete] = useState<Prescription | null>(null);
+  const { width } = useWindowDimensions();
+  const estreito = width < 640;
 
   const { data: settingsData } = useQuery({
     queryKey: ["otica-settings", company?.id],
@@ -68,6 +81,8 @@ export default function OticaReceitasScreen() {
     staleTime: 300_000,
   });
   const validityMonths = settingsData?.settings?.prescription_validity_months ?? OTICA_SETTINGS_DEFAULTS.prescription_validity_months;
+  // A foto do papel só aparece quando o servidor avisa que guarda o arquivo.
+  const fotoDisponivel = settingsData?.capabilities?.prescription_photo === true;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["otica-prescriptions", company?.id, params.customer_id || "all"],
@@ -119,8 +134,24 @@ export default function OticaReceitasScreen() {
       );
       downloadCSV(csv, `livro-de-receitas-${todayIso()}.csv`);
     } catch (err: any) {
-      toast.error(err?.data?.error || "Não deu para exportar o livro");
+      toast.error(err?.data?.error || "Não deu para exportar o livro. Tente de novo.");
     }
+  }
+
+  // Ficha em A4. Direto no clique: a janela de impressão precisa do gesto.
+  function imprimir(p: Prescription) {
+    if (Platform.OS !== "web") { toast.info("Impressão disponível apenas na versão web"); return; }
+    const doc = formatarDocumento((company as any)?.cnpj || (company as any)?.cpf || "");
+    const cliente = customers.find((c) => c.id === p.customer_id) || null;
+    // 24/11/2026: CPF/RG da lista vêm mascarados; o inteiro é buscado na
+    // loja do próprio cliente (multi-CNPJ) depois de a janela abrir.
+    const lojaDoCadastro = cliente ? lojaDoCliente(cliente, { company: company as any, availableCompanies }) : null;
+    printReceita({
+      loja: { nome: nomeDaLojaDe(company as any) || "Ótica", documento: doc ? (doc.length > 14 ? "CNPJ " : "CPF ") + doc : null },
+      settings: settingsData?.settings || null,
+      cliente,
+      receita: p,
+    }, cliente && lojaDoCadastro ? () => buscarDocumentosInteiros(lojaDoCadastro, cliente.id) : undefined).then((r) => { if (r === "blocked") toast.error("Permita pop-ups neste site para imprimir a receita."); });
   }
 
   async function confirmDelete() {
@@ -189,32 +220,56 @@ export default function OticaReceitasScreen() {
       {isLoading ? (
         <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
       ) : isError ? (
-        <View style={st.emptyBox}>
+        <View style={st.emptyBox} testID="otica-rx-erro">
+          <Icon name="alert" size={28} color={Colors.amber} />
           <Text style={st.emptyTitle}>Não deu para carregar as receitas</Text>
-          <Pressable onPress={() => refetch()} style={[st.ghostBtn, { marginTop: 6 }]}><Text style={st.ghostBtnText}>Tentar de novo</Text></Pressable>
+          <Text style={st.emptyDesc}>Pode ser a conexão. As receitas continuam guardadas.</Text>
+          <Pressable onPress={() => refetch()} style={[st.ghostBtn, { marginTop: 6 }]} testID="otica-rx-tentar"><Text style={st.ghostBtnText}>Tentar de novo</Text></Pressable>
         </View>
       ) : rows.length === 0 ? (
         <View style={st.emptyBox} testID="otica-rx-vazio">
           <Icon name="eye" size={30} color={Colors.ink3} />
           <Text style={st.emptyTitle}>{busca ? "Nada encontrado" : chip === "vencendo" ? "Nenhuma receita vence nos próximos 30 dias" : chip === "vencidas" ? "Nenhuma receita vencida" : "Nenhuma receita registrada"}</Text>
           <Text style={st.emptyDesc}>{busca ? "Tente pelo nome do cliente ou do prescritor." : "Cada receita registrada aqui vira uma linha do livro e pode ser usada em uma OS de óculos."}</Text>
+          {enabled && !busca && chip === "todas" && (
+            <Pressable onPress={() => setSheet(true)} style={[st.newBtn, { marginTop: 8 }]} testID="otica-rx-vazio-nova">
+              <Icon name="plus" size={14} color="#fff" />
+              <Text style={st.newBtnText}>{customerFilter ? "Registrar a primeira receita" : "Nova receita"}</Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         <View style={st.table} testID="otica-rx-lista">
-          <View style={[st.tr, st.th]}>
+          {!estreito && <View style={[st.tr, st.th]}>
             <Text style={[st.cell, st.cEmit, st.thText]}>Emitida</Text>
             <Text style={[st.cell, st.cName, st.thText]}>Cliente</Text>
             <Text style={[st.cPresc, st.thText]}>Prescritor</Text>
             <Text style={[st.cell, st.cRx, st.thText]}>OD / OE</Text>
             <Text style={[st.cVal, st.thText]}>Validade</Text>
-          </View>
+          </View>}
           {rows.map((p) => {
             const eyes = columnsToEyes(p);
             const d = daysUntil(p.valid_until);
             const isOpen = open === p.id;
             return (
               <View key={p.id}>
-                <Pressable onPress={() => setOpen(isOpen ? null : p.id)} style={[st.tr, isOpen && st.trOpen]} testID={`otica-rx-${p.id}`}>
+                {estreito ? (
+                  <Pressable onPress={() => setOpen(isOpen ? null : p.id)} style={[st.mRow, isOpen && st.trOpen]} testID={`otica-rx-${p.id}`} accessibilityRole="button" accessibilityState={{ expanded: isOpen }}>
+                    <View style={st.mTop}>
+                      <Text style={[st.cellText, st.strong, { flex: 1 }]} numberOfLines={1}>{p.customer_name || "—"}</Text>
+                      <Text style={st.mono}>{fmtIsoDate(p.issued_at)}</Text>
+                    </View>
+                    <Text style={st.mMeta} numberOfLines={1}>{[p.prescriber_name, p.prescriber_registry || PRESCRIBER_LABEL[p.prescriber_type]].filter(Boolean).join(" · ") || "prescritor não informado"}</Text>
+                    <Text style={st.mono}>OD {fmtEyeShort(eyes.od)}</Text>
+                    <Text style={st.mono}>OE {fmtEyeShort(eyes.oe)}</Text>
+                    <View style={st.mTop}>
+                      <Text style={[st.mMeta, { flex: 1 }]}>válida até {fmtIsoDate(p.valid_until)}</Text>
+                      {d != null && d < 0 && <Text style={[st.tag, st.tagBad]}>vencida</Text>}
+                      {d != null && d >= 0 && d <= 30 && <Text style={[st.tag, st.tagWarn]}>vence em {d} {d === 1 ? "dia" : "dias"}</Text>}
+                    </View>
+                  </Pressable>
+                ) : (
+                <Pressable onPress={() => setOpen(isOpen ? null : p.id)} style={[st.tr, isOpen && st.trOpen]} testID={`otica-rx-${p.id}`} accessibilityRole="button" accessibilityState={{ expanded: isOpen }}>
                   <Text style={[st.cell, st.cEmit, st.mono]}>{fmtIsoDate(p.issued_at)}</Text>
                   <Text style={[st.cell, st.cName, st.strong]} numberOfLines={1}>{p.customer_name || "—"}</Text>
                   <View style={st.cPresc}>
@@ -230,20 +285,42 @@ export default function OticaReceitasScreen() {
                     {d != null && d >= 0 && d <= 30 && <Text style={[st.tag, st.tagWarn]}>vence em {d} {d === 1 ? "dia" : "dias"}</Text>}
                   </View>
                 </Pressable>
+                )}
                 {isOpen && (
                   <View style={st.detail}>
                     <RxGrid od={eyes.od} oe={eyes.oe} />
                     {!!p.notes && <Text style={st.hint}>{p.notes}</Text>}
+                    {!!company?.id && (
+                      <FotoDaReceita
+                        companyId={company.id}
+                        receita={p}
+                        disponivel={fotoDisponivel}
+                        podeEditar={enabled}
+                        onChanged={() => qc.invalidateQueries({ queryKey: ["otica-prescriptions"] })}
+                      />
+                    )}
                     <View style={st.detailActions}>
                       {enabled && (
-                        <Pressable onPress={() => router.push(("/otica/nova?customer_id=" + p.customer_id) as any)} style={st.newBtn} testID={`otica-rx-abrir-os-${p.id}`}>
+                        <Pressable onPress={() => router.push(("/otica/nova?customer_id=" + p.customer_id + "&rx_id=" + p.id) as any)} style={st.newBtn} testID={`otica-rx-abrir-os-${p.id}`}>
                           <Icon name="glasses" size={14} color="#fff" />
                           <Text style={st.newBtnText}>Abrir OS com esta receita</Text>
                         </Pressable>
                       )}
-                      <Pressable onPress={() => router.push(("/otica/receitas?customer_id=" + p.customer_id) as any)} style={st.ghostBtn}>
-                        <Text style={st.ghostBtnText}>Todas deste cliente</Text>
+                      {enabled && (
+                        <Pressable onPress={() => setEditing(p)} style={st.ghostBtn} testID={`otica-rx-editar-${p.id}`}>
+                          <Icon name="edit" size={14} color={Colors.ink} />
+                          <Text style={st.ghostBtnText}>Editar</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => imprimir(p)} style={st.ghostBtn} testID={`otica-rx-imprimir-${p.id}`}>
+                        <Icon name="receipt" size={14} color={Colors.ink} />
+                        <Text style={st.ghostBtnText}>Imprimir</Text>
                       </Pressable>
+                      {!customerFilter && (
+                        <Pressable onPress={() => router.push(("/otica/receitas?customer_id=" + p.customer_id) as any)} style={st.ghostBtn}>
+                          <Text style={st.ghostBtnText}>Todas deste cliente</Text>
+                        </Pressable>
+                      )}
                       {enabled && (
                         <Pressable onPress={() => setToDelete(p)} style={[st.ghostBtn, { borderColor: Colors.red + "66" }]} testID={`otica-rx-excluir-${p.id}`}>
                           <Text style={[st.ghostBtnText, { color: Colors.red }]}>Excluir</Text>
@@ -265,11 +342,12 @@ export default function OticaReceitasScreen() {
       </Text>
       )}
 
-      <NovaReceitaSheet
-        visible={sheet}
-        onClose={() => setSheet(false)}
+      <ReceitaSheet
+        visible={sheet || !!editing}
+        onClose={() => { setSheet(false); setEditing(null); }}
         validityMonths={validityMonths}
         presetCustomerId={params.customer_id || null}
+        editing={editing}
       />
 
       <ConfirmDialog
@@ -284,94 +362,10 @@ export default function OticaReceitasScreen() {
   );
 }
 
-function NovaReceitaSheet({ visible, onClose, validityMonths, presetCustomerId }: { visible: boolean; onClose: () => void; validityMonths: number; presetCustomerId: string | null }) {
-  const { company } = useAuthStore();
-  const qc = useQueryClient();
-  const { customers } = useCustomers();
-  const [customerId, setCustomerId] = useState<string | null>(presetCustomerId);
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [draft, setDraft] = useState<RxDraft>(() => emptyRxDraft(validityMonths));
-  const [saving, setSaving] = useState(false);
-  const customer = customers.find((c) => c.id === customerId) || null;
-  const matches = useMemo(() => {
-    const q = customerQuery.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return customers.filter((c) => (c.name || "").toLowerCase().includes(q) || (c.phone || "").includes(q)).slice(0, 6);
-  }, [customers, customerQuery]);
-
-  async function save() {
-    if (!company?.id || saving) return;
-    if (!customerId) { toast.error("Escolha o cliente da receita"); return; }
-    const err = validateRxDraft(draft);
-    if (err) { toast.error(err); return; }
-    setSaving(true);
-    try {
-      await oticaApi.createPrescription(company.id, {
-        customer_id: customerId,
-        ...eyesToColumns(draft.od, draft.oe),
-        prescriber_type: draft.prescriber_type,
-        prescriber_name: draft.prescriber_name.trim() || null,
-        prescriber_registry: draft.prescriber_registry.trim() || null,
-        issued_at: parseBrDate(draft.issued_at)!,
-        valid_until: parseBrDate(draft.valid_until)!,
-        notes: draft.notes.trim() || null,
-      });
-      qc.invalidateQueries({ queryKey: ["otica-prescriptions"] });
-      qc.invalidateQueries({ queryKey: ["otica-dashboard"] });
-      toast.success("Receita registrada");
-      setDraft(emptyRxDraft(validityMonths));
-      if (!presetCustomerId) setCustomerId(null);
-      onClose();
-    } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para salvar a receita");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={640}>
-      <View style={{ padding: 20, gap: 14 }}>
-        <Text style={st.sheetTitle}>Nova receita<Text style={{ color: Colors.violet }}>.</Text></Text>
-        <View>
-          <Text style={st.lbl}>Cliente</Text>
-          {customer ? (
-            <View style={st.selectedRow}>
-              <Icon name="check" size={14} color={Colors.green} />
-              <Text style={st.selectedName}>{customer.name}</Text>
-              {!presetCustomerId && <Pressable onPress={() => setCustomerId(null)}><Text style={st.changeLink}>trocar</Text></Pressable>}
-            </View>
-          ) : (
-            <>
-              <View style={st.searchBox}>
-                <Icon name="search" size={14} color={Colors.ink3} />
-                <TextInput style={st.searchInput} value={customerQuery} onChangeText={setCustomerQuery} placeholder="Nome ou telefone" placeholderTextColor={Colors.ink3} testID="otica-rx-busca-cliente" />
-              </View>
-              {matches.map((c) => (
-                <Pressable key={c.id} onPress={() => { setCustomerId(c.id); setCustomerQuery(""); }} style={st.matchRow} testID={`otica-rx-cliente-${c.id}`}>
-                  <Text style={st.matchName}>{c.name}</Text>
-                  {!!c.phone && <Text style={st.matchMeta}>{c.phone}</Text>}
-                </Pressable>
-              ))}
-            </>
-          )}
-        </View>
-        <RxEditor value={draft} onChange={setDraft} validityMonths={validityMonths} testID="otica-rx-form" />
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-          <Pressable onPress={onClose} style={st.ghostBtn}><Text style={st.ghostBtnText}>Cancelar</Text></Pressable>
-          <Pressable onPress={save} style={[st.newBtn, saving && { opacity: 0.6 }]} disabled={saving} testID="otica-rx-salvar">
-            {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.newBtnText}>Registrar receita</Text>}
-          </Pressable>
-        </View>
-      </View>
-    </ResponsiveSheet>
-  );
-}
-
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: 20, paddingBottom: 56, maxWidth: 980, alignSelf: "center", width: "100%" },
-  ghostBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  ghostBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   ghostBtnText: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   newBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   newBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
@@ -411,13 +405,8 @@ const st = StyleSheet.create({
   detail: { padding: 14, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.bg2, gap: 10 },
   detailActions: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 4 },
   hint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  mRow: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 3 },
+  mTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  mMeta: { fontSize: 11, color: Colors.ink3 },
 
-  sheetTitle: { fontFamily: Fonts.heading, fontSize: 30, color: Colors.ink, letterSpacing: -0.4 },
-  lbl: { fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 7 },
-  selectedRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  selectedName: { fontSize: 14, color: Colors.ink, fontWeight: "700", flex: 1 },
-  changeLink: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  matchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  matchName: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1 },
-  matchMeta: { fontSize: 11, color: Colors.ink3 },
 });

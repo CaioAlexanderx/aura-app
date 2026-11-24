@@ -16,9 +16,14 @@
 //     clássico que manda a lente errada pro laboratório
 //
 // `onChange` ausente = modo leitura (detalhe da OS, ficha do cliente).
+//
+// 23/11/2026 — celular: seis colunas em 335 px davam ~40 px por campo e
+// "−1,75" não cabia. Abaixo de RX_GRID_ESTREITO a grade vira um bloco por
+// olho, três campos por linha, com o rótulo em cima de cada campo. Mesmos
+// campos, mesma ordem, mesmos testID.
 // ============================================================
 import { useState } from "react";
-import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
+import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import {
@@ -69,9 +74,39 @@ type Props = {
   testID?: string;
 };
 
+/** Abaixo desta largura de tela a grade empilha um bloco por olho. */
+export const RX_GRID_ESTREITO = 560;
+
 export function RxGrid({ od, oe, onChange, hideMeasures, testID }: Props) {
   const cols = hideMeasures ? COLS.filter((c) => c.kind !== "mm") : COLS;
   const editable = !!onChange;
+  const { width } = useWindowDimensions();
+
+  if (width < RX_GRID_ESTREITO) {
+    return (
+      <View style={st.wrap} testID={testID}>
+        {(["od", "oe"] as const).map((eye) => {
+          const rx = eye === "od" ? od : oe;
+          return (
+            <View key={eye} style={st.mBlock}>
+              <Text style={st.mTitle}>{eye.toUpperCase()} <Text style={st.mSub}>· olho {eye === "od" ? "direito" : "esquerdo"}</Text></Text>
+              <View style={st.mGrid}>
+                {cols.map((c) => (
+                  <View key={c.key} style={st.mCell}>
+                    <Text style={st.mHead}>{c.label}</Text>
+                    {editable
+                      ? <Cell col={c} value={rx[c.key] as number | null} onCommit={(v) => onChange!(eye, { [c.key]: v } as Partial<EyeRx>)} testID={testID ? `${testID}-${eye}-${c.key}` : undefined} empilhado />
+                      : <Text style={[st.mValue, (rx[c.key] == null) && st.valueEmpty]}>{fmtCell(c, rx[c.key] as number | null)}</Text>}
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <View style={st.wrap} testID={testID}>
       <View style={st.headRow}>
@@ -100,12 +135,13 @@ export function RxGrid({ od, oe, onChange, hideMeasures, testID }: Props) {
   );
 }
 
-function Cell({ col, value, onCommit, testID }: { col: Col; value: number | null; onCommit: (v: number | null) => void; testID?: string }) {
+function Cell({ col, value, onCommit, testID, empilhado }: { col: Col; value: number | null; onCommit: (v: number | null) => void; testID?: string; empilhado?: boolean }) {
   const [text, setText] = useState(editText(col, value));
   const [bad, setBad] = useState(false);
   return (
     <TextInput
-      style={[st.input, bad && st.inputBad]}
+      style={[st.input, empilhado && st.inputEmpilhado, bad && st.inputBad]}
+      accessibilityLabel={col.label}
       value={text}
       onChangeText={(t) => { setText(t); setBad(false); }}
       onBlur={() => {
@@ -138,4 +174,14 @@ const st = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 4, minWidth: 0,
   },
   inputBad: { borderColor: Colors.red },
+  // No bloco empilhado o campo está numa coluna: flex:1 esticaria na vertical.
+  inputEmpilhado: { flex: 0, flexGrow: 0, width: "100%", fontSize: 15, paddingVertical: 10 },
+
+  mBlock: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 10, backgroundColor: Colors.bg3 },
+  mTitle: { fontSize: 13, fontWeight: "800", color: Colors.ink, marginBottom: 8 },
+  mSub: { fontSize: 11, fontWeight: "500", color: Colors.ink3 },
+  mGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  mCell: { flexBasis: "28%", flexGrow: 1, minWidth: 0 },
+  mHead: { textAlign: "center", fontSize: 9, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.ink3, marginBottom: 3 },
+  mValue: { textAlign: "center", fontSize: 15, color: Colors.ink, fontFamily: Fonts.mono, paddingVertical: 6 },
 });
