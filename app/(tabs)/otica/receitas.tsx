@@ -46,6 +46,7 @@ import { FotoDaReceita } from "@/components/otica/FotoDaReceita";
 import { printReceita } from "@/services/oticaPrint";
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { formatarDocumento } from "@/utils/clienteDadosCompletos";
+import { buscarDocumentosInteiros, lojaDoCliente } from "@/hooks/useDocumentosDoCliente";
 import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
 
 type Chip = "todas" | "vencendo" | "vencidas" | "mes";
@@ -57,7 +58,7 @@ const CHIPS: { key: Chip; label: string }[] = [
 ];
 
 export default function OticaReceitasScreen() {
-  const { company } = useAuthStore();
+  const { company, availableCompanies } = useAuthStore();
   const qc = useQueryClient();
   const { settings: pdv } = usePdvSettings();
   const enabled = pdv.otica_enabled === true;
@@ -141,12 +142,16 @@ export default function OticaReceitasScreen() {
   function imprimir(p: Prescription) {
     if (Platform.OS !== "web") { toast.info("Impressão disponível apenas na versão web"); return; }
     const doc = formatarDocumento((company as any)?.cnpj || (company as any)?.cpf || "");
+    const cliente = customers.find((c) => c.id === p.customer_id) || null;
+    // 24/11/2026: CPF/RG da lista vêm mascarados; o inteiro é buscado na
+    // loja do próprio cliente (multi-CNPJ) depois de a janela abrir.
+    const lojaDoCadastro = cliente ? lojaDoCliente(cliente, { company: company as any, availableCompanies }) : null;
     printReceita({
       loja: { nome: nomeDaLojaDe(company as any) || "Ótica", documento: doc ? (doc.length > 14 ? "CNPJ " : "CPF ") + doc : null },
       settings: settingsData?.settings || null,
-      cliente: customers.find((c) => c.id === p.customer_id) || null,
+      cliente,
       receita: p,
-    }).then((r) => { if (r === "blocked") toast.error("Permita pop-ups neste site para imprimir a receita."); });
+    }, cliente && lojaDoCadastro ? () => buscarDocumentosInteiros(lojaDoCadastro, cliente.id) : undefined).then((r) => { if (r === "blocked") toast.error("Permita pop-ups neste site para imprimir a receita."); });
   }
 
   async function confirmDelete() {

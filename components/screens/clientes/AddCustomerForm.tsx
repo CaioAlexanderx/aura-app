@@ -12,8 +12,10 @@ import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
 import { ENDERECO_VAZIO, erroDoEndereco, type Endereco } from "@/components/endereco/endereco";
 // 23/11/2026 — bloco "Dados completos", só com a ótica ligada (mockup
 // docs/mockups/otica-cadastro-e-receita.html, tela 1).
-import { DadosCompletosDoCliente, type DadosCompletos } from "./DadosCompletosDoCliente";
-import { avisoDoNascimento, erroDoCpf, idadeEmAnos, nascimentoParaGravar, nascimentoParaOCampo, type CampoExtra } from "@/utils/clienteDadosCompletos";
+import { DadosCompletosDoCliente, type CampoDeDocumento, type DadosCompletos, type TravaDoDocumento } from "./DadosCompletosDoCliente";
+import { avisoDoNascimento, erroDoCpf, idadeEmAnos, nascimentoParaGravar, nascimentoParaOCampo, precisaDosDocumentosInteiros, temMascara, type CampoExtra } from "@/utils/clienteDadosCompletos";
+// 24/11/2026: a lista manda CPF e RG mascarados; o inteiro vem do GET /:cid.
+import { useDocumentosDoCliente } from "@/hooks/useDocumentosDoCliente";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -62,11 +64,53 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
   const [birthday, setBirthday] = useState(birthdayInicial);
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [endereco, setEndereco] = useState<Endereco>(initialData?.endereco || ENDERECO_VAZIO);
-  const completosIniciais: DadosCompletos = {
+  // Base de "foi mexido?". Começa com o que veio da lista; quando o CPF/RG
+  // vieram mascarados, troca pelo inteiro assim que o GET /:cid responde.
+  const [completosIniciais, setCompletosIniciais] = useState<DadosCompletos>(() => ({
     cpf: initialData?.cpf || "", rg: initialData?.rg || "",
     gender: initialData?.gender || "", occupation: initialData?.occupation || "",
-  };
+  }));
   const [completos, setCompletos] = useState<DadosCompletos>(completosIniciais);
+
+  // 24/11/2026 (Aura-backend#1099): na edição com a ótica, CPF/RG mascarados
+  // da lista são trocados pelo inteiro (hooks/useDocumentosDoCliente.ts).
+  // Enquanto não chega, os dois ficam só leitura; se não der para buscar, o
+  // mascarado fica só leitura e nada vai no PATCH sem a pessoa redigitar.
+  // Backend antigo (documento inteiro na lista): nenhuma chamada a mais.
+  const clienteDosDocs = dadosCompletos && isEdit ? initialData : null;
+  const [precisouDosDocs] = useState(() => precisaDosDocumentosInteiros(clienteDosDocs));
+  const docs = useDocumentosDoCliente(clienteDosDocs);
+  const [redigitando, setRedigitando] = useState<Partial<Record<CampoDeDocumento, boolean>>>({});
+  useEffect(() => {
+    if (!precisouDosDocs || docs.estado !== "inteiros") return;
+    // Os dois campos estavam travados até aqui: ninguém digitou neles.
+    const inteiros = { cpf: docs.cpf, rg: docs.rg };
+    setCompletosIniciais((b) => ({ ...b, ...inteiros }));
+    setCompletos((c) => ({ ...c, ...inteiros }));
+  }, [docs.estado]); // eslint-disable-line react-hooks/exhaustive-deps
+  function travaDe(campo: CampoDeDocumento): TravaDoDocumento | undefined {
+    if (!precisouDosDocs || redigitando[campo]) return undefined;
+    if (docs.estado === "carregando") return "carregando";
+    // Chegou, mas o efeito acima ainda não trocou a máscara: segue travado
+    // nesse único render, para a máscara nunca aparecer num campo editável.
+    if (docs.estado === "inteiros" && (temMascara(completosIniciais.cpf) || temMascara(completosIniciais.rg))) return "carregando";
+    if (docs.estado === "falhou" && !!completosIniciais[campo]) return "falhou";
+    return undefined;
+  }
+  const travas = { cpf: travaDe("cpf"), rg: travaDe("rg") };
+  function redigitar(campo: CampoDeDocumento) {
+    setRedigitando((r) => ({ ...r, [campo]: true }));
+    setCompletos((c) => ({ ...c, [campo]: "" }));
+  }
+  /** Documento que vai no corpo: mexido, destravado, sem máscara, e — se a
+   *  base era a máscara (não deu para buscar) — com algo redigitado: campo
+   *  vazio ali não apaga o documento que a lojista nunca chegou a ver. */
+  function documentoMexido(campo: CampoDeDocumento): boolean {
+    if (completos[campo] === completosIniciais[campo]) return false;
+    if (travas[campo] || temMascara(completos[campo])) return false;
+    if (temMascara(completosIniciais[campo]) && !completos[campo].trim()) return false;
+    return true;
+  }
   const editou = name !== (initialData?.name || "") || phone !== (initialData?.phone || "")
     || email !== (initialData?.email || "") || instagram !== (initialData?.instagram || "")
     || birthday !== birthdayInicial || notes !== (initialData?.notes || "")
@@ -87,13 +131,13 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
     let mexidos: Customer["dadosCompletos"];
     if (dadosCompletos) {
       mexidos = {};
-      if (completos.cpf !== completosIniciais.cpf) {
+      if (documentoMexido("cpf")) {
         const erroCpf = erroDoCpf(completos.cpf);
         if (erroCpf) { toast.error(erroCpf); return; }
         mexidos.cpf = completos.cpf;
       }
       for (const campo of camposExtras) {
-        if (completos[campo] !== completosIniciais[campo]) mexidos[campo] = completos[campo];
+        if (campo === "rg" ? documentoMexido("rg") : completos[campo] !== completosIniciais[campo]) mexidos[campo] = completos[campo];
       }
     }
     onSave({
@@ -165,7 +209,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
       </View>
 
       {dadosCompletos && (
-        <DadosCompletosDoCliente value={completos} onChange={setCompletos} camposExtras={camposExtras} largo={IS_WIDE} />
+        <DadosCompletosDoCliente value={completos} onChange={setCompletos} camposExtras={camposExtras} largo={IS_WIDE} travas={travas} onRedigitar={redigitar} />
       )}
 
       <SecaoEndereco value={endereco} onChange={setEndereco} testID="cliente-form-endereco" />

@@ -7,7 +7,7 @@ import { toast } from "@/components/Toast";
 import { pluralize } from "@/utils/plural";
 import type { Customer } from "@/components/screens/clientes/types";
 import { enderecoDoCliente, enderecoParaApi, temEnderecoDeEntrega } from "@/components/endereco/endereco";
-import { camposExtrasAceitos, cpfParaApi } from "@/utils/clienteDadosCompletos";
+import { camposExtrasAceitos, cpfParaApi, temMascara } from "@/utils/clienteDadosCompletos";
 
 // MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
 // Hook ramifica entre /me/customers (consolidated) e /companies/:id/customers
@@ -69,7 +69,7 @@ async function deleteBatched(
   return { succeeded, failed };
 }
 
-function mapApiCustomer(c: any): Customer {
+export function mapApiCustomer(c: any): Customer {
   // Bug A fix (15/06/2026): usa birth_date diretamente com ano, em vez de
   // confiar no campo birthday do backend (que vem sem ano: "DD/MM").
   // Append 'T12:00:00' (local noon) evita desvio de timezone: sem ele,
@@ -119,8 +119,12 @@ function mapApiCustomer(c: any): Customer {
     hasAddress: typeof c.has_address === "boolean" ? c.has_address : temEnderecoDeEntrega(enderecoDoCliente(c)),
     // 23/11/2026 — cadastro completo (ótica). Só leitura; quem grava é
     // `dadosCompletos`, que só o formulário com o bloco aberto preenche.
-    cpf: String(c.cpf_cnpj || "").replace(/\D/g, ""),
+    // 24/11/2026 (Aura-backend#1099): a lista manda CPF e RG mascarados.
+    // Máscara fica como veio (tirar os não-dígitos deixaria "24725", que
+    // passaria por um CPF pela metade); o inteiro vem do GET /:cid.
+    cpf: temMascara(c.cpf_cnpj) ? String(c.cpf_cnpj).trim() : String(c.cpf_cnpj || "").replace(/\D/g, ""),
     rg: c.rg || "",
+    docsMasked: c.docs_masked === true,
     gender: c.gender || "",
     occupation: c.occupation || "",
   };
@@ -133,13 +137,17 @@ function mapApiCustomer(c: any): Customer {
  * reenviado (um documento antigo fora do padrão não vira erro ao editar o
  * nome), e RG, sexo e profissão só chegam aqui quando o servidor avisou que
  * os aceita (customer_fields).
+ *
+ * 24/11/2026: CPF ou RG com `*` é a máscara da lista, não o documento — nunca
+ * vai no corpo (gravaria a máscara, ou só o fim do número). Última barreira:
+ * o formulário já não deixa a máscara virar valor editado.
  */
 export function corpoDosDadosCompletos(c: Partial<Customer>): Record<string, string | null> {
   const d = c.dadosCompletos;
   if (!d) return {};
   const corpo: Record<string, string | null> = {};
-  if (d.cpf !== undefined) corpo.cpf_cnpj = cpfParaApi(d.cpf);
-  if (d.rg !== undefined) corpo.rg = d.rg.trim() || null;
+  if (d.cpf !== undefined && !temMascara(d.cpf)) corpo.cpf_cnpj = cpfParaApi(d.cpf);
+  if (d.rg !== undefined && !temMascara(d.rg)) corpo.rg = d.rg.trim() || null;
   if (d.gender !== undefined) corpo.gender = d.gender || null;
   if (d.occupation !== undefined) corpo.occupation = d.occupation.trim() || null;
   return corpo;

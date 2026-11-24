@@ -24,7 +24,7 @@ import {
   PRESCRIBER_LABEL, columnsToEyes, fmtAxis, fmtDiopter, fmtIsoDate, fmtMm, todayIso,
   type EyeRx, type OticaSettings, type Prescription,
 } from "@/services/oticaApi";
-import { formatarDocumento, idadeEmAnos, rotuloDoSexo, situacaoDoNascimento } from "@/utils/clienteDadosCompletos";
+import { formatarDocumento, idadeEmAnos, precisaDosDocumentosInteiros, rotuloDoSexo, situacaoDoNascimento } from "@/utils/clienteDadosCompletos";
 import { resumoDoEndereco } from "@/components/endereco/endereco";
 import type { Customer } from "@/components/screens/clientes/types";
 
@@ -146,9 +146,33 @@ export function htmlDaFichaDaReceita(d: DadosDaFichaDaReceita): string {
 }
 
 /**
- * Abre a janela de impressão com a ficha. Chamar DIRETO no onPress (o
- * window.open precisa do gesto do clique — ver services/printWindow).
+ * Cliente com o CPF e o RG inteiros para o papel. 24/11/2026: o cadastro da
+ * lista vem mascarado (Aura-backend#1099); `buscar` é o GET /:cid
+ * (buscarDocumentosInteiros). Sem máscara, nenhuma chamada. Se a busca
+ * falhar, a folha sai com a máscara — nunca com um número cortado.
  */
-export function printReceita(d: DadosDaFichaDaReceita): Promise<PrintOutcome> {
-  return openPrintWindow(async () => ({ ok: true as const, html: htmlDaFichaDaReceita(d) }), "width=900,height=1000,scrollbars=yes");
+export async function clienteParaAFicha(
+  cliente: Partial<Customer> | null | undefined,
+  buscar?: () => Promise<{ cpf: string; rg: string }>,
+): Promise<Partial<Customer> | null> {
+  if (!cliente) return null;
+  if (!buscar || !precisaDosDocumentosInteiros(cliente)) return cliente;
+  try {
+    const d = await buscar();
+    return { ...cliente, cpf: d.cpf, rg: d.rg, docsMasked: false };
+  } catch {
+    return cliente;
+  }
+}
+
+/**
+ * Abre a janela de impressão com a ficha. Chamar DIRETO no onPress (o
+ * window.open precisa do gesto do clique — ver services/printWindow). O
+ * documento inteiro (`documentosInteiros`) é buscado depois de a janela abrir.
+ */
+export function printReceita(d: DadosDaFichaDaReceita, documentosInteiros?: () => Promise<{ cpf: string; rg: string }>): Promise<PrintOutcome> {
+  return openPrintWindow(async () => {
+    const cliente = await clienteParaAFicha(d.cliente, documentosInteiros);
+    return { ok: true as const, html: htmlDaFichaDaReceita({ ...d, cliente }) };
+  }, "width=900,height=1000,scrollbars=yes");
 }
