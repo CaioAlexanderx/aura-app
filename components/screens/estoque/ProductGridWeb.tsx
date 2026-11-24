@@ -27,6 +27,7 @@ import { fmtQty, unidadeParaQuantidade, nomeDaUnidade } from "@/utils/matconUnit
 // 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
+import { SeloDaLoja } from "./FiltroDeLoja";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -42,9 +43,11 @@ type Props = {
   canLink: boolean;
   // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
   emiteNfse?: boolean;
+  // 18/11/2026 (INC-2026-11-18-01): loja dona no grupo. Ausente = sem selo.
+  nomeDaLojaDe?: (p: Product) => string | null;
 };
 
-export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, emiteNfse }: Props) {
+export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, emiteNfse, nomeDaLojaDe }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -180,6 +183,9 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               } as any}>{p.name}</div>
               <div style={{ fontSize: 10.5, color: C.ink3, fontFamily: Fonts.mono, marginTop: 2 } as any}>{sku}</div>
+              {nomeDaLojaDe && nomeDaLojaDe(p) ? (
+                <div style={{ marginTop: 4 } as any}><SeloDaLoja nome={nomeDaLojaDe(p)} testID={"estoque-loja-do-" + p.id} /></div>
+              ) : null}
               {faltaCodigoNfse(p, !!emiteNfse) && (
                 <span data-testid="selo-falta-nfse" title={DICA_FALTA_NFSE} style={{
                   display: "inline-block", marginTop: 5,
