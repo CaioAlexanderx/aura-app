@@ -18,6 +18,17 @@
 //
 // Fora daqui, de propósito: recomendação automática de lente ao cliente
 // (Decreto 24.492, art. 13 — a ótica não aconselha lente).
+//
+// 23/11/2026 (docs/mockups/otica-cadastro-e-receita.html):
+//   - cliente novo é cadastrado AQUI, com o formulário de Clientes, sem
+//     perder o que já foi digitado;
+//   - o cliente escolhido mostra o que falta no cadastro (CPF, ano de
+//     nascimento, telefone) com "Completar cadastro". É lembrete: a OS abre
+//     sem eles;
+//   - SEM SINAL a OS abre sem venda (deposit_sale_id nulo). Isso é de
+//     propósito — o cliente que paga tudo na retirada —, mas nada entra no
+//     caixa nem sai do estoque. A tela agora diz isso com todas as letras,
+//     antes do botão.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { tourTarget } from "@/utils/tourTarget";
@@ -37,10 +48,15 @@ import { serviceOrdersApi, type ServiceOrderItem } from "@/services/serviceOrder
 import {
   oticaApi, OTICA_SETTINGS_DEFAULTS, LENS_USES, LENS_USE_LABEL, LENS_TREATMENTS,
   type Prescription, type LensUse, type OpticalDetails,
-  columnsToEyes, eyesToColumns, fmtIsoDate, fmtEyeShort, parseBrDate, daysUntil, todayIso,
+  columnsToEyes, fmtIsoDate, parseBrDate, daysUntil,
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
-import { RxEditor, emptyRxDraft, validateRxDraft, type RxDraft } from "@/components/otica/RxEditor";
+import { RxEditor, emptyRxDraft, rxDraftToBody, validateRxDraft, type RxDraft } from "@/components/otica/RxEditor";
+import { ResponsiveSheet } from "@/components/ResponsiveSheet";
+import { CadastroDoClienteOtica } from "@/components/otica/CadastroDoClienteOtica";
+import { maskBrDate } from "@/components/inputs/DateInput";
+import { faltasDoClienteParaOtica } from "@/utils/clienteDadosCompletos";
+import type { Customer } from "@/components/screens/clientes/types";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -63,8 +79,8 @@ const SINAL_METHODS: { key: SinalMethod; label: string }[] = [
 export default function OticaNovaScreen() {
   const { company } = useAuthStore();
   const qc = useQueryClient();
-  const params = useLocalSearchParams<{ customer_id?: string }>();
-  const { customers } = useCustomers();
+  const params = useLocalSearchParams<{ customer_id?: string; rx_id?: string }>();
+  const { customers, isError: clientesComErro, refetch: recarregarClientes } = useCustomers();
   const { products } = useProducts();
 
   const { data: settingsData } = useQuery({
@@ -90,8 +106,16 @@ export default function OticaNovaScreen() {
   const customerMatches = useMemo(() => {
     const q = customerQuery.trim().toLowerCase();
     if (q.length < 2) return [];
-    return customers.filter((c) => (c.name || "").toLowerCase().includes(q) || (c.phone || "").includes(q)).slice(0, 6);
+    // Telefone: compara só os números — "(12) 99812" e "1299812" acham o mesmo cliente.
+    const qd = q.replace(/\D/g, "");
+    return customers.filter((c) => (c.name || "").toLowerCase().includes(q) || (!!qd && (c.phone || "").replace(/\D/g, "").includes(qd))).slice(0, 6);
   }, [customers, customerQuery]);
+  // Cadastro do cliente escolhido. `clienteSalvo` é o que acabou de ser
+  // gravado aqui (a lista ainda pode estar recarregando).
+  const [cadastro, setCadastro] = useState<"novo" | "completar" | null>(null);
+  const [clienteSalvo, setClienteSalvo] = useState<Customer | null>(null);
+  const cliente = (clienteSalvo && clienteSalvo.id === customerId ? clienteSalvo : null) || customers.find((c) => c.id === customerId) || null;
+  const faltas = faltasDoClienteParaOtica(cliente);
   useEffect(() => {
     if (customerId && !customerName) {
       const c = customers.find((x) => x.id === customerId);
@@ -114,7 +138,10 @@ export default function OticaNovaScreen() {
   useEffect(() => {
     // Cliente com receita válida: usa a mais recente por padrão. Sem receita
     // (ou vencida), digita nova.
-    const valid = prescriptions.find((p) => (daysUntil(p.valid_until) ?? -1) >= 0);
+    // 23/11/2026: "Abrir OS com esta receita" manda rx_id — é ESSA a receita
+    // escolhida, mesmo que exista outra mais nova (antes vinha sempre a última).
+    const pedida = params.rx_id && customerId === params.customer_id ? prescriptions.find((p) => p.id === params.rx_id) : null;
+    const valid = pedida || prescriptions.find((p) => (daysUntil(p.valid_until) ?? -1) >= 0);
     if (valid) { setRxMode("existente"); setRxId(valid.id); }
     else { setRxMode("nova"); setRxId(null); }
   }, [prescriptions.length, customerId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -235,16 +262,7 @@ export default function OticaNovaScreen() {
         prescriptionId = createdRx.id;
         rxSource = { saved: createdRx };
       } else if (rxMode === "nova") {
-        const created = await oticaApi.createPrescription(company.id, {
-          customer_id: customerId,
-          ...eyesToColumns(rxDraft.od, rxDraft.oe),
-          prescriber_type: rxDraft.prescriber_type,
-          prescriber_name: rxDraft.prescriber_name.trim() || null,
-          prescriber_registry: rxDraft.prescriber_registry.trim() || null,
-          issued_at: parseBrDate(rxDraft.issued_at)!,
-          valid_until: parseBrDate(rxDraft.valid_until)!,
-          notes: rxDraft.notes.trim() || null,
-        });
+        const created = await oticaApi.createPrescription(company.id, { customer_id: customerId, ...rxDraftToBody(rxDraft) });
         prescriptionId = created.prescription.id;
         rxSource = { saved: created.prescription };
         setCreatedRx(created.prescription);
@@ -303,7 +321,7 @@ export default function OticaNovaScreen() {
     } catch (err: any) {
       // tq-18: só o 409 IDEMPOTENCY_KEY_REUSED troca a chave da venda.
       chaveDaVenda.aposErro(err);
-      toast.error(err?.data?.error || "Não deu para abrir a OS");
+      toast.error(err?.data?.error || "Não deu para abrir a OS. Nada foi perdido: confira a conexão e toque no botão de novo.");
     } finally {
       setSaving(false);
     }
@@ -332,7 +350,7 @@ export default function OticaNovaScreen() {
                 {prescriptions.length === 0 ? "sem receita cadastrada" : `${prescriptions.length} ${prescriptions.length === 1 ? "receita" : "receitas"} · última de ${fmtIsoDate(prescriptions[0].issued_at)}`}
               </Text>
             </View>
-            <Pressable onPress={() => { setCustomerId(null); setCustomerName(""); setRxId(null); }} testID="otica-trocar-cliente">
+            <Pressable onPress={() => { setCustomerId(null); setCustomerName(""); setRxId(null); }} testID="otica-trocar-cliente" hitSlop={8}>
               <Text style={st.changeLink}>trocar</Text>
             </Pressable>
           </View>
@@ -348,10 +366,28 @@ export default function OticaNovaScreen() {
                 {!!c.phone && <Text style={st.matchMeta}>{c.phone}</Text>}
               </Pressable>
             ))}
-            {customerQuery.trim().length >= 2 && customerMatches.length === 0 && (
-              <Text style={st.hint}>Nenhum cliente encontrado. Cadastre na aba Clientes antes de abrir a OS.</Text>
+            {clientesComErro ? (
+              <Text style={st.hint} testID="otica-clientes-erro">
+                Não deu para carregar os clientes. <Text style={st.link} onPress={() => recarregarClientes()}>Tentar de novo</Text>
+              </Text>
+            ) : customerQuery.trim().length >= 2 && customerMatches.length === 0 && (
+              <Text style={st.hint}>Nenhum cliente com esse nome ou telefone.</Text>
             )}
+            <Pressable onPress={() => setCadastro("novo")} style={st.addRow} testID="otica-cadastrar-cliente">
+              <Icon name="user_plus" size={14} color={Colors.violet3} />
+              <Text style={st.changeLink}>Cadastrar cliente</Text>
+            </Pressable>
           </>
+        )}
+        {!!customerId && !!cliente && faltas.length > 0 && (
+          <View style={st.faltas} testID="otica-cliente-faltas">
+            <Text style={st.faltasText}>
+              Falta no cadastro: {faltas.join(" · ")}. Não impede abrir a OS.
+            </Text>
+            <Pressable onPress={() => setCadastro("completar")} hitSlop={8} testID="otica-completar-cadastro">
+              <Text style={st.changeLink}>Completar cadastro</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -427,7 +463,7 @@ export default function OticaNovaScreen() {
           )
         ) : (
           <View style={st.row2}>
-            <View style={[st.col, { flex: 2 }]}>
+            <View style={[st.col, { flexGrow: 2, flexBasis: 220 }]}>
               <Text style={st.lbl}>Descrição</Text>
               <TextInput style={st.input} value={frameDesc} onChangeText={setFrameDesc} placeholder="Ray-Ban RB5154 preto 52-18-140" placeholderTextColor={Colors.ink3} />
             </View>
@@ -519,7 +555,7 @@ export default function OticaNovaScreen() {
           </View>
           <View style={st.col}>
             <Text style={st.lbl}>Prometido para</Text>
-            <TextInput style={st.input} value={promised} onChangeText={setPromised} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} testID="otica-prometido" />
+            <TextInput style={st.input} value={promised} onChangeText={(v) => setPromised(maskBrDate(v))} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="numeric" maxLength={10} testID="otica-prometido" />
           </View>
         </View>
       </View>
@@ -558,11 +594,19 @@ export default function OticaNovaScreen() {
             <View style={st.row}><Text style={st.rowK}>Vence em</Text><Text style={st.rowV}>{promised || "informe a data prometida"}</Text></View>
           </View>
         )}
-        <Text style={st.hint}>
-          {depositSaleId
-            ? "Sinal já registrado no caixa. Falta só abrir a OS — o botão abaixo não cobra de novo."
-            : "Sem sinal? Deixe em branco: a OS abre sem venda e o caixa fecha na entrega."}
-        </Text>
+        {depositSaleId ? (
+          <Text style={st.hint}>Sinal já registrado no caixa. Falta só abrir a OS — o botão abaixo não cobra de novo.</Text>
+        ) : sinalNum > 0 ? (
+          <Text style={st.hint}>O sinal entra no caixa agora, como venda; o saldo vira parcela no crediário do cliente, com vencimento na data prometida.</Text>
+        ) : total > 0 ? (
+          <View style={[st.warn, { marginTop: 12 }]} testID="otica-sem-sinal-aviso">
+            <Text style={st.warnText}>
+              Sem sinal, a OS abre sem venda: nada entra no caixa agora{frameSource === "estoque" ? " e a armação continua no estoque" : ""}. Na entrega, registre a venda no Caixa para o valor entrar e o estoque baixar.
+            </Text>
+          </View>
+        ) : (
+          <Text style={st.hint}>Preencha os valores da armação e das lentes para ver o total e combinar o sinal.</Text>
+        )}
       </View>
 
       {/* ══ GARANTIA E OBSERVAÇÕES ══ */}
@@ -589,9 +633,21 @@ export default function OticaNovaScreen() {
       <Pressable onPress={handleSave} style={[st.saveBtn, saving && { opacity: 0.6 }]} disabled={saving} testID="otica-salvar">
         {saving
           ? <ActivityIndicator color="#fff" size="small" />
-          : <Text style={st.saveText}>{depositSaleId ? "Tentar abrir a OS de novo" : sinalNum > 0 ? "Abrir OS e receber sinal" : "Abrir OS"}</Text>}
+          : <Text style={st.saveText}>{depositSaleId ? "Tentar abrir a OS de novo" : sinalNum > 0 ? "Abrir OS e receber sinal" : total > 0 ? "Abrir OS sem sinal" : "Abrir OS"}</Text>}
       </Pressable>
       <Text style={st.saveHint}>A impressão em A4 fica na tela da OS — confira a receita com o cliente antes de mandar ao laboratório.</Text>
+
+      {!!cadastro && (
+      <ResponsiveSheet visible onClose={() => setCadastro(null)} maxWidth={640}>
+        <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4 }}>
+          <CadastroDoClienteOtica
+            cliente={cadastro === "completar" ? cliente : null}
+            onCancel={() => setCadastro(null)}
+            onSaved={(c) => { setClienteSalvo(c); setCustomerId(c.id); setCustomerName(c.name); setCustomerQuery(""); setCadastro(null); }}
+          />
+        </ScrollView>
+      </ResponsiveSheet>
+      )}
     </ScrollView>
   );
 }
@@ -615,7 +671,8 @@ const st = StyleSheet.create({
   sectionTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase", marginBottom: 10, marginTop: 18 },
   card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   row2: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
-  col: { flex: 1, minWidth: 160 },
+  // flexBasis: a 375 px cada campo ocupa a linha inteira em vez de espremer.
+  col: { flexGrow: 1, flexShrink: 1, flexBasis: 160, minWidth: 0 },
   lbl: { fontSize: 12, fontWeight: "600", color: Colors.ink2, marginBottom: 7 },
   input: { backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: Colors.ink },
   multiline: { minHeight: 72, textAlignVertical: "top" },
@@ -624,16 +681,19 @@ const st = StyleSheet.create({
   warn: { backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "55", borderRadius: 10, padding: 10 },
   warnText: { fontSize: 12, color: Colors.amber, lineHeight: 17 },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12 },
-  searchInput: { flex: 1, paddingVertical: 10, fontSize: 13, color: Colors.ink },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 13, color: Colors.ink, minWidth: 0 },
   matchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
   matchName: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1 },
   matchMeta: { fontSize: 11, color: Colors.ink3 },
   selectedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 13, fontWeight: "800", color: Colors.violet3 },
-  selectedName: { fontSize: 14, color: Colors.ink, fontWeight: "700", flex: 1 },
+  selectedName: { fontSize: 14, color: Colors.ink, fontWeight: "700", flex: 1, minWidth: 0 },
   selectedMeta: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
   changeLink: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  addRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 12, alignSelf: "flex-start" },
+  faltas: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  faltasText: { fontSize: 12, color: Colors.amber, lineHeight: 17, flexShrink: 1 },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
   chipOn: { backgroundColor: Colors.violet + "22", borderColor: Colors.violet },

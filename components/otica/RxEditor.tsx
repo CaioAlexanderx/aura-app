@@ -17,9 +17,10 @@
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { RxGrid } from "@/components/otica/RxGrid";
+import { maskBrDate } from "@/components/inputs/DateInput";
 import {
-  type EyeRx, type PrescriberType, PRESCRIBER_LABEL, EMPTY_EYE,
-  addMonthsIso, parseBrDate, fmtIsoDate,
+  type EyeRx, type PrescriberType, type Prescription, type PrescriptionBody, PRESCRIBER_LABEL, EMPTY_EYE,
+  addMonthsIso, parseBrDate, fmtIsoDate, columnsToEyes, eyesToColumns,
 } from "@/services/oticaApi";
 
 export type RxDraft = {
@@ -42,6 +43,32 @@ export function emptyRxDraft(validityMonths = 12): RxDraft {
     prescriber_type: "medico", prescriber_name: "", prescriber_registry: "",
     issued_at: fmtIsoDate(iso), valid_until: fmtIsoDate(addMonthsIso(iso, validityMonths)),
     notes: "",
+  };
+}
+
+/** Receita salva → rascunho do editor (23/11/2026, "Editar receita"). */
+export function rxDraftFromPrescription(p: Prescription): RxDraft {
+  const eyes = columnsToEyes(p);
+  return {
+    od: eyes.od, oe: eyes.oe,
+    prescriber_type: p.prescriber_type || "medico",
+    prescriber_name: p.prescriber_name || "",
+    prescriber_registry: p.prescriber_registry || "",
+    issued_at: fmtIsoDate(p.issued_at), valid_until: fmtIsoDate(p.valid_until),
+    notes: p.notes || "",
+  };
+}
+
+/** Rascunho VALIDADO → campos da receita no formato da API (sem o cliente). */
+export function rxDraftToBody(d: RxDraft): Omit<PrescriptionBody, "customer_id"> {
+  return {
+    ...eyesToColumns(d.od, d.oe),
+    prescriber_type: d.prescriber_type,
+    prescriber_name: d.prescriber_name.trim() || null,
+    prescriber_registry: d.prescriber_registry.trim() || null,
+    issued_at: parseBrDate(d.issued_at)!,
+    valid_until: parseBrDate(d.valid_until)!,
+    notes: d.notes.trim() || null,
   };
 }
 
@@ -100,7 +127,7 @@ export function RxEditor({ value, onChange, validityMonths = 12, testID = "rx" }
           </View>
         </View>
         <View style={st.col}>
-          <Text style={st.lbl}>Nome</Text>
+          <Text style={st.lbl}>Nome do prescritor</Text>
           <TextInput style={st.input} value={value.prescriber_name} onChangeText={(v) => set({ prescriber_name: v })} placeholder="Dra. Ana Lima" placeholderTextColor={Colors.ink3} testID={testID + "-nome"} />
         </View>
         <View style={st.col}>
@@ -115,7 +142,7 @@ export function RxEditor({ value, onChange, validityMonths = 12, testID = "rx" }
           <TextInput
             style={st.input}
             value={value.issued_at}
-            onChangeText={(v) => set({ issued_at: v })}
+            onChangeText={(v) => set({ issued_at: maskBrDate(v) })}
             onBlur={() => {
               // Validade acompanha a emissão pelo padrão da loja, mas só se o
               // vendedor ainda não tiver mexido nela.
@@ -124,16 +151,18 @@ export function RxEditor({ value, onChange, validityMonths = 12, testID = "rx" }
             }}
             placeholder="DD/MM/AAAA"
             placeholderTextColor={Colors.ink3}
+            keyboardType="numeric"
+            maxLength={10}
             testID={testID + "-emissao"}
           />
         </View>
         <View style={st.col}>
           <Text style={st.lbl}>Válida até</Text>
-          <TextInput style={st.input} value={value.valid_until} onChangeText={(v) => set({ valid_until: v })} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} testID={testID + "-validade"} />
+          <TextInput style={st.input} value={value.valid_until} onChangeText={(v) => set({ valid_until: maskBrDate(v) })} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="numeric" maxLength={10} testID={testID + "-validade"} />
         </View>
         <View style={st.col}>
           <Text style={st.lbl}>Observações</Text>
-          <TextInput style={st.input} value={value.notes} onChangeText={(v) => set({ notes: v })} placeholder="ex.: prisma, uso ocupacional" placeholderTextColor={Colors.ink3} />
+          <TextInput style={st.input} value={value.notes} onChangeText={(v) => set({ notes: v })} placeholder="ex.: prisma, uso ocupacional" placeholderTextColor={Colors.ink3} testID={testID + "-obs"} />
         </View>
       </View>
     </View>
@@ -143,7 +172,9 @@ export function RxEditor({ value, onChange, validityMonths = 12, testID = "rx" }
 const st = StyleSheet.create({
   hint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   row3: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  col: { flex: 1, minWidth: 150 },
+  // flexBasis no lugar de minWidth sozinho: a 375 px cada campo ocupa a linha
+  // inteira em vez de espremer dois lado a lado.
+  col: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },
   lbl: { fontSize: 11, fontWeight: "600", color: Colors.ink2, marginBottom: 6 },
   input: { backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },

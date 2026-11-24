@@ -35,6 +35,7 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { AddCustomerForm } from "@/components/screens/clientes/AddCustomerForm";
 import type { Customer } from "@/components/screens/clientes/types";
 import { useCustomers } from "@/hooks/useCustomers";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 
 export type EditarClienteDaFichaProps = {
   visible: boolean;
@@ -56,7 +57,9 @@ export function EditarClienteDaFicha(props: EditarClienteDaFichaProps) {
 
 function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: EditarClienteDaFichaProps & { customerId: string }) {
   const qc = useQueryClient();
-  const { customers, isLoading, isError, planBlocked, isDemo, refetch, updateCustomerAsync } = useCustomers();
+  const { customers, isLoading, isError, planBlocked, isDemo, refetch, updateCustomerAsync, camposExtras } = useCustomers();
+  // 23/11/2026: loja com a ótica ligada edita também os "Dados completos".
+  const oticaLigada = usePdvSettings(companyId).settings.otica_enabled === true;
   const [salvando, setSalvando] = useState(false);
   const [editou, setEditou] = useState(false);
   const cliente = customers.find(c => c.id === customerId) || null;
@@ -65,6 +68,7 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
   // Chave do formulário: acompanha o cadastro até a lojista mexer.
   const assinatura = cliente ? JSON.stringify([
     cliente.name, cliente.phone, cliente.email, cliente.instagram, cliente.birthday, cliente.notes, cliente.endereco ?? null,
+    cliente.cpf ?? "", cliente.rg ?? "", cliente.gender ?? "", cliente.occupation ?? "",
   ]) : "";
   const chaveRef = useRef("");
   if (!editou) chaveRef.current = assinatura;
@@ -129,6 +133,8 @@ function Janela({ companyId, customerId, focoNoTelefone, onClose, onSaved }: Edi
               onEditou={() => setEditou(true)}
               onSave={salvar}
               onCancel={onClose}
+              dadosCompletos={oticaLigada}
+              camposExtras={camposExtras}
             />
           </View>
         )}

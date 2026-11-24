@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Ótica: cadastro completo do cliente e receita (editar, foto, imprimir)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Ótica, 23/11/2026 (regra 4 do CLAUDE.md).
+     Continua docs/mockups/otica-modulo.html (15/09/2026): mesmas fontes,
+     mesmos tokens, formulário ABERTO (app#859), nada de wizard.
+
+     Três telas:
+
+     1. CADASTRO DO CLIENTE com a ótica ligada — o formulário de sempre
+        ganha o bloco "Dados completos": CPF (máscara e dígito
+        verificador; opcional), nascimento COM ANO (aviso quando vem sem
+        ano: a ótica precisa da idade), e RG, sexo e profissão. Loja sem a
+        ótica ligada vê o formulário exatamente como é hoje.
+        RG, sexo e profissão só aparecem quando o servidor avisa que os
+        aceita (docs/otica-cadastro-completo-backend.md).
+
+     2. RECEITA — no receituário cada receita aberta ganha Editar, Imprimir
+        e (quando o servidor aceitar) a foto do papel. A grade OD/OE no
+        celular vira um bloco por olho, três campos por linha: nada de
+        seis colunas espremidas em 335 px.
+
+     3. FICHA IMPRESSA (A4) — dados do cliente, a grade, o prescritor, as
+        datas e a assinatura. Documento, não cupom: nada aqui passa pela
+        impressão térmica nem pelas etiquetas.
+
+     Fora, de propósito (Decreto 24.492 e LGPD): comissão ao prescritor,
+     recomendação de lente, agenda de exame na loja; receita e CPF nunca
+     vão em mensagem de WhatsApp nem no link de acompanhamento; CPF e
+     nascimento não aparecem na lista de clientes, só na ficha aberta.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --red: #f87171; --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --red: #dc2626; --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 16px 40px; }
+  .tela { font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--violet3); margin: 0 0 4px; }
+  h1 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.1; letter-spacing: -0.5px; margin: 0 0 6px; }
+  h1 i { color: var(--violet); font-style: normal; }
+  .sub { color: var(--ink3); font-size: 13px; margin: 0 0 18px; max-width: 640px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 375px; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .phone { border: 1px solid var(--border2); border-radius: 26px; padding: 14px 12px; background: var(--bg2); max-width: 375px; width: 100%; }
+  .phone-tag { font-size: 10px; color: var(--ink3); text-align: center; margin-bottom: 8px; letter-spacing: 0.6px; text-transform: uppercase; font-weight: 700; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--ink3); margin-bottom: 6px; }
+  .in { width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: var(--bg4); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; }
+  .in.bad { border-color: var(--red); }
+  .in.warn { border-color: var(--amber); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .phone .row2, .row2.um { grid-template-columns: 1fr; }
+  .err { color: var(--red); font-size: 12px; margin-top: 4px; }
+  .aviso { color: var(--amber); font-size: 12px; margin-top: 4px; }
+  .ok { color: var(--green); font-size: 12px; margin-top: 4px; }
+  .bloco { border: 1px solid var(--border2); background: var(--violetD); border-radius: 14px; padding: 14px; margin-bottom: 16px; }
+  .bloco h3 { margin: 0; font-size: 13px; font-weight: 700; }
+  .bloco p { margin: 2px 0 12px; font-size: 12px; color: var(--ink3); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; font-weight: 600; color: var(--ink3); background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 8px 12px; }
+  .chip.on { color: var(--violet3); border-color: var(--violet); background: var(--violetD); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; }
+  .btn.p { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .btn.d { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+  .acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .hint { font-size: 11px; color: var(--ink3); line-height: 1.45; margin: 8px 0 0; }
+  .nota { font-size: 12px; color: var(--ink3); border-left: 2px solid var(--violet); padding: 2px 0 2px 10px; margin: 14px 0 0; }
+
+  /* Grade OD/OE — larga: a do papel do médico. */
+  .rx { display: grid; grid-template-columns: 52px repeat(6, minmax(0, 1fr)); gap: 6px; align-items: center; }
+  .rx .h { font-size: 9px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ink3); text-align: center; }
+  .rx .eye b { display: block; font-size: 13px; font-weight: 800; }
+  .rx .eye span { font-size: 9px; color: var(--ink3); }
+  .rx .v { font-family: var(--mono); font-size: 14px; text-align: center; padding: 8px 0; }
+  .rx .v.e { color: var(--ink3); }
+  /* Grade OD/OE — celular: um bloco por olho, três campos por linha. */
+  .rxm { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 8px; background: var(--bg2); }
+  .rxm .t { font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+  .rxm .t span { font-size: 11px; font-weight: 500; color: var(--ink3); }
+  .rxm .g { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .rxm .g div span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink3); text-align: center; margin-bottom: 3px; }
+  .rxm .g div b { display: block; font-family: var(--mono); font-weight: 400; font-size: 14px; text-align: center; background: var(--bg4); border: 1px solid var(--border2); border-radius: 8px; padding: 9px 2px; }
+  .foto { display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--border2); border-radius: 12px; padding: 12px; margin-top: 12px; }
+  .foto .thumb { width: 56px; height: 72px; border-radius: 8px; background: repeating-linear-gradient(0deg, var(--bg4), var(--bg4) 6px, var(--bg2) 6px, var(--bg2) 8px); border: 1px solid var(--border2); flex: none; }
+  .foto b { font-size: 13px; }
+  .foto small { display: block; color: var(--ink3); font-size: 11px; }
+
+  /* Ficha impressa (A4) — sempre papel branco, tinta preta. */
+  .a4wrap { overflow-x: auto; }
+  .a4 { background: #fff; color: #111; width: 100%; max-width: 720px; margin: 0 auto; padding: 36px 40px; border-radius: 4px; font-size: 12px; box-shadow: 0 6px 30px rgba(0,0,0,0.35); }
+  .a4 header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 14px; }
+  .a4 header b { font-size: 16px; }
+  .a4 header small { display: block; color: #444; }
+  .a4 h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; margin: 0 0 10px; }
+  .a4 h4 { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #555; margin: 16px 0 6px; }
+  .a4 .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; }
+  .a4 .kv div span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: #666; }
+  .a4 table { width: 100%; border-collapse: collapse; font-family: var(--mono); }
+  .a4 th { font-family: var(--sans); font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: #555; border-bottom: 1px solid #111; padding: 4px; text-align: center; }
+  .a4 td { border-bottom: 1px solid #ccc; padding: 8px 4px; text-align: center; font-size: 13px; }
+  .a4 td:first-child, .a4 th:first-child { text-align: left; font-family: var(--sans); font-weight: 700; }
+  .a4 .ass { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 44px; }
+  .a4 .ass div { border-top: 1px solid #111; padding-top: 4px; font-size: 10px; color: #444; text-align: center; }
+  .a4 footer { margin-top: 18px; font-size: 9px; color: #666; }
+  @media (max-width: 520px) { .a4 { padding: 20px 16px; } .a4 .kv { grid-template-columns: 1fr 1fr; } .a4 td { font-size: 11px; padding: 6px 2px; } }
+  hr.sep { border: 0; border-top: 1px solid var(--border); margin: 36px 0; }
+</style>
+</head>
+<body>
+<div class="topbar"><b>Aura · Ótica</b> cadastro completo e receita — mockup de 23/11/2026
+  <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Alternar tema</button>
+</div>
+
+<div class="screen">
+  <!-- ═════════ 1. CADASTRO ═════════ -->
+  <p class="tela">Tela 1 · Clientes › Adicionar cliente (ótica ligada)</p>
+  <h1>Cadastro do cliente<i>.</i></h1>
+  <p class="sub">O formulário de sempre, com o bloco "Dados completos" logo abaixo do contato. Nada é obrigatório além do nome: CPF e nascimento só são conferidos quando preenchidos.</p>
+
+  <div class="cols">
+    <div class="card">
+      <label>Nome completo *</label>
+      <input class="in" value="Marina Albuquerque Prado" style="margin-bottom:16px" />
+      <div class="row2">
+        <div><label>Telefone / WhatsApp</label><input class="in" value="(12) 99812-4410" /></div>
+        <div><label>E-mail</label><input class="in" value="marina.prado@email.com" /></div>
+      </div>
+      <div class="row2">
+        <div><label>Instagram</label><input class="in" value="@marinaprado" /></div>
+        <div><label>Data de nascimento (DD/MM/AAAA)</label><input class="in" value="14/03/1968" /><div class="ok">58 anos</div></div>
+      </div>
+
+      <div class="bloco">
+        <h3>Dados completos</h3>
+        <p>Para a ficha e a receita impressa. Ficam só no cadastro: não aparecem na lista de clientes nem em mensagem.</p>
+        <div class="row2">
+          <div><label>CPF</label><input class="in" value="529.982.247-25" /><div class="ok">CPF conferido</div></div>
+          <div><label>RG</label><input class="in" value="32.118.404-7" /></div>
+        </div>
+        <div class="row2" style="margin-bottom:0">
+          <div><label>Sexo</label><div class="chips"><span class="chip on">Feminino</span><span class="chip">Masculino</span><span class="chip">Outro</span></div></div>
+          <div><label>Profissão</label><input class="in" value="Professora" /></div>
+        </div>
+      </div>
+
+      <div class="card" style="background:var(--bg4);margin-bottom:16px;padding:12px 14px"><b style="font-size:13px">Endereço para entrega</b> <span style="color:var(--ink3);font-size:12px">· Rua das Acácias, 120 · São José dos Campos/SP</span></div>
+      <label>Observações</label>
+      <input class="in" value="Prefere armação leve" />
+      <div class="acoes" style="justify-content:flex-end"><span class="btn">Cancelar</span><span class="btn p">Salvar cliente</span></div>
+    </div>
+
+    <div class="phone">
+      <div class="phone-tag">375 px · os dois avisos</div>
+      <div class="row2">
+        <div><label>Data de nascimento (DD/MM/AAAA)</label><input class="in warn" value="14/03" />
+          <div class="aviso">Sem o ano não dá para saber a idade. Peça o ano de nascimento para a ficha mostrar a idade.</div></div>
+      </div>
+      <div class="bloco" style="margin-bottom:0">
+        <h3>Dados completos</h3>
+        <p>Para a ficha e a receita impressa.</p>
+        <div class="row2" style="margin-bottom:0">
+          <div><label>CPF</label><input class="in bad" value="529.982.247-26" /><div class="err">CPF não confere. Veja se algum número foi trocado.</div></div>
+        </div>
+      </div>
+      <p class="hint">Cadastro antigo com o ano 1904 (importação sem ano) recebe o mesmo aviso âmbar. Salvar continua liberado: o aviso não trava nada.</p>
+    </div>
+  </div>
+  <p class="nota">Na Nova OS de óculos, o cliente escolhido mostra o que falta ("Falta: CPF · ano de nascimento · completar cadastro") com um toque para abrir este formulário. A OS abre do mesmo jeito sem eles.</p>
+
+  <hr class="sep" />
+
+  <!-- ═════════ 2. RECEITA ═════════ -->
+  <p class="tela">Tela 2 · Ótica › Receitas (receita aberta)</p>
+  <h1>Receita: editar, foto e imprimir<i>.</i></h1>
+  <p class="sub">A linha aberta mostra a grade e as ações. "Editar" abre o mesmo formulário da receita nova, já preenchido.</p>
+
+  <div class="cols">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div><b>Marina Albuquerque Prado</b><div style="font-size:12px;color:var(--ink3)">Dra. Ana Lima · CRM 12345/SP · emitida 02/11/2026 · válida até 02/11/2027</div></div>
+      </div>
+      <div class="rx">
+        <span></span><span class="h">Esférico</span><span class="h">Cilíndrico</span><span class="h">Eixo</span><span class="h">Adição</span><span class="h">DNP</span><span class="h">Altura</span>
+        <span class="eye"><b>OD</b><span>direito</span></span><span class="v">−1,75</span><span class="v">−0,50</span><span class="v">180°</span><span class="v">+2,00</span><span class="v">31,5</span><span class="v">18,0</span>
+        <span class="eye"><b>OE</b><span>esquerdo</span></span><span class="v">−2,00</span><span class="v e">—</span><span class="v e">—</span><span class="v">+2,00</span><span class="v">32,0</span><span class="v">18,0</span>
+      </div>
+      <div class="foto">
+        <div class="thumb"></div>
+        <div style="flex:1;min-width:0"><b>Foto do papel da receita</b><small>JPEG ou PNG, até 5 MB. Fica guardada com a receita; não vai em mensagem.</small></div>
+        <span class="btn">Trocar foto</span>
+      </div>
+      <div class="acoes">
+        <span class="btn p">Abrir OS com esta receita</span>
+        <span class="btn">Editar</span>
+        <span class="btn">Imprimir</span>
+        <span class="btn">Todas deste cliente</span>
+        <span class="btn d">Excluir</span>
+      </div>
+      <p class="hint">Editar uma receita já usada em OS não muda a OS: ela guarda a cópia de quando foi aberta.</p>
+    </div>
+
+    <div class="phone">
+      <div class="phone-tag">375 px · editar receita</div>
+      <h1 style="font-size:26px">Editar receita<i>.</i></h1>
+      <div class="rxm">
+        <div class="t">OD <span>· olho direito</span></div>
+        <div class="g">
+          <div><span>Esférico</span><b>-1,75</b></div><div><span>Cilíndrico</span><b>-0,50</b></div><div><span>Eixo</span><b>180</b></div>
+          <div><span>Adição</span><b>+2,00</b></div><div><span>DNP</span><b>31,5</b></div><div><span>Altura</span><b>18,0</b></div>
+        </div>
+      </div>
+      <div class="rxm">
+        <div class="t">OE <span>· olho esquerdo</span></div>
+        <div class="g">
+          <div><span>Esférico</span><b>-2,00</b></div><div><span>Cilíndrico</span><b style="color:var(--ink3)">0,00</b></div><div><span>Eixo</span><b style="color:var(--ink3)">0–180</b></div>
+          <div><span>Adição</span><b>+2,00</b></div><div><span>DNP</span><b>32,0</b></div><div><span>Altura</span><b>18,0</b></div>
+        </div>
+      </div>
+      <div class="acoes" style="justify-content:flex-end"><span class="btn">Cancelar</span><span class="btn p">Salvar alterações</span></div>
+    </div>
+  </div>
+  <p class="nota">A foto do papel só aparece quando o servidor avisar que guarda o arquivo em área privada (docs/otica-cadastro-completo-backend.md, seção 3). Até lá a tela não mostra o bloco.</p>
+
+  <hr class="sep" />
+
+  <!-- ═════════ 3. FICHA IMPRESSA ═════════ -->
+  <p class="tela">Tela 3 · Imprimir (A4)</p>
+  <h1>Ficha da receita impressa<i>.</i></h1>
+  <p class="sub">Abre na janela de impressão do navegador, como a OS. Uma folha A4, papel branco.</p>
+
+  <div class="a4wrap"><div class="a4">
+    <header>
+      <div><b>Ótica Bela Vista</b><small>CNPJ 12.345.678/0001-90</small><small>Óptico responsável: João Martins · registro 4471 · licença sanitária 2026/0312</small></div>
+      <div style="text-align:right"><small>Emitido em 23/11/2026</small></div>
+    </header>
+    <h2>Ficha do cliente e receita</h2>
+    <h4>Cliente</h4>
+    <div class="kv">
+      <div><span>Nome</span>Marina Albuquerque Prado</div>
+      <div><span>CPF</span>529.982.247-25</div>
+      <div><span>Nascimento</span>14/03/1968 · 58 anos</div>
+      <div><span>Telefone</span>(12) 99812-4410</div>
+      <div><span>Profissão</span>Professora</div>
+      <div><span>Endereço</span>Rua das Acácias, 120 · São José dos Campos/SP</div>
+    </div>
+    <h4>Receita</h4>
+    <table>
+      <tr><th>Olho</th><th>Esférico</th><th>Cilíndrico</th><th>Eixo</th><th>Adição</th><th>DNP</th><th>Altura</th></tr>
+      <tr><td>OD · direito</td><td>−1,75</td><td>−0,50</td><td>180°</td><td>+2,00</td><td>31,5</td><td>18,0</td></tr>
+      <tr><td>OE · esquerdo</td><td>−2,00</td><td>—</td><td>—</td><td>+2,00</td><td>32,0</td><td>18,0</td></tr>
+    </table>
+    <h4>Prescritor</h4>
+    <div class="kv">
+      <div><span>Nome</span>Dra. Ana Lima</div>
+      <div><span>Registro</span>Médico (CRM) · 12345/SP</div>
+      <div><span>Emitida · válida até</span>02/11/2026 · 02/11/2027</div>
+    </div>
+    <h4>Observações</h4>
+    <div>Uso ocupacional.</div>
+    <div class="ass"><div>Cliente</div><div>Ótica</div></div>
+    <footer>Receita é dado de saúde do cliente. Documento emitido pela loja para conferência; não substitui a receita do prescritor.</footer>
+  </div></div>
+</div>
+</body>
+</html>

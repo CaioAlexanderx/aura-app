@@ -1,3 +1,4 @@
+import { formatarDocumento, idadeEmAnos } from "@/utils/clienteDadosCompletos";
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
@@ -184,6 +185,13 @@ export function CustomerRow({
           <View style={s.detailGrid}>
             {[["E-mail", c.email], ["Telefone", c.phone], ["Aniversário", c.birthday], ["Instagram", c.instagram || "---"], ["Primeira visita", c.firstVisit], ["Última compra", c.lastPurchase], ["Total gasto", fmt(c.totalSpent)], ["Visitas", String(c.visits)]].map(([l, v]) =>
               <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Total gasto" && { color: Colors.green }, l === "Instagram" && { color: Colors.violet3 }]}>{v}</Text></View>
+            )}
+            {/* 23/11/2026 (ótica ligada): a ficha aberta mostra CPF e idade. Só
+                aqui, no detalhe — a linha da lista nunca mostra documento. */}
+            {oticaEnabled && (
+              [["CPF", formatarDocumento(c.cpf) || "---"], ["Idade", idadeEmAnos(c.birthday) != null ? `${idadeEmAnos(c.birthday)} anos` : "---"], ...(c.rg ? [["RG", c.rg]] : []), ...(c.occupation ? [["Profissão", c.occupation]] : [])].map(([l, v]) =>
+                <View key={l} style={s.detailItem} testID={`cliente-ficha-${l}`}><Text style={s.detailLabel}>{l}</Text><Text style={s.detailValue}>{v}</Text></View>
+              )
             )}
             <View style={s.detailItem}><Text style={s.detailLabel}>Avaliação</Text><Stars r={c.rating} /></View>
             {/* MULTICNPJ Onda 2.3: empresa onde foi cadastrado (so se multi-CNPJ) */}

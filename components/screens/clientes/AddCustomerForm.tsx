@@ -10,6 +10,10 @@ import { DateInput } from "@/components/inputs/DateInput";
 // 09/11/2026 — "Endereço para entrega", recolhido (mockup aprovado, seção A).
 import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
 import { ENDERECO_VAZIO, erroDoEndereco, type Endereco } from "@/components/endereco/endereco";
+// 23/11/2026 — bloco "Dados completos", só com a ótica ligada (mockup
+// docs/mockups/otica-cadastro-e-receita.html, tela 1).
+import { DadosCompletosDoCliente, type DadosCompletos } from "./DadosCompletosDoCliente";
+import { avisoDoNascimento, erroDoCpf, idadeEmAnos, nascimentoParaGravar, nascimentoParaOCampo, type CampoExtra } from "@/utils/clienteDadosCompletos";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -30,21 +34,39 @@ type Props = {
    *  mexer — quem abre o formulário pode então parar de recarregá-lo quando o
    *  cadastro chega atualizado do servidor. */
   onEditou?: () => void;
+  /** 23/11/2026 (ótica): liga o bloco "Dados completos" (CPF e o que o
+   *  servidor aceitar de RG, sexo e profissão) e o aviso de nascimento sem
+   *  ano. Quem abre o formulário passa `pdv_settings.otica_enabled`. Sem
+   *  isto, o formulário é o de sempre, campo por campo. */
+  dadosCompletos?: boolean;
+  /** RG, sexo e profissão que o servidor avisou aceitar (useCustomers). */
+  camposExtras?: CampoExtra[];
 };
 
-export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou }: Props) {
+const SEM_EXTRAS: CampoExtra[] = [];
+
+export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone = false, onEditou, dadosCompletos = false, camposExtras = SEM_EXTRAS }: Props) {
   const isEdit = !!initialData;
   const [name, setName] = useState(initialData?.name || "");
   const [phone, setPhone] = useState(initialData?.phone || "");
   const [email, setEmail] = useState(initialData?.email || "");
   const [instagram, setInstagram] = useState(initialData?.instagram || "");
-  const [birthday, setBirthday] = useState(initialData?.birthday || "");
+  // Ótica: o ano de enfeite (1904, "sem ano") não aparece no campo — a
+  // lojista vê "14/03" com o aviso, não um ano que ninguém digitou.
+  const birthdayInicial = dadosCompletos ? nascimentoParaOCampo(initialData?.birthday || "") : (initialData?.birthday || "");
+  const [birthday, setBirthday] = useState(birthdayInicial);
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [endereco, setEndereco] = useState<Endereco>(initialData?.endereco || ENDERECO_VAZIO);
+  const completosIniciais: DadosCompletos = {
+    cpf: initialData?.cpf || "", rg: initialData?.rg || "",
+    gender: initialData?.gender || "", occupation: initialData?.occupation || "",
+  };
+  const [completos, setCompletos] = useState<DadosCompletos>(completosIniciais);
   const editou = name !== (initialData?.name || "") || phone !== (initialData?.phone || "")
     || email !== (initialData?.email || "") || instagram !== (initialData?.instagram || "")
-    || birthday !== (initialData?.birthday || "") || notes !== (initialData?.notes || "")
-    || JSON.stringify(endereco) !== JSON.stringify(initialData?.endereco || ENDERECO_VAZIO);
+    || birthday !== birthdayInicial || notes !== (initialData?.notes || "")
+    || JSON.stringify(endereco) !== JSON.stringify(initialData?.endereco || ENDERECO_VAZIO)
+    || (dadosCompletos && JSON.stringify(completos) !== JSON.stringify(completosIniciais));
   useEffect(() => { if (editou) onEditou?.(); }, [editou]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
@@ -55,13 +77,29 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
     if (erroTel) { toast.error(erroTel); return; }
     const erroEndereco = erroDoEndereco(endereco);
     if (erroEndereco) { toast.error(erroEndereco); return; }
+    // Ótica: só vai o que foi mexido. CPF antigo, reenviado sem mexer, segue
+    // como está (mesma regra do telefone); o que foi digitado precisa conferir.
+    let mexidos: Customer["dadosCompletos"];
+    if (dadosCompletos) {
+      mexidos = {};
+      if (completos.cpf !== completosIniciais.cpf) {
+        const erroCpf = erroDoCpf(completos.cpf);
+        if (erroCpf) { toast.error(erroCpf); return; }
+        mexidos.cpf = completos.cpf;
+      }
+      for (const campo of camposExtras) {
+        if (completos[campo] !== completosIniciais[campo]) mexidos[campo] = completos[campo];
+      }
+    }
     onSave({
       id: initialData?.id || Date.now().toString(),
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
       instagram: instagram.trim(),
-      birthday: birthday.trim(),
+      // Ótica: sem ano grava 1904 (o "sem ano" das importações), nunca 2000 —
+      // que voltaria como se a pessoa tivesse nascido em 2000, com idade e tudo.
+      birthday: dadosCompletos ? nascimentoParaGravar(birthday) : birthday.trim(),
       lastPurchase: initialData?.lastPurchase || "---",
       totalSpent: initialData?.totalSpent || 0,
       visits: initialData?.visits || 0,
@@ -70,6 +108,7 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
       rating: initialData?.rating || null,
       creditBalance: initialData?.creditBalance || 0,
       endereco,
+      ...(mexidos ? { dadosCompletos: mexidos } : {}),
     });
   }
 
@@ -108,11 +147,21 @@ export function AddCustomerForm({ onSave, onCancel, initialData, focoNoTelefone 
           <View style={{ height: 16 }} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.label}>Aniversário (DD/MM ou DD/MM/AAAA)</Text>
-          <DateInput style={s.input} value={birthday} onChangeText={setBirthday} placeholder="15/06/1990" />
+          <Text style={s.label}>{dadosCompletos ? "Data de nascimento (DD/MM/AAAA)" : "Aniversário (DD/MM ou DD/MM/AAAA)"}</Text>
+          <DateInput style={s.input} value={birthday} onChangeText={setBirthday} placeholder="15/06/1990" testID={dadosCompletos ? "cliente-nascimento" : undefined} />
+          {dadosCompletos && !!avisoDoNascimento(birthday) && (
+            <Text style={s.aviso} testID="cliente-nascimento-aviso">{avisoDoNascimento(birthday)}</Text>
+          )}
+          {dadosCompletos && idadeEmAnos(birthday) != null && (
+            <Text style={s.idade} testID="cliente-idade">{idadeEmAnos(birthday)} {idadeEmAnos(birthday) === 1 ? "ano" : "anos"}</Text>
+          )}
           <View style={{ height: 16 }} />
         </View>
       </View>
+
+      {dadosCompletos && (
+        <DadosCompletosDoCliente value={completos} onChange={setCompletos} camposExtras={camposExtras} largo={IS_WIDE} />
+      )}
 
       <SecaoEndereco value={endereco} onChange={setEndereco} testID="cliente-form-endereco" />
 
@@ -139,6 +188,8 @@ const s = StyleSheet.create({
   label: { fontFamily: Fonts.body, fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
   input: { fontFamily: Fonts.body, backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
   row2: { flexDirection: IS_WIDE ? "row" : "column", gap: IS_WIDE ? 12 : 0 },
+  aviso: { fontFamily: Fonts.body, color: Colors.amber, fontSize: 12, marginTop: 4, lineHeight: 17 },
+  idade: { fontFamily: Fonts.body, color: Colors.ink3, fontSize: 12, marginTop: 4 },
   footer: { flexDirection: "row", gap: 10, justifyContent: "flex-end", marginTop: 16 },
   cancelBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
   cancelText: { fontFamily: Fonts.body, fontSize: 13, color: Colors.ink3, fontWeight: "500" },

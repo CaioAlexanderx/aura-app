@@ -59,6 +59,9 @@ jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jes
 
 var mockHook: any = {};
 jest.mock("@/hooks/useCustomers", () => ({ useCustomers: () => mockHook }));
+// 23/11/2026: a tela de Clientes lê pdv_settings.otica_enabled para ligar o
+// bloco "Dados completos" do cadastro. Aqui, loja sem ótica.
+jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: () => ({ settings: { otica_enabled: false } }) }));
 
 import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
 import ClientesScreen from "@/app/(tabs)/clientes";

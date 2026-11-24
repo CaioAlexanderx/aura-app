@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { pluralize } from "@/utils/plural";
 import type { Customer } from "@/components/screens/clientes/types";
 import { enderecoDoCliente, enderecoParaApi, temEnderecoDeEntrega } from "@/components/endereco/endereco";
+import { camposExtrasAceitos, cpfParaApi } from "@/utils/clienteDadosCompletos";
 
 // MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
 // Hook ramifica entre /me/customers (consolidated) e /companies/:id/customers
@@ -116,6 +117,49 @@ function mapApiCustomer(c: any): Customer {
     // um backend antigo não mandar, calcula com o mesmo critério.
     endereco: enderecoDoCliente(c),
     hasAddress: typeof c.has_address === "boolean" ? c.has_address : temEnderecoDeEntrega(enderecoDoCliente(c)),
+    // 23/11/2026 — cadastro completo (ótica). Só leitura; quem grava é
+    // `dadosCompletos`, que só o formulário com o bloco aberto preenche.
+    cpf: String(c.cpf_cnpj || "").replace(/\D/g, ""),
+    rg: c.rg || "",
+    gender: c.gender || "",
+    occupation: c.occupation || "",
+  };
+}
+
+/**
+ * 23/11/2026 — campos do bloco "Dados completos" (ótica) no corpo do POST e
+ * do PATCH. Sem `dadosCompletos` devolve {} e o corpo é o de sempre. Dentro
+ * dele, só vai a chave que o formulário mandou: CPF que não foi mexido não é
+ * reenviado (um documento antigo fora do padrão não vira erro ao editar o
+ * nome), e RG, sexo e profissão só chegam aqui quando o servidor avisou que
+ * os aceita (customer_fields).
+ */
+export function corpoDosDadosCompletos(c: Partial<Customer>): Record<string, string | null> {
+  const d = c.dadosCompletos;
+  if (!d) return {};
+  const corpo: Record<string, string | null> = {};
+  if (d.cpf !== undefined) corpo.cpf_cnpj = cpfParaApi(d.cpf);
+  if (d.rg !== undefined) corpo.rg = d.rg.trim() || null;
+  if (d.gender !== undefined) corpo.gender = d.gender || null;
+  if (d.occupation !== undefined) corpo.occupation = d.occupation.trim() || null;
+  return corpo;
+}
+
+/** Corpo do POST de cliente a partir do formulário (AddCustomerForm). */
+export function corpoDoNovoCliente(c: Customer) {
+  const extras = corpoDosDadosCompletos(c);
+  // No POST, vazio não vai: não há o que apagar num cadastro novo.
+  for (const k of Object.keys(extras)) if (extras[k] == null) delete extras[k];
+  return {
+    name: c.name,
+    email: c.email || undefined,
+    phone: c.phone || undefined,
+    instagram_handle: c.instagram || undefined,
+    birth_date: parseBirthday(c.birthday),
+    notes: c.notes || undefined,
+    // 09/11/2026: endereço opcional; vazio vai null e o backend ignora.
+    ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
+    ...extras,
   };
 }
 
@@ -138,6 +182,7 @@ export function corpoDaEdicaoDoCliente(c: Partial<Customer>) {
     birth_date: c.birthday ? parseBirthday(c.birthday) : null,
     notes: c.notes || null,
     ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
+    ...corpoDosDadosCompletos(c),
   };
 }
 
@@ -220,6 +265,9 @@ export function useCustomers(options?: UseCustomersOptions) {
 
   // Companies count vem do response em consolidated (pra FE decidir mostrar badge)
   const companyCount = (apiData as any)?.company_count || (availableCompanies?.length || 1);
+  // 23/11/2026: RG, sexo e profissão só entram no formulário quando o
+  // servidor avisa que os aceita (docs/otica-cadastro-completo-backend.md).
+  const camposExtras = useMemo(function () { return camposExtrasAceitos(apiData); }, [apiData]);
   // Limite do plano (vem do response do BE)
   const planLimit = (apiData as any)?.plan_limit || null;
 
@@ -288,15 +336,16 @@ export function useCustomers(options?: UseCustomersOptions) {
   function addCustomer(c: Customer) {
     if (!mutationCompanyId) { toast.error("Empresa não identificada"); return; }
     if (isDemo) return;
-    addMutation.mutate({
-      name: c.name,
-      email: c.email || undefined,
-      phone: c.phone || undefined,
-      instagram_handle: c.instagram || undefined,
-      birth_date: parseBirthday(c.birthday),
-      notes: c.notes || undefined,
-      // 09/11/2026: endereço opcional; vazio vai null e o backend ignora.
-      ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
+    addMutation.mutate(corpoDoNovoCliente(c));
+  }
+
+  // 23/11/2026 (Ótica, "Cadastrar cliente" sem sair da OS): o mesmo POST, com
+  // os mesmos avisos, devolvendo o cliente criado — a tela precisa do id para
+  // já deixar o cliente escolhido.
+  function addCustomerAsync(c: Customer): Promise<Customer> {
+    if (isDemo) return Promise.reject(new Error("Modo demonstração"));
+    return addMutation.mutateAsync(corpoDoNovoCliente(c)).then(function (r: any) {
+      return mapApiCustomer(r?.customer || r);
     });
   }
 
@@ -375,6 +424,8 @@ export function useCustomers(options?: UseCustomersOptions) {
     refetch,
     bulkDeleting,
     addCustomer,
+    addCustomerAsync,
+    camposExtras,
     updateCustomer,
     updateCustomerAsync,
     deleteCustomer,
