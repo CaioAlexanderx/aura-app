@@ -559,6 +559,27 @@ export function usaDuasColunas(largura: number, ehWeb: boolean): boolean {
   return !!ehWeb && (Number(largura) || 0) >= LARGURA_DUAS_COLUNAS;
 }
 
+// ── grade cor × tamanho em cartões (p-201) ──────
+//
+// 23/11/2026 (mockup "Grade no celular", aprovado pelo Caio): até 560 px
+// a tabela cor × tamanho cortava a última coluna (a sandália 34 a 44 não
+// cabia em 375 px). Até essa largura a grade vira um cartão por cor, com
+// os tamanhos em grade que quebra linha. Acima, a tabela de sempre, sem
+// mudar nada. Largura desconhecida (0) fica na tabela.
+export const LARGURA_GRADE_EM_CARTOES = 560;
+
+export function usaGradeEmCartoes(largura: number): boolean {
+  const w = Number(largura) || 0;
+  return w > 0 && w <= LARGURA_GRADE_EM_CARTOES;
+}
+
+// Total de uma cor ou do produto, lendo as mesmas células da tabela
+// (chave matrixKey). Célula vazia ou sem número conta 0.
+export function totalDasCelulas(celulas: Record<string, string>, chaves: string[]): number {
+  return chaves.reduce((soma, k) => soma + (parseInt(String(celulas[k] ?? ""), 10) || 0), 0);
+}
+
+
 // ── fila de fotos escolhidas antes de existir o produto ───
 //
 // No cadastro não há id ainda, então a foto escolhida fica na memória e
