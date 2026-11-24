@@ -68,6 +68,7 @@ import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid, type GridProduct } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { CreditoDaClienteBox } from "@/components/screens/pdv/CreditoDaClienteBox";
+import { OculosDoClienteBox } from "@/components/screens/pdv/OculosDoClienteBox";
 import { WarrantyBox } from "@/components/screens/pdv/WarrantyBox";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
@@ -167,7 +168,20 @@ function CaixaScreenInner() {
   ) : null;
   // 17/11/2026 (INC-2026-11-17-03): o crédito a favor da cliente escolhida,
   // nesta loja, com o jeito de abater na venda. null = sem caixa.
-  const creditoSlot = st.credito ? <CreditoDaClienteBox credito={st.credito} disabled={st.isProcessing} onScan={cartProps.onScan} /> : null;
+  const creditoDaCliente = st.credito ? <CreditoDaClienteBox credito={st.credito} disabled={st.isProcessing} onScan={cartProps.onScan} /> : null;
+  // p-208 (23/11/2026): a OS de ótica no Caixa — faixa "Óculos deste
+  // cliente". Só com o módulo Ótica ligado e cliente na venda; fora disso a
+  // tela fica como sempre. Mora no mesmo lugar do crédito da cliente.
+  const oticaNoCaixa = pdvSettingsGarantia.otica_enabled === true && !!company?.id && !!st.selectedCustomerId && !st.isDemo ? (
+    <OculosDoClienteBox
+      key={st.selectedCustomerId}
+      companyId={company.id}
+      customerId={st.selectedCustomerId}
+      disabled={st.isProcessing}
+      onLancarNoCarrinho={st.lancarOsNoCarrinho}
+    />
+  ) : null;
+  const creditoSlot = oticaNoCaixa || creditoDaCliente ? <>{oticaNoCaixa}{creditoDaCliente}</> : null;
   const pdvPayMethods = crediarioEnabled
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");

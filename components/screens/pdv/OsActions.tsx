@@ -36,20 +36,29 @@ export function OsActions({ companyId, saleId, customerId }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<Record<string, boolean>>({});
 
-  const enabled = settings.os_enabled === true && !!customerId;
+  const reparoOn = settings.os_enabled === true;
+  const oticaOn = settings.otica_enabled === true;
+  const enabled = (reparoOn || oticaOn) && !!customerId;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["service-orders", companyId, "pronta", customerId],
-    // kind='reparo': a OS de óculos tem sinal e saldo próprios (deposit_sale_id)
-    // e é entregue na tela da ótica — vincular uma segunda venda aqui cobraria
-    // o cliente duas vezes.
-    queryFn: () => serviceOrdersApi.list(companyId, { status: "pronta", customer_id: customerId, kind: "reparo" }),
+    queryKey: ["service-orders", companyId, "pronta", customerId, "caixa"],
+    queryFn: () => serviceOrdersApi.list(companyId, { status: "pronta", customer_id: customerId }),
     enabled,
     staleTime: 0, // tela de sucesso: o estado do balcão é agora, não cache
   });
 
   if (!enabled) return null;
-  const orders: ServiceOrder[] = data?.orders || [];
+  // Reparo: como sempre. Ótica (p-208, 23/11/2026): SÓ a OS aberta SEM sinal
+  // e sem venda — a venda deste Caixa é a primeira e única dela. A OS de
+  // óculos COM sinal nunca entra aqui: o saldo dela já é parcela do crediário
+  // da venda do sinal, e vincular esta venda cobraria o cliente duas vezes
+  // (o backend também recusa, 409 OS_JA_TEM_VENDA). Ela é recebida na faixa
+  // "Óculos deste cliente", sem venda nova.
+  const orders: ServiceOrder[] = (data?.orders || []).filter((o: any) => {
+    const kind = o.kind || "reparo";
+    if (kind === "reparo") return reparoOn;
+    return oticaOn && kind === "otica" && !o.deposit_sale_id && !o.sale_id;
+  });
   if (!isLoading && orders.length === 0 && Object.keys(delivered).length === 0) return null;
 
   async function handleDeliver(os: ServiceOrder) {

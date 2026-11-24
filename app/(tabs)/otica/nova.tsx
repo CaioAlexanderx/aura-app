@@ -58,6 +58,15 @@ import { maskBrDate } from "@/components/inputs/DateInput";
 import { faltasDoClienteParaOtica } from "@/utils/clienteDadosCompletos";
 import type { Customer } from "@/components/screens/clientes/types";
 
+// p-205: espelha o teto do backend (/pdv/sale-com-sinal, SALDO_INSTALLMENTS_MAX).
+const SALDO_PARCELAS_MAX = 24;
+const LENS_QUANTITIES = ["par", "unidade"] as const;
+type LensQuantity = typeof LENS_QUANTITIES[number];
+const LENS_QUANTITY_LABEL: Record<LensQuantity, string> = { par: "1 par", unidade: "1 lente" };
+const SERVICE_TYPES = ["lente", "montagem", "lente_montagem"] as const;
+type ServiceType = typeof SERVICE_TYPES[number];
+const SERVICE_TYPE_LABEL: Record<ServiceType, string> = { lente: "Venda de lente", montagem: "Montagem", lente_montagem: "Lente + montagem" };
+
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 function parseMoney(s: string): number {
@@ -167,6 +176,10 @@ export default function OticaNovaScreen() {
   const [lensMaterial, setLensMaterial] = useState("");
   const [treatments, setTreatments] = useState<string[]>([]);
   const [lensPrice, setLensPrice] = useState("");
+  // p-205 (23/11/2026, mockup otica-os-impressa, seção 2): quantidade e o que
+  // o laboratório faz. Padrões do Caio: 1 par; lente + montagem.
+  const [quantity, setQuantity] = useState<LensQuantity>("par");
+  const [serviceType, setServiceType] = useState<ServiceType>("lente_montagem");
   const [servicePrice, setServicePrice] = useState("");
 
   // ── Laboratório e prazo ──
@@ -192,6 +205,13 @@ export default function OticaNovaScreen() {
   const total = frameValue + parseMoney(lensPrice) + parseMoney(servicePrice);
   const sinalNum = parseMoney(sinal);
   const saldo = Math.max(0, total - sinalNum);
+  // p-205: parcelas do saldo. 1 = como sempre (uma parcela na data prometida).
+  // Com N, o crediário recebe N parcelas: a 1ª na data prometida e as outras
+  // de 30 em 30 dias, sem juros. Só existe quando sobra saldo depois do sinal.
+  const [saldoParcelas, setSaldoParcelas] = useState(1);
+  const temSaldo = sinalNum > 0 && saldo > 0.005;
+  const parcelasDoSaldo = temSaldo ? saldoParcelas : 1;
+  const valorDaParcela = parcelasDoSaldo > 0 ? Math.floor((saldo / parcelasDoSaldo) * 100) / 100 : saldo;
 
   const [saving, setSaving] = useState(false);
   const [depositSaleId, setDepositSaleId] = useState<string | null>(null);
@@ -232,6 +252,8 @@ export default function OticaNovaScreen() {
         treatments, notes: "",
       },
       use,
+      quantity,
+      service_type: serviceType,
       adaptation_warranty_days: parseInt(adaptDays ?? String(settings.adaptation_warranty_days), 10) || 0,
     };
   }
@@ -290,6 +312,8 @@ export default function OticaNovaScreen() {
           notes: "Óculos — sinal na abertura da OS",
           sinal: { method: sinalMethod, amount: Number(sinalNum.toFixed(2)) },
           saldo_due_date: parseBrDate(promised)!,
+          // p-205: só vai quando é mais de 1 (sem o campo, o backend faz 1x).
+          ...(parcelasDoSaldo > 1 ? { saldo_installments: parcelasDoSaldo } : {}),
         }, { idempotencyKey: chaveDaVenda.atual() });
         chaveDaVenda.concluida();
         saleId = sale?.sale_id || sale?.id || sale?.sale?.id || null;
@@ -510,9 +534,22 @@ export default function OticaNovaScreen() {
             <TextInput style={st.input} value={lensMaterial} onChangeText={setLensMaterial} placeholder="1.59 policarbonato" placeholderTextColor={Colors.ink3} />
           </View>
           <View style={st.col}>
+            <Text style={st.lbl}>Quantidade</Text>
+            <View style={st.chipsWrap}>
+              {LENS_QUANTITIES.map((qk) => (
+                <Pressable key={qk} onPress={() => setQuantity(qk)} style={[st.chip, quantity === qk && st.chipOn]} testID={`otica-quantidade-${qk}`} accessibilityRole="radio" accessibilityState={{ selected: quantity === qk }}>
+                  <Text style={[st.chipText, quantity === qk && st.chipTextOn]}>{LENS_QUANTITY_LABEL[qk]}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+        <View style={[st.row2, { marginTop: 10 }]}>
+          <View style={st.col}>
             <Text style={st.lbl}>Valor das lentes</Text>
             <TextInput style={st.input} value={lensPrice} onChangeText={setLensPrice} placeholder="0,00" keyboardType="numeric" placeholderTextColor={Colors.ink3} testID="otica-lente-valor" />
           </View>
+          <View style={st.col} />
         </View>
         <Text style={[st.lbl, { marginTop: 12 }]}>Tratamentos</Text>
         <View style={st.chipsWrap}>
@@ -525,6 +562,15 @@ export default function OticaNovaScreen() {
             );
           })}
         </View>
+        <Text style={[st.lbl, { marginTop: 12 }]}>O que o laboratório faz</Text>
+        <View style={st.chipsWrap}>
+          {SERVICE_TYPES.map((t) => (
+            <Pressable key={t} onPress={() => setServiceType(t)} style={[st.chip, serviceType === t && st.chipOn]} testID={`otica-servico-${t}`} accessibilityRole="radio" accessibilityState={{ selected: serviceType === t }}>
+              <Text style={[st.chipText, serviceType === t && st.chipTextOn]}>{SERVICE_TYPE_LABEL[t]}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={st.hint}>"Venda de lente" é só a lente; "Montagem" é só o serviço; "Lente + montagem" faz as duas. Sai marcado na folha da OS.</Text>
         <View style={[st.row2, { marginTop: 12 }]}>
           <View style={st.col}>
             <Text style={st.lbl}>Montagem / serviço (opcional)</Text>
@@ -591,7 +637,28 @@ export default function OticaNovaScreen() {
         {sinalNum > 0 && (
           <View style={[st.money, { marginTop: 12 }]}>
             <View style={st.row}><Text style={st.rowK}>Saldo na entrega</Text><Text style={[st.rowV, { color: Colors.amber }]}>{fmt(saldo)}</Text></View>
-            <View style={st.row}><Text style={st.rowK}>Vence em</Text><Text style={st.rowV}>{promised || "informe a data prometida"}</Text></View>
+            <View style={st.row}><Text style={st.rowK}>{parcelasDoSaldo > 1 ? "1ª parcela em" : "Vence em"}</Text><Text style={st.rowV}>{promised || "informe a data prometida"}</Text></View>
+          </View>
+        )}
+        {temSaldo && !depositSaleId && (
+          <View style={{ marginTop: 12 }} testID="otica-parcelas">
+            <Text style={st.lbl}>Parcelas do saldo</Text>
+            <View style={st.stepRow}>
+              <Pressable onPress={() => setSaldoParcelas((n) => Math.max(1, n - 1))} style={[st.stepBtn, saldoParcelas <= 1 && { opacity: 0.4 }]} disabled={saldoParcelas <= 1} testID="otica-parcelas-menos" accessibilityLabel="Menos parcelas">
+                <Text style={st.stepBtnText}>−</Text>
+              </Pressable>
+              <Text style={st.stepValue} testID="otica-parcelas-valor">
+                {parcelasDoSaldo}x de {fmt(valorDaParcela)}
+              </Text>
+              <Pressable onPress={() => setSaldoParcelas((n) => Math.min(SALDO_PARCELAS_MAX, n + 1))} style={[st.stepBtn, saldoParcelas >= SALDO_PARCELAS_MAX && { opacity: 0.4 }]} disabled={saldoParcelas >= SALDO_PARCELAS_MAX} testID="otica-parcelas-mais" accessibilityLabel="Mais parcelas">
+                <Text style={st.stepBtnText}>+</Text>
+              </Pressable>
+            </View>
+            <Text style={st.hint}>
+              {parcelasDoSaldo > 1
+                ? `O saldo vira ${parcelasDoSaldo} parcelas no crediário do cliente: a 1ª na data prometida e as outras de 30 em 30 dias, sem juros.`
+                : "O saldo vira uma parcela só, na data prometida."}
+            </Text>
           </View>
         )}
         {depositSaleId ? (
@@ -695,6 +762,10 @@ const st = StyleSheet.create({
   faltas: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   faltasText: { fontSize: 12, color: Colors.amber, lineHeight: 17, flexShrink: 1 },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  stepBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2, alignItems: "center", justifyContent: "center" },
+  stepBtnText: { fontSize: 18, color: Colors.ink, fontWeight: "700" },
+  stepValue: { fontSize: 14, color: Colors.ink, fontWeight: "700", fontFamily: Fonts.mono, minWidth: 120, textAlign: "center" },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2 },
   chipOn: { backgroundColor: Colors.violet + "22", borderColor: Colors.violet },
   chipText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },

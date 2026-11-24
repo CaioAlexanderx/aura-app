@@ -104,6 +104,42 @@ export type CreateOsBody = {
   notes?: string;
 };
 
+export type SaldoMethod = "pix" | "dinheiro" | "cartao" | "debito";
+
+export type OticaNoCaixa = {
+  id: string;
+  os_number: number | null;
+  status: OsStatus;
+  lab_status?: string | null;
+  promised_at?: string | null;
+  estimated_amount: string | number;
+  deposit_sale_id?: string | null;
+  sale_id?: string | null;
+  lens?: { brand?: string; design?: string; material?: string } | null;
+  frame?: { description?: string; source?: string } | null;
+  use?: string | null;
+  deposit_sale_status?: string | null;
+  deposit_sale_total?: string | number | null;
+  open_amount: number;
+  open_installments: number;
+  total_installments: number;
+  next_due_date?: string | null;
+  /** Sem sinal: não há venda; o Caixa cobra como venda e entrega vinculando. */
+  sem_venda: boolean;
+};
+
+export type ReceberSaldoResult = {
+  replayed: boolean;
+  order: ServiceOrder;
+  paid: number;
+  method: SaldoMethod;
+  remaining: number;
+  settled: boolean;
+  delivered: boolean;
+  transaction_id: string | null;
+  receipt_url: string | null;
+};
+
 export type OsListFilters = {
   status?: OsStatus;
   customer_id?: string;
@@ -176,6 +212,26 @@ export var serviceOrdersApi = {
       { method: "POST", body: { status: status, ...(extra || {}) }, retry: 0 });
   },
 
+  // ─── Ótica no Caixa (p-208, 23/11/2026) ─────────────────────
+  // A faixa "Óculos deste cliente": OS de ótica prontas ou com saldo. Sem
+  // receita nem CPF na resposta (dado de saúde só na tela da OS e no papel).
+  oticaNoCaixa: function (companyId: string, customerId: string) {
+    return request<{ orders: OticaNoCaixa[] }>(
+      "/companies/" + companyId + "/service-orders/otica-no-caixa?customer_id=" + encodeURIComponent(customerId),
+      { retry: 1 });
+  },
+
+  // Receber o saldo (e entregar): QUITA as parcelas da venda do sinal, sem
+  // venda nova. retry 0 + Idempotency-Key: repetir com a mesma chave devolve o
+  // que já foi gravado, nunca recebe duas vezes.
+  receberSaldo: function (companyId: string, osId: string, body: {
+    method: SaldoMethod; entregar?: boolean; amount?: number;
+  }, idempotencyKey?: string | null) {
+    return request<ReceberSaldoResult>(
+      "/companies/" + companyId + "/service-orders/" + osId + "/receber-saldo",
+      { method: "POST", body: body, retry: 0, headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined });
+  },
+
   remove: function (companyId: string, osId: string) {
     return request<{ deleted: boolean }>(
       "/companies/" + companyId + "/service-orders/" + osId, { method: "DELETE", retry: 0 });
@@ -187,10 +243,16 @@ export var serviceOrdersApi = {
 // window.open direto daria "Token não fornecido". A janela abre SÍNCRONA
 // no clique (openPrintWindow) — window.open depois do await perde a user
 // activation e o Chrome bloqueia o pop-up de forma intermitente.
-export async function printOs(companyId: string, osId: string): Promise<void> {
+//
+// p-206 (23/11/2026): a OS de ótica sai em 2 vias iguais por padrão. `vias`
+// muda isso: { via: "cliente" } ou { via: "laboratorio" } imprime uma folha
+// só (o PDF para o laboratório é a via do laboratório). A OS de reparo
+// ignora os parâmetros.
+export async function printOs(companyId: string, osId: string, opts?: { via?: "cliente" | "laboratorio" }): Promise<void> {
   if (typeof window === "undefined") return;
   const token = useAuthStore.getState().token;
-  const url = BASE_URL + "/companies/" + companyId + "/print/os/" + osId;
+  const url = BASE_URL + "/companies/" + companyId + "/print/os/" + osId
+    + (opts?.via ? "?vias=1&via=" + opts.via : "");
   const outcome = await openPrintWindow(async () => {
     const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
     if (!resp.ok) return { ok: false as const, error: "Erro ao carregar a OS (" + resp.status + ")." };
