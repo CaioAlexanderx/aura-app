@@ -6,7 +6,7 @@
 // ============================================================
 import {
   formDaPrevia, corpoDoForm, campoDoFaltante, passoDoFaltante, faltantesPorCampo, faltantesDosItens,
-  resumoDosFaltantes, lerErroDaEmissao, lerRespostaDaEmissao, notaSugerida, automaticaEspera,
+  resumoDosFaltantes, lerErroDaEmissao, lerRespostaDaEmissao, notaSugerida, automaticaEspera, destinatarioCompletoNaPrevia,
   fmtDocumento, fmtChave, rotuloDaIe,
 } from "@/utils/nfe55";
 import type { Previa } from "@/services/nfe55Api";
@@ -134,6 +134,42 @@ describe("venda concluída: NFC-e ou NF-e", () => {
     expect(automaticaEspera(true, "11444777000161")).toBe(true);
     expect(automaticaEspera(true, "39053344705")).toBe(false);
     expect(automaticaEspera(false, "11444777000161")).toBe(false);
+  });
+
+  // 24/11/2026 (hotfix ótica): cliente completo na ótica também indica a NF-e.
+  it("ótica com destinatário completo: NF-e indicada e a automática espera", () => {
+    expect(notaSugerida("390.533.447-05", true)).toBe("nfe");
+    expect(notaSugerida(null, true)).toBe("nfe");
+    expect(notaSugerida(null, false)).toBe("nfce");
+    expect(automaticaEspera(true, "39053344705", true)).toBe(true);
+    expect(automaticaEspera(true, null, true)).toBe(true);
+    expect(automaticaEspera(true, "39053344705", false)).toBe(false);
+    expect(automaticaEspera(false, "39053344705", true)).toBe(false);
+    expect(automaticaEspera(true, "11444777000161", false)).toBe(true);
+  });
+});
+
+describe("destinatarioCompletoNaPrevia (hotfix ótica, 24/11/2026)", () => {
+  const dest = {
+    documento: "39053344705", nome: "Ana Exemplo", ie: null, ind_ie_dest: 9 as const, email: null,
+    endereco: { cep: "01310100", logradouro: "Av. Paulista", bairro: "Bela Vista", municipio: "São Paulo", uf: "SP", codigo_municipio_ibge: "3550308" },
+    customer_id: "cli-1",
+  };
+  const base: Previa = { pode_emitir: true, bloqueio: null, faltantes: [], nota_existente: null, nota_pendente: null, destinatario: dest };
+
+  it("completo: cadastro, CPF e nenhum faltante do destinatário", () => {
+    expect(destinatarioCompletoNaPrevia(base)).toBe(true);
+    expect(destinatarioCompletoNaPrevia({ ...base, faltantes: [{ campo: "itens[0].ncm", mensagem: "NCM", tipo: "faltando" }] })).toBe(true);
+  });
+  it("não completo: faltante do destinatário, bloqueio, nota existente, sem cadastro ou sem documento", () => {
+    expect(destinatarioCompletoNaPrevia(null)).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, faltantes: [{ campo: "destinatario.endereco.bairro", mensagem: "Bairro", tipo: "faltando" }] })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, faltantes: [{ campo: "destinatario.documento", mensagem: "Doc", tipo: "invalido" }] })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, bloqueio: { code: "NFE_REGIME_NORMAL_FORA_DO_V1", error: "x" } })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, nota_existente: { id: "n", tipo: "nfce", numero: 1, serie: 1, status: "autorizada", chave_acesso: null } })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, destinatario: { ...dest, customer_id: null } })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, destinatario: { ...dest, documento: null } })).toBe(false);
+    expect(destinatarioCompletoNaPrevia({ ...base, destinatario: undefined })).toBe(false);
   });
 });
 

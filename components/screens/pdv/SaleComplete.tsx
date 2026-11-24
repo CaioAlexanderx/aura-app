@@ -175,7 +175,7 @@ type Props = {
   referralName?: string | null;
   /** pdv_settings da loja: o vale-troca do cupom lê vale_troca_enabled daqui;
    *  a impressão automática (p-160), auto_print_receipt. */
-  pdvSettings?: (NonNullable<ConfigDoVale> & { auto_print_receipt?: boolean | null }) | null;
+  pdvSettings?: (NonNullable<ConfigDoVale> & { auto_print_receipt?: boolean | null; otica_enabled?: boolean | null }) | null;
   /** 09/11/2026: endereço do cadastro do cliente da venda (venda sem
    *  retrato, ex.: sem frete). null = cliente sem endereço ou sem cliente. */
   enderecoDoCliente?: Endereco | null;
@@ -259,6 +259,9 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
   // 14/11/2026 (NF-e 55, CP4b): o documento que a venda conhece — quem
   // contratou (venda com serviço) ou o CPF/CNPJ na nota.
   const documentoDoCliente = (sale.tomador && sale.tomador.doc) || sale.cpfNaNota || null;
+  // 24/11/2026 (hotfix ótica): com a Ótica ligada, o cliente com cadastro
+  // completo tem a NF-e sugerida (NotaDeProdutosDaVenda). Sem ótica, nada muda.
+  const oticaLigada = pdvSettings?.otica_enabled === true;
 
   // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
   // unidades (10 m² + 500 tijolos = "510 produtos").
@@ -466,6 +469,8 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
             autoEmit={autoEmit}
             documentoDoCliente={documentoDoCliente}
             notaAtiva={notaAtiva}
+            otica={oticaLigada}
+            customerId={sale.customerId || null}
             chave={chaveDaNota}
           />
         )}
@@ -499,6 +504,8 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
                   autoEmit={autoEmit}
                   documentoDoCliente={documentoDoCliente}
                   notaAtiva={notaAtiva}
+                  otica={oticaLigada}
+                  customerId={sale.customerId || null}
                   chave={chaveDaNota}
                 />
               </View>

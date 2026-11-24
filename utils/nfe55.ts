@@ -10,6 +10,9 @@
 //     texto humano para a tela;
 //   - notaSugerida / automaticaEspera: a escolha NFC-e ou NF-e na venda
 //     concluída (cliente com CNPJ → NF-e; a automática da NFC-e espera).
+//     24/11/2026 (hotfix ótica): na loja com Ótica, o cliente com cadastro
+//     completo para o destinatário (destinatarioCompletoNaPrevia) também
+//     tem a NF-e sugerida. Sem ótica, nada muda.
 // ============================================================
 import type {
   Previa, CorpoNfe55, Faltante, IndIeDest, ModFrete, RejeicaoAmigavel, RespostaEmissao, ResumoNota,
@@ -249,18 +252,43 @@ export function lerErroDaEmissao(err: ErroDeApi | null | undefined): ResultadoDa
 
 // ── Venda concluída: NFC-e ou NF-e ───────────────────────────
 
-/** Nota de produtos indicada: cliente com CNPJ → NF-e; os demais → NFC-e. */
-export function notaSugerida(documentoDoCliente: string | null | undefined): "nfe" | "nfce" {
-  return soDigitos(documentoDoCliente).length === 14 ? "nfe" : "nfce";
+/**
+ * Nota de produtos indicada: cliente com CNPJ → NF-e; os demais → NFC-e.
+ * 24/11/2026 (hotfix ótica): `completoNaOtica` = loja com Ótica e a prévia
+ * da NF-e diz que o destinatário está completo (destinatarioCompletoNaPrevia).
+ * Aí a NF-e também é a indicada. Ausente/false = a regra de sempre.
+ */
+export function notaSugerida(documentoDoCliente: string | null | undefined, completoNaOtica: boolean = false): "nfe" | "nfce" {
+  if (soDigitos(documentoDoCliente).length === 14) return "nfe";
+  return completoNaOtica ? "nfe" : "nfce";
 }
 
 /**
- * A emissão automática da NFC-e espera quando o cliente tem CNPJ (a nota
- * indicada é a NF-e, que a lojista confere no assistente). Sem automática
- * ligada, nada a esperar.
+ * A emissão automática da NFC-e espera quando a nota indicada é a NF-e
+ * (cliente com CNPJ, ou cliente completo na ótica), que a lojista confere
+ * no assistente. Sem automática ligada, nada a esperar.
  */
-export function automaticaEspera(autoEmitLigada: boolean, documentoDoCliente: string | null | undefined): boolean {
-  return !!autoEmitLigada && notaSugerida(documentoDoCliente) === "nfe";
+export function automaticaEspera(
+  autoEmitLigada: boolean, documentoDoCliente: string | null | undefined, completoNaOtica: boolean = false,
+): boolean {
+  return !!autoEmitLigada && notaSugerida(documentoDoCliente, completoNaOtica) === "nfe";
+}
+
+/**
+ * 24/11/2026 (hotfix ótica): a prévia da NF-e (GET .../venda/:saleId/previa,
+ * só leitura) diz que o destinatário está pronto? Exige: sem bloqueio (UF
+ * não liberada, regime normal, certificado...), venda sem nota de produtos,
+ * cliente do cadastro, CPF ou CNPJ e nenhum faltante em "destinatario.*"
+ * (nome, endereço, IE). Faltante de item (NCM) não conta: isso se resolve
+ * no assistente e não é dado do cliente.
+ */
+export function destinatarioCompletoNaPrevia(previa: Previa | null | undefined): boolean {
+  if (!previa || previa.bloqueio || previa.nota_existente) return false;
+  const d = previa.destinatario;
+  if (!d || !d.customer_id) return false;
+  const doc = soDigitos(d.documento);
+  if (doc.length !== 11 && doc.length !== 14) return false;
+  return !(previa.faltantes || []).some((f) => String(f.campo || "").startsWith("destinatario."));
 }
 
 // ── formatação ───────────────────────────────────────────────

@@ -13,6 +13,15 @@
 // Uma nota de produtos por venda: quando uma das duas sai, a outra some
 // (o backend recusa a segunda com 409 de qualquer jeito).
 // Regras puras em utils/nfe55.ts (notaSugerida, automaticaEspera).
+//
+// 24/11/2026 (hotfix ótica): loja com Ótica E cliente na venda → a tela
+// pergunta à prévia da NF-e (só leitura) se o destinatário está completo
+// (CPF/CNPJ, nome e endereço sem faltante). Completo: o mesmo desenho do
+// caso 2 (NF-e sugerida, NFC-e alternativa, automática espera). Enquanto
+// a prévia não volta, a NFC-e de sempre, com a automática segurando até
+// PRAZO_DA_PREVIA_MS; falhou, a NFC-e de sempre, sem mensagem. O link vira
+// "Nota com os dados completos do cliente (NF-e) →". Sem ótica, nada muda
+// (nem chamada). hooks/useClienteCompletoNaOtica.
 // ============================================================
 import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
@@ -20,7 +29,8 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { NfceActions, type NfceActionsProps } from "@/components/screens/pdv/NfceActions";
 import type { RespostaEmissao } from "@/services/nfe55Api";
-import { automaticaEspera, notaSugerida } from "@/utils/nfe55";
+import { automaticaEspera, notaSugerida, soDigitos } from "@/utils/nfe55";
+import { useClienteCompletoNaOtica } from "@/hooks/useClienteCompletoNaOtica";
 import { Nfe55Wizard } from "./Nfe55Wizard";
 import { abrirDanfe, baixarXml } from "./nfe55Acoes";
 import { ConviteNotaFiscal } from "./ConviteNotaFiscal";
@@ -31,18 +41,33 @@ type Props = Omit<NfceActionsProps, "onEmitted"> & {
   saleNumber?: number | null;
   /** nfce_config.is_active da loja. undefined = ainda não se sabe (tela de sempre). */
   notaAtiva?: boolean;
+  /** 24/11/2026 (hotfix ótica): pdv_settings.otica_enabled da loja. */
+  otica?: boolean;
+  /** Cliente do cadastro na venda (sale.customerId). Só a ótica usa. */
+  customerId?: string | null;
 };
 
+/** Quanto a NFC-e automática espera a prévia na ótica antes de sair. */
+export const PRAZO_DA_PREVIA_MS = 5000;
+
 export function NotaDeProdutosDaVenda(props: Props) {
-  const { documentoDoCliente, saleNumber, notaAtiva, autoEmit, ...nfce } = props;
+  const { documentoDoCliente, saleNumber, notaAtiva, autoEmit, otica, customerId, ...nfce } = props;
   const [assistente, setAssistente] = useState(false);
   const [nfe, setNfe] = useState<RespostaEmissao | null>(null);
   const [nfceSaiu, setNfceSaiu] = useState(false);
 
+  // Ótica: só pergunta à prévia quando o CNPJ já não decidiu pela NF-e.
+  const naOtica = otica === true;
+  const perguntaAPrevia = naOtica && !!customerId && notaAtiva !== false && notaSugerida(documentoDoCliente) !== "nfe";
+  const clienteNaOtica = useClienteCompletoNaOtica(perguntaAPrevia, nfce.companyId, nfce.saleId, autoEmit ? PRAZO_DA_PREVIA_MS : null);
+
   if (notaAtiva === false) return <ConviteNotaFiscal />;
 
-  const sugerida = notaSugerida(documentoDoCliente);
-  const espera = automaticaEspera(!!autoEmit, documentoDoCliente);
+  const completoNaOtica = clienteNaOtica === "completo";
+  const sugerida = notaSugerida(documentoDoCliente, completoNaOtica);
+  const espera = automaticaEspera(!!autoEmit, documentoDoCliente, completoNaOtica);
+  // Na ótica o cliente completo pode ter CPF: os textos dizem o documento certo.
+  const porCadastro = completoNaOtica && soDigitos(documentoDoCliente).length !== 14;
 
   const wizard = assistente ? (
     <Nfe55Wizard
@@ -77,16 +102,20 @@ export function NotaDeProdutosDaVenda(props: Props) {
               <View style={st.ico}><Text style={st.icoT}>55</Text></View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={st.t}>Nota fiscal eletrônica (NF-e)</Text>
-                <Text style={st.sub}>Sugerida: o cliente tem CNPJ</Text>
+                <Text style={st.sub}>{porCadastro ? "Sugerida: o cliente tem cadastro completo" : "Sugerida: o cliente tem CNPJ"}</Text>
               </View>
               <View style={st.selo}><Text style={st.seloT}>Sugerida</Text></View>
             </View>
-            <Text style={st.msg}>Já trazemos CNPJ, nome e endereço do cadastro. Você confere a Inscrição Estadual e emite.</Text>
+            <Text style={st.msg}>{porCadastro
+              ? "Já trazemos documento, nome e endereço do cadastro do cliente. Você confere e emite."
+              : "Já trazemos CNPJ, nome e endereço do cadastro. Você confere a Inscrição Estadual e emite."}</Text>
             <Pressable style={st.btnP} onPress={() => setAssistente(true)} accessibilityRole="button" testID="venda-emitir-nfe">
               <Icon name="file_text" size={16} color="#fff" />
               <Text style={st.btnPT}>Emitir NF-e</Text>
             </Pressable>
-            {espera ? <Text style={st.peq} testID="venda-automatica-esperou">A emissão automática da NFC-e esperou porque o cliente tem CNPJ.</Text> : null}
+            {espera ? <Text style={st.peq} testID="venda-automatica-esperou">{porCadastro
+              ? "A emissão automática da NFC-e esperou porque o cliente tem cadastro completo."
+              : "A emissão automática da NFC-e esperou porque o cliente tem CNPJ."}</Text> : null}
           </View>
         )}
         <View style={st.card} testID="venda-nfce-alternativa">
@@ -94,7 +123,9 @@ export function NotaDeProdutosDaVenda(props: Props) {
             <View style={st.ico}><Text style={st.icoT}>65</Text></View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={st.t}>Prefere o cupom fiscal (NFC-e)?</Text>
-              <Text style={st.sub}>Também aceita o CNPJ do cliente, só na loja e dentro do estado.</Text>
+              <Text style={st.sub}>{porCadastro
+                ? "Também aceita o CPF ou CNPJ do cliente, só na loja e dentro do estado."
+                : "Também aceita o CNPJ do cliente, só na loja e dentro do estado."}</Text>
             </View>
           </View>
           <NfceActions {...nfce} autoEmit={false} notaAtiva={notaAtiva} onEmitted={() => setNfceSaiu(true)} />
@@ -107,10 +138,11 @@ export function NotaDeProdutosDaVenda(props: Props) {
 
   return (
     <View style={st.col} testID="venda-nota-nfce">
-      <NfceActions {...nfce} autoEmit={autoEmit} notaAtiva={notaAtiva} onEmitted={() => setNfceSaiu(true)} />
+      {/* Ótica: a automática segura enquanto a prévia não volta (até o prazo). */}
+      <NfceActions {...nfce} autoEmit={autoEmit && clienteNaOtica !== "carregando"} notaAtiva={notaAtiva} onEmitted={() => setNfceSaiu(true)} />
       {!nfceSaiu && (
         <Pressable style={st.link} onPress={() => setAssistente(true)} accessibilityRole="button" testID="venda-precisa-nfe">
-          <Text style={st.linkT}>Cliente precisa de NF-e? (empresa / CNPJ) →</Text>
+          <Text style={st.linkT}>{naOtica ? "Nota com os dados completos do cliente (NF-e) →" : "Cliente precisa de NF-e? (empresa / CNPJ) →"}</Text>
         </Pressable>
       )}
       {wizard}
