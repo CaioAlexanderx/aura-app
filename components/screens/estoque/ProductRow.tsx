@@ -25,6 +25,7 @@ import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
 import { ReservaNaLinha } from "./ReservaNaLinha";
 import { reservadoDoProduto } from "@/utils/reservaDoPedido";
+import { SeloDaLoja } from "./FiltroDeLoja";
 
 // 14/11/2026 (CP2b da revisão de cores): a tabela própria desta lista (24
 // hex exatos; o resto saía como o hex cru, "#C3B091") saiu. A cor do
@@ -44,7 +45,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false,
+  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false, nomeDaLoja = null,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -64,6 +65,8 @@ export function ProductRow({
   emiteNfse?: boolean;
   // 17/11/2026 (Pedido, A4): trava do Pedido. Sem ela, a linha de sempre.
   reservaLiberada?: boolean;
+  // 18/11/2026 (INC-2026-11-18-01): loja dona no grupo; null = sem selo.
+  nomeDaLoja?: string | null;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -125,6 +128,7 @@ export function ProductRow({
             <View style={s.nameRow}>
               <Text style={s.name} numberOfLines={1}>{product.name}</Text>
               {!isService && product.size ? <View style={s.sizeBadge}><Text style={s.sizeBadgeText}>{product.size}</Text></View> : null}
+              <SeloDaLoja nome={nomeDaLoja} testID={"estoque-loja-do-" + product.id} />
             </View>
             <Text style={s.meta}>{product.code} / {product.category}</Text>
             {faltaCodigoNfse(product, !!emiteNfse) ? (

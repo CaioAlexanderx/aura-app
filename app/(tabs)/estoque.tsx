@@ -115,6 +115,11 @@ import { lojasDaTransferencia, plural as pluralQtd, textoDosNumeros } from "@/ut
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { vaiNaNfse } from "@/utils/notaDoItem";
 import { avisoDoFiltroNfse, servicosSemCodigoNfse, SELO_FALTA_NFSE } from "@/components/screens/estoque/nfseNaLista";
+// 18/11/2026 (INC-2026-11-18-01): de que loja do grupo é cada produto, e o
+// filtro "Loja" (o mesmo das Etiquetas). Só quando a lista mistura lojas.
+import { contextoDeLojas, filtrarPorLoja, nomeDaLojaDona, lojaDonaDoProduto } from "@/utils/lojaDona";
+import { useFiltroDeLoja } from "@/hooks/useFiltroDeLoja";
+import { FiltroDeLoja, SeloDaLoja } from "@/components/screens/estoque/FiltroDeLoja";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -187,11 +192,33 @@ function AggregatedView() {
   });
 
   const groups = data?.products || [];
+  // 18/11/2026 (INC-2026-11-18-01): de que loja é cada produto no consolidado.
+  // O item já traz company_id e company_name (GET /me/products/aggregated);
+  // o switcher completa o nome. Um grupo vinculado entra na loja escolhida
+  // quando algum dos seus produtos é dela.
+  const { availableCompanies: empresasDoSwitcher } = useAuthStore();
+  const ctxLojas = useMemo(() => {
+    const ids: string[] = [];
+    const nomes: Record<string, string> = {};
+    groups.forEach((g: AggregatedProduct) => (g.items || []).forEach((it) => {
+      if (!it || !it.company_id) return;
+      ids.push(String(it.company_id));
+      if (it.company_name) nomes[String(it.company_id)] = it.company_name;
+    }));
+    return contextoDeLojas(empresasDoSwitcher, null, ids, nomes);
+  }, [groups, empresasDoSwitcher]);
+  const [lojaConsolidado, setLojaConsolidado] = useFiltroDeLoja("estoque-consolidado", "consolidado", ctxLojas);
+  const daLoja = useMemo(() => {
+    if (!ctxLojas) return groups;
+    return groups.filter((g: AggregatedProduct) =>
+      filtrarPorLoja(g.items || [], ctxLojas, lojaConsolidado, (it) => it.company_id).length > 0);
+  }, [groups, ctxLojas, lojaConsolidado]);
+
   // 07/05/2026: usa productMatchesSearch pra paridade com Estoque single-company
   // e PDV (acentos normalizados, multi-termo AND, haystack consolidado).
   const filtered = useMemo(() => {
-    if (!search) return groups;
-    return groups.filter((g: AggregatedProduct) =>
+    if (!search) return daLoja;
+    return daLoja.filter((g: AggregatedProduct) =>
       productMatchesSearch(
         {
           name: g.name,
@@ -203,7 +230,7 @@ function AggregatedView() {
         search
       )
     );
-  }, [groups, search]);
+  }, [daLoja, search]);
 
   const ordenados = useMemo(
     () => ordenarProdutos(filtered, ordemVista, (g: AggregatedProduct) => ({
@@ -214,6 +241,12 @@ function AggregatedView() {
     })),
     [filtered, ordemVista],
   );
+
+  // 18/11/2026 (INC-2026-11-18-01): o agregado deixou de cortar em 500
+  // (Aura-backend#1085) e um grupo tem ~1.500 produtos. Página de 20 como a
+  // lista de uma empresa, para não desenhar tudo de uma vez.
+  const { paginated: paginaAgg, page: pagAgg, totalPages: totPagAgg, total: totAgg, goTo: irAgg } =
+    usePagination(ordenados, PAGE_SIZE, search + "|" + ordemVista + "|loja:" + lojaConsolidado);
 
   const linkedCount = groups.filter((g: AggregatedProduct) => g.is_linked).length;
   const totalUnits = groups.reduce((acc: number, g: AggregatedProduct) => acc + g.total_stock, 0);
@@ -261,6 +294,10 @@ function AggregatedView() {
         <OrdenarBarra value={ordemVista} onChange={trocarOrdem} opcoes={consulta ? ordensSemPreco(ORDENS_CONSOLIDADO) : ORDENS_CONSOLIDADO} />
       </ScrollView>
 
+      {ctxLojas && (
+        <FiltroDeLoja ctx={ctxLojas} value={lojaConsolidado} onChange={setLojaConsolidado} testIDBase="estoque-consolidado" />
+      )}
+
       {filtered.length === 0 && (
         <View style={{ alignItems: "center", paddingVertical: 40 }}>
           <Text style={{ fontSize: 13, color: Colors.ink3 }}>
@@ -270,8 +307,8 @@ function AggregatedView() {
       )}
 
       <View style={s.listCard}>
-        {ordenados.map((g: AggregatedProduct) => (
-          <View key={g.group_key} style={agg.row}>
+        {paginaAgg.map((g: AggregatedProduct) => (
+          <View key={g.group_key} style={agg.row} testID={"estoque-consolidado-item-" + g.group_key}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={agg.nameLine}>
                 <Text style={agg.name} numberOfLines={1}>{g.name}</Text>
@@ -280,6 +317,10 @@ function AggregatedView() {
                     <Text style={agg.linkedBadgeText}>{"🔗 " + g.company_count + " CNPJs"}</Text>
                   </View>
                 )}
+                {/* Vinculado já lista cada loja nos chips de baixo. */}
+                {!g.is_linked && ctxLojas && g.items && g.items[0] ? (
+                  <SeloDaLoja nome={nomeDaLojaDona(ctxLojas, g.items[0].company_id)} testID={"estoque-consolidado-loja-do-" + g.group_key} />
+                ) : null}
               </View>
               <Text style={agg.meta}>
                 {g.master_sku ? "Código: " + g.master_sku : (g.sku || g.barcode || "Sem código")}
@@ -312,6 +353,7 @@ function AggregatedView() {
           </View>
         ))}
       </View>
+      <Pagination page={pagAgg} totalPages={totPagAgg} total={totAgg} pageSize={PAGE_SIZE} onPage={irAgg} />
     </View>
   );
 }
@@ -558,22 +600,33 @@ export default function EstoqueScreen() {
   // Resolvidos todos, o filtro se desliga sozinho (o chip some junto).
   const filtroNfseAtivo = soFaltaNfse && semCodigoNfse.length > 0;
 
+  // 18/11/2026 (INC-2026-11-18-01): null fora de grupo, no grupo sem
+  // compartilhamento e no backend antigo — nada muda nesses casos.
+  const ctxLojas = useMemo(
+    () => contextoDeLojas(availableCompanies, company?.id, products.map(lojaDonaDoProduto)),
+    [availableCompanies, company?.id, products],
+  );
+  const [lojaEstoque, setLojaEstoque] = useFiltroDeLoja("estoque", company?.id, ctxLojas);
+  // 24/11/2026: nome local diferente do nomeDaLojaDe de utils/nomeDaLoja (o main
+  // usa os dois na mesma tela; com o mesmo nome a tela quebrava ao abrir).
+  const seloDaLojaDe = ctxLojas ? (p: Product) => nomeDaLojaDona(ctxLojas, lojaDonaDoProduto(p)) : undefined;
+
   const filtered = useMemo(() => {
     const q = (search || "").trim();
-    return products.filter(p => {
+    return filtrarPorLoja(products, ctxLojas, lojaEstoque, lojaDonaDoProduto).filter(p => {
       const matchSearch = productMatchesSearch(p, q);
       const matchCat = effectiveCats.length === 0 || effectiveCats.includes(p.category);
       const matchNfse = !filtroNfseAtivo || faltaCodigoNfse(p, true);
       return matchSearch && matchCat && matchNfse;
     });
-  }, [products, search, effectiveCats, filtroNfseAtivo]);
+  }, [products, search, effectiveCats, filtroNfseAtivo, ctxLojas, lojaEstoque]);
 
   const ordemVista = consulta ? ordemSemPreco(sortOrder, "recent") : sortOrder;
   const sorted = useMemo(() => ordenarProdutos(filtered, ordemVista), [filtered, ordemVista]);
 
   // Pagination key inclui catsMulti pra resetar página quando user
   // troca categorias no wide layout (multi-select dropdown).
-  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder + (filtroNfseAtivo ? "|nfse" : ""));
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder + (filtroNfseAtivo ? "|nfse" : "") + "|loja:" + lojaEstoque);
   const lowStock = products.filter(p => p.stock <= p.minStock && p.unit !== "srv");
   const valorEstoque = resumoValorEstoque(products);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
@@ -1217,6 +1270,11 @@ export default function EstoqueScreen() {
               </>
             )}
 
+            {/* 18/11/2026 (INC-2026-11-18-01): só quando a lista mistura lojas do grupo */}
+            {ctxLojas && (
+              <FiltroDeLoja ctx={ctxLojas} value={lojaEstoque} onChange={setLojaEstoque} testIDBase="estoque" />
+            )}
+
             {/* 10/11/2026: filtro rápido da NFS-e — só para quem emite e tem serviço sem código */}
             {semCodigoNfse.length > 0 && (
               <View style={{ marginBottom: 12 } as any}>
@@ -1270,6 +1328,7 @@ export default function EstoqueScreen() {
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
+                    nomeDaLojaDe={seloDaLojaDe}
                   />
                 ) : (
                   <ProductGridWeb
@@ -1282,6 +1341,7 @@ export default function EstoqueScreen() {
                     onSelect={toggleBulkSelect}
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
+                    nomeDaLojaDe={seloDaLojaDe}
                   />
                 )}
               </View>
@@ -1301,6 +1361,7 @@ export default function EstoqueScreen() {
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
+                    nomeDaLoja={seloDaLojaDe ? seloDaLojaDe(p) : null}
                   />
                 ))}
                 {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}

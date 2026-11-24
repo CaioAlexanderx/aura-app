@@ -204,6 +204,11 @@ export type OticaSettings = {
   wa_ready_auto: boolean;
   wa_adaptation_auto: boolean;
   wa_revision_auto: boolean;
+  // p-207 (23/11/2026): termos da venda, escritos pela LOJA e impressos nas
+  // duas vias da OS. Opcional de propósito: só existe quando o servidor
+  // já guarda a chave (utils/oticaTermos.ts, termosAceitos). Fora dos
+  // defaults pelo mesmo motivo: o app não inventa a chave.
+  sale_terms?: string;
 };
 
 export const OTICA_SETTINGS_DEFAULTS: OticaSettings = {

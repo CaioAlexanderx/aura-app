@@ -96,6 +96,10 @@ export type Product = {
   // personalização só grava no produto da própria empresa. null = backend
   // não mandou.
   ownerCompanyId?: string | null;
+  // 18/11/2026 (INC-2026-11-18-01): a loja dona do item no grupo, para o
+  // filtro e o selo "Loja" do Estoque e das Etiquetas (utils/lojaDona).
+  // O GET /products manda `stock_company_id`; null = backend não mandou.
+  lojaDonaId?: string | null;
   // 17/11/2026 (Pedido, A4): peças separadas em pedido do balcão (GET /products,
   // Aura-backend#1072). Ausentes = backend sem a trava: nada muda.
   reservedQty?: number;

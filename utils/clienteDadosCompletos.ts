@@ -50,8 +50,40 @@ export function camposExtrasAceitos(resposta: any): CampoExtra[] {
 
 const soDigitos = (v: string | null | undefined) => String(v ?? "").replace(/\D/g, "");
 
-/** CPF (ou o CNPJ que já estava no cadastro) com a máscara certa. */
+// ─── Documento mascarado da lista ────────────────────────────
+//
+// 24/11/2026 (Aura-backend#1099): a LISTA de clientes (GET /companies/:id/
+// customers e GET /me/customers) devolve CPF/CNPJ e RG MASCARADOS
+// ("***.***.247-25", "***4-7") com `docs_masked: true`. O valor inteiro só
+// sai no GET /companies/:id/customers/:cid, que a ficha aberta e o
+// formulário de edição usam (hooks/useDocumentosDoCliente.ts).
+//
+// Regra de ouro: valor com `*` NUNCA vai para o servidor — gravaria a
+// máscara no lugar do documento (ou, tirando os não-dígitos, só o fim dele).
+// Backend antigo (sem docs_masked, documento inteiro na lista) segue igual.
+
+/** O valor é a máscara da lista (tem `*`), não o documento de verdade. */
+export function temMascara(v: string | null | undefined): boolean {
+  return String(v ?? "").includes("*");
+}
+
+/**
+ * O cadastro veio da lista com CPF ou RG escondido e precisa do GET /:cid
+ * para mostrar ou editar o documento inteiro. Com `docs_masked` mas sem
+ * documento nenhum, não há o que buscar (vazio continua vazio).
+ */
+export function precisaDosDocumentosInteiros(
+  c: { docsMasked?: boolean; cpf?: string | null; rg?: string | null } | null | undefined,
+): boolean {
+  if (!c) return false;
+  if (temMascara(c.cpf) || temMascara(c.rg)) return true;
+  return c.docsMasked === true && !!(String(c.cpf ?? "").trim() || String(c.rg ?? "").trim());
+}
+
+/** CPF (ou o CNPJ que já estava no cadastro) com a máscara certa. A máscara
+ *  da lista ("***.***.247-25") já vem formatada e sai como veio. */
 export function formatarDocumento(v: string | null | undefined): string {
+  if (temMascara(v)) return String(v).trim();
   return maskCpfCnpj(soDigitos(v));
 }
 
@@ -69,7 +101,8 @@ export function erroDoCpf(v: string | null | undefined): string | null {
   return "Confira o documento: CPF tem 11 números.";
 }
 
-/** Só dígitos para a API; vazio vira null (apaga o documento). */
+/** Só dígitos para a API; vazio vira null (apaga o documento). Não passe
+ *  aqui um valor com `*` (temMascara): quem monta o corpo já o deixa de fora. */
 export function cpfParaApi(v: string | null | undefined): string | null {
   return soDigitos(v) || null;
 }
