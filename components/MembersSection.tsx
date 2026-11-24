@@ -1,5 +1,5 @@
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput,
   ScrollView, Switch, Linking, Platform, ActivityIndicator,
@@ -18,17 +18,46 @@ import { alternarPermissao, custosPorPadrao } from "@/utils/estoqueConsulta";
 import { personalizadosAtivo } from "@/utils/personalizados";
 import { usePersonalizadosLiberado } from "@/hooks/usePersonalizadosLiberado";
 import { ContratarAcessoBotao } from "@/components/ContratarAcessoBotao";
+import { computeVisibleModules, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
 
 // ============================================================
 // CONSTANTS
 // ============================================================
 
-const MODULE_GROUPS = [
+// 24/11/2026 (hotfix, pedido do Caio): "a ideia do toggle dos funcionários é
+// ter todas as janelas disponíveis para a loja escolher o que o funcionário
+// vai ver". Toda chave de PERM_TO_MODULES (hooks/useVisibleModules.ts) que
+// abre tela tem um interruptor aqui, ou está em PERMISSOES_SEM_TOGGLE com o
+// motivo. O teste __tests__/togglesDaEquipe.test.tsx segura a paridade.
+//
+// Só aparece o que a loja tem (togglesVisiveis): o mesmo critério do menu
+// (MODULE_PLAN_MAP + module_overrides, via computeVisibleModules) e a frente
+// ligada (onlyWhen). No Essencial o que o plano não tem some, sem cadeado.
+// hintSe: a dica muda quando a loja tem a tela extra que a chave também abre
+// (ex.: Crediário dentro de Vendas, só do Negócio em diante).
+type ToggleDaEquipe = {
+  key: string;
+  label: string;
+  hint: string;
+  onlyWhen?: "otica" | "matcon" | "personalizados";
+  derived?: boolean;
+  hintSe?: { mod: string; hint: string };
+};
+type GrupoDeToggles = { label: string; modules: ToggleDaEquipe[] };
+
+const MODULE_GROUPS: GrupoDeToggles[] = [
   {
     label: "Operação",
     modules: [
       { key: "painel",   label: "Painel",         hint: "Visão geral do negócio (dashboard)" },
       { key: "pdv",      label: "Caixa (PDV)",    hint: "Vender, abrir e fechar caixa" },
+      // 24/11/2026 (hotfix) — a chave "vendas" existe desde 15/05/2026
+      // (PERM_TO_MODULES: vendas, crediario, crediario.config, vendas.pedidos)
+      // mas não tinha interruptor: funcionário novo nunca via Vendas
+      // (caso Finesse). Desligada por padrão, como toda chave nova: quem já é
+      // membro continua vendo exatamente o que via.
+      { key: "vendas",   label: "Vendas",         hint: "Histórico de vendas, cancelamento e fechamentos de caixa",
+        hintSe: { mod: "crediario", hint: "Histórico de vendas, cancelamento, fechamentos de caixa e Crediário" } },
       { key: "estoque",  label: "Estoque",        hint: "Cadastrar e ajustar produtos" },
       // 30/10/2026 — variação da tela Estoque (utils/estoqueConsulta.ts). As
       // duas chaves se excluem no seletor.
@@ -65,6 +94,15 @@ const MODULE_GROUPS = [
     ],
   },
   {
+    // 24/11/2026 (hotfix) — "agentes" (agentes + hub_social) tinha permissão
+    // desde 15/05/2026 sem interruptor. Mesmo nome da seção do menu. Plano
+    // Expansão: nos outros planos o grupo inteiro some.
+    label: "Crescimento",
+    modules: [
+      { key: "agentes",   label: "Agentes",       hint: "Trabalho automático dos agentes e atendimento nas redes sociais" },
+    ],
+  },
+  {
     label: "Administração",
     modules: [
       { key: "configuracoes", label: "Configurações", hint: "Empresa, equipe, integrações — acesso administrativo" },
@@ -75,9 +113,47 @@ const MODULE_LABELS = Object.fromEntries(
   MODULE_GROUPS.flatMap(g => g.modules).map(m => [m.key, m.label])
 ) as Record<string, string>;
 
+// Chaves de PERM_TO_MODULES que ficam SEM interruptor, com o motivo. Nascer
+// chave nova em PERM_TO_MODULES sem entrar em MODULE_GROUPS nem aqui quebra o
+// teste de paridade.
+const PERMISSOES_SEM_TOGGLE: Record<string, string> = {
+  // A loja Food nunca chega a esta tela: app/_layout manda o (tabs) para o
+  // shell /food, que não tem Equipe. Food está parado (sem página nem venda).
+  "food.access": "loja Food não abre a tela Equipe (shell /food)",
+  // O shell do dojô ainda não filtra DOJO_NAV pelas chaves karate_dojo.*
+  // (TODO F2b em components/karate/DojoShell.tsx) e o karatê também sai do
+  // (tabs) pelo app/_layout: a chave não abre nem esconde tela nenhuma hoje.
+  "karate_dojo.access": "shell do dojô ainda não lê a chave (DojoShell, F2b)",
+};
+
+// Filtro puro do que o seletor mostra. peloPlano = computeVisibleModules(
+// plano, module_overrides, null), o mesmo conjunto que decide o menu do
+// dono. A chave aparece se ao menos uma tela que ela abre está no plano;
+// chave sem tela (derivada, ex.: custos) segue sempre. Grupo vazio some.
+function togglesVisiveis(peloPlano: Set<string>, frentes: Record<string, boolean>): GrupoDeToggles[] {
+  return MODULE_GROUPS
+    .map(group => ({
+      label: group.label,
+      modules: group.modules
+        .filter(m => !m.onlyWhen || frentes[m.onlyWhen] === true)
+        .filter(m => {
+          const telas = PERM_TO_MODULES[m.key];
+          return !telas || telas.some(t => peloPlano.has(t));
+        })
+        .map(m => (m.hintSe && peloPlano.has(m.hintSe.mod) ? { ...m, hint: m.hintSe.hint } : m)),
+    }))
+    .filter(group => group.modules.length > 0);
+}
+
+// 24/11/2026 (hotfix) — o Gerente ("acesso amplo, exceto Configs") ganha
+// Vendas: desde 15/05/2026 o Caixa (pdv) não leva mais a tela Vendas junto, e
+// o modelo ficou sem ela. O modelo Caixa NÃO ganha: Vendas cancela qualquer
+// venda (POST /sales/:id/cancel não pede permissão além do acesso à loja) e
+// mostra o total da loja; o lojista liga em um toque se quiser. Modelo só
+// vale para convite novo: ninguém que já é membro muda.
 const BUILT_IN_TEMPLATES = [
   { key: "caixa",    label: "Caixa",        description: "Painel + Caixa + Clientes",       icon: "🛒", role_label: "Caixa",       permissions: { painel: true, pdv: true, clientes: true } as Record<string, boolean> },
-  { key: "gerente",  label: "Gerente",      description: "Acesso amplo, exceto Configs",    icon: "👔", role_label: "Gerente",     permissions: { painel: true, pdv: true, estoque: true, clientes: true, financeiro: true, relatorios: true, folha: true } as Record<string, boolean> },
+  { key: "gerente",  label: "Gerente",      description: "Acesso amplo, exceto Configs",    icon: "👔", role_label: "Gerente",     permissions: { painel: true, pdv: true, vendas: true, estoque: true, clientes: true, financeiro: true, relatorios: true, folha: true } as Record<string, boolean> },
   { key: "analista", label: "Analista",     description: "Painel + Financeiro + Relatórios", icon: "📊", role_label: "Analista",    permissions: { painel: true, financeiro: true, relatorios: true } as Record<string, boolean> },
   // 30/10/2026 — painel: false porque, ausente, o Painel fica liberado
   // (useVisibleModules) e ele mostra faturamento.
@@ -217,6 +293,7 @@ function ModuleToggleRow({ moduleKey, label, hint, value, onToggle }: {
         <Text style={s.modHint}>{hint}</Text>
       </View>
       <Switch
+        testID={"toggle-" + moduleKey}
         value={value}
         onValueChange={onToggle}
         trackColor={{ true: Colors.green, false: Colors.bg4 }}
@@ -249,20 +326,28 @@ function ModuleGroupSelector({ value, onChange }: {
   const personalizadosLiberadoAqui = usePersonalizadosLiberado();
   const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva, personalizadosLiberadoAqui);
   const TOGGLE_ON: Record<string, boolean> = { otica: oticaOn, matcon: matconOn, personalizados: personalizadosOn };
+  // 24/11/2026 (hotfix) — plano e module_overrides da loja, o mesmo critério
+  // do menu. O MembersSection refaz o /auth/me ao montar (plano stale no JWT).
+  const plano = useAuthStore((st) => st.company?.plan);
+  const overrides = useAuthStore((st) => (st.company as any)?.module_overrides as Record<string, boolean> | undefined);
+  const grupos = useMemo(
+    () => togglesVisiveis(computeVisibleModules(plano, overrides, null), TOGGLE_ON),
+    [plano, overrides, oticaOn, matconOn, personalizadosOn],
+  );
   return (
     <View style={{ gap: 12 }}>
-      {MODULE_GROUPS.map(group => (
+      {grupos.map(group => (
         <View key={group.label}>
           <Text style={s.groupHeader}>{group.label}</Text>
           <View style={s.groupBody}>
-            {group.modules.filter(m => !(m as any).onlyWhen || TOGGLE_ON[(m as any).onlyWhen] === true).map(m => (
+            {group.modules.map(m => (
               <ModuleToggleRow
                 key={m.key}
                 moduleKey={m.key}
                 label={m.label}
                 hint={m.hint}
-                value={(m as any).derived ? efetivo(value, m.key) : !!value[m.key]}
-                onToggle={() => onChange((m as any).derived
+                value={m.derived ? efetivo(value, m.key) : !!value[m.key]}
+                onToggle={() => onChange(m.derived
                   ? { ...value, [m.key]: !efetivo(value, m.key) }
                   : alternarPermissao(value, m.key))}
               />
@@ -1048,6 +1133,14 @@ export function MembersSection() {
   } = useMembers();
   const { customTemplates, createTemplate, isCreating, deleteTemplate } = useMemberTemplates();
 
+  // 24/11/2026 (hotfix) — os interruptores dependem do plano da loja; o plano
+  // do JWT pode estar velho (armadilha 1 do CLAUDE.md). Refaz o /auth/me uma
+  // vez ao montar, como o Crediário e os Personalizados.
+  useEffect(() => {
+    const refreshMe = useAuthStore.getState().refreshMe;
+    if (typeof refreshMe === "function") refreshMe().catch(() => {});
+  }, []);
+
   const [wizardOpen, setWizardOpen] = useState(false);
   const inviterName = (user as any)?.name || (user as any)?.full_name || undefined;
   const companyName = nomeDaLojaDe(company as any) || "Aura";
@@ -1328,4 +1421,6 @@ const s = StyleSheet.create({
   billingTextOver:  { fontSize: 11, color: Colors.red   || "#ef4444", fontWeight: "600", textAlign: "center" },
 });
 
+// Exportados para os testes (__tests__/togglesDaEquipe.test.tsx).
+export { MODULE_GROUPS, PERMISSOES_SEM_TOGGLE, BUILT_IN_TEMPLATES, togglesVisiveis, ModuleGroupSelector };
 export default MembersSection;
