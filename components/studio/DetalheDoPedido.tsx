@@ -15,6 +15,11 @@
 // 25/11/2026: `voltarEtapa` (só o Negócio passa) põe o "Voltar para …" ao
 // lado do avançar, pela mesma rota e o mesmo recarregar. Sem a prop, o
 // /studio não muda.
+//
+// 25/11/2026 (p-185, D6 do Caio): `faltaReceber` (só o Negócio passa) mostra
+// "Falta receber R$ X" com "Recebi" no pedido de orçamento, e o avançar para
+// Entregue com dinheiro faltando pergunta antes (AvisoFaltaReceber). Só com
+// os campos orcamento_* do backend; sem a prop ou sem os campos, nada muda.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import {
@@ -49,6 +54,10 @@ import { nomeDaCor } from "@/components/studio/nomeDaCor";
 import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
 import { BotaoVoltarEtapa } from "@/components/personalizados/BotaoVoltarEtapa";
+import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
+import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
+import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
+import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
 
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -446,6 +455,11 @@ export type DetalheDoPedidoProps = {
    * avançar aparece. Padrão: false (o /studio de sempre).
    */
   voltarEtapa?: boolean;
+  /**
+   * p-185: "Falta receber R$ X" e a baixa do pedido de orçamento, e o aviso
+   * ao entregar com dinheiro faltando. Padrão: false (o /studio de sempre).
+   */
+  faltaReceber?: boolean;
 };
 
 const TRILHA_DO_STUDIO = (numero: string): ItemDaTrilha[] => [
@@ -461,6 +475,7 @@ export function DetalheDoPedido({
   rotaDaFicha = FICHA_DO_STUDIO,
   acoesDaEtapa,
   voltarEtapa = false,
+  faltaReceber = false,
 }: DetalheDoPedidoProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -485,6 +500,10 @@ export function DetalheDoPedido({
   // FIX (bug #6 QA): customization_config por product_id, pra renderizar
   // PersonalizationPreview + rótulos legíveis em vez de JSON cru.
   const [configByProduct, setConfigByProduct] = useState<Record<string, CustomizationConfig | null>>({});
+  // p-185: aviso ao entregar com dinheiro faltando, e a versão do bloco
+  // "Sinal e saldo" (recarrega os marcos depois da baixa).
+  const [avisoAberto, setAvisoAberto] = useState(false);
+  const [versaoDosMarcos, setVersaoDosMarcos] = useState(0);
 
   const load = useCallback(async () => {
     // FIX (bug #14 QA): return antes do setLoading(false) deixava o
@@ -510,6 +529,10 @@ export function DetalheDoPedido({
   // avançar status e voltar podia mostrar dado stale. useFocusEffect cobre
   // mount inicial + toda vez que a tela ganha foco de novo.
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const receber = useReceberDoOrcamento(company?.id, {
+    onSucesso: () => { setVersaoDosMarcos((v) => v + 1); load(); },
+  });
 
   // Carrega customization_config de cada produto personalizado no pedido
   // (mesmo endpoint usado em CollectCustomizationModal) pra dar nome/tipo
@@ -586,6 +609,10 @@ export function DetalheDoPedido({
     if (!cur) return;
     const next = NEXT[cur];
     if (!next) return;
+    if (faltaReceber && next === "delivered" && faltaReceberDoOrcamento(data.order) !== null) {
+      setAvisoAberto(true);
+      return;
+    }
     // Gate removido do FE — backend decide (P1). doAdvance trata 409.
     doAdvance(next);
   };
@@ -625,6 +652,7 @@ export function DetalheDoPedido({
   const statusCol = status ? colorStudioStatus(status, isDark) : { bg: tk.bgSoft, fg: tk.ink3 };
   const next = status ? NEXT[status] : null;
   const lastApproval = approvals?.[0] || null;
+  const falta = faltaReceber ? faltaReceberDoOrcamento(order) : null;
 
   // 26/09/2026 (A1 do QA da lojista, P0): pagamento do pedido da vitrine.
   // Enquanto pede ação (Pix a confirmar, comprovante a conferir), o bloco
@@ -707,6 +735,21 @@ export function DetalheDoPedido({
             </Pressable>
           ) : null}
         </View>
+
+        {falta !== null ? (
+          <View style={s.faltaRow} testID="detalhe-falta-receber">
+            <Text style={s.faltaTxt}>Falta receber <Text style={s.faltaValor}>{reais(falta)}</Text></Text>
+            <Pressable
+              onPress={() => receber.abrir(order)}
+              style={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Registrar o recebimento de ${order.customer_name || numeroDoPedido(order)}`}
+              testID="btn-receber-orcamento"
+            >
+              <Text style={[s.actionBtnTxt, { color: tk.successInk }]}>Recebi</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {pagamentoNoTopo ? blocoPagamento : null}
 
@@ -798,6 +841,7 @@ export function DetalheDoPedido({
 
         {company?.id ? (
           <PaymentCard
+            key={`marcos-${versaoDosMarcos}`}
             orderId={oid}
             companyId={company.id}
             depositRequired={order.deposit_required}
@@ -820,6 +864,19 @@ export function DetalheDoPedido({
           />
         )}
       </Modal>
+
+      {faltaReceber ? (
+        <>
+          <RegistrarPagamentoSheet controller={receber} formas={FORMAS_DO_ORCAMENTO} valorFixo rotuloDoValor="Falta receber" />
+          <AvisoFaltaReceber
+            falta={avisoAberto ? falta : null}
+            idDeTeste="detalhe-aviso-falta"
+            onFechar={() => setAvisoAberto(false)}
+            onEntregar={() => { setAvisoAberto(false); doAdvance("delivered"); }}
+            onReceber={() => { setAvisoAberto(false); receber.abrir(order, () => doAdvance("delivered")); }}
+          />
+        </>
+      ) : null}
     </StudioScreen>
   );
 }
@@ -861,6 +918,9 @@ function buildStyles(t: StudioPalette) {
   referenciaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6, alignSelf: "flex-start", minHeight: 24 },
   referenciaTxt: { color: t.primary, fontSize: 12, fontWeight: "700", textDecorationLine: "underline" },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  faltaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 },
+  faltaTxt: { fontSize: 13, color: t.ink3 },
+  faltaValor: { fontWeight: "700", color: t.ink, fontVariant: ["tabular-nums"] },
   link: { color: t.primary, fontWeight: "600", fontSize: 12 },
   });
 }

@@ -45,7 +45,15 @@
 // "Pronto" pede confirmação. Recusa do backend (marketplace com a arte já
 // recolhida) aparece no toast com a mensagem dele.
 //
-// Regras sem tela: components/personalizados/regrasDaProducao.ts.
+// 25/11/2026 (p-185, D6 do Caio: "o saldo é baixado na Produção"): pedido de
+// orçamento com dinheiro faltando mostra "Falta receber R$ X" e "Recebi" (a
+// folha da baixa do saldo, com as formas do Caixa). "Marcar como entregue"
+// com falta pergunta antes (AvisoFaltaReceber): "Receber agora" baixa e
+// entrega; "Entregar mesmo assim" entrega. Só com os campos orcamento_* do
+// backend (Aura-backend#1106, trava do financeiro): sem eles, o de antes.
+//
+// Regras sem tela: components/personalizados/regrasDaProducao.ts e
+// regrasDoReceber.ts.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
@@ -68,6 +76,9 @@ import {
 } from "@/components/personalizados/regrasDaProducao";
 import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
 import { BotaoVoltarEtapa } from "@/components/personalizados/BotaoVoltarEtapa";
+import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
+import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
+import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
 
 type Props = {
   companyId: string;
@@ -96,6 +107,8 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
   const [recolherDe, setRecolherDe] = useState<string | null>(null);
   const [vista, setVista] = useState<Vista>("fila");
   const [saida, setSaida] = useState<Saida>("delivered");
+  // p-185: o pedido de orçamento que ia ser entregue com dinheiro faltando.
+  const [avisoDe, setAvisoDe] = useState<StudioOrder | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -156,11 +169,17 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
 
   const avancar = useCallback((pedido: StudioOrder) => {
     const proxima = PROXIMA_ETAPA[etapaDe(pedido)];
-    if (proxima) mover(pedido, proxima);
+    if (!proxima) return;
+    if (proxima === "delivered" && faltaReceberDoOrcamento(pedido) !== null) {
+      setAvisoDe(pedido);
+      return;
+    }
+    mover(pedido, proxima);
   }, [mover]);
 
   const { cobrar, cobrandoId } = useCobrarSaldo(companyId);
   const baixa = useRegistrarPagamento(companyId, { onSucesso: carregar });
+  const receber = useReceberDoOrcamento(companyId, { onSucesso: carregar });
 
   const cartao = (o: StudioOrder, etapa: Etapa) => (
     <Cartao
@@ -184,6 +203,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
         orderId: o.id, installmentId: o.balance_installment_id, customerName: o.customer_name,
         amount: Number(o.balance_amount) || 0, dueDate: o.balance_due_date, status: o.balance_status,
       })}
+      onReceberOrcamento={() => receber.abrir(o)}
     />
   );
 
@@ -340,6 +360,24 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
           monta em document.body. */}
       <RegistrarPagamentoSheet controller={baixa} />
 
+      {/* p-185: o que falta do pedido de orçamento (mesma folha, valor fixo). */}
+      <RegistrarPagamentoSheet controller={receber} formas={FORMAS_DO_ORCAMENTO} valorFixo rotuloDoValor="Falta receber" />
+      <AvisoFaltaReceber
+        falta={avisoDe ? faltaReceberDoOrcamento(avisoDe) : null}
+        idDeTeste="producao-aviso-falta"
+        onFechar={() => setAvisoDe(null)}
+        onEntregar={() => {
+          const p = avisoDe;
+          setAvisoDe(null);
+          if (p) mover(p, "delivered");
+        }}
+        onReceber={() => {
+          const p = avisoDe;
+          setAvisoDe(null);
+          if (p) receber.abrir(p, () => mover(p, "delivered"));
+        }}
+      />
+
       {/* Arte e texto das peças: ResponsiveSheet (Modal, em document.body). */}
       <FolhaDeRecolher
         companyId={companyId}
@@ -401,7 +439,7 @@ function LinhaSaida({
 }
 
 function Cartao({
-  o, etapa, t, s, destacado, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, cobrando,
+  o, etapa, t, s, destacado, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, onReceberOrcamento, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
@@ -416,6 +454,8 @@ function Cartao({
   onAbrir?: (id: string) => void;
   onCobrar: () => void;
   onRecebi: () => void;
+  /** p-185: abre a baixa do que falta do pedido de orçamento. */
+  onReceberOrcamento: () => void;
   cobrando: boolean;
 }) {
   const nome = o.customer_name || o.display_name || "Sem cadastro";
@@ -423,6 +463,8 @@ function Cartao({
   const pix = situacaoDoPixNoCartao(o as any);
   const origem = origemDoPedido(o);
   const temSaldo = !!o.balance_installment_id && o.balance_amount != null;
+  // p-185: só com os campos do backend; sem eles, o cartão de antes.
+  const faltaReceber = faltaReceberDoOrcamento(o);
   const naArte = etapa.key === "pending_art";
   const naPersonalizacao = etapa.key === "awaiting_customization";
   // Duas ações na etapa: a principal é a da etapa, e o avançar fica discreto.
@@ -455,6 +497,11 @@ function Cartao({
         <Text style={s.meta} testID={`producao-saldo-${o.id}`}>
           Saldo <Text style={s.saldoValor}>{reais(o.balance_amount)}</Text>
           {o.balance_status === "overdue" ? " · vencido" : ""}
+        </Text>
+      ) : null}
+      {faltaReceber !== null ? (
+        <Text style={s.meta} testID={`producao-falta-receber-${o.id}`}>
+          Falta receber <Text style={s.saldoValor}>{reais(faltaReceber)}</Text>
         </Text>
       ) : null}
 
@@ -513,6 +560,17 @@ function Cartao({
               <Text style={[s.botaoNeutroTxt, { color: t.successInk }]}>Recebi</Text>
             </Pressable>
           </View>
+        ) : null}
+        {faltaReceber !== null ? (
+          <Pressable
+            style={s.botaoNeutro}
+            onPress={onReceberOrcamento}
+            accessibilityRole="button"
+            accessibilityLabel={`Registrar o recebimento de ${nome}`}
+            testID={`producao-receber-orcamento-${o.id}`}
+          >
+            <Text style={[s.botaoNeutroTxt, { color: t.successInk }]}>Recebi</Text>
+          </Pressable>
         ) : null}
         {/* Voltar uma etapa: discreto, por último. Some na primeira etapa. */}
         <BotaoVoltarEtapa
