@@ -57,6 +57,11 @@ import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
+import { AvisoDaData } from "./ficha/AvisoDaData";
+import {
+  avisoDaData, sugestaoDaPrimeiraParcela, ehPrimeiraParcelaNoPassado,
+  TEXTO_RENEGOCIAR_DATA_PASSADA, type AvisoDaData as AvisoDaDataTipo,
+} from "@/utils/crediarioDatas";
 import { TelefoneDaFicha } from "./ficha/TelefoneDaFicha";
 import { EditarClienteDaFicha } from "./ficha/EditarClienteDaFicha";
 import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
@@ -197,6 +202,9 @@ export function ClienteCrediarioModal({
   const [renegCount, setRenegCount] = useState(1);
   const [renegPerParcel, setRenegPerParcel] = useState("");
   const [renegFirstDue, setRenegFirstDue] = useState("");
+  // 24/11/2026: o backend recusou a 1ª parcela no passado (422
+  // FIRST_DUE_DATE_PAST) — o mesmo texto do bloqueio local, até mudar a data.
+  const [renegDataRecusada, setRenegDataRecusada] = useState(false);
 
   const [renegSubmitting, setRenegSubmitting] = useState(false);
 
@@ -340,6 +348,7 @@ export function ClienteCrediarioModal({
       setEditDueDateError("");
       setRenegScope(null);
       setRenegSubmitting(false);
+      setRenegDataRecusada(false);
       setPrintScope(null);
       setJuntarPre(null);
       setHistEvents([]);
@@ -635,7 +644,11 @@ export function ClienteCrediarioModal({
     const firstIso = scopeInst.length
       ? scopeInst.reduce((best, i) => (!best || new Date(i.due_date) < new Date(best) ? i.due_date : best), "" as string)
       : "";
-    setRenegFirstDue(firstIso ? formatIsoToBr(firstIso) : todayBrSp());
+    // 24/11/2026: nunca sugerir data no passado (caso real: renegociação em
+    // 23/11 com a parcela mais antiga de 22/11 nascia vencida). Regra em
+    // utils/crediarioDatas.ts: mesmo dia do mês, hoje ou depois.
+    setRenegFirstDue(formatIsoToBr(sugestaoDaPrimeiraParcela(firstIso || null)));
+    setRenegDataRecusada(false);
   }
 
   function setRenegCountSafe(n: number) {
@@ -667,6 +680,7 @@ export function ClienteCrediarioModal({
     if (renegCount < 1) { toast.error("Número de parcelas inválido"); return; }
     const iso = parseBrDate(renegFirstDue);
     if (!iso) { toast.error("Data da 1ª parcela inválida"); return; }
+    if (avisoDaData(renegFirstDue, "renegociar").bloqueia) return;
     if (!renegKeyRef.current) {
       renegKeyRef.current = "resched-" + companyId + "-" + customerId + "-"
         + (renegScope.accountId || "general") + "-" + Date.now()
@@ -697,6 +711,11 @@ export function ClienteCrediarioModal({
       // Movimentações recarrega ao abrir a aba (o "Atualizar" saiu na F1).
       setHistLoaded(false);
     } catch (err: any) {
+      if (ehPrimeiraParcelaNoPassado(err)) {
+        if (clienteAtualRef.current === pedidoDe) setRenegDataRecusada(true);
+        toast.error(TEXTO_RENEGOCIAR_DATA_PASSADA);
+        return;
+      }
       toast.error(err?.data?.error || "Não foi possível renegociar. Tente novamente.");
     } finally {
       if (clienteAtualRef.current === pedidoDe) setRenegSubmitting(false);
@@ -1028,6 +1047,13 @@ export function ClienteCrediarioModal({
 
   // Derivados do sheet de renegociacao (distribuicao identica ao backend).
   const renegTotalVal = parseAmount(renegTotal);
+  // 24/11/2026: data no passado não deixa confirmar (o 422 do backend também).
+  const avisoDaReneg: AvisoDaDataTipo = renegDataRecusada
+    ? { ...avisoDaData(renegFirstDue, "renegociar"), texto: TEXTO_RENEGOCIAR_DATA_PASSADA, tom: "erro", bloqueia: true }
+    : avisoDaData(renegFirstDue, "renegociar");
+  const renegBloqueado = renegTotalVal <= 0 || renegSubmitting || avisoDaReneg.bloqueia;
+  // Mudar a data: só avisa (corrigir carnê antigo para um dia passado vale).
+  const avisoDaMudanca = avisoDaData(editDueDateInput, "mudar");
   const renegBase = renegCount > 0 ? Math.floor((renegTotalVal / renegCount) * 100) / 100 : 0;
   const renegLast = +(renegTotalVal - renegBase * (renegCount - 1)).toFixed(2);
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
@@ -1767,9 +1793,15 @@ export function ClienteCrediarioModal({
               <Text style={[m.fieldLabel, { marginTop: 12 }]}>1ª parcela vence em</Text>
               <DateInput
                 value={renegFirstDue}
-                onChangeText={setRenegFirstDue}
+                onChangeText={v => { setRenegFirstDue(v); setRenegDataRecusada(false); }}
                 placeholder="dd/mm/aaaa"
                 style={m.dateInput}
+                testID="reneg-primeira-parcela"
+              />
+              <AvisoDaData
+                aviso={avisoDaReneg}
+                onUsarSugestao={v => { setRenegFirstDue(v); setRenegDataRecusada(false); }}
+                testID="reneg-primeira-parcela"
               />
 
               {/* 10/10/2026: a renegociação mexe num carnê só. Quem quer uma
@@ -1805,9 +1837,11 @@ export function ClienteCrediarioModal({
                     <Text style={[m.ctaTxt, { color: CorDaFicha.secundario }]}>Cancelar</Text>
                   </Pressable>
                   <Pressable
-                    style={[m.cta, { flex: 2 }, (renegTotalVal <= 0 || renegSubmitting) && { opacity: 0.5 }]}
+                    style={[m.cta, { flex: 2 }, renegBloqueado && { opacity: 0.5 }]}
                     onPress={confirmRenegociar}
-                    disabled={renegTotalVal <= 0 || renegSubmitting}
+                    disabled={renegBloqueado}
+                    accessibilityState={{ disabled: renegBloqueado }}
+                    testID="reneg-confirmar"
                   >
                     {renegSubmitting
                       ? <ActivityIndicator color="#fff" />
@@ -1875,9 +1909,17 @@ export function ClienteCrediarioModal({
                 placeholder="15/07/2026"
                 forceShowError={!!editDueDateError}
                 style={m.dateInput}
+                testID="mudar-data-campo"
               />
               {!!editDueDateError && (
                 <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }}>{editDueDateError}</Text>
+              )}
+              {!editDueDateError && (
+                <AvisoDaData
+                  aviso={avisoDaMudanca}
+                  onUsarSugestao={v => { setEditDueDateInput(v); setEditDueDateError(""); }}
+                  testID="mudar-data-campo"
+                />
               )}
               </ScrollView>
               <View style={m.panelFoot}>

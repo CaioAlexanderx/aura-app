@@ -41,6 +41,7 @@ import { Icon } from "@/components/Icon";
 import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
 import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
 import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
+import { TEXTO_PARCELA_A_CONFERIR } from "@/utils/crediarioDatas";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard, type InfoDaLinha } from "./CarneCard";
@@ -213,7 +214,10 @@ export function TabParcelas({
           diasDeAtraso > 0 ? `${diasDeAtraso} ${diasDeAtraso === 1 ? "dia" : "dias"} de atraso` : "",
         ].filter(Boolean).join(" · ")
       : toReview
-        ? "antes de o carnê ser cadastrado — confira se já foi paga"
+        // 24/11/2026: "a conferir" também nasce de data digitada errada
+        // (renegociação com a 1ª parcela no passado, ano esquecido) — a linha
+        // diz o que é e oferece o Mudar a data logo abaixo.
+        ? TEXTO_PARCELA_A_CONFERIR
         : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
     // QA 23/11/2026: o backend abate pela parcela mais antiga do carnê (não
     // dá para mirar uma parcela). Na 1ª linha "Receber" é esta; nas outras,
@@ -242,6 +246,7 @@ export function TabParcelas({
         atrasada={late}
         principal={indice === 0}
         onData={() => handleEditDueDateOpen(ins)}
+        aConferir={toReview}
         // 23/11/2026 (revisão da F4): o Receber da linha mira o carnê DELA —
         // quem toca Receber no carnê B espera abater o B. Antes ia para a
         // parcela mais antiga de qualquer carnê.
@@ -428,8 +433,10 @@ const c = StyleSheet.create({
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber }: {
+function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber, aConferir }: {
   numero: string; data: string; porque: string; valor: string;
+  /** Parcela "a conferir" (cadastrada depois do vencimento): link Mudar a data. */
+  aConferir?: boolean;
   /** O que o Receber preenche (pode incluir encargos das outras do carnê). */
   valorDoReceber?: string;
   /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
@@ -455,6 +462,17 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
           <Text style={l.lapis}>✎</Text>
         </Pressable>
         {!!porque && <Text style={l.porque}>{porque}</Text>}
+        {aConferir && (
+          <Pressable
+            onPress={onData}
+            style={({ pressed }: any) => [l.conferir, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Mudar a data da parcela ${numero}, a conferir`}
+            testID={`parcela-${numero}-conferir-data`}
+          >
+            <Text style={l.conferirT}>Mudar a data</Text>
+          </Pressable>
+        )}
       </View>
       <Text style={[l.valor, atrasada && { color: Colors.red }]}>{valor}</Text>
       <Pressable
@@ -500,6 +518,8 @@ const l = StyleSheet.create({
   dataT: { fontFamily: Fonts.body, fontSize: 12.5, color: Colors.ink },
   lapis: { fontFamily: Fonts.body, fontSize: 12, color: Colors.violet3 },
   porque: { fontFamily: Fonts.body, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 3 },
+  conferir: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
+  conferirT: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
   valor: { fontFamily: Fonts.mono, fontSize: 13.5, fontWeight: "500", color: Colors.ink, textAlign: "right", marginLeft: "auto" as any, fontVariant: ["tabular-nums"] as any },
   receber: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   receberP: { backgroundColor: Colors.violet },
