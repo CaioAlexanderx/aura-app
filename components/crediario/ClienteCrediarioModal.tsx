@@ -2347,7 +2347,7 @@ export function ClienteCrediarioModal({
         <>
           {trocarAberto && <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista" />}
           <View style={t.trocarCaixa} onLayout={(e) => setAlturaDaTroca(e.nativeEvent.layout.height)}>
-            <Collapsible open={trocarAberto} style={t.trocarLista}>
+            <Collapsible open={trocarAberto} style={t.trocarLista} desmontarFechado>
               <View style={{ height: alturaDaTroca }} testID="ficha-trocar-lista">
                 {listaLateral}
                 {ocupado && <TravaDaLista />}

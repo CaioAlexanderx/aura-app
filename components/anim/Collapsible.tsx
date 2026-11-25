@@ -7,14 +7,15 @@
 //
 // Uso: <Collapsible open={expanded}> ...conteúdo... </Collapsible>
 //
-// 25/11/2026 (movimento do crediário): anima ABRIR e FECHAR. Fechado, o
-// conteúdo NÃO fica na tela — antes ele ficava com altura 0 e os botões
-// escondidos recebiam Tab e Enter (QA 23/11; por isso o ParcelaRow e o
-// ConfirmGate deixaram de montá-lo fechado). Agora:
-//  · abrindo: monta e cresce até a altura medida;
-//  · fechando: o conteúdo fica inerte (sem toque, fora da leitura de tela,
-//    fora do Tab) enquanto encolhe e é desmontado no fim;
-//  · "menos movimento" no sistema: abre e fecha na hora.
+// 25/11/2026 (movimento do crediário): anima ABRIR e FECHAR, na curva do
+// app; "menos movimento" no sistema abre e fecha na hora. Fechado, o
+// conteúdo fica INERTE: sem toque, fora da leitura de tela e fora do Tab
+// (`inert` no web) — antes ele ficava com altura 0 e os botões escondidos
+// recebiam Tab e Enter (QA 23/11).
+//  · padrão: o conteúdo continua montado fechado (estado interno e dados
+//    das telas que usam a sanfona — financeiro, karatê, lançamento — ficam);
+//  · `desmontarFechado`: desmonta no fim da animação de fechar. Só para
+//    conteúdo sem estado próprio (menus, listas do crediário).
 // Se o conteúdo mudar de altura enquanto aberto, o onLayout atualiza a
 // medida e o container acompanha.
 // ============================================================
@@ -28,6 +29,9 @@ interface CollapsibleProps {
   style?:    StyleProp<ViewStyle>;
   duration?: number;
   testID?:   string;
+  /** Desmonta o conteúdo no fim da animação de fechar (padrão: fica montado
+   *  e inerte). */
+  desmontarFechado?: boolean;
 }
 
 /** Tira o conteúdo da leitura de tela (web e nativo); o toque sai pelo
@@ -39,12 +43,15 @@ const INERTE: any = {
   "aria-hidden": true,
 };
 
-export function Collapsible({ open, children, style, duration = Motion.slow, testID }: CollapsibleProps) {
+export function Collapsible({
+  open, children, style, duration = Motion.slow, testID, desmontarFechado = false,
+}: CollapsibleProps) {
   const menos = useMenosMovimento();
   const anim = useRef(new Animated.Value(open ? 1 : 0)).current;
   const [contentH, setContentH] = useState(0);
-  // Montado enquanto aberto e durante a animação de fechar.
-  const [montado, setMontado] = useState(open);
+  // Com `desmontarFechado`: montado enquanto aberto e durante a animação de
+  // fechar. Sem ela, sempre montado.
+  const [montado, setMontado] = useState(open || !desmontarFechado);
   if (open && !montado) setMontado(true);
 
   const caixaRef = useRef<any>(null);
@@ -59,15 +66,17 @@ export function Collapsible({ open, children, style, duration = Motion.slow, tes
     a.start();
     // Desmonta pelo relógio, não pelo fim do Animated: no Jest o Animated
     // termina na hora (AnimatedMock) e o tempo da saída deixaria de valer.
-    const fim = !open ? setTimeout(() => setMontado(false), duracao(duration, menos)) : null;
+    const fim = !open && desmontarFechado
+      ? setTimeout(() => setMontado(false), duracao(duration, menos))
+      : null;
     return () => {
       a.stop();
       if (fim) clearTimeout(fim);
     };
-  }, [open, anim, duration, menos]);
+  }, [open, anim, duration, menos, desmontarFechado]);
 
-  // Web: `inert` tira os botões do Tab enquanto encolhe (o RNW não repassa
-  // a prop, então vai direto no elemento).
+  // Web: `inert` tira os botões do Tab enquanto encolhe e fechado (o RNW não
+  // repassa a prop, então vai direto no elemento).
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const el = caixaRef.current as any;
@@ -82,8 +91,9 @@ export function Collapsible({ open, children, style, duration = Motion.slow, tes
   };
 
   const height = anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.max(contentH, 0)] });
-  // Com "menos movimento" fechar é na hora: nem um quadro do conteúdo.
-  const mostra = montado && (open || !menos);
+  // Com "menos movimento" e `desmontarFechado`, fechar é na hora: nem um
+  // quadro do conteúdo.
+  const mostra = !desmontarFechado || (montado && (open || !menos));
 
   return (
     <Animated.View

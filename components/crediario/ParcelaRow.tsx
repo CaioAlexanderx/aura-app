@@ -104,7 +104,7 @@ export function ParcelaRow({
           25/11/2026: o próprio Collapsible desmonta o conteúdo depois de
           fechar (e o deixa inerte enquanto fecha), então abre E fecha
           animado, com a seta. */}
-      <Collapsible open={expanded}>
+      <Collapsible open={expanded} desmontarFechado>
         {!!breakdown?.length && (
           <View style={s.breakdown}>
             {breakdown.map((l, i) => (

@@ -144,7 +144,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
 
       {/* 25/11/2026 (movimento): menu e "ver/ocultar" abrem e fecham em
           sanfona (280 ms); fechados, saem da tela (sem Tab escondido). */}
-      <Collapsible open={menu}>
+      <Collapsible open={menu} desmontarFechado>
         <View style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
           <ListaDoMenu itens={itensDoMenu} onEscolher={() => setMenu(false)} testID={`carne-${c.key}-menu`} />
         </View>
@@ -180,7 +180,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         </Pressable>
       )}
 
-      <Collapsible open={detalhe}>
+      <Collapsible open={detalhe} desmontarFechado>
         <View style={s.corpo} testID={`carne-${c.key}-corpo`}>
           {c.compras.length > 0 && (
             <View style={{ marginBottom: pagas.length > 0 ? 12 : 0 }}>

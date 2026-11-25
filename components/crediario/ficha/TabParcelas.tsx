@@ -353,7 +353,7 @@ export function TabParcelas({
             </Pressable>
           </View>
           {/* 25/11/2026 (movimento): sanfona de 280 ms para abrir e fechar. */}
-          <Collapsible open={verQuitados}>
+          <Collapsible open={verQuitados} desmontarFechado>
             {quitados.map(q => (
               <View key={q.key} style={c.done} testID="carne-quitado">
                 <Text style={c.doneK}>
