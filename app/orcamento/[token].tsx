@@ -45,6 +45,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { studioApi, type PublicQuote } from "@/services/studioApi";
 import { qtdComUnidade } from "@/utils/matconUnits";
+import { etiquetasDaPersonalizacao } from "@/components/studio/personalizacaoNoOrcamentoPublico";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 
 import { tipografiaDaLoja, cssDaVitrine } from "@/constants/fonts";
@@ -324,12 +325,9 @@ export default function OrcamentoPublico() {
             // Matcon não tem "Personalização" de item — é jargão de
             // encomenda sob medida, e o orçamento de material não tem
             // customization nenhuma.
-            const custEntries =
-              !isMatcon && it.customization && typeof it.customization === "object"
-                ? Object.entries(it.customization as Record<string, any>)
-                    .filter(([, v]) => v != null && String(v).trim() !== "")
-                    .slice(0, 4)
-                : [];
+            // 25/11/2026: rótulo do campo ("Nome: Ana") em vez do id, e
+            // imagem sem o endereço cru (personalizacaoNoOrcamentoPublico).
+            const custEntries = isMatcon ? [] : etiquetasDaPersonalizacao(it.customization, it.customization_fields);
             // Matcon mostra a unidade por extenso ("13,92 m²", "10 sacos") em vez do "N×"
             // de peça avulsa do Studio.
             const qtyLabel = isMatcon ? qtdComUnidade(it.quantity, it.unit) : it.quantity + "×";
@@ -344,13 +342,13 @@ export default function OrcamentoPublico() {
                 </View>
                 {custEntries.length > 0 && (
                   <View style={s.custWrap}>
-                    {custEntries.map(([k, v]) => (
-                      <View key={k} style={s.custChip}>
-                        {isHexColor(String(v)) ? (
-                          <View style={[s.custSwatch, { backgroundColor: String(v) }]} />
+                    {custEntries.map((e) => (
+                      <View key={e.chave} style={s.custChip} testID={"orcamento-personalizacao-" + e.chave}>
+                        {e.cor ? (
+                          <View style={[s.custSwatch, { backgroundColor: e.cor }]} />
                         ) : null}
                         <Text style={s.custChipTxt} numberOfLines={1}>
-                          {isHexColor(String(v)) ? k : `${k}: ${String(v).slice(0, 40)}`}
+                          {e.texto}
                         </Text>
                       </View>
                     ))}

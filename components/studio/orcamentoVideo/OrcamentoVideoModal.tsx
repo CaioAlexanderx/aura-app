@@ -217,6 +217,12 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
         setVideo(v);
         setGravacao("pronto");
         guardar(v);
+        // 25/11/2026: a foto da peça também, para ir junto do link do
+        // orçamento (a página do link não mostra a arte). Mesma foto do
+        // plano B sem vídeo, tirada do palco antes de fechar.
+        const still = await fotoDoPalco(palco, marca, comLogo).catch(() => null);
+        if (minha !== tentativa.current) return;
+        setFoto(still);
       } else {
         const f = await fotoDoPalco(palco, marca, comLogo);
         if (minha !== tentativa.current) return;
@@ -260,6 +266,13 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     return null;
   }, [video, foto, nomeDaLoja, quote.customer_name]);
   const compartilhaArquivo = podeCompartilharArquivo(arquivo);
+  // A foto da peça que vai junto do link do orçamento (25/11/2026): a
+  // mesma do canal de foto, gravada também quando o anexo é o vídeo.
+  const fotoDoLink = useMemo(() => {
+    if (!foto || typeof File === "undefined") return null;
+    return new File([foto], nomeDoArquivo(nomeDaLoja, quote.customer_name, foto.type === "image/png" ? "png" : "jpg"), { type: foto.type || "image/jpeg" });
+  }, [foto, nomeDaLoja, quote.customer_name]);
+  const compartilhaFotoDoLink = podeCompartilharArquivo(fotoDoLink);
   const linkConversa = linkDaConversa(telefone, texto);
   const [jaBaixou, setJaBaixou] = useState(false);
   const [canal, setCanal] = useState<Canal>("whatsapp");
@@ -296,15 +309,28 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     const nome = primeiroNome(quote.customer_name);
     return `${nome ? `Oi, ${nome}! ` : ""}Segue o seu orçamento${nomeDaLoja ? ` da ${nomeDaLoja}` : ""}: ${url}`;
   };
+  // 25/11/2026 (QA do Caio, 24/11): a página do link não mostra a arte, então
+  // a foto da peça vai junto, pelo MESMO caminho do canal de foto:
+  // compartilhar com arquivo onde existir (foto + texto com o link numa
+  // folha só); senão, ou se a folha não abrir, baixar a foto + abrir a
+  // conversa com o link escrito (a lojista arrasta a foto). Fechar a folha
+  // não marca nada: o link já está gerado e dá para tocar de novo.
   async function enviarLink() {
     setOcupado(true);
     try {
       const r = await studioApi.sendQuote(companyId, quote.id);
       onAtualizou(r);
       const url = r.quote_url;
-      const conversa = linkDaConversa(telefone, textoDoLink(url));
+      const mensagem = textoDoLink(url);
+      copyToClipboard(mensagem).catch(() => {});
+      if (fotoDoLink && compartilhaFotoDoLink) {
+        const res = await compartilharArquivo(fotoDoLink, mensagem);
+        if (res === "cancelado") return;
+        if (res === "enviado") { setEnviadoPor("link"); setPasso("enviado"); return; }
+      }
+      if (fotoDoLink) baixarArquivo(fotoDoLink, fotoDoLink.name);
+      const conversa = linkDaConversa(telefone, mensagem);
       if (conversa) abrirConversa(conversa);
-      copyToClipboard(textoDoLink(url)).catch(() => {});
       setEnviadoPor("link");
       setPasso("enviado");
     } catch (e: any) {
@@ -514,7 +540,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                     <View style={{ flex: 1, gap: 4 }}>
                       <Text style={s.opcaoTit}>Link do orçamento</Text>
                       <Text style={s.opcaoSub}>
-                        O cliente abre uma página com as peças e os valores e responde por lá: aceitar ou recusar. A conversa abre com o link escrito, e o link fica copiado.{quote.token ? " É o mesmo link que já foi enviado." : ""}
+                        O cliente abre uma página com as peças e os valores e responde por lá: aceitar ou recusar. A conversa abre com o link escrito, e o link fica copiado.{quote.token ? " É o mesmo link que já foi enviado." : ""}{fotoDoLink && compartilhaFotoDoLink ? " A foto e a mensagem vão juntas." : ""}
                       </Text>
                       {!telefoneDoCliente(telefone) && <Text style={[s.nota, { color: t.warningInk }]}>Sem WhatsApp com DDD: o link só fica copiado.</Text>}
                     </View>
@@ -586,7 +612,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
           {estreito && (passo === "enviado" || !info) ? null : <Text style={s.peInfo} numberOfLines={estreito ? 1 : 2}>{passo === "enviado" ? "" : info}</Text>}
           <View style={s.peAcoes}>
             {passo === "enviar" && canal === "link" && (
-              <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={enviarLink} disabled={ocupado} testID="enviar-link">
+              <Pressable style={[s.btnWa, (ocupado || gravando || carregandoPeca) && { opacity: 0.45 }]} onPress={enviarLink} disabled={ocupado || gravando || carregandoPeca} testID="enviar-link">
                 {ocupado ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="link" size={15} color="#fff" />}<Text style={s.btnPriTxt}>Enviar o link</Text>
               </Pressable>
             )}
