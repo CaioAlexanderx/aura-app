@@ -25,7 +25,6 @@ import { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ModalPop } from "@/components/anim";
 import { lerFormatoCarne, salvarFormatoCarne, type FormatoCarne } from "@/utils/crediarioCarne";
 import { m, CorDaFicha } from "./fichaStyles";
 
@@ -64,8 +63,9 @@ export function ImprimirCarnePanel({
   }
 
   return (
-    <View style={m.panel} testID="imprimir-carne-painel">
-      <ModalPop visible style={{ flex: 1 }}>
+    // 25/11/2026: a moldura (m.panel), a entrada e a saída animadas vêm do
+    // <Presenca> da ficha — o painel continua na tela enquanto sai.
+    <View style={{ flex: 1 }} testID="imprimir-carne-painel">
         <View style={m.panelHead}>
           <Pressable onPress={onBack} style={m.panelBack} accessibilityRole="button">
             <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -134,7 +134,6 @@ export function ImprimirCarnePanel({
             <Text style={m.ctaTxt}>Imprimir</Text>
           </Pressable>
         </View>
-      </ModalPop>
     </View>
   );
 }

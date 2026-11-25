@@ -17,7 +17,7 @@ import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { Collapsible } from "@/components/anim";
-import { Motion, webTransition } from "@/constants/motion";
+import { Motion, duracao, useMenosMovimento, webTransition } from "@/constants/motion";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -49,11 +49,12 @@ interface ParcelaRowProps {
 export function ParcelaRow({
   title, subtitle, amount, overdue, expanded, onToggle, breakdown, actions, onEditDate,
 }: ParcelaRowProps) {
+  const menos = useMenosMovimento();
   const chevron = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.timing(chevron, { toValue: expanded ? 1 : 0, duration: Motion.slow, useNativeDriver: false }).start();
-  }, [expanded, chevron]);
+    Animated.timing(chevron, { toValue: expanded ? 1 : 0, duration: duracao(Motion.slow, menos), easing: Motion.easingRN, useNativeDriver: false }).start();
+  }, [expanded, chevron, menos]);
 
   const rotate = chevron.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "90deg"] });
 
@@ -99,8 +100,11 @@ export function ParcelaRow({
       </Pressable>
 
       {/* 23/11/2026 (QA): fechada, a sanfona não renderiza — os botões
-          escondidos (Receber, Pix) recebiam Tab e Enter. */}
-      {expanded && <Collapsible open={expanded}>
+          escondidos (Receber, Pix) recebiam Tab e Enter.
+          25/11/2026: o próprio Collapsible desmonta o conteúdo depois de
+          fechar (e o deixa inerte enquanto fecha), então abre E fecha
+          animado, com a seta. */}
+      <Collapsible open={expanded}>
         {!!breakdown?.length && (
           <View style={s.breakdown}>
             {breakdown.map((l, i) => (
@@ -112,7 +116,7 @@ export function ParcelaRow({
           </View>
         )}
         {!!actions && <View style={s.actions}>{actions}</View>}
-      </Collapsible>}
+      </Collapsible>
     </View>
   );
 }

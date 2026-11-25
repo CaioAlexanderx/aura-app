@@ -24,6 +24,7 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { SeloDaSituacao } from "./SeloDaSituacao";
 import { ROTULO_DA_SITUACAO, type SituacaoDoCrediario } from "@/utils/crediarioSituacao";
+import { Motion, webTransition } from "@/constants/motion";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -142,15 +143,19 @@ function Filtro({ rotulo, ativo, onPress }: { rotulo: string; ativo: boolean; on
   return (
     <Pressable
       onPress={onPress}
-      style={[s.filtro, ativo && s.filtroOn]}
+      style={[s.filtro, ativo && s.filtroOn, TRANSICAO_DO_FILTRO]}
       accessibilityRole="button"
       accessibilityState={{ selected: ativo }}
       testID={`ficha-lista-filtro-${rotulo}`}
     >
-      <Text style={[s.filtroTxt, ativo && { color: "#fff" }]} numberOfLines={1}>{rotulo}</Text>
+      <Text style={[s.filtroTxt, ativo && { color: "#fff" }, TRANSICAO_DO_TEXTO]} numberOfLines={1}>{rotulo}</Text>
     </Pressable>
   );
 }
+
+// 25/11/2026 (movimento): filtro escolhido pinta em 200 ms (web).
+const TRANSICAO_DO_FILTRO = webTransition(["background-color", "border-color"], Motion.base);
+const TRANSICAO_DO_TEXTO = webTransition("color", Motion.base);
 
 const s = StyleSheet.create({
   raiz: { flex: 1, minHeight: 0, backgroundColor: Colors.bg2 },

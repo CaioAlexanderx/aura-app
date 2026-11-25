@@ -43,6 +43,8 @@ import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/cr
 import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
 import { TEXTO_PARCELA_A_CONFERIR } from "@/utils/crediarioDatas";
 import { Button } from "@/components/Button";
+import { Collapsible } from "@/components/anim";
+import { Motion, webTransition } from "@/constants/motion";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
 import { CarneCard, type InfoDaLinha } from "./CarneCard";
 import { valorParaQuitarAte } from "@/utils/crediarioReceberCarne";
@@ -350,15 +352,18 @@ export function TabParcelas({
               <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver"}</Text>
             </Pressable>
           </View>
-          {verQuitados && quitados.map(q => (
-            <View key={q.key} style={c.done} testID="carne-quitado">
-              <Text style={c.doneK}>
-                <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
-                {q.nome}{q.itensResumo ? ` · ${q.itensResumo}` : ""}
-              </Text>
-              {q.valorOriginal != null && <Text style={c.doneV}>{fmt(q.valorOriginal)}</Text>}
-            </View>
-          ))}
+          {/* 25/11/2026 (movimento): sanfona de 280 ms para abrir e fechar. */}
+          <Collapsible open={verQuitados}>
+            {quitados.map(q => (
+              <View key={q.key} style={c.done} testID="carne-quitado">
+                <Text style={c.doneK}>
+                  <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
+                  {q.nome}{q.itensResumo ? ` · ${q.itensResumo}` : ""}
+                </Text>
+                {q.valorOriginal != null && <Text style={c.doneV}>{fmt(q.valorOriginal)}</Text>}
+              </View>
+            ))}
+          </Collapsible>
         </View>
       )}
     </View>
@@ -459,8 +464,8 @@ function LinhaDaParcela({ numero, data, porque, valor, situacao, principal, onDa
   // Em dia: só o círculo verde (mockup, seção 2) — o cartão não vira semáforo.
   const destaque = situacao === "em_dia" ? null : cor;
   return (
-    <View style={[l.linha, destaque && { backgroundColor: destaque.fundo }]} testID={`parcela-${numero}`}>
-      <View style={[l.ic, { borderColor: cor.ponto }]} testID={`parcela-${numero}-${situacao}`}>
+    <View style={[l.linha, destaque && { backgroundColor: destaque.fundo }, TRANSICAO_DA_LINHA]} testID={`parcela-${numero}`}>
+      <View style={[l.ic, { borderColor: cor.ponto }, TRANSICAO_DA_LINHA]} testID={`parcela-${numero}-${situacao}`}>
         <Text style={[l.icT, atrasada && { color: cor.texto }]}>{atrasada ? "!" : ""}</Text>
       </View>
       <Text style={l.num} accessibilityLabel={`Parcela ${numero}`}>{numero}</Text>
@@ -472,7 +477,7 @@ function LinhaDaParcela({ numero, data, porque, valor, situacao, principal, onDa
           accessibilityLabel={`Mudar a data da parcela ${numero}`}
           hitSlop={6}
         >
-          <Text style={[l.dataT, destaque && { color: destaque.texto }]}>{data}</Text>
+          <Text style={[l.dataT, destaque && { color: destaque.texto }, TRANSICAO_DO_TEXTO]}>{data}</Text>
           <Text style={l.lapis}>✎</Text>
         </Pressable>
         {!!porque && <Text style={l.porque}>{porque}</Text>}
@@ -488,7 +493,7 @@ function LinhaDaParcela({ numero, data, porque, valor, situacao, principal, onDa
           </Pressable>
         )}
       </View>
-      <Text style={[l.valor, destaque && { color: destaque.texto }]}>{valor}</Text>
+      <Text style={[l.valor, destaque && { color: destaque.texto }, TRANSICAO_DO_TEXTO]}>{valor}</Text>
       <Pressable
         onPress={onReceber}
         style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
@@ -513,6 +518,11 @@ function LinhaDaParcela({ numero, data, porque, valor, situacao, principal, onDa
     </View>
   );
 }
+
+// 25/11/2026 (movimento): parcela que foi paga ou mudou de situação troca a
+// cor em 200 ms em vez de seco (web; no nativo webTransition devolve {}).
+const TRANSICAO_DA_LINHA = webTransition(["background-color", "border-color"], Motion.base);
+const TRANSICAO_DO_TEXTO = webTransition("color", Motion.base);
 
 const l = StyleSheet.create({
   linha: {

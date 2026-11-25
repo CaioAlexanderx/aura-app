@@ -23,7 +23,7 @@ import {
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { ModalPop } from "@/components/anim";
-import { Motion } from "@/constants/motion";
+import { Motion, duracao, useMenosMovimento } from "@/constants/motion";
 
 /** Abaixo desta largura o modal vira bottom sheet. Mesmo corte da tela
  *  principal do crediário (isNarrow = width < 500). */
@@ -58,17 +58,19 @@ export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 
   const maxH = Math.round(height * (isNarrow ? 0.94 : 0.92));
 
   // Slide-up do bottom sheet (o diálogo usa ModalPop scale+fade).
+  // 25/11/2026: curva do app e "menos movimento" (entra na hora, sem subir).
+  const menos = useMenosMovimento();
   const slide = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (visible && isNarrow) {
-      slide.setValue(0);
-      Animated.timing(slide, { toValue: 1, duration: Motion.slow, useNativeDriver: false }).start();
+      slide.setValue(menos ? 1 : 0);
+      Animated.timing(slide, { toValue: 1, duration: duracao(Motion.slow, menos), easing: Motion.easingRN, useNativeDriver: false }).start();
     }
-  }, [visible, isNarrow, slide]);
-  const translateY = slide.interpolate({ inputRange: [0, 1], outputRange: [56, 0] });
+  }, [visible, isNarrow, slide, menos]);
+  const translateY = slide.interpolate({ inputRange: [0, 1], outputRange: [menos ? 0 : 56, 0] });
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={menos ? "none" : "fade"} onRequestClose={onClose}>
       <Pressable
         style={[s.backdrop, isNarrow ? s.backdropNarrow : s.backdropWide]}
         onPress={onBackdropPress ?? onClose}

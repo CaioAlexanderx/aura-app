@@ -13,6 +13,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { CorDaFicha } from "./fichaStyles";
+import { Motion, webTransition } from "@/constants/motion";
 import { ROTULO_DA_SITUACAO, type SituacaoDoCrediario } from "@/utils/crediarioSituacao";
 
 /** Ponto, texto e fundo de cada situação (claro e escuro pelos tokens). */
@@ -27,15 +28,19 @@ export function SeloDaSituacao({ situacao, testID }: { situacao: SituacaoDoCredi
   const c = COR_DA_SITUACAO[situacao];
   return (
     <View
-      style={[s.selo, { backgroundColor: c.fundo }]}
+      style={[s.selo, { backgroundColor: c.fundo }, TRANSICAO]}
       testID={testID ?? `crediario-selo-${situacao}`}
       accessibilityLabel={ROTULO_DA_SITUACAO[situacao]}
     >
-      <View style={[s.ponto, { backgroundColor: c.ponto }]} />
-      <Text style={[s.texto, { color: c.texto }]} numberOfLines={1}>{ROTULO_DA_SITUACAO[situacao]}</Text>
+      <View style={[s.ponto, { backgroundColor: c.ponto }, TRANSICAO]} />
+      <Text style={[s.texto, { color: c.texto }, TRANSICAO_DO_TEXTO]} numberOfLines={1}>{ROTULO_DA_SITUACAO[situacao]}</Text>
     </View>
   );
 }
+
+// 25/11/2026 (movimento): a troca de situação pinta em 200 ms (web).
+const TRANSICAO = webTransition("background-color", Motion.base);
+const TRANSICAO_DO_TEXTO = webTransition("color", Motion.base);
 
 const s = StyleSheet.create({
   selo: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 99 },

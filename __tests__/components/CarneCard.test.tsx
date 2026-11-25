@@ -106,10 +106,12 @@ describe("CarneCard (F4: sem sanfona)", () => {
     expect(porId(t, "carne-c1-paga")).toHaveLength(2);
   });
 
-  it("Imprimir à vista; o raro no ⋯ (Mudar as parcelas, Receber o carnê inteiro)", () => {
+  it("Imprimir à vista; o raro no ⋯ (Mudar as parcelas, Receber o carnê inteiro)", async () => {
     const { t, props } = montarCartao(CONTA, abertas);
     apertarImprimir(t);
     expect(props.onImprimir).toHaveBeenCalled();
+    // 25/11/2026 (movimento): o menu fecha em sanfona (280 ms) e só então sai da tela.
+    await act(async () => { await new Promise((r) => setTimeout(r, 320)); });
     expect(porId(t, "carne-c1-menu")).toHaveLength(0);
     act(() => { porId(t, "carne-c1-mais")[0].props.onPress(); });
     apertarRotulo(t, "Mudar as parcelas (renegociar)");

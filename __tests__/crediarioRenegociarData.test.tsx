@@ -46,6 +46,15 @@ jest.mock("@/components/anim", () => {
   return {
     ModalPop: ({ children }: any) => R.createElement(R.Fragment, null, children),
     Collapsible: ({ open, children }: any) => (open ? R.createElement(R.Fragment, null, children) : null),
+    // 25/11/2026 (movimento): painel com saída animada e entrada da ficha.
+    Presenca: ({ visivel, children, testID }: any) => {
+      const { View } = jest.requireActual("react-native");
+      return visivel ? R.createElement(View, { testID }, children) : null;
+    },
+    FadeInUp: ({ children, testID }: any) => {
+      const { View } = jest.requireActual("react-native");
+      return R.createElement(View, { testID }, children);
+    },
   };
 });
 
