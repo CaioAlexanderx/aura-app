@@ -17,6 +17,11 @@
 // Não há confirmação em dois passos além deste sheet: o sheet JÁ é a
 // confirmação, e empilhar um Alert em cima faria a lojista aprender a clicar
 // "sim" sem ler.
+//
+// 25/11/2026 (p-185): o Negócio abre esta mesma folha para o que falta
+// receber do pedido de orçamento, com `valorFixo` (o marco tem valor certo:
+// não há parcial), `rotuloDoValor` e `formas` (as quatro do Caixa). Sem as
+// props, a folha é a de sempre.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -35,7 +40,17 @@ import {
 } from "@/components/studio/useRegistrarPagamento";
 import { parseValorBR, erroDoValor, ehParcial, restanteApos } from "@/components/studio/baixaDeSaldo";
 
-export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarPagamentoController }) {
+type Props = {
+  controller: Pick<RegistrarPagamentoController, "alvo" | "salvando" | "fechar" | "confirmar">;
+  /** Formas a escolher. Padrão: as do checkout do Studio. */
+  formas?: { key: string; label: string; icon: string }[];
+  /** Valor sem campo: confirma o valor do alvo inteiro. Padrão: editável. */
+  valorFixo?: boolean;
+  /** Rótulo da caixa do valor. Padrão: "Saldo de <cliente>". */
+  rotuloDoValor?: string;
+};
+
+export function RegistrarPagamentoSheet({ controller, formas = FORMAS_PAGAMENTO, valorFixo = false, rotuloDoValor }: Props) {
   const { alvo, salvando, fechar, confirmar } = controller;
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -54,8 +69,8 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
   }, [alvo]);
 
   const saldo = alvo?.amount ?? 0;
-  const valor = parseValorBR(valorTxt);
-  const erro = erroDoValor(valor, saldo);
+  const valor = valorFixo ? saldo : parseValorBR(valorTxt);
+  const erro = valorFixo ? null : erroDoValor(valor, saldo);
   const acimaDoSaldo = erro === "acima";
   const invalido = erro !== null;
   const parcial = ehParcial(valor, saldo);
@@ -82,13 +97,14 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
       <View style={s.body}>
         <View style={s.saldoBox}>
           <Text style={s.saldoLabel} numberOfLines={1}>
-            {alvo?.customerName ? `Saldo de ${alvo.customerName}` : "Saldo em aberto"}
+            {rotuloDoValor || (alvo?.customerName ? `Saldo de ${alvo.customerName}` : "Saldo em aberto")}
           </Text>
           <Text style={[s.saldoValor, alvo?.status === "overdue" && { color: t.dangerInk }]}>
             R$ {saldo.toFixed(2).replace(".", ",")}
           </Text>
         </View>
 
+        {!valorFixo ? (<>
         <Text style={s.campoLabel}>Quanto entrou</Text>
         <View style={[s.inputWrap, acimaDoSaldo && { borderColor: t.danger }]}>
           <Text style={s.inputPrefix}>R$</Text>
@@ -115,10 +131,11 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
             Pagamento parcial — a encomenda segue em "A receber" com R$ {restanteApos(valor as number, saldo).toFixed(2).replace(".", ",")}.
           </Text>
         ) : null}
+        </>) : null}
 
-        <Text style={[s.campoLabel, { marginTop: 18 }]}>Como o cliente pagou</Text>
+        <Text style={[s.campoLabel, { marginTop: valorFixo ? 0 : 18 }]}>Como o cliente pagou</Text>
         <View style={s.formas}>
-          {FORMAS_PAGAMENTO.map((f) => {
+          {formas.map((f) => {
             const ativa = forma === f.key;
             return (
               <Pressable
@@ -129,6 +146,7 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
                 accessibilityRole="radio"
                 accessibilityState={{ selected: ativa, disabled: salvando }}
                 accessibilityLabel={`Pagou em ${f.label}`}
+                testID={`baixa-forma-${f.key}`}
               >
                 <Icon name={f.icon} size={14} color={ativa ? t.primary : t.ink3} />
                 <Text style={[s.formaTxt, ativa && s.formaTxtAtiva]}>{f.label}</Text>
@@ -144,6 +162,7 @@ export function RegistrarPagamentoSheet({ controller }: { controller: RegistrarP
           accessibilityRole="button"
           accessibilityState={{ disabled: invalido || salvando }}
           accessibilityLabel="Registrar recebimento"
+          testID="baixa-confirmar"
         >
           {salvando ? (
             <ActivityIndicator size="small" color="#fff" />

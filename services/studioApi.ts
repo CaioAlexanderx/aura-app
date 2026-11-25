@@ -218,6 +218,14 @@ export type StudioOrder = {
   item_quantity?: number | null;
   origin?: "caixa" | "orcamento" | "loja_online" | "lote" | "marketplace" | null;
   origin_label?: string | null;
+  // 25/11/2026 (p-185, Aura-backend#1106): o dinheiro do pedido que saiu de
+  // orçamento aprovado. Só vêm no pedido de orçamento com a trava do
+  // financeiro ligada no backend (empresa de teste até a virada); nos outros
+  // pedidos, null ou ausentes. NÃO confundir com balance_* acima (saldo do
+  // crediário da venda do Caixa). O `id` de cada pendente é o do mark-paid.
+  orcamento_recebido?: number | null;
+  orcamento_falta_receber?: number | null;
+  orcamento_pagamentos_pendentes?: Array<{ id: string; kind: StudioPaymentKind; amount: number }> | null;
 };
 
 // K3 — o que a página pública recebe. Espelha exatamente o que a rota
@@ -1139,10 +1147,25 @@ export const studioApi = {
     request<{ payments: StudioPayment[] }>(base(cid) + "/orders/" + oid + "/payments", { method: "GET", retry: 1, timeout: 8000 }),
   createOrderPayment: (cid: string, oid: string, body: { kind: StudioPaymentKind; amount: number; due_at?: string | null; method?: StudioPayment["method"] }) =>
     request<StudioPayment>(base(cid) + "/orders/" + oid + "/payments", { method: "POST", body, retry: 0, timeout: 8000 }),
-  markPaymentPaid: (cid: string, pid: string, body?: { method?: StudioPayment["method"] }) =>
-    request<{ ok: true; payment: StudioPayment; deposit_released: boolean }>(
+  // p-185: `forma` (pix | dinheiro | cartao = crédito | debito) e a
+  // Idempotency-Key no cabeçalho, a MESMA em toda nova tentativa do mesmo
+  // marco. No pedido de orçamento a resposta traz lancamento/taxa/
+  // falta_receber (ou ja_pago no replay); erros com `code` em e.data.code.
+  markPaymentPaid: (
+    cid: string,
+    pid: string,
+    body?: { method?: StudioPayment["method"]; forma?: "pix" | "dinheiro" | "cartao" | "debito" },
+    opts?: { idempotencyKey?: string },
+  ) =>
+    request<{
+      ok: true; payment: StudioPayment; deposit_released: boolean;
+      lancamento?: "sinal" | "saldo"; taxa?: number; falta_receber?: number | null; ja_pago?: boolean;
+    }>(
       base(cid) + "/payments/" + pid + "/mark-paid",
-      { method: "POST", body: body || {}, retry: 0, timeout: 8000 }
+      {
+        method: "POST", body: body || {}, retry: 0, timeout: 8000,
+        ...(opts?.idempotencyKey ? { headers: { "Idempotency-Key": opts.idempotencyKey } } : {}),
+      }
     ),
   createChargeLink: (cid: string, pid: string) =>
     request<{ ok: true; payment_url: string | null; pix_code: string | null; method: string }>(
