@@ -39,7 +39,7 @@ export function daysLate(due?: string | null): number {
   return Math.max(0, daysBetween(d, today));
 }
 
-type InstallmentLike = {
+export type InstallmentLike = {
   is_overdue?: boolean;
   needs_review?: boolean;
   status?: string;
@@ -55,13 +55,22 @@ type InstallmentLike = {
  * Prefere o campo do backend; só calcula localmente se ele não vier.
  */
 export function isInstallmentOverdue(ins: InstallmentLike, graceDays = DEFAULT_GRACE_DAYS): boolean {
+  return parcelaEmAtrasoEm(ins, todaySP(), graceDays);
+}
+
+/**
+ * A mesma regra com o "hoje" explícito (testável; usada por
+ * utils/crediarioSituacao). Não passe esta função direto para
+ * `.some`/`.filter`: o índice cairia na carência.
+ */
+export function parcelaEmAtrasoEm(ins: InstallmentLike, hoje: string, graceDays = DEFAULT_GRACE_DAYS): boolean {
   if (typeof ins?.is_overdue === "boolean") return ins.is_overdue;
   if (ins?.status !== "pending" && ins?.status !== "overdue") return false;
   const rem = ins.remaining ?? ((ins.amount_due ?? 0) - (ins.covered_amount ?? 0));
   if (rem <= RESIDUE_TOLERANCE) return false;
   const due = ins.due_date ? String(ins.due_date).slice(0, 10) : null;
   if (!due) return false;
-  const late = daysLate(due);
+  const late = due >= hoje ? 0 : Math.max(0, daysBetween(due, hoje));
   if (late <= 0) return false;
   // Retroativa (cadastrada depois do próprio vencimento) = a conferir, não atraso.
   const created = ins.created_at ? String(ins.created_at).slice(0, 10) : null;
@@ -69,12 +78,14 @@ export function isInstallmentOverdue(ins: InstallmentLike, graceDays = DEFAULT_G
   return late > graceDays;
 }
 
-type CustomerRowLike = {
+export type CustomerRowLike = {
   balance?: number;
   overdue?: boolean;
   next_due_date?: string | null;
   open_installments?: number;
   ledger_mismatch?: boolean;
+  /** Parcelas retroativas vencidas (carnê histórico): a conferir. */
+  to_review_count?: number;
 };
 
 /**
@@ -108,6 +119,11 @@ export function statusDaCarteira(cust: CustomerRowLike): StatusDaCarteira {
 
 /** Parcela retroativa vencida: carnê histórico digitalizado, a conferir. */
 export function needsReview(ins: InstallmentLike): boolean {
+  return parcelaAConferirEm(ins, todaySP());
+}
+
+/** needsReview com o "hoje" explícito (testável). */
+export function parcelaAConferirEm(ins: InstallmentLike, hoje: string): boolean {
   if (typeof ins?.needs_review === "boolean") return ins.needs_review;
   if (ins?.status !== "pending" && ins?.status !== "overdue") return false;
   const rem = ins.remaining ?? ((ins.amount_due ?? 0) - (ins.covered_amount ?? 0));
@@ -115,5 +131,5 @@ export function needsReview(ins: InstallmentLike): boolean {
   const due = ins.due_date ? String(ins.due_date).slice(0, 10) : null;
   const created = ins.created_at ? String(ins.created_at).slice(0, 10) : null;
   if (!due || !created) return false;
-  return due < todaySP() && due < created;
+  return due < hoje && due < created;
 }

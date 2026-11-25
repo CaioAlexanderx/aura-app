@@ -225,7 +225,9 @@ export function TabHistorico({
                   <Text style={lc.onde} numberOfLines={2}>{`Para onde foi o dinheiro · ${g.nome}`}</Text>
                   {g.linhas.map((l) => (
                     <View key={l.id} style={lc.ln}>
-                      <Text style={[lc.marca, { color: l.tipo === "inteira" ? Colors.green : Colors.amber }]}>
+                      {/* 25/11/2026: parcial (◐) neutro — o âmbar agora é "a vencer"
+                          e o violeta é "a conferir"; pagar parte não é nenhum dos dois. */}
+                      <Text style={[lc.marca, { color: l.tipo === "inteira" ? Colors.green : CorDaFicha.secundario }]}>
                         {l.tipo === "inteira" ? "✓" : "◐"}
                       </Text>
                       <View style={{ flex: 1, minWidth: 0 }}>

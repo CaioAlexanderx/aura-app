@@ -113,6 +113,21 @@ describe("situação e padrão", () => {
     expect(diasDeAtraso("2026-11-25", "2026-11-21")).toBe(0);
   });
 
+  it("25/11: dentro da carência de 3 dias não é em atraso (a mesma regra da ficha)", () => {
+    // só a data: carência de 3 dias
+    expect(situacaoDaParcela("2026-11-20", "2026-11-21")).toBe("a_vencer");
+    expect(situacaoDaParcela("2026-11-18", "2026-11-21")).toBe("a_vencer");
+    expect(situacaoDaParcela("2026-11-17", "2026-11-21")).toBe("em_atraso");
+    // a parcela inteira: vale o is_overdue do backend
+    expect(situacaoDaParcela({ due_date: "2026-11-19", is_overdue: false }, "2026-11-21")).toBe("a_vencer");
+    expect(situacaoDaParcela({ due_date: "2026-11-21", is_overdue: false }, "2026-11-21")).toBe("vence_hoje");
+    expect(situacaoDaParcela({ due_date: "2026-11-15", is_overdue: true }, "2026-11-21")).toBe("em_atraso");
+    // sem is_overdue (backend antigo): carência + resíduo de R$ 2
+    expect(situacaoDaParcela({ due_date: "2026-11-15", status: "pending", amount_due: 100, covered_amount: 0 }, "2026-11-21")).toBe("em_atraso");
+    expect(situacaoDaParcela({ due_date: "2026-11-19", status: "pending", amount_due: 100, covered_amount: 0 }, "2026-11-21")).toBe("a_vencer");
+    expect(situacaoDaParcela({ due_date: "2026-12-01", is_overdue: false }, "2026-11-21")).toBe("a_vencer");
+  });
+
   it("o padrão da situação; sem padrão, o modelo daquela situação; sem nada, o primeiro", () => {
     expect(modeloPadrao(MODELOS_DA_AURA, "em_atraso")!.name).toBe("Passou do dia");
     const loja: ModeloDeMensagem[] = [

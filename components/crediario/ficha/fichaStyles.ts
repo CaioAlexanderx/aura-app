@@ -8,6 +8,10 @@ export const CorDaFicha = {
   secundario: IS_DARK_MODE ? "rgba(196,188,245,0.86)" : Colors.ink3,
   ambarTexto: IS_DARK_MODE ? Colors.amber : "#92400e",
   verdeTexto: IS_DARK_MODE ? Colors.green : "#047857",
+  // 25/11/2026 (cores por situação): texto do atraso e do "a conferir" com o
+  // mesmo contraste dos dois de cima.
+  vermelhoTexto: IS_DARK_MODE ? Colors.red : "#b91c1c",
+  violetaTexto: IS_DARK_MODE ? Colors.violet4 : Colors.violet3,
 };
 import { Fonts } from "@/constants/fonts";
 
@@ -43,6 +47,7 @@ export const m = StyleSheet.create({
   tabTxtOn: { color: "#fff" },
 
   scoreBanner: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: Colors.amber + "18", borderWidth: 1, borderColor: Colors.amber + "44", borderRadius: 11, padding: 12, marginBottom: 13 },
+  conferirBanner: { backgroundColor: Colors.violetD, borderColor: Colors.violet + "44" },
   scoreBannerTxt: { fontFamily: Fonts.body, flex: 1, fontSize: 12, color: CorDaFicha.ambarTexto, lineHeight: 17 },
   scorePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   scorePillTxt: { fontFamily: Fonts.body, fontSize: 10, fontWeight: "700" },

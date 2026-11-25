@@ -48,6 +48,8 @@ import { CarneCard, type InfoDaLinha } from "./CarneCard";
 import { valorParaQuitarAte } from "@/utils/crediarioReceberCarne";
 import { fmt } from "./fichaHelpers";
 import { m, CorDaFicha } from "./fichaStyles";
+import { COR_DA_SITUACAO } from "./SeloDaSituacao";
+import { avisoDoVencimento, situacaoDaParcelaAberta, type SituacaoDoCrediario } from "@/utils/crediarioSituacao";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
 function sumRemaining(list: CreditInstallment[]): number {
@@ -218,7 +220,14 @@ export function TabParcelas({
         // (renegociação com a 1ª parcela no passado, ano esquecido) — a linha
         // diz o que é e oferece o Mudar a data logo abaixo.
         ? TEXTO_PARCELA_A_CONFERIR
-        : jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "";
+        : [
+            // 25/11/2026: "vence hoje" / "vence amanhã" na parcela a vencer.
+            avisoDoVencimento(ins.due_date, hoje) ?? "",
+            jaPago > 0.009 ? `já tem ${fmt(jaPago)} pago` : "",
+          ].filter(Boolean).join(" · ");
+    // Cor da linha (utils/crediarioSituacao): vermelho, âmbar (vence em até
+    // 7 dias ou na carência), violeta (a conferir) ou neutra com o círculo verde.
+    const situacao = situacaoDaParcelaAberta(ins, hoje);
     // QA 23/11/2026: o backend abate pela parcela mais antiga do carnê (não
     // dá para mirar uma parcela). Na 1ª linha "Receber" é esta; nas outras,
     // "Receber até esta" preenche as anteriores + esta — o que de fato vai
@@ -243,7 +252,7 @@ export function TabParcelas({
         data={`${jaVenceu ? "venceu" : "vence"} ${venc}`}
         porque={porque}
         valor={fmt(totalHoje)}
-        atrasada={late}
+        situacao={situacao}
         principal={indice === 0}
         onData={() => handleEditDueDateOpen(ins)}
         aConferir={toReview}
@@ -433,7 +442,7 @@ const c = StyleSheet.create({
 // ── F4: linha da parcela a pagar, sem sanfona ────────────────────────────
 // Ícone · número · data (com lápis) e o porquê · valor · Receber. Quebra de
 // linha em vez de espremer: em tela estreita data e Receber descem.
-function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onData, onReceber, onPix, ateAqui, valorDoReceber, aConferir }: {
+function LinhaDaParcela({ numero, data, porque, valor, situacao, principal, onData, onReceber, onPix, ateAqui, valorDoReceber, aConferir }: {
   numero: string; data: string; porque: string; valor: string;
   /** Parcela "a conferir" (cadastrada depois do vencimento): link Mudar a data. */
   aConferir?: boolean;
@@ -441,13 +450,18 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
   valorDoReceber?: string;
   /** Valor das anteriores + esta, quando ela não é a 1ª aberta do carnê. */
   ateAqui?: string | null;
-  atrasada: boolean; principal: boolean;
+  /** Situação pela regra única (utils/crediarioSituacao). */
+  situacao: SituacaoDoCrediario; principal: boolean;
   onData: () => void; onReceber: () => void; onPix?: () => void;
 }) {
+  const atrasada = situacao === "atrasado";
+  const cor = COR_DA_SITUACAO[situacao];
+  // Em dia: só o círculo verde (mockup, seção 2) — o cartão não vira semáforo.
+  const destaque = situacao === "em_dia" ? null : cor;
   return (
-    <View style={[l.linha, atrasada && l.linhaLate]} testID={`parcela-${numero}`}>
-      <View style={[l.ic, atrasada && l.icLate]}>
-        <Text style={[l.icT, atrasada && { color: Colors.red }]}>{atrasada ? "!" : ""}</Text>
+    <View style={[l.linha, destaque && { backgroundColor: destaque.fundo }]} testID={`parcela-${numero}`}>
+      <View style={[l.ic, { borderColor: cor.ponto }]} testID={`parcela-${numero}-${situacao}`}>
+        <Text style={[l.icT, atrasada && { color: cor.texto }]}>{atrasada ? "!" : ""}</Text>
       </View>
       <Text style={l.num} accessibilityLabel={`Parcela ${numero}`}>{numero}</Text>
       <View style={l.meio}>
@@ -458,7 +472,7 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
           accessibilityLabel={`Mudar a data da parcela ${numero}`}
           hitSlop={6}
         >
-          <Text style={[l.dataT, atrasada && { color: Colors.red }]}>{data}</Text>
+          <Text style={[l.dataT, destaque && { color: destaque.texto }]}>{data}</Text>
           <Text style={l.lapis}>✎</Text>
         </Pressable>
         {!!porque && <Text style={l.porque}>{porque}</Text>}
@@ -474,7 +488,7 @@ function LinhaDaParcela({ numero, data, porque, valor, atrasada, principal, onDa
           </Pressable>
         )}
       </View>
-      <Text style={[l.valor, atrasada && { color: Colors.red }]}>{valor}</Text>
+      <Text style={[l.valor, destaque && { color: destaque.texto }]}>{valor}</Text>
       <Pressable
         onPress={onReceber}
         style={({ pressed }: any) => [l.receber, principal ? l.receberP : l.receberS, pressed && { opacity: 0.85 }]}
@@ -505,9 +519,7 @@ const l = StyleSheet.create({
     flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 10, rowGap: 6,
     paddingHorizontal: 14, paddingVertical: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  linhaLate: { backgroundColor: Colors.redD },
   ic: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: CorDaFicha.secundario, alignItems: "center", justifyContent: "center" },
-  icLate: { borderColor: Colors.red },
   icT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "800", color: CorDaFicha.secundario },
   num: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink, minWidth: 48 },
   meio: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 0 },

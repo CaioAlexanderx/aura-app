@@ -10,6 +10,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { querNovoFiado } from "@/utils/checkinDestino";
 import { clienteDaRota, rotaFichaNaLoja } from "@/utils/creditoOutraLoja";
 import { isCustomerOverdue, statusDaCarteira } from "@/utils/creditOverdue";
+import { detalheDoCliente, situacaoDoCliente } from "@/utils/crediarioSituacao";
+import { SeloDaSituacao } from "@/components/crediario/ficha/SeloDaSituacao";
+import { CorDaFicha } from "@/components/crediario/ficha/fichaStyles";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -109,7 +112,8 @@ function initials(name: string): string {
 
 // Atraso e "Conferir" da linha: utils/creditOverdue.ts (isCustomerOverdue,
 // statusDaCarteira) — a mesma fonte da ficha, testada em
-// __tests__/crediarioStatusDaCarteira.test.ts.
+// __tests__/crediarioStatusDaCarteira.test.ts. O selo (Em dia / A vencer /
+// Atrasado / A conferir) sai de utils/crediarioSituacao (25/11/2026).
 
 /**
  * Data-base do aging. next_due_date é só "o próximo a vencer" — quem manda no
@@ -121,14 +125,35 @@ function overdueRefDate(cust: CreditBalanceItem & { oldest_overdue_date?: string
   return cust.oldest_overdue_date ?? cust.next_due_date ?? null;
 }
 
+/**
+ * Selo e subtítulo da linha da carteira (página e lista ao lado da ficha;
+ * no consolidado multi-CNPJ a carteira é a mesma lista).
+ */
+function situacaoDaLinha(cust: CreditBalanceItem) {
+  const situacao = situacaoDoCliente(cust as any);
+  const conferir = statusDaCarteira(cust as any) === "conferir";
+  // Dias só quando a regra chamou de atraso: dentro da carência não há "1 dias".
+  const diasDeAtraso = situacao === "atrasado" ? daysLate(overdueRefDate(cust as any)) : 0;
+  const detalhe = detalheDoCliente(situacao, {
+    diasDeAtraso, conferirSaldo: conferir, aConferir: cust.to_review_count || 0, vencimento: cust.next_due_date,
+  });
+  return { situacao, detalhe, conferir };
+}
+
 const AGING_LABELS: Record<string, string> = {
   a_vencer: "Em dia", "1_30_dias": "1–30 dias",
   "31_60_dias": "31–60 dias", "61_90_dias": "61–90 dias", acima_90: "90+ dias",
 };
 
+// 25/11/2026 (cores por situação, mockup crediario-cores-e-movimento §3):
+// todo atraso é vermelho, mais forte quanto mais antigo; o âmbar fica só para
+// o que ainda vai vencer. Saíram o laranja e o vermelho literal do 90+.
 const AGING_COLORS: Record<string, string> = {
-  a_vencer: Colors.green, "1_30_dias": Colors.amber,
-  "31_60_dias": "#f97316", "61_90_dias": Colors.red, acima_90: "#ef4444",
+  a_vencer: Colors.green, "1_30_dias": Colors.red,
+  "31_60_dias": Colors.red, "61_90_dias": Colors.red, acima_90: Colors.red,
+};
+const AGING_OPACITY: Record<string, number> = {
+  a_vencer: 1, "1_30_dias": 0.45, "31_60_dias": 0.65, "61_90_dias": 0.82, acima_90: 1,
 };
 
 const AGING_ORDER = ["a_vencer", "1_30_dias", "31_60_dias", "61_90_dias", "acima_90"];
@@ -514,7 +539,9 @@ export default function CrediarioScreen() {
       if (nextDue) {
         const valor = valorAPagarParcela(nextDue);
         const atraso = diasDeAtraso(nextDue.due_date);
-        situacao = situacaoDaParcela(nextDue.due_date);
+        // 25/11/2026: a parcela inteira (is_overdue do backend): dentro da
+        // carência não é "em atraso", como na ficha.
+        situacao = situacaoDaParcela(nextDue);
         const parcela = `${nextDue.installment_number}/${nextDue.total_installments}`;
         valorLabel = fmt(valor);
         // "vence 10/10" de parcela vencida era o defeito do texto antigo.
@@ -522,7 +549,10 @@ export default function CrediarioScreen() {
           ? `Parcela ${parcela} · venceu ${fmtDate(nextDue.due_date)} · ${pluralize(atraso, "dia", "dias")} de atraso`
           : situacao === "vence_hoje"
             ? `Parcela ${parcela} · vence hoje`
-            : `Parcela ${parcela} · vence ${fmtDate(nextDue.due_date)}`;
+            : atraso > 0
+              // Na carência: não é atraso, mas a data já passou.
+              ? `Parcela ${parcela} · venceu ${fmtDate(nextDue.due_date)}`
+              : `Parcela ${parcela} · vence ${fmtDate(nextDue.due_date)}`;
         dados.valor = fmt(valor);
         dados.vencimento = fmtDate(nextDue.due_date);
         dados.parcela = parcela;
@@ -650,16 +680,12 @@ export default function CrediarioScreen() {
   };
   const clientesDaLista: ClienteDaLista[] = fichaEmTela
     ? carteira.map((cust) => {
-        const overdue = isCustomerOverdue(cust as any);
-        const conferir = statusDaCarteira(cust as any) === "conferir";
-        const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
+        const { situacao, detalhe, conferir } = situacaoDaLinha(cust);
         return {
           id: cust.id,
           nome: cust.name,
-          atrasada: overdue,
-          situacao: overdue
-            ? (dl > 0 ? `Em atraso · ${pluralize(dl, "dia", "dias")}` : "Em atraso")
-            : conferir ? "Conferir" : "Em dia",
+          situacao,
+          detalhe,
           valor: conferir ? m(fmt(cust.open_installments || 0)) : m(fmt(cust.balance)),
         };
       })
@@ -811,7 +837,7 @@ export default function CrediarioScreen() {
               sub={pluralize(kpis?.paid_this_month_count || 0, "recebimento")}
             />
             <HeroStat
-              dot={Colors.amber} color={Colors.amber}
+              dot={Colors.red} color={Colors.red}
               label="Clientes em atraso" value={String(kpis?.defaulting_customers ?? 0)}
               sub="com parcela vencida"
               onPress={() => toggleFilter("atraso")}
@@ -850,7 +876,7 @@ export default function CrediarioScreen() {
                       {
                         width: (`${pct}%` as any),
                         backgroundColor: AGING_COLORS[faixa],
-                        opacity: dimmed ? 0.3 : 1,
+                        opacity: (AGING_OPACITY[faixa] ?? 1) * (dimmed ? 0.3 : 1),
                         borderRadius: 999,
                       },
                       hovered && ({ transform: [{ scaleY: 1.3 }] } as any),
@@ -880,7 +906,7 @@ export default function CrediarioScreen() {
                     onPress={() => toggleFilter(faixa)}
                     style={({ hovered }: any) => [s.pill, on && s.pillActive, hovered && s.pillHover, IS_WEB ? (webTransition(["transform", "border-color", "background-color"], Motion.base) as any) : null]}
                   >
-                    <View style={[s.pillDot, { backgroundColor: AGING_COLORS[faixa] }]} />
+                    <View style={[s.pillDot, { backgroundColor: AGING_COLORS[faixa], opacity: AGING_OPACITY[faixa] ?? 1 }]} />
                     <Text style={[s.pillLabel, on && s.pillLabelActive]}>{AGING_LABELS[faixa]}</Text>
                     <Text style={[s.pillAmount, on && s.pillLabelActive]}>{m(fmt(row.amount))}</Text>
                   </Pressable>
@@ -936,7 +962,7 @@ export default function CrediarioScreen() {
           <View style={s.tableHeadRow}>
             <Text style={[s.th, { flex: 1 }]}>Cliente</Text>
             <Text style={[s.th, s.thRight, { width: 110 }]}>Saldo</Text>
-            {isWide && <Text style={[s.th, { width: 100 }]}>Maior atraso</Text>}
+            {isWide && <Text style={[s.th, { width: 110 }]}>Situação</Text>}
             <Text style={[s.th, s.thRight, { width: isWide ? 96 : 64 }]}>Ações</Text>
           </View>
 
@@ -958,14 +984,11 @@ export default function CrediarioScreen() {
             </View>
           ) : (
             carteira.map((cust) => {
-              const overdue = isCustomerOverdue(cust as any);
-              // Parcela aberta sem dívida no razão (débito apagado): nem
-              // vermelho nem verde — âmbar "Conferir", com o valor das parcelas.
-              const conferir = statusDaCarteira(cust as any) === "conferir";
-              // dl só faz sentido quando o backend classificou como atraso:
-              // dentro da carência o cliente é "Em dia" e não deve exibir "1 dias".
-              const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
-              const toReview = (cust as any).to_review_count || 0;
+              // 25/11/2026: um selo por linha (utils/crediarioSituacao, a
+              // mesma regra da ficha e da lista ao lado dela). Parcela aberta
+              // sem dívida no razão mostra o valor das parcelas.
+              const { situacao, detalhe, conferir } = situacaoDaLinha(cust);
+              const overdue = situacao === "atrasado";
               return (
                 <Pressable
                   key={cust.id}
@@ -989,49 +1012,21 @@ export default function CrediarioScreen() {
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={s.rowName} numberOfLines={1}>{cust.name}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                        <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : conferir ? Colors.amber : Colors.green }]} />
-                        <Text style={s.rowMeta} numberOfLines={1}>
-                          {overdue ? "Em atraso" : conferir ? "Conferir" : "Em dia"}
-                          {!isWide && dl > 0 ? ` · ${dl}d` : ""}
-                        </Text>
+                        {!isWide && <SeloDaSituacao situacao={situacao} testID={`crediario-linha-selo-${cust.id}`} />}
+                        {!!detalhe && <Text style={[s.rowMeta, { flexShrink: 1 }]} numberOfLines={1}>{detalhe}</Text>}
                       </View>
                     </View>
                   </View>
 
                   {/* Saldo */}
-                  <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : conferir ? Colors.amber : Colors.ink }]} numberOfLines={1}>
+                  <Text style={[s.rowBalance, { width: 110, color: overdue ? CorDaFicha.vermelhoTexto : Colors.ink }]} numberOfLines={1}>
                     {conferir ? m(fmt(cust.open_installments || 0)) : m(fmt(cust.balance))}
                   </Text>
 
-                  {/* Maior atraso (desktop) — F2: pill colorida; overdue sem data ganha pill "Em atraso" */}
+                  {/* Situação (desktop): o selo substitui ponto + texto e a pílula de atraso */}
                   {isWide && (
-                    <View style={{ width: 100 }}>
-                      {dl > 0 ? (
-                        <View style={[s.latePill, {
-                          backgroundColor: (dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber) + "1f",
-                          borderColor: (dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber) + "55",
-                        }]}>
-                          <Text style={[s.latePillText, { color: dl > 60 ? Colors.red : dl > 30 ? "#f97316" : Colors.amber }]}>{dl} dias</Text>
-                        </View>
-                      ) : overdue ? (
-                        <View style={[s.latePill, { backgroundColor: Colors.amber + "1f", borderColor: Colors.amber + "55" }]}>
-                          <Text style={[s.latePillText, { color: Colors.amber }]}>Em atraso</Text>
-                        </View>
-                      ) : conferir ? (
-                        /* Parcela sem dívida no razão: o débito foi apagado e a
-                           parcela ficou. Não é inadimplência — é conferência. */
-                        <View style={[s.latePill, { backgroundColor: Colors.amber + "14", borderColor: Colors.amber + "33" }]}>
-                          <Text style={[s.latePillText, { color: Colors.amber }]}>Conferir saldo</Text>
-                        </View>
-                      ) : toReview > 0 ? (
-                        /* Parcela retroativa: carnê histórico cadastrado depois do
-                           vencimento. Não é inadimplência — é conferência. */
-                        <View style={[s.latePill, { backgroundColor: Colors.amber + "14", borderColor: Colors.amber + "33" }]}>
-                          <Text style={[s.latePillText, { color: Colors.amber }]}>{toReview} a conferir</Text>
-                        </View>
-                      ) : (
-                        <Text style={s.lateTextOk}>—</Text>
-                      )}
+                    <View style={{ width: 110 }}>
+                      <SeloDaSituacao situacao={situacao} testID={`crediario-linha-selo-${cust.id}`} />
                     </View>
                   )}
 
@@ -1193,11 +1188,7 @@ const s = StyleSheet.create({
   avatarText: { color: "#fff", fontWeight: "800", fontSize: 13 },
   rowName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   rowMeta: { fontSize: 11, color: Colors.ink3 },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
   rowBalance: { fontSize: 14, fontWeight: "800", textAlign: "right", fontVariant: ["tabular-nums"] as any },
-  latePill: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
-  latePillText: { fontSize: 11, fontWeight: "700" },
-  lateTextOk: { fontSize: 12, color: Colors.ink3 },
   rowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10 },
   actBtn: { width: 40, height: 40, borderRadius: 11, backgroundColor: "rgba(52,211,153,0.12)", borderWidth: 1, borderColor: "rgba(52,211,153,0.35)", alignItems: "center", justifyContent: "center" },
 

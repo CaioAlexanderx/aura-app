@@ -11,6 +11,10 @@
 // cima pelo "Trocar cliente".
 //
 // Sem hover-reveal (regra 7): o hover só pinta o fundo; nada aparece nele.
+//
+// 25/11/2026 (cores por situação): o selo da linha (Em dia / A vencer /
+// Atrasado / A conferir) é o mesmo da carteira, pela mesma regra
+// (utils/crediarioSituacao); o subtítulo fica sem cor própria.
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
@@ -18,15 +22,18 @@ import { Colors } from "@/constants/colors";
 import { CorDaFicha } from "./fichaStyles";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
+import { SeloDaSituacao } from "./SeloDaSituacao";
+import { ROTULO_DA_SITUACAO, type SituacaoDoCrediario } from "@/utils/crediarioSituacao";
 
 const IS_WEB = Platform.OS === "web";
 
 export type ClienteDaLista = {
   id: string;
   nome: string;
-  /** "Em dia", "Em atraso · 19 dias", "Conferir". */
-  situacao: string;
-  atrasada: boolean;
+  /** utils/crediarioSituacao.situacaoDoCliente — a mesma da carteira. */
+  situacao: SituacaoDoCrediario;
+  /** "maior atraso 19 dias", "vence amanhã", "Conferir saldo"… (pode ser ""). */
+  detalhe: string;
   /** Valor já formatado (e escondido pelo olho, se for o caso). */
   valor: string;
 };
@@ -108,12 +115,15 @@ export function ListaDaFicha({
               style={({ hovered, pressed }: any) => [s.item, (hovered || pressed) && s.itemHover, on && s.itemOn]}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={`${c.nome}, ${c.situacao}, ${c.valor}`}
+              accessibilityLabel={[c.nome, ROTULO_DA_SITUACAO[c.situacao], c.detalhe, c.valor].filter(Boolean).join(", ")}
               testID={`ficha-lista-item-${c.id}`}
             >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.nome} numberOfLines={1}>{c.nome}</Text>
-                <Text style={[s.sit, c.atrasada && { color: Colors.red }]} numberOfLines={1}>{c.situacao}</Text>
+                <View style={s.sitLinha}>
+                  <SeloDaSituacao situacao={c.situacao} testID={`ficha-lista-selo-${c.id}`} />
+                  {!!c.detalhe && <Text style={s.sit} numberOfLines={1}>{c.detalhe}</Text>}
+                </View>
               </View>
               <Text style={s.valor} numberOfLines={1}>{c.valor}</Text>
             </Pressable>
@@ -172,7 +182,8 @@ const s = StyleSheet.create({
   itemHover: { backgroundColor: Colors.violetD },
   itemOn: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   nome: { fontFamily: Fonts.body, fontSize: 12.5, fontWeight: "600", color: Colors.ink },
-  sit: { fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario, marginTop: 1 },
+  sitLinha: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 6, rowGap: 2, marginTop: 3 },
+  sit: { fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario, flexShrink: 1 },
   valor: { fontFamily: Fonts.mono, fontSize: 12, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] as any },
   rodape: {
     fontFamily: Fonts.body, fontSize: 11, color: CorDaFicha.secundario,

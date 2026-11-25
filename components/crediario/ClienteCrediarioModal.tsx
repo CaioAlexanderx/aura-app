@@ -53,6 +53,7 @@ import {
   PAYMENT_METHODS, type Tab,
 } from "./ficha/fichaHelpers";
 import { m, CorDaFicha } from "./ficha/fichaStyles";
+import { COR_DA_SITUACAO } from "./ficha/SeloDaSituacao";
 import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
@@ -436,7 +437,6 @@ export function ClienteCrediarioModal({
   // O backend já não classifica como atraso; aqui o topo diz "Conferir" em
   // vez de "Em dia" e mostra as duas contas que não batem.
   const semSaldoNoRazao = !hasOverdue && detail?.ledger_mismatch === true && balance <= 0.009;
-  const corStatus = hasOverdue ? Colors.red : semSaldoNoRazao ? Colors.amber : Colors.green;
   /** Parcelas retroativas: carnê histórico a conferir — não é inadimplência. */
   const toReviewCount = openInst.filter(i => needsReview(i)).length;
 
@@ -1255,13 +1255,17 @@ export function ClienteCrediarioModal({
   // Carnê vazio (criado à mão, sem nada lançado) não é compra em aberto.
   const fatoFalta = fatoFaltaPagar({ saldo: totalBalance, comprasEmAberto: carnesAbertos.filter(c => !c.vazio).length, fmt });
   const fatoAgora = semSaldoNoRazao
-    ? { titulo: "O que vem agora", valor: "Conferir as contas", detalhe: "veja o aviso abaixo", atrasado: false }
+    ? { titulo: "O que vem agora", valor: "Conferir as contas", detalhe: "veja o aviso abaixo", atrasado: false, situacao: "a_conferir" as const }
     : fatoOQueVemAgora({
         atrasadas: parcelasAtrasadas, proxima: proximaParcela, aConferir: hasOverdue ? 0 : toReviewCount,
         saldo: totalBalance, hoje: hojeSP, fmt,
       });
   // QA 23/11 (P2): com parcela atrasada, a frase do score ("paga em dia")
   // contradizia o fato 2 — que já diz o atraso. A frase segue em Limite e regras.
+  // 25/11/2026 (cores por situação): vermelho no atraso, âmbar quando vence
+  // em até 7 dias (ou está na carência), violeta no "a conferir"; em dia
+  // fica neutro (o cartão não vira semáforo).
+  const corDoFato = fatoAgora.situacao === "em_dia" ? null : COR_DA_SITUACAO[fatoAgora.situacao];
   const fatoLimite = fatoPodeComprarMais({
     limite: profile?.credit_limit, usado: profile?.credit_used, disponivel: profile?.available_limit,
     scoreLabel: fatoAgora.atrasado ? null : scoreLabel, fmt,
@@ -1273,9 +1277,12 @@ export function ClienteCrediarioModal({
         <Text style={[f.fatoBig, fatoFalta.tom === "credito" && { color: Colors.green }]} numberOfLines={1}>{fatoFalta.valor}</Text>
         <Text style={f.fatoSub} numberOfLines={2}>{fatoFalta.detalhe}</Text>
       </View>
-      <View style={[f.fato, { flexGrow: 1.2 }, fatoAgora.atrasado && f.fatoLate]} testID="crediario-ficha-status">
+      <View
+        style={[f.fato, { flexGrow: 1.2 }, corDoFato && { borderColor: corDoFato.ponto + "66", backgroundColor: corDoFato.fundo }]}
+        testID="crediario-ficha-status"
+      >
         <Text style={f.fatoK}>{fatoAgora.titulo}</Text>
-        <Text style={[f.fatoMid, fatoAgora.atrasado && { color: Colors.red }]} numberOfLines={1}>{fatoAgora.valor}</Text>
+        <Text style={[f.fatoMid, corDoFato && { color: corDoFato.texto }]} numberOfLines={1}>{fatoAgora.valor}</Text>
         <Text style={f.fatoSub} numberOfLines={2}>{fatoAgora.detalhe}</Text>
       </View>
       {!!profile && (
@@ -1303,13 +1310,16 @@ export function ClienteCrediarioModal({
   // primeiro (utils/crediarioAvisoDaFicha). Saíram dos selos ao lado do nome
   // ("parcelas R$ X · saldo R$ Y", "N a conferir"), que não diziam o que era
   // nem o que fazer.
+  // 25/11/2026: as contas que não batem e as parcelas a conferir são
+  // "a conferir" (violeta); o âmbar fica para o "costuma atrasar".
+  const avisoConferir = !!aviso && aviso.tipo !== "score";
   const avisoEl = !!aviso && (
     <View
-      style={m.scoreBanner}
+      style={[m.scoreBanner, avisoConferir && m.conferirBanner]}
       testID={aviso.tipo === "divergencia" ? "crediario-ficha-divergencia" : `crediario-ficha-aviso-${aviso.tipo}`}
     >
-      <Icon name="alert_triangle" size={15} color={Colors.amber} />
-      <Text style={[m.scoreBannerTxt, { fontFamily: Fonts.body }]}>{aviso.texto}</Text>
+      <Icon name="alert_triangle" size={15} color={avisoConferir ? Colors.violet3 : Colors.amber} />
+      <Text style={[m.scoreBannerTxt, { fontFamily: Fonts.body }, avisoConferir && { color: CorDaFicha.violetaTexto }]}>{aviso.texto}</Text>
     </View>
   );
 
@@ -2444,7 +2454,6 @@ const f = StyleSheet.create({
     backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 13,
     paddingHorizontal: 13, paddingVertical: 11,
   },
-  fatoLate: { borderColor: Colors.red + "66", backgroundColor: Colors.redD },
   fatoK: { fontFamily: Fonts.body, fontSize: 12, fontWeight: "600", color: Colors.ink2 },
   fatoBig: { fontFamily: Fonts.mono, fontSize: 21, fontWeight: "500", letterSpacing: -0.5, color: Colors.ink, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   fatoMid: { fontFamily: Fonts.mono, fontSize: 16, fontWeight: "500", color: Colors.ink, marginTop: 3, fontVariant: ["tabular-nums"] as any },
