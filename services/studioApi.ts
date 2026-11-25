@@ -764,6 +764,9 @@ export type PublicQuote = {
     quantity: number;
     unit_price: number;
     customization: any;
+    // 25/11/2026: campos da personalização do produto (rótulo de cada id).
+    // Opcional — ausente no backend antigo e null em item livre.
+    customization_fields?: Array<{ id: string; label?: string | null; type?: string | null }> | null;
     // 22/09/2026 (Matcon M1): unidade de venda do item ("m²", "sc"...).
     // Opcional — ausente/null em orçamento do Studio, que não tem unidade.
     unit?: string | null;
