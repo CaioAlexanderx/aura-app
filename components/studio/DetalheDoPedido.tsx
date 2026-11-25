@@ -11,6 +11,10 @@
 // para cá, sem mudar o que ela faz, para o shell Negócio montar o mesmo
 // detalhe em /personalizados/pedido/[id]. As props são todas opcionais: sem
 // nenhuma (a rota do /studio), o detalhe é o de sempre.
+//
+// 25/11/2026: `voltarEtapa` (só o Negócio passa) põe o "Voltar para …" ao
+// lado do avançar, pela mesma rota e o mesmo recarregar. Sem a prop, o
+// /studio não muda.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import {
@@ -20,6 +24,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { confirmAlert, notify } from "@/utils/webAlert";
+import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens, useStudioTheme, useStudioSemantic } from "@/contexts/StudioThemeMode";
@@ -43,6 +48,7 @@ import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/stud
 import { nomeDaCor } from "@/components/studio/nomeDaCor";
 import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
+import { BotaoVoltarEtapa } from "@/components/personalizados/BotaoVoltarEtapa";
 
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -435,6 +441,11 @@ export type DetalheDoPedidoProps = {
     status: StudioProductionStatus | null;
     recarregar: () => void;
   }) => ReactNode;
+  /**
+   * "Voltar para …" (uma etapa) ao lado do avançar. Só aparece onde o
+   * avançar aparece. Padrão: false (o /studio de sempre).
+   */
+  voltarEtapa?: boolean;
 };
 
 const TRILHA_DO_STUDIO = (numero: string): ItemDaTrilha[] => [
@@ -449,6 +460,7 @@ export function DetalheDoPedido({
   eyebrow = "PEDIDOS",
   rotaDaFicha = FICHA_DO_STUDIO,
   acoesDaEtapa,
+  voltarEtapa = false,
 }: DetalheDoPedidoProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -531,7 +543,7 @@ export function DetalheDoPedido({
   // Se require_deposit_for_production estiver ON e sinal pendente,
   // o backend retorna 409 deposit_required e doAdvance exibe Alert.
   // force: true enviado no retry quando lojista confirma.
-  const doAdvance = async (next: StudioProductionStatus, force = false) => {
+  const doAdvance = async (next: StudioProductionStatus, force = false, voltando = false) => {
     if (!data || !company?.id) return;
     setActing(true);
     try {
@@ -547,9 +559,13 @@ export function DetalheDoPedido({
           'Sinal não recebido',
           msg,
           'Iniciar mesmo assim',
-          () => doAdvance(next, true),
+          () => doAdvance(next, true, voltando),
           { destructive: true }
         );
+      } else if (voltando) {
+        // Voltar uma etapa: a recusa do backend (marketplace com a arte já
+        // recolhida, pedido cancelado da loja online) vai com a mensagem dele.
+        toast.error(e?.data?.error || e?.message || "Não deu para mover o pedido. Tente de novo.");
       } else {
         // Sem toast, o botão "Avançar" simplesmente não fazia nada visível
         // quando o backend recusava por outro motivo.
@@ -649,6 +665,19 @@ export function DetalheDoPedido({
               <Text style={s.actionBtnTxt}>Avançar para "{labelStudioStatus(next)}"</Text>
             </Pressable>
           )}
+          {/* Voltar uma etapa: só onde o avançar está, e só no Negócio. */}
+          {voltarEtapa && next ? (
+            <BotaoVoltarEtapa
+              etapaAtual={status}
+              onVoltar={(destino) => doAdvance(destino, false, true)}
+              disabled={acting}
+              nome={order.customer_name || undefined}
+              idDeTeste="btn-voltar-etapa"
+              estilo={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}
+              estiloDoTexto={[s.actionBtnTxt, { color: tk.ink2 }]}
+              antes={<Icon name="arrow-left" size={16} color={tk.ink2} />}
+            />
+          ) : null}
           {status === "pending_art" && (
             <Pressable
               onPress={() => setAprovacaoAberta(true)}

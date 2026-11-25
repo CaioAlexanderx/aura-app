@@ -39,6 +39,12 @@
 // a etapa dele abre primeiro. Pedido que já saiu da Fila (entregue,
 // cancelado) avisa por toast.
 //
+// 25/11/2026: "Voltar para …" no cartão (BotaoVoltarEtapa). Na fusão o
+// arrasto saiu e o cartão só andava para a frente. Volta uma etapa pela
+// mesma rota e pelo mesmo `mover` do avançar; sair de "Em produção" ou de
+// "Pronto" pede confirmação. Recusa do backend (marketplace com a arte já
+// recolhida) aparece no toast com a mensagem dele.
+//
 // Regras sem tela: components/personalizados/regrasDaProducao.ts.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -61,6 +67,7 @@ import {
   itemDoCartao, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
 import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
+import { BotaoVoltarEtapa } from "@/components/personalizados/BotaoVoltarEtapa";
 
 type Props = {
   companyId: string;
@@ -164,6 +171,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       s={s}
       destacado={!!destacarId && o.id === destacarId}
       onAvancar={avancar}
+      onVoltar={mover}
       onAprovacao={setAprovacaoDe}
       onRecolher={(p) => setRecolherDe(p.id)}
       onAbrir={onAbrirPedido}
@@ -393,7 +401,7 @@ function LinhaSaida({
 }
 
 function Cartao({
-  o, etapa, t, s, destacado, onAvancar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, cobrando,
+  o, etapa, t, s, destacado, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
@@ -401,6 +409,8 @@ function Cartao({
   s: ReturnType<typeof estilos>;
   destacado?: boolean;
   onAvancar: (o: StudioOrder) => void;
+  /** Mesmo `mover` do avançar: mesma rota, mesmo desfazer no erro. */
+  onVoltar: (o: StudioOrder, destino: StudioProductionStatus) => void;
   onAprovacao: (o: StudioOrder) => void;
   onRecolher: (o: StudioOrder) => void;
   onAbrir?: (id: string) => void;
@@ -504,6 +514,13 @@ function Cartao({
             </Pressable>
           </View>
         ) : null}
+        {/* Voltar uma etapa: discreto, por último. Some na primeira etapa. */}
+        <BotaoVoltarEtapa
+          etapaAtual={etapa.key}
+          onVoltar={(destino) => onVoltar(o, destino)}
+          nome={nome}
+          idDeTeste={`producao-voltar-${o.id}`}
+        />
       </View>
     </View>
   );

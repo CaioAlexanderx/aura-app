@@ -328,6 +328,91 @@ describe("a rota /personalizados/pedido/[id]", () => {
 });
 
 // ── 3. A folha ────────────────────────────────────────────────────────────
+// ── Voltar uma etapa no detalhe (25/11/2026) ─────────────────────────────
+describe("Voltar para … no detalhe do Negócio", () => {
+  beforeEach(estadoPadrao);
+
+  async function montar() {
+    let a!: renderer.ReactTestRenderer;
+    await act(async () => { a = renderer.create(<TelaPedido />); });
+    await esperar();
+    return a;
+  }
+
+  test("Aguardando arte: o botão volta direto para Aguardando personalização e recarrega", async () => {
+    mockGetOrder.mockResolvedValue(detalhe("pending_art"));
+    const a = await montar();
+    expect(texto(a)).toContain("Voltar para Aguardando personalização");
+    mockGetOrder.mockClear();
+    await act(async () => { achar(a, "btn-voltar-etapa")[0].props.onPress(); });
+    await esperar();
+    expect(tem(a, "web-portal")).toBe(false);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "o1", "awaiting_customization", undefined);
+    // Mesmo recarregar do avançar.
+    expect(mockGetOrder).toHaveBeenCalledWith("loja-1", "o1");
+    a.unmount();
+  });
+
+  test("Em produção: pede confirmação na tela antes de voltar para Aprovado", async () => {
+    mockGetOrder.mockResolvedValue(detalhe("in_production"));
+    const a = await montar();
+    expect(texto(a)).toContain("Voltar para Aprovado");
+    await act(async () => { achar(a, "btn-voltar-etapa")[0].props.onPress(); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(achar(a, "btn-voltar-etapa-pergunta")[0].props.children).toBe("Voltar este pedido para Aprovado?");
+    await act(async () => { achar(a, "btn-voltar-etapa-confirmar")[0].props.onPress(); });
+    await esperar();
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "o1", "approved", undefined);
+    a.unmount();
+  });
+
+  test("Pronto: confirma e volta para Em produção", async () => {
+    mockGetOrder.mockResolvedValue(detalhe("ready"));
+    const a = await montar();
+    await act(async () => { achar(a, "btn-voltar-etapa")[0].props.onPress(); });
+    expect(achar(a, "btn-voltar-etapa-pergunta")[0].props.children).toBe("Voltar este pedido para Em produção?");
+    await act(async () => { achar(a, "btn-voltar-etapa-cancelar")[0].props.onPress(); });
+    expect(tem(a, "btn-voltar-etapa-pergunta")).toBe(false);
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    await act(async () => { achar(a, "btn-voltar-etapa")[0].props.onPress(); });
+    await act(async () => { achar(a, "btn-voltar-etapa-confirmar")[0].props.onPress(); });
+    await esperar();
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "o1", "in_production", undefined);
+    a.unmount();
+  });
+
+  test("recusa do backend (marketplace com a arte recolhida): o toast mostra a mensagem dele", async () => {
+    const { toast } = jest.requireMock("@/components/Toast");
+    const msg = "Personalização já foi coletada; não dá pra voltar pra awaiting_customization.";
+    mockGetOrder.mockResolvedValue(detalhe("pending_art", { source: "marketplace" }));
+    mockUpdateStatus.mockRejectedValueOnce(Object.assign(new Error(msg), { status: 400, data: { error: msg } }));
+    const a = await montar();
+    await act(async () => { achar(a, "btn-voltar-etapa")[0].props.onPress(); });
+    await esperar();
+    expect(toast.error).toHaveBeenCalledWith(msg);
+    a.unmount();
+  });
+
+  test("sem botão na primeira etapa nem nas saídas da Fila", async () => {
+    for (const etapa of ["awaiting_customization", "delivered", "cancelled"]) {
+      mockGetOrder.mockResolvedValue(detalhe(etapa));
+      const a = await montar();
+      expect(tem(a, "btn-voltar-etapa")).toBe(false);
+      a.unmount();
+    }
+  });
+
+  test("o /studio não ganha o botão", async () => {
+    mockGetOrder.mockResolvedValue(detalhe("in_production"));
+    let a!: renderer.ReactTestRenderer;
+    await act(async () => { a = renderer.create(<TelaDoStudio />); });
+    await esperar();
+    expect(tem(a, "btn-voltar-etapa")).toBe(false);
+    expect(texto(a)).not.toContain("Voltar para");
+    a.unmount();
+  });
+});
+
 describe("regras da folha", () => {
   test("só as peças personalizáveis entram, abertas com o que já foi gravado", () => {
     const v = valoresIniciais([...DADOS.itens, item("i4", { customization: { nome: "Ana" } })]);
