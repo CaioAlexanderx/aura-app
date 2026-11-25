@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useMenosMovimento } from "@/constants/motion";
 
 type SkeletonProps = {
   width?: number | string;
@@ -10,6 +11,8 @@ type SkeletonProps = {
 };
 
 function ShimmerWeb({ width, height = 16, borderRadius = 8, style }: SkeletonProps) {
+  // 25/11/2026: "menos movimento" no sistema = bloco parado.
+  const menos = useMenosMovimento();
   return (
     <div
       style={{
@@ -18,7 +21,7 @@ function ShimmerWeb({ width, height = 16, borderRadius = 8, style }: SkeletonPro
         borderRadius,
         background: `linear-gradient(90deg, ${Colors.bg4} 25%, ${Colors.bg3} 50%, ${Colors.bg4} 75%)`,
         backgroundSize: "200% 100%",
-        animation: "auraShimmer 1.5s ease-in-out infinite",
+        animation: menos ? "none" : "auraShimmer 1.5s ease-in-out infinite",
         ...(style || {}),
       } as any}
     />
@@ -26,9 +29,11 @@ function ShimmerWeb({ width, height = 16, borderRadius = 8, style }: SkeletonPro
 }
 
 function ShimmerNative({ width, height = 16, borderRadius = 8, style }: SkeletonProps) {
+  const menos = useMenosMovimento();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (menos) { anim.setValue(0.5); return; }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: 1, duration: 1000, useNativeDriver: true }),
@@ -37,7 +42,7 @@ function ShimmerNative({ width, height = 16, borderRadius = 8, style }: Skeleton
     );
     loop.start();
     return () => loop.stop();
-  }, []);
+  }, [menos]);
 
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
 

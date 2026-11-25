@@ -29,6 +29,7 @@ import { datasDasPagas } from "@/utils/crediarioTresFatos";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./MenuMais";
 import { fmt } from "./fichaHelpers";
 import { SeloDaSituacao } from "./SeloDaSituacao";
+import { Collapsible } from "@/components/anim";
 
 /** QA 23/11/2026: o que a linha precisa saber do carnê. */
 export type InfoDaLinha<P> = {
@@ -141,11 +142,13 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         </View>
       </View>
 
-      {menu && (
+      {/* 25/11/2026 (movimento): menu e "ver/ocultar" abrem e fecham em
+          sanfona (280 ms); fechados, saem da tela (sem Tab escondido). */}
+      <Collapsible open={menu} desmontarFechado>
         <View style={{ paddingHorizontal: 14, paddingBottom: 10 }}>
           <ListaDoMenu itens={itensDoMenu} onEscolher={() => setMenu(false)} testID={`carne-${c.key}-menu`} />
         </View>
-      )}
+      </Collapsible>
 
       {c.progresso != null && (
         <View style={s.pg}>
@@ -177,7 +180,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         </Pressable>
       )}
 
-      {detalhe && (
+      <Collapsible open={detalhe} desmontarFechado>
         <View style={s.corpo} testID={`carne-${c.key}-corpo`}>
           {c.compras.length > 0 && (
             <View style={{ marginBottom: pagas.length > 0 ? 12 : 0 }}>
@@ -213,7 +216,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
             </View>
           ))}
         </View>
-      )}
+      </Collapsible>
 
       {c.juntadoDe.length > 0 && (
         <Text style={[s.nota, { paddingHorizontal: 14 }]}>Carnês juntados: {c.juntadoDe.join(", ")}</Text>

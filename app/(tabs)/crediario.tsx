@@ -1,7 +1,7 @@
 import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, Animated,
+  View, Text, ScrollView, StyleSheet, Pressable,
   ActivityIndicator, RefreshControl, useWindowDimensions,
   TextInput, Platform,
 } from "react-native";
@@ -39,6 +39,9 @@ import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/Button";
 import { Motion, Shadows, webTransition } from "@/constants/motion";
+import { useCountUp } from "@/hooks/useCountUp";
+import { FadeInUp } from "@/components/anim";
+import { Skeleton } from "@/components/Skeleton";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
 import { OlhoValores } from "@/components/OlhoValores";
@@ -194,55 +197,9 @@ type SortOrder = "balance" | "az";
 /** F2: filtro único — "todos" | "atraso" (qualquer vencido) | faixa de aging. */
 type FilterSel = "todos" | "atraso" | string;
 
-// ── F2: count-up do número herói (RAF, web+nativo) ─────────────────────
-function useCountUp(target: number, duration = 500): number {
-  const [val, setVal] = useState(target);
-  const fromRef = useRef(target);
-  useEffect(() => {
-    const from = fromRef.current;
-    if (!isFinite(target) || from === target) { setVal(target); return; }
-    fromRef.current = target;
-    const start = Date.now();
-    let raf = 0;
-    const step = () => {
-      const p = Math.min(1, (Date.now() - start) / duration);
-      const e = 1 - Math.pow(1 - p, 3); // ease-out cubic
-      setVal(from + (target - from) * e);
-      if (p < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return val;
-}
-
-// ── F2: entrada escalonada das seções (fade + translateY 8→0) ─────────
-function FadeInUp({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: any }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(anim, { toValue: 1, duration: Motion.slow, delay, useNativeDriver: false }).start();
-  }, [anim, delay]);
-  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
-  return (
-    <Animated.View style={[style, { opacity: anim, transform: [{ translateY }] }]}>
-      {children}
-    </Animated.View>
-  );
-}
-
-// ── F2: skeleton com pulse (substitui blocos estáticos) ────────────────
-function PulseBlock({ w, h, r = 6, mb = 0 }: { w: number | string; h: number; r?: number; mb?: number }) {
-  const anim = useRef(new Animated.Value(0.35)).current;
-  useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(anim, { toValue: 0.65, duration: 700, useNativeDriver: false }),
-      Animated.timing(anim, { toValue: 0.35, duration: 700, useNativeDriver: false }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [anim]);
-  return <Animated.View style={{ width: w as any, height: h, borderRadius: r, marginBottom: mb, backgroundColor: Colors.border, opacity: anim }} />;
-}
+// 25/11/2026 (movimento): o count-up do herói é o do app (hooks/useCountUp),
+// a entrada das seções é o FadeInUp de components/anim e o skeleton é o
+// components/Skeleton — os três respeitam o "menos movimento" do sistema.
 
 // ── F2: stat inline do hero (clicável quando tem onPress) ──────────────
 function HeroStat({ dot, label, value, sub, color, onPress, active }: {
@@ -655,12 +612,12 @@ export default function CrediarioScreen() {
           subtitle="Carregando a carteira…"
         />
         <GlassCard tone="gradient" style={{ padding: 22 }}>
-          <PulseBlock w={90} h={10} r={5} mb={12} />
-          <PulseBlock w={180} h={36} r={8} mb={16} />
+          <Skeleton width={90} height={10} borderRadius={5} style={{ marginBottom: 12 }} />
+          <Skeleton width={180} height={36} borderRadius={8} style={{ marginBottom: 16 }} />
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <PulseBlock w={120} h={44} r={11} />
-            <PulseBlock w={120} h={44} r={11} />
-            <PulseBlock w={120} h={44} r={11} />
+            <Skeleton width={120} height={44} borderRadius={11} />
+            <Skeleton width={120} height={44} borderRadius={11} />
+            <Skeleton width={120} height={44} borderRadius={11} />
           </View>
         </GlassCard>
       </ScrollView>
@@ -968,7 +925,7 @@ export default function CrediarioScreen() {
 
           {carteiraQ.isLoading ? (
             <View style={{ padding: 16 }}>
-              {[0, 1, 2].map(i => <PulseBlock key={i} w="100%" h={16} mb={12} />)}
+              {[0, 1, 2].map(i => <Skeleton key={i} width="100%" height={16} borderRadius={6} style={{ marginBottom: 12 }} />)}
             </View>
           ) : carteira.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: "center", gap: 14 }}>

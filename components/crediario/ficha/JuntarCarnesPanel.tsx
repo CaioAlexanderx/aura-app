@@ -24,7 +24,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ModalPop } from "@/components/anim";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
 import { MAX_INSTALLMENTS_CEILING } from "@/services/creditApi";
 import { mergeApi, type MergeOpts, type MergePlan } from "@/services/creditMerge";
@@ -157,8 +156,9 @@ export function JuntarCarnesPanel({
   const pronto = !!opts && !!preview && !previewLoading && !submitting;
 
   return (
-    <View style={m.panel} testID="juntar-carnes-painel">
-      <ModalPop visible style={{ flex: 1 }}>
+    // 25/11/2026: a moldura (m.panel), a entrada e a saída animadas vêm do
+    // <Presenca> da ficha — o painel continua na tela enquanto sai.
+    <View style={{ flex: 1 }} testID="juntar-carnes-painel">
         <View style={m.panelHead}>
           <Pressable onPress={onBack} style={m.panelBack} accessibilityRole="button">
             <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -395,7 +395,6 @@ export function JuntarCarnesPanel({
               )}
           </Pressable>
         </View>
-      </ModalPop>
     </View>
   );
 }

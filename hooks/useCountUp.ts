@@ -11,10 +11,13 @@
 // (ex.: fmtBRL(useCountUp(1234.5))) — nunca anime a string já formatada.
 // Se o valor final não for finito (NaN/Infinity/undefined), retorna o
 // valor final imediatamente (sem animar).
+// 25/11/2026: com "menos movimento" no sistema o número troca na hora.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
+import { useMenosMovimento } from "@/constants/motion";
 
 export function useCountUp(target: number, duration = 700): number {
+  const menos = useMenosMovimento();
   const isValid = Number.isFinite(target);
   const [display, setDisplay] = useState(isValid ? target : 0);
   const prevTarget = useRef(isValid ? target : 0);
@@ -31,7 +34,7 @@ export function useCountUp(target: number, duration = 700): number {
     const to = target;
     prevTarget.current = to;
 
-    if (from === to) {
+    if (from === to || menos) {
       setDisplay(to);
       return;
     }
@@ -56,7 +59,7 @@ export function useCountUp(target: number, duration = 700): number {
       if (frameRef.current != null) cancelAnimationFrame(frameRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, duration, isValid]);
+  }, [target, duration, isValid, menos]);
 
   return isValid ? display : target;
 }

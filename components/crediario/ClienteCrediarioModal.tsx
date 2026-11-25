@@ -41,7 +41,9 @@ import { installmentLabel } from "@/utils/creditInstallmentLabel";
 import QRCode from "react-native-qrcode-svg";
 import { toast } from "@/components/Toast";
 import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateInput";
-import { ModalPop } from "@/components/anim";
+import { Collapsible, FadeInUp, Presenca } from "@/components/anim";
+import { Skeleton } from "@/components/Skeleton";
+import { Motion, webTransition } from "@/constants/motion";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import {
   recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
@@ -235,6 +237,8 @@ export function ClienteCrediarioModal({
   // da tela cheia; "Trocar cliente" abre a lista por cima na tela média.
   const [limiteAberto, setLimiteAberto] = useState(false);
   const [trocarAberto, setTrocarAberto] = useState(false);
+  // Altura da coluna da ficha: a sanfona do "Trocar cliente" cresce até ela.
+  const [alturaDaTroca, setAlturaDaTroca] = useState(0);
   // F4: o "⋯" do alto da ficha.
   const [menuFicha, setMenuFicha] = useState(false);
   // QA 23/11 (P1-7): o menu do telefone (celular) entra na pilha do Esc.
@@ -1323,9 +1327,21 @@ export function ClienteCrediarioModal({
     </View>
   );
 
+  // 25/11/2026: o esqueleto do app no lugar da rodinha — o desenho de um
+  // cartão de carnê com duas parcelas, para a ficha não "pular" ao chegar.
   const carregandoEl = (
-    <View style={{ paddingVertical: 36, alignItems: "center" }}>
-      <ActivityIndicator color={Colors.violet3} />
+    <View style={{ paddingVertical: 6 }} testID="ficha-carregando">
+      {[0, 1].map((i) => (
+        <View key={i} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 14 }}>
+            <Skeleton width="45%" height={14} borderRadius={6} />
+            <Skeleton width={90} height={14} borderRadius={6} />
+          </View>
+          <Skeleton width="100%" height={6} borderRadius={99} style={{ marginBottom: 14 }} />
+          <Skeleton width="100%" height={44} borderRadius={10} style={{ marginBottom: 8 }} />
+          <Skeleton width="100%" height={44} borderRadius={10} />
+        </View>
+      ))}
     </View>
   );
 
@@ -1403,9 +1419,8 @@ export function ClienteCrediarioModal({
           {/* ── Painel "Receber pagamento" (task 03/08): desliza POR CIMA da
                ficha ocupando o sheet inteiro — não comprime mais o body.
                Gate e CTA vivem no rodapé FIXO, sempre visíveis. ── */}
-          {receberOpen && (
-            <View style={m.panel}>
-             <ModalPop visible style={{ flex: 1 }}>
+          <Presenca visivel={receberOpen} style={m.panel}>
+            {receberOpen && (<>
               <View style={m.panelHead}>
                 <Pressable onPress={() => { setReceberOpen(false); setReceberGate(false); }} style={m.panelBack} accessibilityRole="button">
                   <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -1662,15 +1677,13 @@ export function ClienteCrediarioModal({
               </View>
               </>
               )}
-             </ModalPop>
-            </View>
-          )}
+            </>)}
+          </Presenca>
 
           {/* Painel Pix: renderizado DEPOIS do Receber → empilha por cima;
               ‹ Voltar devolve ao Receber (se aberto) com os valores intactos. */}
-          {!!pixInstId && (
-            <View style={m.panel}>
-             <ModalPop visible style={{ flex: 1 }}>
+          <Presenca visivel={!!pixInstId} style={m.panel}>
+            {!!pixInstId && (<>
               <View style={m.panelHead}>
                 <Pressable onPress={() => { setPixInstId(null); setPixData(null); }} style={m.panelBack} accessibilityRole="button">
                   <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -1721,13 +1734,11 @@ export function ClienteCrediarioModal({
                   </Pressable>
                 </View>
               )}
-             </ModalPop>
-            </View>
-          )}
+            </>)}
+          </Presenca>
 
-          {renegScope && (
-            <View style={m.panel}>
-             <ModalPop visible style={{ flex: 1 }}>
+          <Presenca visivel={!!renegScope} style={m.panel}>
+            {renegScope && (<>
               <View style={m.panelHead}>
                 <Pressable onPress={() => setRenegScope(null)} style={m.panelBack} accessibilityRole="button">
                   <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -1859,10 +1870,10 @@ export function ClienteCrediarioModal({
                   </Pressable>
                 </View>
               </View>
-             </ModalPop>
-            </View>
-          )}
+            </>)}
+          </Presenca>
 
+          <Presenca visivel={!!juntarPre} style={m.panel}>
           {juntarPre && (
             <JuntarCarnesPanel
               companyId={companyId}
@@ -1875,7 +1886,9 @@ export function ClienteCrediarioModal({
               onDone={handleJuntou}
             />
           )}
+          </Presenca>
 
+          <Presenca visivel={!!printScope} style={m.panel}>
           {printScope && (
             <ImprimirCarnePanel
               titulo={printScope.label}
@@ -1892,10 +1905,10 @@ export function ClienteCrediarioModal({
               }}
             />
           )}
+          </Presenca>
 
-          {editingDueDateInst && (
-            <View style={m.panel}>
-             <ModalPop visible style={{ flex: 1 }}>
+          <Presenca visivel={!!editingDueDateInst} style={m.panel}>
+            {editingDueDateInst && (<>
               <View style={m.panelHead}>
                 <Pressable onPress={() => { setEditingDueDateInst(null); setEditDueDateError(""); }} style={m.panelBack} accessibilityRole="button">
                   <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -1951,9 +1964,8 @@ export function ClienteCrediarioModal({
                   </Pressable>
                 </View>
               </View>
-             </ModalPop>
-            </View>
-          )}
+            </>)}
+          </Presenca>
     </>
   );
 
@@ -2016,9 +2028,10 @@ export function ClienteCrediarioModal({
     </>
   );
 
+  // 25/11/2026: entra e sai animado (Presenca), como os outros painéis.
   const painelLimite = (
-    <View style={m.panel} testID="ficha-painel-limite">
-      <ModalPop visible style={{ flex: 1 }}>
+    <Presenca visivel={limiteAberto} style={m.panel}>
+      <View style={{ flex: 1 }} testID="ficha-painel-limite">
         <View style={m.panelHead}>
           <Pressable onPress={() => setLimiteAberto(false)} style={m.panelBack} accessibilityRole="button">
             <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -2031,8 +2044,8 @@ export function ClienteCrediarioModal({
         <ScrollView style={m.panelBody} contentContainerStyle={{ padding: 16, paddingTop: 12 }} showsVerticalScrollIndicator={true}>
           {carregandoFicha ? carregandoEl : contaEl}
         </ScrollView>
-      </ModalPop>
-    </View>
+      </View>
+    </Presenca>
   );
 
   // ── F5 (23/11/2026): a ficha no celular, página inteira ──────────────
@@ -2118,12 +2131,12 @@ export function ClienteCrediarioModal({
                 <Pressable
                   key={k}
                   onPress={() => setTab(k)}
-                  style={[pg.segItem, tab === k && pg.segOn]}
+                  style={[pg.segItem, tab === k && pg.segOn, TRANSICAO_DA_ABA]}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: tab === k }}
                   testID={`ficha-aba-${k}`}
                 >
-                  <Text style={[pg.segTxt, tab === k && { color: "#fff" }]}>{k === "parcelas" ? "Parcelas" : "Movimentações"}</Text>
+                  <Text style={[pg.segTxt, tab === k && { color: "#fff" }, TRANSICAO_DO_TEXTO]}>{k === "parcelas" ? "Parcelas" : "Movimentações"}</Text>
                 </Pressable>
               ))}
             </View>
@@ -2141,7 +2154,7 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {limiteAberto && painelLimite}
+          {painelLimite}
           {paineis}
           {dialogos}
         </KeyboardAvoidingView>
@@ -2177,8 +2190,8 @@ export function ClienteCrediarioModal({
                 virou painel (pelo "⋯" ou pelo "ver" do terceiro fato). */}
             <View style={[m.tabs, { marginBottom: 12 }]}>
               {(["parcelas", "historico"] as Tab[]).map(t => (
-                <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
-                  <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn]} numberOfLines={1}>
+                <Pressable key={t} style={[m.tab, tab === t && m.tabOn, TRANSICAO_DA_ABA]} onPress={() => setTab(t)}>
+                  <Text style={[m.tabTxt, { fontFamily: Fonts.body }, tab === t && m.tabTxtOn, TRANSICAO_DO_TEXTO]} numberOfLines={1}>
                     {/* 23/11/2026 (F1): nomes do redesenho da ficha. No celular
                         (< 480 px) a 1ª aba vira "Parcelas" e a 3ª "Limite": três
                         abas em 375 px têm ~105 px cada. */}
@@ -2211,7 +2224,7 @@ export function ClienteCrediarioModal({
             </View>
           )}
 
-          {limiteAberto && painelLimite}
+          {painelLimite}
           {paineis}
           {dialogos}
     </ResponsiveSheet>
@@ -2284,6 +2297,9 @@ export function ClienteCrediarioModal({
         </View>
       )}
 
+      {/* 25/11/2026 (movimento): a ficha entra e troca de cliente com fade +
+          8 px (key = cliente). A lista da esquerda fica parada. */}
+      <FadeInUp key={customerId ?? "sem-cliente"} style={t.corpo} testID="ficha-entrada">
       <View style={t.centro} testID="ficha-centro">
         {!larga && barraDeTroca}
         {/* QA 23/11 (P2): na tela média (1024 com o menu) o cabeçalho fixo
@@ -2319,16 +2335,24 @@ export function ClienteCrediarioModal({
         <ScrollView style={t.rolagem} contentContainerStyle={t.movConteudo} showsVerticalScrollIndicator={true}>
           {historicoEl}
         </ScrollView>
-        {limiteAberto && painelLimite}
+        {painelLimite}
         {paineis}
       </View>
+      </FadeInUp>
 
-      {!larga && trocarAberto && !!listaLateral && (
+      {/* 25/11/2026 (movimento): "Trocar cliente ⌄" abre em sanfona (280 ms)
+          e fecha animado; fechada, a lista sai da tela (sem Tab escondido).
+          A caixa de fora só dá a altura; não pega toque. */}
+      {!larga && !!listaLateral && (
         <>
-          <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista" />
-          <View style={t.trocarLista} testID="ficha-trocar-lista">
-            {listaLateral}
-            {ocupado && <TravaDaLista />}
+          {trocarAberto && <Pressable style={t.trocarFundo} onPress={() => setTrocarAberto(false)} accessibilityLabel="Fechar a lista" />}
+          <View style={t.trocarCaixa} onLayout={(e) => setAlturaDaTroca(e.nativeEvent.layout.height)}>
+            <Collapsible open={trocarAberto} style={t.trocarLista} desmontarFechado>
+              <View style={{ height: alturaDaTroca }} testID="ficha-trocar-lista">
+                {listaLateral}
+                {ocupado && <TravaDaLista />}
+              </View>
+            </Collapsible>
           </View>
         </>
       )}
@@ -2337,6 +2361,11 @@ export function ClienteCrediarioModal({
     </View>
   );
 }
+
+// 25/11/2026 (movimento): abas Parcelas/Movimentações trocam a cor em 200 ms
+// (web; no nativo webTransition devolve {}).
+const TRANSICAO_DA_ABA = webTransition(["background-color", "border-color"], Motion.base);
+const TRANSICAO_DO_TEXTO = webTransition("color", Motion.base);
 
 /** Por cima da lista das clientes enquanto um envio não termina. */
 function TravaDaLista() {
@@ -2430,8 +2459,9 @@ const t = StyleSheet.create({
   posicao: { fontFamily: Fonts.mono, fontSize: 12, color: CorDaFicha.secundario, minWidth: 64, textAlign: "center" },
   trocarTxt: { fontFamily: Fonts.body, fontSize: 13, fontWeight: "700", color: Colors.ink },
   trocarFundo: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 19, backgroundColor: "rgba(3,5,14,0.35)" },
+  trocarCaixa: { position: "absolute", top: 0, left: 0, bottom: 0, width: 300, zIndex: 20, pointerEvents: "box-none" },
+  corpo: { flex: 1, flexDirection: "row", minWidth: 0, minHeight: 0 },
   trocarLista: {
-    position: "absolute", top: 0, left: 0, bottom: 0, width: 300, zIndex: 20,
     borderRightWidth: 1, borderRightColor: Colors.border2, backgroundColor: Colors.bg2,
     boxShadow: "6px 0 24px rgba(0,0,0,0.35)",
   },

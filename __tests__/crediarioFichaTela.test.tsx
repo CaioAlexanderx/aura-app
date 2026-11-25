@@ -44,11 +44,23 @@ jest.mock("@/components/ConfirmDialog", () => {
 jest.mock("@/components/ResponsiveSheet", () => ({
   ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
 }));
+const mockEntradas: string[] = [];
 jest.mock("@/components/anim", () => {
   const R = jest.requireActual("react");
   return {
     ModalPop: ({ children }: any) => R.createElement(R.Fragment, null, children),
     Collapsible: ({ open, children }: any) => (open ? R.createElement(R.Fragment, null, children) : null),
+    // 25/11/2026 (movimento): painel com saída animada e entrada da ficha.
+    Presenca: ({ visivel, children, testID }: any) => {
+      const { View } = jest.requireActual("react-native");
+      return visivel ? R.createElement(View, { testID }, children) : null;
+    },
+    // Conta cada montagem: a ficha entra de novo (key) ao trocar de cliente.
+    FadeInUp: ({ children, testID }: any) => {
+      const { View } = jest.requireActual("react-native");
+      R.useEffect(() => { mockEntradas.push(testID); }, []);
+      return R.createElement(View, { testID }, children);
+    },
   };
 });
 
@@ -297,6 +309,33 @@ describe("ClienteCrediarioModal na casca tela", () => {
     act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" })); });
     expect(onProxima).toHaveBeenCalledTimes(1);
     expect(onAnterior).toHaveBeenCalledTimes(1);
+  });
+
+  test("25/11 (movimento): a ficha entra de novo ao trocar de cliente (key), a lista não", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const lista = <ListaDaFicha clientes={[]} selecionadaId="c1" onEscolher={jest.fn()} onVoltar={jest.fn()} busca="" onBusca={jest.fn()} filtro="todos" onFiltro={jest.fn()} />;
+    const ficha = (id: string) => (
+      <QueryClientProvider client={qc}>
+        <ClienteCrediarioModal visible casca="tela" layout="larga" companyId="loja1" customerId={id} customerName="Maria" onClose={jest.fn()} onCobrar={jest.fn()} listaLateral={lista} />
+      </QueryClientProvider>
+    );
+    mockEntradas.length = 0;
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => { tree = renderer.create(ficha("c1")); });
+    const entradas = () => mockEntradas.filter((e) => e === "ficha-entrada").length;
+    expect(entradas()).toBe(1);
+
+    // Mesma cliente: nada entra de novo.
+    await act(async () => { tree.update(ficha("c1")); });
+    expect(entradas()).toBe(1);
+
+    // Outra cliente: a ficha (centro e direita) remonta e anima; a lista fica.
+    await act(async () => { tree.update(ficha("c2")); });
+    expect(entradas()).toBe(2);
+    expect(porId(tree, "ficha-entrada")[0].findAllByProps({ testID: "ficha-centro" }).length).toBeGreaterThan(0);
+    expect(porId(tree, "ficha-entrada")[0].findAllByProps({ testID: "ficha-direita" }).length).toBeGreaterThan(0);
+    expect(porId(tree, "ficha-entrada")[0].findAllByProps({ testID: "ficha-lista" })).toHaveLength(0);
+    expect(porId(tree, "ficha-lista")).toHaveLength(1);
   });
 
   test("as Movimentações carregam sem trocar de aba", async () => {
