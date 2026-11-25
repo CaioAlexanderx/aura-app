@@ -59,6 +59,11 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // backend conhece a chave (Aura-backend#1073). Atras da trava
   // PEDIDO_LIBERADO (utils/pedidoLiberado.ts).
   'vendas.pedidos': 'essencial',
+  // 25/11/2026 -- Venda condicional (C4): aba "Condicionais" em Vendas, a
+  // segunda. Aba, nao item de menu (o item "Vendas" segue com mod "vendas"),
+  // com chave PROPRIA (regra 3). Essencial. Atras da trava
+  // CONDICIONAL_LIBERADA (utils/condicionalLiberada.ts).
+  'vendas.condicionais': 'essencial',
   // 14/09/2026 -- Ordem de Servico ganha modulo proprio. Antes o item /os do
   // NAV usava mod "pdv" emprestado. Mesmo plano minimo do pdv (essencial) pra
   // ninguem ganhar nem perder acesso; o opt-in continua sendo o toggle
@@ -239,7 +244,8 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   // 10/10/2026 -- crediario.config acompanha o crediario (mesma pessoa).
   // 17/11/2026 -- a aba Pedidos (vendas.pedidos) acompanha quem ve Vendas.
-  vendas:        ['vendas', 'crediario', 'crediario.config', 'vendas.pedidos'],
+  // 25/11/2026 -- a aba Condicionais (vendas.condicionais) tambem.
+  vendas:        ['vendas', 'crediario', 'crediario.config', 'vendas.pedidos', 'vendas.condicionais'],
   // 13/10/2026 -- a pagina Black Friday acompanha quem decide a compra
   // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
   // Nao existe permissao propria no backend; cada secao da pagina checa o

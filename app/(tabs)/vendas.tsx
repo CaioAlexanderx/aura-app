@@ -29,6 +29,11 @@ import { pluralize } from "@/utils/plural";
 import { useAbaPedidos, usePedidos } from "@/hooks/usePedidos";
 import { AbaPedidos } from "@/components/screens/vendas/pedidos/AbaPedidos";
 import { TEXTOS_DOS_PEDIDOS } from "@/components/screens/vendas/pedidos/regrasDosPedidos";
+// 25/11/2026 (C4): aba Condicionais, a segunda, atras da trava
+// CONDICIONAL_LIBERADA e do modulo vendas.condicionais. Sem os dois, a tela e
+// a de antes: nenhuma aba, botao, selo ou cadeado.
+import { useAbaCondicionais } from "@/hooks/useAbaCondicionais";
+import { AbaCondicionais, TEXTOS_DAS_CONDICIONAIS } from "@/components/screens/vendas/condicionais/AbaCondicionais";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -121,6 +126,8 @@ var fmtDate = function(iso: string) {
   } catch { return ""; }
 };
 
+type AbaDeVendas = "vendas" | "condicionais" | "pedidos" | "ranking" | "fechamentos";
+
 // MULTICNPJ Onda 2.4: tipo do item da lista. Em consolidated tem
 // company_id+company_name; em per-company eles sao undefined.
 type SaleListRow = SalesListItem & {
@@ -152,14 +159,16 @@ export default function VendasScreen() {
   // folha — e assim o plano Essencial (que nao tem folha) tambem enxerga.
   const params = useLocalSearchParams<{ tab?: string }>();
   const paramTab = typeof params.tab === "string" ? params.tab : undefined;
-  const [activeTab, setActiveTab] = useState<"vendas" | "pedidos" | "ranking" | "fechamentos">(
-    paramTab === "ranking" || paramTab === "fechamentos" || paramTab === "pedidos" ? paramTab : "vendas"
+  const [activeTab, setActiveTab] = useState<AbaDeVendas>(
+    paramTab === "ranking" || paramTab === "fechamentos" || paramTab === "pedidos" || paramTab === "condicionais" ? paramTab : "vendas"
   );
   // 17/11/2026 (A5a): a aba Pedidos so existe com a trava e o modulo. O numero
   // da aba e o dos abertos (mesma consulta da aba, entao o cache e um so).
   const { visivel: comPedidos } = useAbaPedidos();
   const pedidosDaAba = usePedidos("abertos", "", { enabled: comPedidos });
-  const abaAtiva = activeTab === "pedidos" && !comPedidos ? "vendas" : activeTab;
+  const { visivel: comCondicionais } = useAbaCondicionais();
+  const abaAtiva = (activeTab === "pedidos" && !comPedidos) || (activeTab === "condicionais" && !comCondicionais)
+    ? "vendas" : activeTab;
 
   const range = useMemo(
     function() { return periodToRange(period, customFromIso, customToIso, monthAnchor); },
@@ -237,6 +246,13 @@ export default function VendasScreen() {
 
   const TABS_VENDAS: ScreenTabItem[] = [
     { key: "vendas", label: "Vendas" },
+    // Mockup da condicional (C4): Vendas · Condicionais · Pedidos · Ranking ·
+    // Fechamentos de caixa.
+    ...(comCondicionais ? [{
+      key: "condicionais",
+      label: TEXTOS_DAS_CONDICIONAIS.aba,
+      testID: "aba-vendas-condicionais",
+    }] : []),
     // Mockup (parte 3): "Pedidos" entre Vendas e Ranking, com o numero dos abertos.
     ...(comPedidos ? [{
       key: "pedidos",
@@ -250,7 +266,9 @@ export default function VendasScreen() {
   // Linha de metricas do cabecalho. Na aba Vendas ela carrega o numero e ja
   // diz o escopo dele ("receita de vendas"), pra nao repetir a palavra solta
   // "receita" que o Painel usa pra outra conta.
-  const heroSub = abaAtiva === "pedidos"
+  const heroSub = abaAtiva === "condicionais"
+    ? TEXTOS_DAS_CONDICIONAIS.subtitulo
+    : abaAtiva === "pedidos"
     ? TEXTOS_DOS_PEDIDOS.subtitulo
     : abaAtiva === "vendas"
     ? (stats ? (
@@ -271,7 +289,7 @@ export default function VendasScreen() {
         title="Vendas"
         live={abaAtiva === "vendas"}
         subtitle={heroSub}
-        actions={
+        actions={abaAtiva === "condicionais" ? undefined : (
           <Pressable onPress={function() { if (abaAtiva === "pedidos") pedidosDaAba.refetch(); else refetch(); }} style={s.refreshBtn} disabled={abaAtiva === "pedidos" ? pedidosDaAba.isFetching : isFetching}>
             {(abaAtiva === "pedidos" ? pedidosDaAba.isFetching : isFetching) ? (
               <ActivityIndicator size="small" color={Colors.violet3} />
@@ -282,18 +300,22 @@ export default function VendasScreen() {
               </>
             )}
           </Pressable>
-        }
+        )}
       />
 
       {/* 09/05/2026: tabs Vendas / Fechamentos de Caixa
           02/08/2026: "Ranking" entre as duas (migrada de Folha)
-          29/08/2026: sublinhado -> pilula (ScreenTabs), igual /clientes e /estoque */}
+          29/08/2026: sublinhado -> pilula (ScreenTabs), igual /clientes e /estoque
+          25/11/2026 (C4): abaixo de 700 px as pilulas quebram em linhas, so
+          com a aba Condicionais; sem ela o celular fica como hoje (rolando). */}
       <ScreenTabs
         tabs={TABS_VENDAS}
         active={abaAtiva}
-        onSelect={function(k: string) { setActiveTab(k as "vendas" | "pedidos" | "ranking" | "fechamentos"); }}
+        onSelect={function(k: string) { setActiveTab(k as AbaDeVendas); }}
+        quebraNoCelular={comCondicionais}
       />
 
+      {abaAtiva === "condicionais" && <AbaCondicionais />}
       {abaAtiva === "pedidos" && <AbaPedidos />}
 
       {/* Ranking depende de um CNPJ especifico (o endpoint e

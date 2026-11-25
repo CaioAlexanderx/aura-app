@@ -25,7 +25,7 @@
 //   · docs/mockups/cabecalho-unificado-nove-abas.html        (01/09/2026)
 // ============================================================
 import { useEffect } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Dimensions } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Dimensions, useWindowDimensions } from "react-native";
 import { useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
@@ -192,17 +192,56 @@ export function ScreenHero({ eyebrow, title, subtitle, live, badge, actions }: S
 // testIDs históricos das abas (wa-varejo-aba-N) ao migrar pro padrão.
 // 14/10/2026: `dot` opcional — ponto colorido ao lado do rótulo (cor do estado,
 // ex.: certificado A1 da NF-e). Ausente = nada muda para as outras telas.
+// 25/11/2026 (Venda condicional, C4): `quebraNoCelular` opcional — abaixo de
+// 700 px as pilulas quebram em linhas (sem rolar de lado), com alvo de 44 px.
+// Medido no mockup aprovado: 5 abas em 2 linhas, sem rolagem em 375 e 320.
+// So /vendas liga; ausente = as outras telas ficam como estao.
 export type ScreenTabItem = { key: string; label: string; locked?: boolean; testID?: string; dot?: string };
+
+/** Abaixo desta largura as abas com `quebraNoCelular` quebram em linhas. */
+export const LARGURA_QUEBRA_DAS_ABAS = 700;
 
 type ScreenTabsProps = {
   tabs: ScreenTabItem[];
   active: string;
   onSelect: (key: string) => void;
+  quebraNoCelular?: boolean;
 };
 
-export function ScreenTabs({ tabs, active, onSelect }: ScreenTabsProps) {
+export function ScreenTabs({ tabs, active, onSelect, quebraNoCelular }: ScreenTabsProps) {
   const C = useColors();
   const { isDark } = useThemeStore();
+  const { width } = useWindowDimensions();
+  const quebra = !!quebraNoCelular && width < LARGURA_QUEBRA_DAS_ABAS;
+  const pilulas = tabs.map(t => {
+    const on = t.key === active;
+    return (
+      <Pressable
+        key={t.key}
+        onPress={() => onSelect(t.key)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        testID={t.testID}
+        style={[
+          tb.tab,
+          quebra && tb.tabQuebra,
+          { backgroundColor: isDark ? C.bg3 : C.bg3, borderColor: C.border },
+          on && { backgroundColor: C.violet, borderColor: C.violet },
+        ]}
+      >
+        <Text style={[tb.text, { color: C.ink3 }, on && { color: "#fff", fontWeight: "600" }]}>{t.label}</Text>
+        {t.locked && <Icon name="lock" size={10} color={on ? "#fff" : C.ink3} />}
+        {!!t.dot && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.dot }} />}
+      </Pressable>
+    );
+  });
+  if (quebra) {
+    return (
+      <View testID="screen-tabs-quebra" style={tb.quebra}>
+        {pilulas}
+      </View>
+    );
+  }
   return (
     <ScrollView
       horizontal
@@ -210,27 +249,7 @@ export function ScreenTabs({ tabs, active, onSelect }: ScreenTabsProps) {
       style={{ flexGrow: 0, marginBottom: 16 }}
       contentContainerStyle={{ flexDirection: "row", gap: 6, paddingHorizontal: 4 }}
     >
-      {tabs.map(t => {
-        const on = t.key === active;
-        return (
-          <Pressable
-            key={t.key}
-            onPress={() => onSelect(t.key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            testID={t.testID}
-            style={[
-              tb.tab,
-              { backgroundColor: isDark ? C.bg3 : C.bg3, borderColor: C.border },
-              on && { backgroundColor: C.violet, borderColor: C.violet },
-            ]}
-          >
-            <Text style={[tb.text, { color: C.ink3 }, on && { color: "#fff", fontWeight: "600" }]}>{t.label}</Text>
-            {t.locked && <Icon name="lock" size={10} color={on ? "#fff" : C.ink3} />}
-            {!!t.dot && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.dot }} />}
-          </Pressable>
-        );
-      })}
+      {pilulas}
     </ScrollView>
   );
 }
@@ -242,6 +261,9 @@ const tb = StyleSheet.create({
     borderRadius: 10, borderWidth: 1,
   },
   text: { fontSize: 13, fontWeight: "500" },
+  // Mockup (C4): .tab{height:44px;padding:0 13px} abaixo de 700 px.
+  quebra: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 4, marginBottom: 16 },
+  tabQuebra: { minHeight: 44, paddingHorizontal: 13, paddingVertical: 0 },
 });
 
 const n = StyleSheet.create({
