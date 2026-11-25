@@ -157,8 +157,8 @@ describe("acaoDaTecla", () => {
 
 describe("ListaDaFicha", () => {
   const clientes = [
-    { id: "c1", nome: "Maria Aparecida Souza", situacao: "Em atraso · 19 dias", atrasada: true, valor: "R$ 570,66" },
-    { id: "c2", nome: "Ana Lúcia Ferreira", situacao: "Em dia", atrasada: false, valor: "R$ 180,00" },
+    { id: "c1", nome: "Maria Aparecida Souza", situacao: "atrasado" as const, detalhe: "maior atraso 19 dias", valor: "R$ 570,66" },
+    { id: "c2", nome: "Ana Lúcia Ferreira", situacao: "em_dia" as const, detalhe: "", valor: "R$ 180,00" },
   ];
   function montar(extra: any = {}) {
     const props = {
@@ -176,6 +176,14 @@ describe("ListaDaFicha", () => {
     expect(porId(tree, "ficha-lista-item-c2")).toHaveLength(1);
     expect(porId(tree, "ficha-lista-item-c1")[0].props.accessibilityState).toEqual({ selected: true });
     expect(porId(tree, "ficha-lista-item-c2")[0].props.accessibilityState).toEqual({ selected: false });
+  });
+
+  test("25/11: um selo por linha, pela situação da carteira", () => {
+    const { tree } = montar();
+    expect(porId(tree, "ficha-lista-selo-c1")[0].props.situacao).toBe("atrasado");
+    expect(porId(tree, "ficha-lista-selo-c2")[0].props.situacao).toBe("em_dia");
+    expect(porId(tree, "ficha-lista-item-c1")[0].props.accessibilityLabel)
+      .toBe("Maria Aparecida Souza, Atrasado, maior atraso 19 dias, R$ 570,66");
   });
 
   test("um toque troca a ficha; outro volta para a lista", () => {

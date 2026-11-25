@@ -48,6 +48,7 @@ describe("O que vem agora", () => {
     expect(f).toEqual({
       titulo: "Atrasado", valor: "R$ 82,11",
       detalhe: "com R$ 2,11 de multa e juros · 1 parcela · venceu 02/11, há 19 dias", atrasado: true,
+      situacao: "atrasado",
     });
     const semEncargos = fatoOQueVemAgora({
       atrasadas: [{ due_date: "2026-11-02", remaining: 80, days_late: 19 }], proxima: null, saldo: 80, hoje: HOJE, fmt,
@@ -71,7 +72,7 @@ describe("O que vem agora", () => {
   });
   test("em dia: a próxima parcela", () => {
     const f = fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: "2026-12-20", remaining: 205.32 }, saldo: 410.66, hoje: HOJE, fmt });
-    expect(f).toEqual({ titulo: "Próxima parcela", valor: "R$ 205,32", detalhe: "vence 20/12", atrasado: false });
+    expect(f).toEqual({ titulo: "Próxima parcela", valor: "R$ 205,32", detalhe: "vence 20/12", atrasado: false, situacao: "em_dia" });
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: HOJE, remaining: 5 }, saldo: 5, hoje: HOJE, fmt }).detalhe).toBe("vence hoje");
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: { due_date: "2027-01-20", remaining: 5 }, saldo: 5, hoje: HOJE, fmt }).detalhe).toBe("vence 20/01/27");
   });
@@ -84,12 +85,25 @@ describe("O que vem agora", () => {
   test("só parcelas a conferir", () => {
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, aConferir: 2, saldo: 300, hoje: HOJE, fmt })).toEqual({
       titulo: "O que vem agora", valor: "Parcelas a conferir", detalhe: "veja o aviso abaixo", atrasado: false,
+      situacao: "a_conferir",
     });
   });
   test("compras sem carnê, sem parcela", () => {
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, saldo: 180, hoje: HOJE, fmt })).toEqual({
       titulo: "Próxima parcela", valor: "Sem data marcada", detalhe: "compras sem carnê: receba quando vier o pagamento", atrasado: false,
+      situacao: "em_dia",
     });
+  });
+  test("situação da cor (25/11): âmbar até 7 dias e na carência; depois neutro", () => {
+    const sit = (due: string | null, atrasadas: any[] = []) => fatoOQueVemAgora({
+      atrasadas, proxima: due ? { due_date: due, remaining: 50 } : null, saldo: 50, hoje: HOJE, fmt,
+    }).situacao;
+    expect(sit(HOJE)).toBe("a_vencer");
+    expect(sit("2026-11-28")).toBe("a_vencer");
+    expect(sit("2026-11-29")).toBe("em_dia");
+    expect(sit("2026-11-19")).toBe("a_vencer");
+    expect(sit(null, [{ due_date: "2026-11-10", remaining: 10 }])).toBe("atrasado");
+    expect(sit(null)).toBe("em_dia");
   });
   test("nada a vencer", () => {
     expect(fatoOQueVemAgora({ atrasadas: [], proxima: null, saldo: 0, hoje: HOJE, fmt }).valor).toBe("Nada a vencer");

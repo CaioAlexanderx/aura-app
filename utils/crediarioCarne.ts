@@ -302,7 +302,8 @@ export function derivarCarne<P extends ParcelaAbertaDoCarne>(
   const quitado = semSaldo && abertas.length === 0 && temCamposNovos && temAlgo;
   const vazio = semSaldo && abertas.length === 0 && !quitado;
   const semParcelas = !semSaldo && abertas.length === 0;
-  const atrasado = !quitado && (acc.overdue === true || abertas.some(emAtraso));
+  // (p) => …: passada direto ao .some, a regra recebia o índice como carência.
+  const atrasado = !quitado && (acc.overdue === true || abertas.some((p) => emAtraso(p)));
   const temContagem = !!total && total > 0 && pagas != null;
 
   const proxima = abertas[0];

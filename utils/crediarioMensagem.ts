@@ -15,6 +15,9 @@
 //     dentro de "semana").
 // ============================================================
 
+import { DEFAULT_GRACE_DAYS, parcelaEmAtrasoEm, type InstallmentLike } from "./creditOverdue";
+import { situacaoDoCrediario } from "./crediarioSituacao";
+
 export type Situacao = "a_vencer" | "vence_hoje" | "em_atraso";
 export const SITUACOES: Situacao[] = ["a_vencer", "vence_hoje", "em_atraso"];
 
@@ -124,12 +127,33 @@ export function diasDeAtraso(vencimento: string | null | undefined, hoje: string
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
-/** Sem parcela (só saldo) conta como "a vencer": o lembrete é o tom certo. */
-export function situacaoDaParcela(vencimento: string | null | undefined, hoje: string = hojeSP()): Situacao {
+/** O que a situação da mensagem precisa saber da parcela (a de /credit). */
+export type ParcelaDaMensagem = InstallmentLike & { due_date?: string | null };
+
+/**
+ * Sem parcela (só saldo) conta como "a vencer": o lembrete é o tom certo.
+ *
+ * 25/11/2026: a mesma regra de atraso da ficha e da lista
+ * (utils/crediarioSituacao): dentro da carência de 3 dias a parcela NÃO está
+ * "em atraso" — sai "a vencer" (ou "vence hoje"). Antes a mensagem chamava de
+ * "em atraso" a parcela que a ficha mostrava em dia. Com a parcela inteira
+ * vale o is_overdue do backend; só com a data, a data + a carência. Vencida
+ * além da carência sem contar como atraso (retroativa, a conferir) segue
+ * "em atraso": "venceu dia X" é o texto verdadeiro, "vence dia X" não.
+ */
+export function situacaoDaParcela(
+  parcela: string | ParcelaDaMensagem | null | undefined, hoje: string = hojeSP(),
+): Situacao {
+  const p = parcela && typeof parcela === "object" ? parcela : null;
+  const vencimento = p ? p.due_date : (parcela as string | null | undefined);
   if (!vencimento) return "a_vencer";
   const d = dia(vencimento);
+  const atrasado = p ? parcelaEmAtrasoEm(p, hoje) : diasDeAtraso(d, hoje) > DEFAULT_GRACE_DAYS;
+  const s = situacaoDoCrediario({ atrasado, vencimento: d, hoje });
+  if (s === "atrasado") return "em_atraso";
   if (d === hoje) return "vence_hoje";
-  return d < hoje ? "em_atraso" : "a_vencer";
+  if (s === "a_vencer" || d > hoje) return "a_vencer";
+  return "em_atraso";
 }
 
 export function primeiroNome(nome: string | null | undefined): string {

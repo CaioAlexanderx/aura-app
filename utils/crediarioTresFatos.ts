@@ -13,6 +13,7 @@
 // Puro (sem React, sem API): testado em __tests__/crediarioTresFatos.test.ts.
 // ============================================================
 import { dataDoVencimento, diaEmSaoPaulo } from "@/utils/crediarioMovimentacao";
+import { situacaoDoCrediario, type SituacaoDoCrediario } from "@/utils/crediarioSituacao";
 
 type Fmt = (n: number) => string;
 
@@ -106,7 +107,7 @@ export function fatoOQueVemAgora(p: {
   /** Hoje em São Paulo, YYYY-MM-DD. */
   hoje: string;
   fmt: Fmt;
-}): Fato & { atrasado: boolean } {
+}): Fato & { atrasado: boolean; situacao: SituacaoDoCrediario } {
   if (p.atrasadas.length > 0) {
     const ordem = p.atrasadas.slice().sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
     const antiga = ordem[0];
@@ -127,6 +128,7 @@ export function fatoOQueVemAgora(p: {
         ? `1 parcela · venceu ${venceu}${ha}`
         : `${n} parcelas · a mais antiga venceu ${venceu}${ha}`),
       atrasado: true,
+      situacao: "atrasado",
     };
   }
   if (p.proxima) {
@@ -140,10 +142,12 @@ export function fatoOQueVemAgora(p: {
         : dia && dia < p.hoje ? `venceu ${dataDoVencimento(p.proxima.due_date, p.hoje)}`
         : `vence ${dataDoVencimento(p.proxima.due_date, p.hoje)}`,
       atrasado: false,
+      // 25/11/2026: âmbar quando vence em até 7 dias ou está na carência.
+      situacao: situacaoDoCrediario({ atrasado: false, vencimento: dia, hoje: p.hoje }),
     };
   }
   if ((p.aConferir ?? 0) > 0) {
-    return { titulo: "O que vem agora", valor: "Parcelas a conferir", detalhe: "veja o aviso abaixo", atrasado: false };
+    return { titulo: "O que vem agora", valor: "Parcelas a conferir", detalhe: "veja o aviso abaixo", atrasado: false, situacao: "a_conferir" };
   }
   if (p.saldo > 0.009) {
     return {
@@ -151,9 +155,10 @@ export function fatoOQueVemAgora(p: {
       valor: "Sem data marcada",
       detalhe: "compras sem carnê: receba quando vier o pagamento",
       atrasado: false,
+      situacao: "em_dia",
     };
   }
-  return { titulo: "O que vem agora", valor: "Nada a vencer", detalhe: "nenhuma parcela em aberto", atrasado: false };
+  return { titulo: "O que vem agora", valor: "Nada a vencer", detalhe: "nenhuma parcela em aberto", atrasado: false, situacao: "em_dia" };
 }
 
 // ── 3. Pode comprar mais ────────────────────────────────────────────────

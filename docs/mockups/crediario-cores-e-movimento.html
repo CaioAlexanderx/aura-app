@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crediário · cores e movimento</title>
+<style>
+:root{
+  --bg:#f6f5fb; --card:#ffffff; --ink:#1c1830; --ink2:#4b4662; --ink3:#7a7591; --line:#e7e4f0;
+  --green:#059669; --greenT:#047857; --greenD:rgba(5,150,105,.09);
+  --amber:#d97706; --amberT:#92400e; --amberD:rgba(217,119,6,.10);
+  --red:#dc2626;   --redT:#b91c1c;   --redD:rgba(220,38,38,.08);
+  --violet:#7c3aed; --violetT:#6d28d9; --violetD:rgba(124,58,237,.09);
+  --orange:#f97316; --red90:#ef4444;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+:root[data-t="dark"]{
+  --bg:#0f0c1a; --card:#1a1628; --ink:#f1eff8; --ink2:#c9c4dc; --ink3:#8d87a6; --line:#2c2740;
+  --green:#34d399; --greenT:#34d399; --greenD:rgba(52,211,153,.10);
+  --amber:#fbbf24; --amberT:#fbbf24; --amberD:rgba(251,191,36,.10);
+  --red:#f87171;   --redT:#f87171;   --redD:rgba(248,113,113,.10);
+  --violet:#a78bfa; --violetT:#c4b5fd; --violetD:rgba(167,139,250,.12);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px max(16px,env(safe-area-inset-left)) 48px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:22px;margin:0}
+h2{font-size:15px;margin:0 0 10px;letter-spacing:.02em}
+p.lead{color:var(--ink2);margin:6px 0 0;max-width:72ch}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button.tg{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:7px 14px;font:inherit;cursor:pointer}
+button.tg[aria-pressed="true"]{background:var(--violet);color:#fff;border-color:var(--violet)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;flex:none}
+.nm{flex:1;min-width:0}.nm b{display:block}.nm small{color:var(--ink3)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.val{font-variant-numeric:tabular-nums;font-weight:600}
+.pill{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 9px;white-space:nowrap}
+.selo{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:99px;padding:3px 10px;white-space:nowrap;transition:background .2s var(--ease),color .2s var(--ease)}
+.selo i{width:7px;height:7px;border-radius:50%;display:block}
+.s-ok{background:var(--greenD);color:var(--greenT)}.s-ok i{background:var(--green)}
+.s-soon{background:var(--amberD);color:var(--amberT)}.s-soon i{background:var(--amber)}
+.s-late{background:var(--redD);color:var(--redT)}.s-late i{background:var(--red)}
+.s-rev{background:var(--violetD);color:var(--violetT)}.s-rev i{background:var(--violet)}
+.parc{display:flex;align-items:center;gap:10px;padding:10px 10px;border-radius:10px;margin:4px 0;transition:background .2s var(--ease)}
+.circ{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;border:1.5px solid var(--line);color:var(--ink3);flex:none}
+.aging{display:flex;gap:4px;align-items:flex-end;height:46px}
+.aging div{flex:1;border-radius:6px 6px 2px 2px}
+.aging-l{display:flex;gap:4px;font-size:11px;color:var(--ink3);margin-top:4px}.aging-l span{flex:1;text-align:center}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink3);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.note{font-size:12.5px;color:var(--ink2)}
+/* movimento */
+.stage{position:relative;height:230px;border:1px dashed var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.ficha{position:absolute;inset:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.ficha.in{animation:fichaIn .28s var(--ease) both}
+@keyframes fichaIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.painel{position:absolute;left:50%;top:50%;width:min(260px,80%);transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.painel.abre{animation:pIn .28s var(--ease) both}
+.painel.fecha{animation:pOut .2s var(--ease) both}
+.painel.seco{animation:none}
+@keyframes pIn{from{opacity:0;transform:translate(-50%,-50%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes pOut{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-50%) scale(.98)}}
+.sanfona{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s var(--ease)}
+.sanfona.aberta{grid-template-rows:1fr}.sanfona>div{overflow:hidden}
+.reduz *{animation:none!important;transition:none!important}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer;min-height:40px}
+.btn.pri{background:var(--violet);border-color:var(--violet);color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Crediário · cores e movimento</h1>
+    <p class="lead">Mockup para aprovação (Teo, 25/11). À esquerda, como está hoje; à direita, a proposta. Verde = em dia, âmbar = a vencer, vermelho = atrasado. O "a conferir" sai do âmbar e vai para o violeta, que já é a cor do "Mudar a data".</p>
+    <div class="bar" style="margin-top:12px">
+      <button class="tg" id="tClaro" aria-pressed="true">Tema claro</button>
+      <button class="tg" id="tEscuro" aria-pressed="false">Tema escuro</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>1 · Lista de clientes</h2>
+    <div class="cols">
+      <div class="panel"><div class="tag">Hoje</div>
+        <div class="row"><div class="av" style="background:var(--violet)">A</div><div class="nm"><b>Ana P.</b><small><span class="dot" style="background:var(--green)"></span>Em dia</small></div><span class="val">R$ 320,00</span></div>
+        <div class="row"><div class="av" style="background:var(--violet)">B</div><div class="nm"><b>Bruna S.</b><small><span class="dot" style="background:var(--green)"></span>Em dia · vence amanhã</small></div><span class="val">R$ 110,00</span></div>
+        <div class="row"><div class="av" style="background:var(--red)">C</div><div class="nm"><b>Carla M.</b><small><span class="dot" style="background:var(--red)"></span>Em atraso</small></div><span class="val" style="color:var(--red)">R$ 569,40</span><span class="pill" style="background:var(--amberD);color:var(--amber)">Em atraso</span></div>
+        <div class="row"><div class="av" style="background:var(--violet)">G</div><div class="nm"><b>Gisele R.</b><small><span class="dot" style="background:var(--amber)"></span>Conferir</small></div><span class="val" style="color:var(--amber)">R$ 683,40</span><span class="pill" style="background:var(--amberD);color:var(--amber)">2 a conferir</span></div>
+        <p class="note">Âmbar hoje quer dizer quatro coisas: atraso curto, "Em atraso" sem data, a conferir e pagamento parcial. A Carla aparece com o ponto vermelho e a pílula âmbar na mesma linha.</p>
+      </div>
+      <div class="panel"><div class="tag">Proposta</div>
+        <div class="row"><div class="av" style="background:var(--violet)">A</div><div class="nm"><b>Ana P.</b><small>próxima em 18/12</small></div><span class="val">R$ 320,00</span><span class="selo s-ok"><i></i>Em dia</span></div>
+        <div class="row"><div class="av" style="background:var(--violet)">B</div><div class="nm"><b>Bruna S.</b><small>R$ 110,00 amanhã</small></div><span class="val">R$ 110,00</span><span class="selo s-soon"><i></i>A vencer</span></div>
+        <div class="row"><div class="av" style="background:var(--red)">C</div><div class="nm"><b>Carla M.</b><small>maior atraso 12 dias</small></div><span class="val" style="color:var(--redT)">R$ 569,40</span><span class="selo s-late"><i></i>Atrasado</span></div>
+        <div class="row"><div class="av" style="background:var(--violet)">G</div><div class="nm"><b>Gisele R.</b><small>2 parcelas a conferir</small></div><span class="val">R$ 683,40</span><span class="selo s-rev"><i></i>A conferir</span></div>
+        <p class="note">Um selo por linha, no desenho do selo de situação dos Pedidos (#1320). Texto em tom escuro para passar no contraste do tema claro.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2 · Parcelas na ficha</h2>
+    <div class="cols">
+      <div class="panel"><div class="tag">Hoje</div>
+        <div class="parc" style="background:var(--redD)"><div class="circ" style="border-color:var(--red);color:var(--red)">!</div><div class="nm"><b style="color:var(--red)">1/3 · 22/11</b><small>3 dias de atraso</small></div><span class="val" style="color:var(--red)">R$ 110,00</span></div>
+        <div class="parc"><div class="circ">2</div><div class="nm"><b>2/3 · 26/11</b><small>&nbsp;</small></div><span class="val">R$ 110,00</span></div>
+        <div class="parc"><div class="circ">3</div><div class="nm"><b>3/3 · 22/01</b><small>&nbsp;</small></div><span class="val">R$ 110,00</span></div>
+        <p class="note">Só o atraso tem cor. A que vence amanhã é igual à de janeiro.</p>
+      </div>
+      <div class="panel"><div class="tag">Proposta</div>
+        <div class="parc" style="background:var(--redD)"><div class="circ" style="border-color:var(--red);color:var(--red)">!</div><div class="nm"><b style="color:var(--redT)">1/3 · 22/11</b><small>3 dias de atraso</small></div><span class="val" style="color:var(--redT)">R$ 110,00</span></div>
+        <div class="parc" style="background:var(--amberD)"><div class="circ" style="border-color:var(--amber);color:var(--amberT)">2</div><div class="nm"><b style="color:var(--amberT)">2/3 · 26/11</b><small>vence amanhã</small></div><span class="val" style="color:var(--amberT)">R$ 110,00</span></div>
+        <div class="parc"><div class="circ" style="border-color:var(--green);color:var(--green)">3</div><div class="nm"><b>3/3 · 22/01</b><small>&nbsp;</small></div><span class="val">R$ 110,00</span></div>
+        <p class="note">A vencer = vence hoje, nos próximos 7 dias, ou já venceu dentro dos 3 dias de carência. As mais distantes ficam neutras, com só o círculo verde, para o cartão não virar um semáforo inteiro.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · Faixa de atraso (aging)</h2>
+    <div class="cols">
+      <div class="panel"><div class="tag">Hoje</div>
+        <div class="aging"><div style="height:90%;background:var(--green)"></div><div style="height:60%;background:var(--amber)"></div><div style="height:40%;background:var(--orange)"></div><div style="height:30%;background:var(--red)"></div><div style="height:25%;background:var(--red90)"></div></div>
+        <div class="aging-l"><span>Em dia</span><span>1–30</span><span>31–60</span><span>61–90</span><span>90+</span></div>
+        <p class="note">Laranja literal e um vermelho de 90+ mais claro que o de 61–90 no tema claro.</p>
+      </div>
+      <div class="panel"><div class="tag">Proposta</div>
+        <div class="aging"><div style="height:90%;background:var(--green)"></div><div style="height:60%;background:var(--red);opacity:.45"></div><div style="height:40%;background:var(--red);opacity:.65"></div><div style="height:30%;background:var(--red);opacity:.82"></div><div style="height:25%;background:var(--red)"></div></div>
+        <div class="aging-l"><span>Em dia</span><span>1–30</span><span>31–60</span><span>61–90</span><span>90+</span></div>
+        <p class="note">Todo atraso é vermelho, mais forte quanto mais antigo. O âmbar fica só para o que ainda vai vencer.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · Movimento</h2>
+    <div class="bar" style="margin-bottom:10px">
+      <button class="tg" id="mHoje" aria-pressed="false">Hoje</button>
+      <button class="tg" id="mProp" aria-pressed="true">Proposta</button>
+      <button class="tg" id="mReduz" aria-pressed="false">Menos movimento (sistema)</button>
+    </div>
+    <div class="cols">
+      <div class="panel" id="demo"><div class="tag">Ficha, painel e sanfona</div>
+        <div class="stage" id="stage">
+          <div class="ficha in" id="ficha"><b id="cli">Carla M.</b><div class="note">3 parcelas · R$ 569,40</div>
+            <div class="bar" style="margin-top:10px"><button class="btn" id="bTroca">Trocar cliente</button><button class="btn pri" id="bReceber">Receber</button><button class="btn" id="bVer">Ver quitados</button></div>
+            <div class="sanfona" id="sanf"><div><div class="note" style="padding-top:8px">✓ 1/2 · 09/10 · R$ 120,00<br>✓ 2/2 · 09/11 · R$ 120,00</div></div></div>
+          </div>
+          <div class="painel" id="painel" hidden><b>Receber</b><div class="note">Quanto recebeu?</div><div class="bar" style="margin-top:10px"><button class="btn" id="bFecha">Cancelar</button><button class="btn pri" id="bOk">Confirmar</button></div></div>
+        </div>
+      </div>
+      <div class="panel"><div class="tag">O que muda</div>
+        <table>
+          <tr><th>Onde</th><th>Hoje</th><th>Proposta</th></tr>
+          <tr><td>Abrir/trocar cliente (tela cheia)</td><td>troca seca</td><td>fade + 8 px, 280 ms</td></tr>
+          <tr><td>Painéis (Receber, Pix, Mudar a data…)</td><td>abre 250 ms, fecha seco</td><td>abre 280 ms, fecha 200 ms</td></tr>
+          <tr><td>Ver quitados, menu do carnê, Trocar cliente</td><td>aparece seco</td><td>sanfona 280 ms</td></tr>
+          <tr><td>Parcela que foi paga</td><td>vermelho some seco</td><td>cor apaga em 200 ms</td></tr>
+          <tr><td>Carregando a ficha</td><td>rodinha</td><td>esqueleto do app</td></tr>
+          <tr><td>Menos movimento no sistema</td><td>ignorado</td><td>tudo sem animação</td></tr>
+        </table>
+        <p class="note">Mesma curva e mesmos tempos do resto do app (<code>constants/motion.ts</code>: 120 / 200 / 280 ms, cubic-bezier(.4,0,.2,1)), os do Caixa.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Para aprovar</h2>
+    <table>
+      <tr><th>#</th><th>Decisão</th><th>Recomendação</th></tr>
+      <tr><td>1</td><td>O que é "A vencer"</td><td>Vence hoje, nos próximos 7 dias, ou venceu dentro da carência de 3 dias. O resto fica neutro.</td></tr>
+      <tr><td>2</td><td>"A conferir" em violeta</td><td>Sim. Libera o âmbar para "A vencer".</td></tr>
+      <tr><td>3</td><td>Atraso todo em vermelho, graduado</td><td>Sim. Sai o laranja.</td></tr>
+      <tr><td>4</td><td>Textos novos do selo</td><td>"Em dia", "A vencer", "Atrasado", "A conferir"; na parcela, "vence hoje" e "vence amanhã".</td></tr>
+      <tr><td>5</td><td>Mensagem de cobrança alinhada à carência</td><td>Sim: hoje a mensagem chama de "em atraso" a parcela que a ficha mostra "em dia".</td></tr>
+    </table>
+  </section>
+</div>
+<script>
+(function(){
+  var root=document.documentElement;
+  function tema(d){root.setAttribute('data-t',d?'dark':'light');tClaro.setAttribute('aria-pressed',!d);tEscuro.setAttribute('aria-pressed',d);}
+  tClaro.onclick=function(){tema(false)};tEscuro.onclick=function(){tema(true)};
+  var modo='prop';
+  function setModo(m){modo=m;mHoje.setAttribute('aria-pressed',m==='hoje');mProp.setAttribute('aria-pressed',m==='prop');}
+  mHoje.onclick=function(){setModo('hoje')};mProp.onclick=function(){setModo('prop')};
+  mReduz.onclick=function(){var on=mReduz.getAttribute('aria-pressed')!=='true';mReduz.setAttribute('aria-pressed',on);demo.classList.toggle('reduz',on);};
+  var nomes=['Carla M.','Gisele R.','Bruna S.'],i=0;
+  bTroca.onclick=function(){i=(i+1)%nomes.length;cli.textContent=nomes[i];if(modo==='prop'){ficha.classList.remove('in');void ficha.offsetWidth;ficha.classList.add('in');}};
+  bReceber.onclick=function(){painel.hidden=false;painel.className='painel '+(modo==='prop'?'abre':'abre');};
+  function fecha(){if(modo==='prop'){painel.className='painel fecha';setTimeout(function(){painel.hidden=true},200);}else{painel.hidden=true;}}
+  bFecha.onclick=fecha;bOk.onclick=fecha;
+  bVer.onclick=function(){if(modo==='prop'){sanf.classList.toggle('aberta');}else{sanf.style.transition='none';sanf.classList.toggle('aberta');setTimeout(function(){sanf.style.transition=''},0);}};
+})();
+</script>
+</body>
+</html>

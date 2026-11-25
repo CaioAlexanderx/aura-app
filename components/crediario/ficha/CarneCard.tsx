@@ -28,6 +28,7 @@ import { diaMes, type CarneDerivado, type ParcelaAbertaDoCarne } from "@/utils/c
 import { datasDasPagas } from "@/utils/crediarioTresFatos";
 import { BotaoMais, ListaDoMenu, type ItemDoMenu } from "./MenuMais";
 import { fmt } from "./fichaHelpers";
+import { SeloDaSituacao } from "./SeloDaSituacao";
 
 /** QA 23/11/2026: o que a linha precisa saber do carnê. */
 export type InfoDaLinha<P> = {
@@ -65,7 +66,7 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
   // F5: no celular o "Imprimir" entra no "⋯" (mockup, celular).
   const { width } = useWindowDimensions();
   const celular = width < 768;
-  const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : CorDaFicha.secundario;
+  const corValor = c.atrasado ? CorDaFicha.vermelhoTexto : c.falta > 0 ? Colors.ink : CorDaFicha.secundario;
   const temDetalhe = c.parcelasPagas.length > 0 || c.compras.length > 0;
   // Fiado no grupo sem carnê: os dois botões ficam à vista (mockup).
   const fiadoSemCarne = c.semCarne && c.semParcelas;
@@ -110,9 +111,8 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
         <View style={s.nomeBloco}>
           <View style={s.nomeLinha}>
             <Text style={s.nome}>{c.nome}</Text>
-            {c.atrasado && (
-              <View style={[s.chip, s.chipLate]}><Text style={[s.chipT, { color: Colors.red }]}>Atrasado</Text></View>
-            )}
+            {/* 25/11/2026: o mesmo selo da carteira (sem "Em dia", decisão acima). */}
+            {c.atrasado && <SeloDaSituacao situacao="atrasado" testID={`carne-${c.key}-atrasado`} />}
           </View>
           {!!c.itensResumo && <Text style={s.itens} numberOfLines={1}>{c.itensResumo}</Text>}
           {c.semCarne && c.semParcelas && <Text style={s.itens}>Compras sem parcelas definidas.</Text>}
@@ -269,9 +269,6 @@ const s = StyleSheet.create({
   valor: { fontFamily: Fonts.mono, fontSize: 14.5, fontWeight: "500", fontVariant: ["tabular-nums"] as any },
   de: { fontFamily: Fonts.mono, fontSize: 11.5, color: CorDaFicha.secundario, marginTop: 1, fontVariant: ["tabular-nums"] as any },
   acoesTopo: { flexDirection: "row", alignItems: "center", gap: 6 },
-  chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, borderWidth: 1 },
-  chipT: { fontFamily: Fonts.body, fontSize: 11, fontWeight: "700" },
-  chipLate: { borderColor: Colors.red + "66", backgroundColor: Colors.redD },
 
   pg: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingBottom: 10 },
   prog: { flex: 1, height: 6, borderRadius: 99, backgroundColor: Colors.bg4, overflow: "hidden" },
