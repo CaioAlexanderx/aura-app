@@ -120,7 +120,7 @@ jest.mock("@/components/CompanyPickerModal", () => ({
 }));
 
 import {
-  ETAPAS, PROXIMA_ETAPA, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
+  ETAPAS, PROXIMA_ETAPA, ETAPA_ANTERIOR, etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
   fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
 } from "@/components/personalizados/regrasDaProducao";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
@@ -448,6 +448,138 @@ describe("render do quadro", () => {
     expect(tem(arvore, "producao-vazia")).toBe(false);
     expect(tem(arvore, "producao-tentar-de-novo")).toBe(true);
     arvore.unmount();
+  });
+});
+
+// ── Voltar uma etapa (25/11/2026) ─────────────────────────────────────────
+describe("ETAPA_ANTERIOR", () => {
+  test("o inverso do PROXIMA_ETAPA dentro do quadro; a primeira e as saídas não voltam", () => {
+    expect(ETAPA_ANTERIOR).toEqual({
+      awaiting_customization: null, pending_art: "awaiting_customization", approved: "pending_art",
+      in_production: "approved", ready: "in_production", delivered: null, cancelled: null,
+    });
+    // Coerente com o avançar: a próxima da anterior é a própria etapa.
+    for (const e of ETAPAS) {
+      const antes = ETAPA_ANTERIOR[e.key];
+      if (antes) expect(PROXIMA_ETAPA[antes]).toBe(e.key);
+    }
+  });
+
+  test("o rótulo é o da coluna; sem anterior, null", () => {
+    expect(etapaAnterior("in_production")?.label).toBe("Aprovado");
+    expect(etapaAnterior("pending_art")?.label).toBe("Aguardando personalização");
+    expect(etapaAnterior("awaiting_customization")).toBeNull();
+    expect(etapaAnterior("delivered")).toBeNull();
+    expect(etapaAnterior("cancelled")).toBeNull();
+    expect(etapaAnterior(null)).toBeNull();
+    expect(etapaAnterior("inventada")).toBeNull();
+    expect(textoDoVoltar({ label: "Aprovado" })).toBe("Voltar para Aprovado");
+    expect(perguntaDoVoltar({ label: "Em produção" })).toBe("Voltar este pedido para Em produção?");
+  });
+
+  test("só sair de Em produção ou de Pronto pede confirmação", () => {
+    expect(voltarPedeConfirmacao("in_production")).toBe(true);
+    expect(voltarPedeConfirmacao("ready")).toBe(true);
+    for (const k of ["awaiting_customization", "pending_art", "approved", null]) {
+      expect(voltarPedeConfirmacao(k)).toBe(false);
+    }
+  });
+});
+
+describe("Voltar para … no cartão", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLargura.valor = 1280;
+    mockUpdateStatus.mockResolvedValue({});
+  });
+
+  const QUATRO = [
+    pedido("p0", { studio_production_status: "awaiting_customization" }),
+    pedido("a1"),
+    pedido("b1", { studio_production_status: "in_production" }),
+    pedido("r1", { studio_production_status: "ready" }),
+  ];
+  const { Text: TextoRN } = jest.requireActual("react-native");
+  const textoDe = (n: any) => JSON.stringify(n.findAllByType(TextoRN).map((x: any) => x.props.children));
+  const plano = (n: any) => Object.assign({}, ...[n.props.style].flat(Infinity).filter(Boolean));
+
+  test("o botão aparece com o rótulo da coluna anterior; na primeira etapa, não", async () => {
+    const arvore = await montarQuadro(QUATRO);
+    expect(tem(arvore, "producao-voltar-p0")).toBe(false);
+    expect(textoDe(achar(arvore, "producao-voltar-a1")[0])).toContain("Voltar para Aguardando personalização");
+    expect(textoDe(achar(arvore, "producao-voltar-b1")[0])).toContain("Voltar para Aprovado");
+    expect(textoDe(achar(arvore, "producao-voltar-r1")[0])).toContain("Voltar para Em produção");
+    arvore.unmount();
+  });
+
+  test("de Aguardando arte volta direto, pela mesma rota do avançar", async () => {
+    const arvore = await montarQuadro(QUATRO);
+    await act(async () => { achar(arvore, "producao-voltar-a1")[0].props.onPress(); });
+    expect(tem(arvore, "web-portal")).toBe(false);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "a1", "awaiting_customization", undefined);
+    const col = achar(arvore, "producao-coluna-awaiting_customization")[0];
+    expect(col.findAllByProps({ testID: "producao-cartao-a1" }, { deep: false })).toHaveLength(1);
+    arvore.unmount();
+  });
+
+  test("de Em produção pede confirmação na tela; Cancelar não grava, Voltar grava a etapa anterior", async () => {
+    const arvore = await montarQuadro(QUATRO);
+    await act(async () => { achar(arvore, "producao-voltar-b1")[0].props.onPress(); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "web-portal")).toBe(true);
+    expect(achar(arvore, "producao-voltar-b1-pergunta")[0].props.children).toBe("Voltar este pedido para Aprovado?");
+    expect(textoDe(achar(arvore, "producao-voltar-b1-cancelar")[0])).toContain("Cancelar");
+    expect(textoDe(achar(arvore, "producao-voltar-b1-confirmar")[0])).toContain("Voltar");
+    await act(async () => { achar(arvore, "producao-voltar-b1-cancelar")[0].props.onPress(); });
+    expect(tem(arvore, "web-portal")).toBe(false);
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+
+    await act(async () => { achar(arvore, "producao-voltar-b1")[0].props.onPress(); });
+    await act(async () => { achar(arvore, "producao-voltar-b1-confirmar")[0].props.onPress(); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "b1", "approved", undefined);
+    const col = achar(arvore, "producao-coluna-approved")[0];
+    expect(col.findAllByProps({ testID: "producao-cartao-b1" }, { deep: false })).toHaveLength(1);
+    arvore.unmount();
+  });
+
+  test("de Pronto também pede confirmação e volta para Em produção", async () => {
+    const arvore = await montarQuadro(QUATRO);
+    await act(async () => { achar(arvore, "producao-voltar-r1")[0].props.onPress(); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(achar(arvore, "producao-voltar-r1-pergunta")[0].props.children).toBe("Voltar este pedido para Em produção?");
+    await act(async () => { achar(arvore, "producao-voltar-r1-confirmar")[0].props.onPress(); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "r1", "in_production", undefined);
+    arvore.unmount();
+  });
+
+  test("recusa do backend: o cartão volta para onde estava e o toast mostra a mensagem dele", async () => {
+    const { toast } = jest.requireMock("@/components/Toast");
+    const msg = "Personalização já foi coletada; não dá pra voltar pra awaiting_customization.";
+    mockUpdateStatus.mockRejectedValueOnce(Object.assign(new Error(msg), { status: 400 }));
+    const arvore = await montarQuadro([pedido("m1", { source: "marketplace" })]);
+    await act(async () => { achar(arvore, "producao-voltar-m1")[0].props.onPress(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(toast.error).toHaveBeenCalledWith(msg);
+    const arte = achar(arvore, "producao-coluna-pending_art")[0];
+    expect(arte.findAllByProps({ testID: "producao-cartao-m1" }, { deep: false })).toHaveLength(1);
+    arvore.unmount();
+  });
+
+  test("alvo de 44 px no botão e na confirmação; no celular o botão continua no cartão", async () => {
+    mockLargura.valor = 390;
+    const arvore = await montarQuadro(QUATRO);
+    await act(async () => { achar(arvore, "producao-etapa-in_production")[0].props.onPress(); });
+    expect(plano(achar(arvore, "producao-voltar-b1")[0]).minHeight).toBeGreaterThanOrEqual(44);
+    await act(async () => { achar(arvore, "producao-voltar-b1")[0].props.onPress(); });
+    expect(plano(achar(arvore, "producao-voltar-b1-confirmar")[0]).minHeight).toBeGreaterThanOrEqual(44);
+    expect(plano(achar(arvore, "producao-voltar-b1-cancelar")[0]).minHeight).toBeGreaterThanOrEqual(44);
+    arvore.unmount();
+  });
+
+  test("sem confirmação do navegador e sem hover no botão de voltar", () => {
+    const fonte = ler("components/personalizados/BotaoVoltarEtapa.tsx");
+    expect(fonte).not.toMatch(/confirmAlert|window\.confirm|Alert\.alert/);
+    expect(fonte).not.toMatch(/onMouseEnter|onHoverIn|onHoverOut|hovered|:hover/);
   });
 });
 

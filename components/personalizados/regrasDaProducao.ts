@@ -47,6 +47,51 @@ export const PROXIMA_ETAPA: Record<StudioProductionStatus, StudioProductionStatu
   cancelled: null,
 };
 
+// ── Voltar uma etapa (25/11/2026) ────────────────────────────────────────
+//
+// Na fusão o arrasto do Studio saiu e nada entrou no lugar: o cartão só
+// andava para a frente. O "Voltar para …" devolve o pedido UMA etapa, pela
+// mesma rota do avançar (PATCH production-status, que aceita qualquer etapa
+// válida).
+//
+// O mapa é o inverso do PROXIMA_ETAPA dentro das cinco etapas do quadro:
+//   - a primeira (Aguardando personalização) não tem anterior;
+//   - Entregue e Cancelado são saídas da Fila, não etapas do quadro: não
+//     voltam por aqui (null). O cartão deles não está na Fila, e o
+//     cancelado da loja online o backend nem aceita de volta;
+//   - não há etapa paralela no mapa: o caminho é uma linha só.
+//
+// Pedido de marketplace com a arte já recolhida não volta para "Aguardando
+// personalização": o backend recusa e a tela mostra a mensagem dele.
+export const ETAPA_ANTERIOR: Record<StudioProductionStatus, StudioProductionStatus | null> = {
+  awaiting_customization: null,
+  pending_art: "awaiting_customization",
+  approved: "pending_art",
+  in_production: "approved",
+  ready: "in_production",
+  delivered: null,
+  cancelled: null,
+};
+
+/** Sair de "Em produção" ou de "Pronto" pede confirmação; das outras, volta direto. */
+const VOLTAR_PEDE_CONFIRMACAO = new Set<string>(["in_production", "ready"]);
+
+export function voltarPedeConfirmacao(atual: string | null | undefined): boolean {
+  return !!atual && VOLTAR_PEDE_CONFIRMACAO.has(atual);
+}
+
+/** A etapa de antes, com o rótulo da coluna. null na primeira e nas saídas. */
+export function etapaAnterior(atual: string | null | undefined): Etapa | null {
+  const k = atual ? ETAPA_ANTERIOR[atual as StudioProductionStatus] : null;
+  return k ? ETAPAS.find((e) => e.key === k) || null : null;
+}
+
+/** "Voltar para Aprovado" */
+export const textoDoVoltar = (anterior: Pick<Etapa, "label">) => `Voltar para ${anterior.label}`;
+
+/** "Voltar este pedido para Aprovado?" */
+export const perguntaDoVoltar = (anterior: Pick<Etapa, "label">) => `Voltar este pedido para ${anterior.label}?`;
+
 const DO_QUADRO = new Set<string>(ETAPAS.map((e) => e.key));
 
 export function etapaDe(o: Pick<StudioOrder, "studio_production_status">): StudioProductionStatus {

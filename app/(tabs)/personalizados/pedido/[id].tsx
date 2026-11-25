@@ -13,7 +13,8 @@
 // props que a rota passa são todas opcionais; sem elas o /studio é o de
 // sempre. A trilha volta para a Produção, a ficha de produção do Studio fica
 // de fora (é do shell /studio) e, em "Aguardando personalização", entra o
-// botão "Recolher a arte e o texto" com a folha.
+// botão "Recolher a arte e o texto" com a folha. 25/11/2026: e o "Voltar
+// para …" ao lado do avançar (voltarEtapa), que o /studio não tem.
 //
 // Quem chega aqui, na ordem (o mesmo caminho da Produção, p-129):
 //   1. CONSOLIDADO (multi-CNPJ, "Todas as empresas"): uma loja por vez. A
@@ -97,6 +98,7 @@ function Tela() {
           trilha={TRILHA_DO_NEGOCIO}
           eyebrow="PERSONALIZADOS"
           rotaDaFicha={null}
+          voltarEtapa
           acoesDaEtapa={({ order, status, recarregar }) =>
             status === "awaiting_customization" ? (
               <BotaoRecolher companyId={companyId} pedidoId={order.id} onSalvo={() => recarregar()} />
