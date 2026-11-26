@@ -31,6 +31,17 @@ jest.mock("expo-font", () => ({ loadAsync: jest.fn(), isLoaded: () => true, useF
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: "FpktLogo" }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+// O arraste é HTML5 do DOM (web). Aqui o hook entrega o onDrop que o quadro
+// montou, e o teste solta o cartão chamando-o, como o navegador faria.
+const mockDnd: { onDrop: ((id: string, to: string) => void) | null } = { onDrop: null };
+jest.mock("@/components/studio/kanban/useStudioKanbanDnD", () => ({
+  useStudioKanbanDnD: (onDrop: any) => {
+    mockDnd.onDrop = onDrop;
+    return { isWeb: true, draggingId: null, hoverStatus: null, onCardDragStart: jest.fn(), onCardDragEnd: jest.fn(), onHoverChange: jest.fn(), onDrop };
+  },
+  useDraggableCardRef: () => ({ current: null }),
+  useDropZoneRef: () => ({ current: null }),
+}));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/utils/webAlert", () => ({ confirmAlert: jest.fn() }));
 const mockParams: { valor: Record<string, any> } = { valor: {} };
@@ -121,7 +132,7 @@ jest.mock("@/components/CompanyPickerModal", () => ({
 
 import {
   ETAPAS, PROXIMA_ETAPA, ETAPA_ANTERIOR, etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
-  fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
+  decidirSolta, fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
 } from "@/components/personalizados/regrasDaProducao";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
@@ -393,9 +404,55 @@ describe("render do quadro", () => {
     arvore.unmount();
   });
 
-  test("sem arrastar: o quadro não usa o arraste do Studio nem evento de drag", () => {
-    expect(FONTE_QUADRO).not.toMatch(/useStudioKanbanDnD|useDraggableCardRef|useDropZoneRef/);
-    expect(FONTE_QUADRO).not.toMatch(/onDragStart|draggable=|PanResponder/);
+  test("arrastar: eventos do DOM no web, nunca o responder system do react-native-web", () => {
+    expect(FONTE_QUADRO).toMatch(/useStudioKanbanDnD/);
+    expect(FONTE_QUADRO).not.toMatch(/PanResponder|onResponder|onStartShouldSetResponder/);
+  });
+
+  test("decidirSolta: mesma coluna nada; seguinte avança; adiante move; atrás volta (confirma de produção e pronto)", () => {
+    expect(decidirSolta("approved", "approved")).toEqual({ acao: "nada" });
+    expect(decidirSolta("approved", "delivered")).toEqual({ acao: "nada" });
+    expect(decidirSolta("approved", "in_production")).toEqual({ acao: "avancar" });
+    expect(decidirSolta("approved", "ready")).toEqual({ acao: "mover", destino: "ready" });
+    expect(decidirSolta("approved", "pending_art")).toEqual({ acao: "mover", destino: "pending_art" });
+    const c = decidirSolta("in_production", "approved");
+    expect(c.acao).toBe("confirmar-voltar");
+    expect(decidirSolta("ready", "approved").acao).toBe("confirmar-voltar");
+  });
+
+  test("soltar na coluna seguinte faz o mesmo que o botão de avançar", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("a1", "approved"); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "a1", "approved", undefined);
+    arvore.unmount();
+  });
+
+  test("soltar na mesma coluna não faz nada", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("a1", "pending_art"); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "web-portal")).toBe(false);
+    arvore.unmount();
+  });
+
+  test("soltar numa coluna de trás pede a confirmação; só grava ao confirmar", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("b1", "approved"); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "producao-arraste-voltar-confirmacao")).toBe(true);
+    expect(JSON.stringify(arvore.toJSON())).toContain("Voltar este pedido para Aprovado?");
+    await act(async () => { achar(arvore, "producao-arraste-voltar-confirmar")[0].props.onPress(); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "b1", "approved", undefined);
+    arvore.unmount();
+  });
+
+  test("cancelar a confirmação do arraste não grava", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("b1", "approved"); });
+    await act(async () => { achar(arvore, "producao-arraste-voltar-cancelar")[0].props.onPress(); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "web-portal")).toBe(false);
+    arvore.unmount();
   });
 
   test("sem hover: nenhuma ação depende do mouse por cima", () => {
