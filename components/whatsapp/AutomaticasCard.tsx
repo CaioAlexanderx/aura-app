@@ -12,15 +12,14 @@
 //
 // Sem saldo ou sem automáticas lidas do servidor, tudo trava.
 // ============================================================
-import React, { useCallback, useState } from "react";
+import React from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { birthdayApi } from "@/services/birthdayApi";
 import type { WaStatus } from "@/services/waApi";
 import type { SaldoInfo } from "./waSaldo";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
-import { mapWaError, waMarketingConsentOk } from "./waGuards";
+import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
 import {
   AUTO_KEYS, COR_AUTO, ROTULO_AUTO, podeDarMais, podeTirar, semDono, type AutoKey,
 } from "./waDivisao";
@@ -52,37 +51,9 @@ const DESC: Record<AutoKey, { desc: string; linhas: string[] }> = {
 };
 
 export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChanged, onAjustar }: Props) {
-  const [perguntando, setPerguntando] = useState<AutoKey | null>(null);
-  const [gravandoAceite, setGravandoAceite] = useState(false);
-  const [erroAceite, setErroAceite] = useState<string | null>(null);
-
   const info = auto.info;
   const total = saldo ? saldo.novidades.total : null;
-  const aceitou = waMarketingConsentOk(status);
-
-  const confirmarAceite = useCallback(async () => {
-    const key = perguntando;
-    if (!key) return;
-    setGravandoAceite(true);
-    setErroAceite(null);
-    try {
-      await birthdayApi.saveSettings(companyId, { wa_marketing_consent: true });
-      onStatusChanged();
-      setPerguntando(null);
-      await auto.ligar(key, true);
-    } catch (e: any) {
-      setErroAceite(mapWaError(e).message);
-    } finally {
-      setGravandoAceite(false);
-    }
-  }, [perguntando, companyId, onStatusChanged, auto]);
-
-  const alternar = useCallback((key: AutoKey) => {
-    if (!info) return;
-    if (info.ligadas[key]) { auto.ligar(key, false); return; }
-    if (!aceitou) { setPerguntando(key); return; }
-    auto.ligar(key, true);
-  }, [info, aceitou, auto]);
+  const alt = useAlternarAutomatica({ companyId, auto, status, onStatusChanged });
 
   if (auto.carregando && !info) {
     return (
@@ -196,7 +167,7 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
                 <Text style={s.sub}>{DESC[k].desc}</Text>
               </View>
               <Pressable
-                onPress={() => alternar(k)}
+                onPress={() => alt.alternar(k)}
                 disabled={travado}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: ligada, disabled: travado }}
@@ -224,27 +195,8 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
               )}
             </View>
 
-            {perguntando === k && (
-              <View style={s.aceite} testID="wa-auto-aceite">
-                <Text style={s.aceiteTitulo}>Seus clientes aceitaram receber novidades da loja pelo WhatsApp?</Text>
-                <View style={s.aceiteBotoes}>
-                  <Pressable
-                    onPress={confirmarAceite}
-                    disabled={gravandoAceite}
-                    accessibilityRole="button"
-                    style={[s.btnPrim, gravandoAceite && { opacity: 0.6 }]}
-                    testID="wa-auto-aceite-sim"
-                  >
-                    {gravandoAceite && <ActivityIndicator size="small" color="#fff" />}
-                    <Text style={s.btnPrimTxt}>Sim, aceitaram</Text>
-                  </Pressable>
-                  <Pressable onPress={() => { setPerguntando(null); setErroAceite(null); }} accessibilityRole="button" style={s.btnSec} testID="wa-auto-aceite-nao">
-                    <Text style={s.btnSecTxt}>Ainda não</Text>
-                  </Pressable>
-                </View>
-                <Text style={s.sub}>Pergunta feita uma vez só. Quem pedir para sair deixa de receber sozinho.</Text>
-                {!!erroAceite && <Text style={s.erro}>{erroAceite}</Text>}
-              </View>
+            {alt.perguntando === k && (
+              <AceiteNovidadesPergunta gravando={alt.gravando} erro={alt.erro} onSim={alt.confirmar} onNao={alt.recusar} />
             )}
           </View>
         );
@@ -287,14 +239,4 @@ const s = StyleSheet.create({
   swBolinhaOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
   btnLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-start" },
   btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
-  aceite: { backgroundColor: Colors.violetD, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, padding: 12, gap: 8 },
-  aceiteTitulo: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  aceiteBotoes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  btnPrim: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44,
-    backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14,
-  },
-  btnPrimTxt: { fontSize: 12.5, fontWeight: "700", color: "#fff" },
-  btnSec: { minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
-  btnSecTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
 } as any);

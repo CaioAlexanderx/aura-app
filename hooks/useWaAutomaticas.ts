@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { waConfigApi, type WaAutoKey } from "@/services/waConfigApi";
 import { mapWaError } from "@/components/whatsapp/waGuards";
-import { ajustarParte, lerAutomaticas, type AutomaticasInfo } from "@/components/whatsapp/waDivisao";
+import { ajustarParte, divisaoValida, lerAutomaticas, type AutomaticasInfo, type Partes } from "@/components/whatsapp/waDivisao";
 
 export interface UseWaAutomaticas {
   info: AutomaticasInfo | null;
@@ -19,6 +19,7 @@ export interface UseWaAutomaticas {
   /** +1 / −1 numa parte. `total` = saldo de novidades do mês. */
   ajustar: (key: WaAutoKey, delta: 1 | -1, total: number) => Promise<void>;
   ligar: (key: WaAutoKey, ligada: boolean) => Promise<boolean>;
+  aplicarDivisao: (prox: Partes, total: number) => Promise<boolean>;
 }
 
 export function useWaAutomaticas(companyId: string | null | undefined, enabled: boolean = true): UseWaAutomaticas {
@@ -71,10 +72,17 @@ export function useWaAutomaticas(companyId: string | null | undefined, enabled: 
     await aplicar(() => waConfigApi.putDivisao(companyId as string, prox));
   }, [info, salvando, ativo, aplicar, companyId]);
 
+  /** Grava uma divisão inteira (ex.: "Trazer 3 do Venda+"). Confere a regra antes de ir ao servidor. */
+  const aplicarDivisao = useCallback(async (prox: Partes, total: number) => {
+    if (!info || salvando || !ativo) return false;
+    if (!divisaoValida(prox, info.usadas, total)) return false;
+    return aplicar(() => waConfigApi.putDivisao(companyId as string, prox));
+  }, [info, salvando, ativo, aplicar, companyId]);
+
   const ligar = useCallback(async (key: WaAutoKey, ligada: boolean) => {
     if (!info || salvando || !ativo) return false;
     return aplicar(() => waConfigApi.setLigada(companyId as string, key, ligada));
   }, [info, salvando, ativo, aplicar, companyId]);
 
-  return { info, carregando, falhou, salvando, erro, recarregar, ajustar, ligar };
+  return { info, carregando, falhou, salvando, erro, recarregar, ajustar, ligar, aplicarDivisao };
 }

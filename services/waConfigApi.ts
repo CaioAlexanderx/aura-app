@@ -22,6 +22,10 @@ export const ROTAS = {
   automaticas: (c: string) => `${base(c)}/automaticas`,
   divisao: (c: string) => `${base(c)}/automaticas/divisao`,
   ligada: (c: string, key: string) => `${base(c)}/automaticas/${key}/ligada`,
+  automatica: (c: string, key: string) => `${base(c)}/automaticas/${key}`,
+  config: (c: string, key: string) => `${base(c)}/automaticas/${key}/config`,
+  enviar: (c: string, key: string) => `${base(c)}/automaticas/${key}/enviar`,
+  modelos: (c: string) => `${base(c)}/modelos`,
 };
 
 // ── Saldo ─────────────────────────────────────────────────────
@@ -61,6 +65,49 @@ export interface WaAutomaticasRaw {
   automaticas?: Partial<Record<WaAutoKey, WaAutomaticaRaw>> | null;
 }
 
+/** Uma pessoa da prévia, já na ordem do corte (mais compra / mais limite livre). */
+export interface WaPessoaRaw {
+  nome?: string | null;
+  detalhe?: string | null;
+}
+
+export interface WaPreviaRaw {
+  /** Quem entra no corte, na ordem declarada. Pode ser só uma amostra. */
+  pessoas?: WaPessoaRaw[] | null;
+  /** Total de aptos (maior que `pessoas` quando o servidor manda amostra). */
+  total?: number | null;
+  /** Novidades que ainda sobram para esta automática no mês. */
+  reserva?: number | null;
+  /** Mensagens por cliente com a configuração atual (Aniversário: 1 a 3). */
+  por_cliente?: number | null;
+  /** Fora por motivo (Venda+): recebeu há menos de 7 dias, pediu para sair, sem telefone. */
+  fora?: { recente?: number | null; sair?: number | null; sem_telefone?: number | null } | null;
+  /** Frase de exemplo já montada com um cliente real, para a bolha. */
+  mensagem?: string | null;
+}
+
+export interface WaAutomaticaDetalheRaw {
+  /** Escolhas da lojista (tom, presente, passos...). Formato por automática. */
+  config?: Record<string, any> | null;
+  previa?: WaPreviaRaw | null;
+}
+
+export type WaModeloEstado = "pronta" | "em_aprovacao" | "aprovado" | "nao_aprovado" | (string & {});
+
+export interface WaModeloRaw {
+  chave?: string | null;
+  /** Automática a que o modelo pertence. */
+  grupo?: WaAutoKey | (string & {}) | null;
+  titulo?: string | null;
+  /** Texto que vale hoje (o da Aura ou o último aprovado). */
+  texto?: string | null;
+  estado?: WaModeloEstado | null;
+  /** Texto novo esperando a aprovação do WhatsApp. */
+  texto_pendente?: string | null;
+  /** Por que o WhatsApp não aprovou, já em português. */
+  motivo?: string | null;
+}
+
 export const waConfigApi = {
   getSaldo: (companyId: string): Promise<WaSaldoRaw> =>
     request<WaSaldoRaw>(ROTAS.saldo(companyId)),
@@ -74,4 +121,19 @@ export const waConfigApi = {
 
   setLigada: (companyId: string, key: WaAutoKey, ligada: boolean): Promise<WaAutomaticasRaw> =>
     request<WaAutomaticasRaw>(ROTAS.ligada(companyId, key), { method: "PUT", body: { ligada } }),
+
+  /** Escolhas + prévia (quem cabe) de uma automática. */
+  getAutomatica: (companyId: string, key: WaAutoKey): Promise<WaAutomaticaDetalheRaw> =>
+    request<WaAutomaticaDetalheRaw>(ROTAS.automatica(companyId, key)),
+
+  /** Salva só o que mudou; a resposta traz a prévia refeita. */
+  putConfig: (companyId: string, key: WaAutoKey, patch: Record<string, any>): Promise<WaAutomaticaDetalheRaw> =>
+    request<WaAutomaticaDetalheRaw>(ROTAS.config(companyId, key), { method: "PUT", body: patch }),
+
+  /** Manda agora para quem cabe. `quantidade` é o que a tela prometeu; o servidor refaz o corte. */
+  enviarAgora: (companyId: string, key: WaAutoKey, quantidade: number): Promise<{ enfileiradas?: number | null }> =>
+    request<{ enfileiradas?: number | null }>(ROTAS.enviar(companyId, key), { method: "POST", body: { quantidade } }),
+
+  getModelos: (companyId: string): Promise<{ data?: WaModeloRaw[] | null }> =>
+    request<{ data?: WaModeloRaw[] | null }>(ROTAS.modelos(companyId)),
 };
