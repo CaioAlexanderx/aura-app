@@ -101,6 +101,7 @@ function Tela() {
           rotaDaFicha={null}
           voltarEtapa
           faltaReceber
+          semArcos
           acoesDaEtapa={({ order, status, recarregar }) =>
             status === "awaiting_customization" ? (
               <BotaoRecolher companyId={companyId} pedidoId={order.id} onSalvo={() => recarregar()} />

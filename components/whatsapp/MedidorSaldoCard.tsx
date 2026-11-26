@@ -84,6 +84,19 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
     );
   }
 
+  // Trava do servidor desligada (WA_SALDO_ATIVO): os limites novos ainda não valem
+  // nesta loja; mostrar "10 de 10" daria a entender que valem.
+  if (!saldo.ativo) {
+    return (
+      <View style={s.card} testID="wa-saldo-inativo">
+        <View style={s.linhaAviso}>
+          <Icon name="alert" size={13} color={Colors.amber} />
+          <Text style={s.avisoTxt}>Os limites novos ainda não estão valendo nesta loja.</Text>
+        </View>
+      </View>
+    );
+  }
+
   const esgotados = saldo.baldes.filter((b) => b.esgotado && b.textoEsgotado);
   const atencao = saldo.numeroEmAtencao || waNumeroEmAtencao(status);
 
@@ -128,6 +141,11 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
             Só passa a valer depois do pagamento. A Aura nunca compra sozinha.
           </Text>
           {!!pac.erro && <Text style={s.erro} testID="wa-saldo-pacote-erro">{pac.erro}</Text>}
+          {pac.abaBloqueada && (
+            <Text style={s.pacoteNota} testID="wa-saldo-pacote-bloqueada">
+              Se o pagamento não abriu, toque em abrir o pagamento.
+            </Text>
+          )}
           {!!pac.manual && (
             <Text style={s.pacoteNota} testID="wa-saldo-pacote-manual">
               Pedido registrado. Ainda não gerei o link de pagamento: a Aura vai te chamar para combinar o pagamento
