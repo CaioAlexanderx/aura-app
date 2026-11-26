@@ -43,7 +43,11 @@ export interface HubMessage {
   created_at: string;
   /** 'aurinha' | 'humano' | null (inbound) */
   source_type: string | null;
+  /** Quem falou (hub_messages, canal WhatsApp). Instagram não manda. */
+  author?: HubAuthor | null;
 }
+
+export type HubAuthor = "cliente" | "humano" | "aurinha";
 
 export interface HubPendingApproval {
   id: string;

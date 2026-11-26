@@ -5,7 +5,8 @@
 // categoria é a triagem automática com correção manual.
 // ============================================================
 import { Colors } from "@/constants/colors";
-import type { HubCategory, HubChannel, HubStatus } from "@/services/hubApi";
+import type { HubCategory, HubChannel, HubStatus, HubMessage } from "@/services/hubApi";
+import { formatarTelefone } from "@/utils/telefone";
 
 export const CHANNEL_META: Record<HubChannel, { label: string; color: string; short: string }> = {
   instagram:  { label: "Instagram",    color: "#d6249f", short: "IG" },
@@ -55,4 +56,27 @@ export function shortTime(iso: string | null): string {
 export function displayName(name: string | null, externalId: string): string {
   if (name && name.trim()) return name.trim();
   return `Cliente ${externalId.slice(-4)}`;
+}
+
+/** Contato na thread: nome, ou o telefone no WhatsApp (external_id é o número). */
+export function nomeDoContato(conv: { customer_name: string | null; external_id: string; channel: HubChannel }): string {
+  if (conv.customer_name && conv.customer_name.trim()) return conv.customer_name.trim();
+  if (conv.channel === "whatsapp") return formatarTelefone(conv.external_id) || displayName(null, conv.external_id);
+  return displayName(null, conv.external_id);
+}
+
+/**
+ * Rótulo do autor da bolha. Com `author` (hub_messages, WhatsApp) vale o
+ * que o backend gravou: o eco do celular vem como 'humano'. Sem ele
+ * (Instagram), o critério antigo por direção + source_type.
+ */
+export function rotuloDoAutor(
+  m: Pick<HubMessage, "direction" | "source_type" | "author">,
+  conv: { customer_name: string | null; external_id: string; channel: HubChannel },
+): string | null {
+  if (m.author === "cliente") return nomeDoContato(conv);
+  if (m.author === "humano") return "EQUIPE";
+  if (m.author === "aurinha") return "AURINHA";
+  if (m.direction !== "outbound") return null;
+  return m.source_type === "humano" ? "VOCÊ" : "AURINHA";
 }
