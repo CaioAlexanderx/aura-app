@@ -51,6 +51,8 @@ import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { useWaSaldo } from "@/hooks/useWaSaldo";
+import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -70,11 +72,13 @@ export default function WhatsAppScreen() {
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secao, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
-  const { company, isDemo, user } = useAuthStore();
+  const { company, isDemo, user, consolidatedView } = useAuthStore();
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
+  // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
+  const saldo = useWaSaldo(companyId, !demo && !consolidatedView);
 
   // A entrada da reativação conta em cima da lista de clientes. Mesma
   // queryKey do hook da tela de Clientes (react-query), então isto é
@@ -174,6 +178,22 @@ export default function WhatsAppScreen() {
         </View>
       ) : (
         <View style={{ gap: 14 }} testID="wa-varejo-real">
+          {consolidatedView ? (
+            <View style={s.linkCard} testID="wa-varejo-escolha-loja">
+              <Icon name="alert" size={14} color={Colors.violet3} />
+              <Text style={s.linkTxt}>
+                As mensagens e as automáticas do WhatsApp são por loja. Saia da visão consolidada e escolha a loja.
+              </Text>
+            </View>
+          ) : (
+            <MedidorSaldoCard
+              saldo={saldo.saldo}
+              carregando={saldo.carregando}
+              falhou={saldo.falhou}
+              status={wa.status}
+              onRetry={saldo.recarregar}
+            />
+          )}
           {/* Seções de Configurações: uma de cada vez, cada uma num bloco
               próprio (SECOES_CONFIG). */}
           <View style={s.secoes} testID="wa-varejo-config-secoes">
