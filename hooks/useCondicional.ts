@@ -47,6 +47,8 @@ export type PecaDaCondicional = {
   decided_at: string | null;
   decided_by?: string | null;
   sale_id: string | null;
+  /** C11 (Aura-backend#1117): número da venda que cobrou a peça. Ausente no backend antigo. */
+  venda_numero?: string | number | null;
   added_at: string;
   /** C9: peça com defeito já resolvida em Peças para resolver (C16). */
   resolved_at?: string | null;

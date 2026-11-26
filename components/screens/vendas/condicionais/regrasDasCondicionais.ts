@@ -147,17 +147,28 @@ function voltaram(n: number): string {
 export function pecasDaCondicional(c: LinhaDaCondicional): string {
   const sit = String(c.situacao);
   const total = Number(c.pecas) || 0;
+  const nomes = (c.primeiras_pecas || []).map((p) => p && p.nome).filter(Boolean) as string[];
   if (comPecaComEla(sit)) {
     if (c.parcial) {
-      const com = Number(c.pecas_com_cliente) || 0;
-      const voltou = Number(c.pecas_voltou) || 0;
-      const ficou = Number(c.pecas_ficou) || 0;
-      const partes = [pluralize(com, "peça", "peças") + " com ela"];
+      const com = Number(c.resumo?.com_cliente ?? c.pecas_com_cliente) || 0;
+      const voltou = Number(c.resumo?.voltaram ?? c.pecas_voltou) || 0;
+      const ficou = Number(c.resumo?.ficaram ?? c.pecas_ficou) || 0;
+      // C18: as primeiras peças vêm com a cliente primeiro; delas, as `com` primeiras são as que seguem com ela.
+      const quais = nomes.slice(0, Math.min(com, nomes.length));
+      const comEla = pluralize(com, "peça", "peças") + " com ela" + (quais.length
+        ? ": " + quais.join(", ") + (com > quais.length ? " e mais " + (com - quais.length) : "")
+        : "");
+      const partes = [comEla];
       if (voltou) partes.push(voltou === 1 ? "1 já voltou" : voltou + " já voltaram");
       if (ficou) partes.push(ficou === 1 ? "1 ficou" : ficou + " ficaram");
       return partes.join(" · ");
     }
     const base = pluralize(total, "peça", "peças");
+    // C18: dois nomes e "e mais N" (o total menos os nomes mostrados).
+    if (nomes.length) {
+      const mais = Math.max(0, total - nomes.length);
+      return base + ": " + nomes.join(", ") + (mais > 0 ? " e mais " + mais : "");
+    }
     if (!c.primeira_peca) return base;
     return base + ": " + c.primeira_peca + (total > 1 ? " e mais " + (total - 1) : "");
   }
@@ -169,8 +180,12 @@ export function pecasDaCondicional(c: LinhaDaCondicional): string {
     return partes.join(" · ");
   }
   if (sit === "concluida") {
-    const ficou = Number(c.pecas_ficou) || 0;
-    if (ficou > 0) return "Ficou " + ficou + " de " + pluralize(total, "peça", "peças");
+    const ficou = Number(c.resumo?.ficaram ?? c.pecas_ficou) || 0;
+    if (ficou > 0) {
+      const venda = c.venda && c.venda.numero !== undefined && c.venda.numero !== null && String(c.venda.numero) !== ""
+        ? " · venda #" + String(c.venda.numero).replace(/^#/, "") : "";
+      return "Ficou " + ficou + " de " + pluralize(total, "peça", "peças") + venda;
+    }
     return "Tudo devolvido · " + pluralize(total, "peça", "peças") + " · sem venda";
   }
   return pluralize(total, "peça", "peças");
@@ -191,6 +206,8 @@ export function valorDaLinha(c: LinhaDaCondicional): number {
   const sit = String(c.situacao);
   if (comPecaComEla(sit)) return Number(c.valor_com_cliente) || 0;
   if (sit === "a_cobrar") return Number(c.valor_a_cobrar) || 0;
+  // C18: a concluída com venda mostra o valor da venda.
+  if (sit === "concluida" && c.venda) return Number(c.venda.valor) || 0;
   return 0;
 }
 
@@ -267,6 +284,33 @@ export function somaDaSituacao(linhas: LinhaDaCondicional[], situacao: "vence_ho
     if (l.situacao !== situacao) continue;
     valor += Number(l.valor_com_cliente) || 0;
     pecas += Number(l.pecas_com_cliente) || 0;
+  }
+  return { valor, pecas, texto: pecas ? brl(valor) + " em " + pluralize(pecas, "peça", "peças") : "" };
+}
+
+/**
+ * Os cartões Vencem hoje, Atrasadas e Falta cobrar. Com `totais` do backend
+ * (C18) vale ele, calculado sobre todas as abertas; sem ele, a soma das linhas
+ * lidas (backend antigo).
+ */
+export function totalDoCartao(
+  totais: { vence_hoje?: { valor: number; pecas: number }; atrasadas?: { valor: number; pecas: number }; a_cobrar?: { valor: number; pecas: number } } | null | undefined,
+  chave: "vence_hoje" | "atrasadas" | "a_cobrar",
+  linhas: LinhaDaCondicional[],
+): { valor: number; pecas: number; texto: string } {
+  let valor: number;
+  let pecas: number;
+  const t = totais ? totais[chave] : undefined;
+  if (t) {
+    valor = Number(t.valor) || 0;
+    pecas = Number(t.pecas) || 0;
+  } else if (chave === "a_cobrar") {
+    valor = linhas.reduce((s, l) => s + (Number(l.valor_a_cobrar) || 0), 0);
+    pecas = linhas.reduce((s, l) => s + (Number(l.pecas_a_cobrar) || 0), 0);
+  } else {
+    const r = somaDaSituacao(linhas, chave === "atrasadas" ? "atrasada" : "vence_hoje");
+    valor = r.valor;
+    pecas = r.pecas;
   }
   return { valor, pecas, texto: pecas ? brl(valor) + " em " + pluralize(pecas, "peça", "peças") : "" };
 }

@@ -197,8 +197,10 @@ export function textoDaPecaTravada(i: PecaDaCondicional, hoje: string): { texto:
   const d = dia(i.decided_at);
   const em = d ? " em " + d : "";
   if (i.situacao === "ficou") {
+    const venda = i.venda_numero !== undefined && i.venda_numero !== null && String(i.venda_numero) !== ""
+      ? " na venda #" + String(i.venda_numero).replace(/^#/, "") : "";
     return i.sale_id
-      ? { texto: TEXTOS_FORA_DO_MOCKUP.jaCobrada + (d ? " em " + d : ""), tom: "ficou" }
+      ? { texto: TEXTOS_FORA_DO_MOCKUP.jaCobrada + venda + (d ? " em " + d : ""), tom: "ficou" }
       : { texto: `Ficou${em} · falta cobrar no Caixa`, tom: "ficou" };
   }
   if (i.situacao === "voltou_defeito") {

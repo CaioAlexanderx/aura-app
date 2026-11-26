@@ -41,7 +41,7 @@ export type NovaCondicionalProps = {
   /** O servidor guardou: a lista recarrega. */
   onCriada: (condicional: CondicionalGuardada) => void;
   /** "Ver a C-0029" no aviso de peça sem unidade livre (liga na lista/detalhe). */
-  onVerCondicional?: (condicionalId: string) => void;
+  onVerCondicional?: (condicionalId: string, companyId?: string | null) => void;
   /** Para os testes: o "hoje" de São Paulo. */
   hoje?: string;
 };
@@ -217,7 +217,7 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
             onTirar={(chave) => { setPecas((l) => l.filter((x) => x.chave !== chave)); setFaltas(null); }}
             vendeSemEstoque={vendeSemEstoque}
             faltas={faltas}
-            onVerCondicional={onVerCondicional}
+            onVerCondicional={onVerCondicional ? (id) => onVerCondicional(id, lojaAtiva) : undefined}
           />
         ) : (
           <PassosDoFim.Passo3 estado={estado} guardar={guardar} />

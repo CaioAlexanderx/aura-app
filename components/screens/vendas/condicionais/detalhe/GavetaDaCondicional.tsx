@@ -39,6 +39,7 @@ import { dataCurtaComPonto } from "../regrasDasCondicionais";
 import { SeloDaSituacao, SeloDaLoja } from "../AbaCondicionais";
 import { LembrarCondicional } from "../LembrarCondicional";
 import { NovaDataDaCondicional } from "./NovaDataDaCondicional";
+import { AcrescentarPecas } from "./AcrescentarPecas";
 import { useAuthStore } from "@/stores/auth";
 import { normalizeBrPhone } from "@/utils/whatsapp";
 import { pdvApi } from "@/services/pdvApi";
@@ -65,9 +66,11 @@ type Props = {
   onCobrar?: (c: DetalheDaCondicional) => void;
   /** C16: abre a lista de Peças para resolver. Sem ele, o link não existe. */
   onVerPecasParaResolver?: () => void;
+  /** "Ver a C-0029" no aviso de peça sem unidade livre dentro de "Acrescentar peça". */
+  onVerCondicional?: (condicionalId: string, companyId?: string | null) => void;
 };
 
-export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobrar, onVerPecasParaResolver }: Props) {
+export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobrar, onVerPecasParaResolver, onVerCondicional }: Props) {
   const companyId = linha?.company_id;
   const { condicional: c, isLoading, error, refetch } = useCondicionalDetalhe(companyId, linha?.id);
   const acoes = useDecidirCondicional(companyId, linha?.id);
@@ -80,6 +83,7 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
   const [novaData, setNovaData] = useState(false);
   const [lembrar, setLembrar] = useState(false);
   const [escolhendoFormato, setEscolhendoFormato] = useState(false);
+  const [acrescentando, setAcrescentando] = useState(false);
 
   const vivo = useMemo(() => c || null, [c]);
   const resumo = useMemo(() => (vivo ? resumoAoVivo(vivo, marcas) : null), [vivo, marcas]);
@@ -268,6 +272,15 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
               </View>
             )}
 
+            {acrescentando && aberta && !!companyId && (
+              <AcrescentarPecas
+                companyId={companyId}
+                acrescentar={acoes.acrescentar}
+                onFechar={() => setAcrescentando(false)}
+                onVerCondicional={onVerCondicional}
+              />
+            )}
+
             {vivo.items.map((i) => (
               <Peca key={i.id} peca={i} aberta={aberta} marca={marcaDe(marcas, i)} hoje={hoje} onMarcar={(m) => marcar(i, m)} />
             ))}
@@ -285,6 +298,11 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
             )}
 
             <View style={s.links}>
+              {aberta && !acrescentando && (
+                <Pressable onPress={() => setAcrescentando(true)} style={s.link} accessibilityRole="button" testID="cond-acrescentar-abrir">
+                  <Text style={s.linkTxt}>{T.acrescentar}</Text>
+                </Pressable>
+              )}
               <Pressable onPress={() => setEscolhendoFormato((v) => !v)} style={s.link} accessibilityRole="button" testID="cond-reimprimir">
                 <Text style={s.linkTxt}>{T.reimprimir}</Text>
               </Pressable>
