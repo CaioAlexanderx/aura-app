@@ -13,6 +13,7 @@ import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
+import { camposDaCondicionalNaVenda, ehErroDaCondicional } from "@/utils/condicionalNoCaixa";
 import { linhaDoFrete, valorDoFrete } from "@/utils/frete";
 import { camposDaEntregaNaVenda, entregaValeParaACliente, type EntregaDaVenda } from "@/utils/entregaDaVenda";
 import { enderecoDoCliente, type Endereco } from "@/components/endereco/endereco";
@@ -130,6 +131,16 @@ export type ComandaNoCarrinho = {
   itemIds?: string[]; itemQty?: Record<string, number>;
 };
 
+/** C12: o que o Caixa da condicional entrega ao carrinho (hooks/useCondicionalNoCaixa). */
+export type ControleDaCondicional = {
+  /** A condicional que esta venda cobra; null = venda comum. */
+  naVenda: { id: string; itemIds: string[] } | null;
+  /** Recusa COND_* do servidor (409/422). */
+  aoErro: (err: any) => void;
+  /** Venda registrada. */
+  aoVender: () => void;
+};
+
 export type SaleResult = {
   id: string;
   // 01/09/2026: sequencial legivel por empresa que o backend passou a devolver
@@ -204,9 +215,17 @@ function idDoCadastro(pid: string): string | undefined {
 }
 
 function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } {
+  // C12: "~cN" separa linhas do mesmo produto+variante com preços diferentes (condicional).
+  cartKey = cartKey.replace(/~c[0-9]+$/, "");
   var idx = cartKey.indexOf("__");
   if (idx < 0) return { pid: cartKey, vid: null };
   return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
+}
+
+/** C12: o "~cN" que separa linhas da condicional não sai do carrinho (NFC-e, garantia, tela final). */
+function semSufixoDaCondicional(itens: CartItem[]): CartItem[] {
+  if (!itens.some(function(i) { return /~c[0-9]+$/.test(i.productId); })) return itens;
+  return itens.map(function(i) { return { ...i, productId: i.productId.replace(/~c[0-9]+$/, "") }; });
 }
 
 function round2(n: number): number {
@@ -226,6 +245,10 @@ export function useCart(
     /** 09/11/2026: o servidor recusou a venda com frete por falta de
      *  endereço (422 DELIVERY_ADDRESS_REQUIRED). Recebe o cliente da venda. */
     aoFaltarEntrega?: (customerId: string | null) => void;
+    /** C12 (26/11/2026): o Caixa aberto pela condicional. Um ref lido na hora
+     *  de vender: sem condicional (o caso de sempre) é null e o POST, a guarda
+     *  da venda e os erros são exatamente os de antes. */
+    condicional?: { current: ControleDaCondicional | null };
   } = {},
 ) {
   const cartaoOn = cardCfg.enabled === true;
@@ -421,9 +444,25 @@ export function useCart(
 
   function guardarAgora(): boolean {
     if (demoRef.current || finalizandoRef.current || !vendaRef.current) return false;
+    // C12: o carrinho da condicional não é guardado (Sair = nada gravado).
+    if (condAtiva()) return false;
     return guardarVenda(empresaRef.current, usuarioRef.current, vendaRef.current);
   }
+  // C12: no modo condicional a venda guardada da lojista não é gravada nem apagada.
+  function condAtiva(): boolean {
+    return !!(opcoes.condicional && opcoes.condicional.current);
+  }
+  // Venda da condicional concluída: a próxima "Nova venda" não apaga a guardada, recupera.
+  const condVendaRef = useRef(false);
+  // Pede ao efeito de recuperação para rodar de novo (depois de Sair da condicional).
+  const [retomada, setRetomada] = useState(0);
+  function retomarGuardada() {
+    podeRecuperar.current = true;
+    jaRecuperou.current = false;
+    setRetomada(function(n) { return n + 1; });
+  }
   function apagarGuarda() {
+    if (condAtiva()) return;
     apagarVendaGuardada(empresaRef.current, usuarioRef.current);
   }
 
@@ -444,6 +483,8 @@ export function useCart(
       }
       return;
     }
+    // C12: o carrinho da condicional não conta como "venda da lojista".
+    if (condAtiva()) return;
     jaTeveItens.current = true;
     if (isProcessing || finalizandoRef.current) return;
     const t = setTimeout(guardarAgora, 400);
@@ -475,20 +516,21 @@ export function useCart(
   // chegar, até recuperar uma vez. Venda de outra empresa fica guardada.
   // Carrinho que já começou nesta página NUNCA é sobrescrito.
   const jaRecuperou = useRef(false);
-  useEffect(() => {
-    if (jaRecuperou.current || !podeRecuperar.current || demoRef.current || !companyId || !usuarioId) return;
-    if (vendaRef.current) return;
+  // Repõe a venda guardada (usada ao abrir, depois de Sair da condicional e, de forma
+  // síncrona, em newSale depois de uma venda da condicional). `extra` entra por cima.
+  function aplicarGuardada(extra: CartItem[]): boolean {
+    if (!companyId || !usuarioId) return false;
     const v = recuperarVenda<VendaGuardada>(companyId, usuarioId);
-    if (!v || !Array.isArray(v.cart)) return;
+    if (!v || !Array.isArray(v.cart)) return false;
     // Não confia no que veio do storage: item sem id, sem quantidade ou sem
     // preço válido fica de fora.
     const itens = v.cart.filter(function (i) {
       return !!i && typeof i.productId === "string" && i.productId !== ""
         && isFinite(i.qty) && i.qty > 0 && isFinite(i.price) && i.price >= 0;
     });
-    if (itens.length === 0) { apagarVendaGuardada(companyId, usuarioId); return; }
+    if (itens.length === 0) { apagarVendaGuardada(companyId, usuarioId); return false; }
     jaRecuperou.current = true;
-    setCart(itens);
+    setCart(extra.length ? itens.concat(extra) : itens);
     setRecuperada({ itens: itens });
     if (v.payment) setPayment(v.payment);
     setSelectedCustomerId(v.selectedCustomerId ?? null);
@@ -513,8 +555,14 @@ export function useCart(
     // tq-15: a venda restaurada continua com a chave dela (outra aba pode
     // estar com o mesmo carrinho). Guardada antes disso: fica a desta aba.
     if (typeof v.idempotencyKey === "string" && v.idempotencyKey) setChaveDaVenda(v.idempotencyKey);
+    return true;
+  }
+  useEffect(() => {
+    if (jaRecuperou.current || !podeRecuperar.current || demoRef.current || !companyId || !usuarioId) return;
+    if (vendaRef.current) return;
+    aplicarGuardada([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, usuarioId]);
+  }, [companyId, usuarioId, retomada]);
 
   useEffect(() => {
     if (comanda && cart.length === 0) setComanda(null);
@@ -1122,6 +1170,8 @@ export function useCart(
       comanda_item_qty: comanda && comanda.itemIds && comanda.itemIds.length > 0 && comanda.itemQty && Object.keys(comanda.itemQty).length > 0
         ? comanda.itemQty : undefined,
       referred_by_professional_id: referredProfessionalId || undefined,
+      // C12: peças da condicional que esta venda cobra. Sem condicional: nada.
+      ...camposDaCondicionalNaVenda(opcoes.condicional && opcoes.condicional.current ? opcoes.condicional.current.naVenda : null),
     };
 
     // Frete: uma linha sem produto de cadastro (utils/frete). O servidor
@@ -1241,7 +1291,7 @@ export function useCart(
         total: conta.total,
         payment: primaryPayment,
         payments: paymentsSnapshot,
-        items: cartSnapshot,
+        items: semSufixoDaCondicional(cartSnapshot),
         date: new Date().toLocaleString("pt-BR"),
         // Cliente cadastrado na própria venda (frete sem cliente): o id vem
         // do servidor e o nome é o de quem recebe.
@@ -1276,6 +1326,7 @@ export function useCart(
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
+          if (opcoes.condicional && opcoes.condicional.current && opcoes.condicional.current.naVenda) { condVendaRef.current = true; opcoes.condicional.current.aoVender(); }
           tempos.aoResponder(true, res?.sale?.id || (res as any)?.id || null);
           // tq-15: venda concluída — a próxima é outra venda, com outra chave.
           setChaveDaVenda(novaChaveDaVenda());
@@ -1304,7 +1355,11 @@ export function useCart(
           // mensagem do servidor diz qual; a chave é trocada e o próximo
           // "Finalizar" registra esta como venda nova.
           if (errCode === "IDEMPOTENCY_KEY_REUSED") setChaveDaVenda(novaChaveDaVenda());
-          if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
+          const condErro = opcoes.condicional && opcoes.condicional.current;
+          if (condErro && condErro.naVenda && ehErroDaCondicional(err)) {
+            // C12: a frase do servidor aparece na faixa do Caixa, com "Voltar à condicional".
+            condErro.aoErro(err);
+          } else if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
           } else if (errCode === "DELIVERY_ADDRESS_REQUIRED") {
             // 09/11/2026: o servidor conferiu e falta o endereço (o cadastro
@@ -1343,10 +1398,14 @@ export function useCart(
     setPayment("pix");
   }
 
-  function newSale() {
+  function newSale(opts?: { manterGuarda?: boolean }) {
     // 14/10/2026: nova venda / Limpar / lançar na comanda: a guarda sai junto.
+    // C12: depois de uma venda da condicional (ou ao esvaziar para montá-la) a
+    // guarda da lojista fica; ela volta pela retomada.
+    var veioDaCond = condVendaRef.current;
+    condVendaRef.current = false;
     finalizandoRef.current = false;
-    apagarGuarda();
+    if (!veioDaCond && !(opts && opts.manterGuarda === true)) apagarGuarda();
     setRecuperada(null);
     // 17/11/2026 (p-146): o que foi lançado durante a espera da venda
     // anterior abre a venda nova (sem nada esperando, é o carrinho vazio de
@@ -1368,9 +1427,14 @@ export function useCart(
     // QA 23/09/2026: não herda mais o dividido nem o método da venda
     // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
     voltarAoPagamentoInicial();
+    // C12: a venda guardada da lojista volta já, junto com o que foi lançado na espera;
+    // o que for bipado em seguida entra por cima (nada é sobrescrito pelo autosave).
+    if (veioDaCond && !aplicarGuardada(daEspera)) retomarGuardada();
   }
 
   return {
+    // C12: depois de Sair da condicional o Caixa recupera a venda guardada.
+    retomarGuardada,
     quoteId, setQuoteId,
     comanda, setComanda,
     // 30/10/2026 (Frete no Caixa): o texto do campo e o valor que vale.

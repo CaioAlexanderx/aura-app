@@ -249,6 +249,12 @@ type Props = {
    *  vendas.pedidos, consolidado, demonstração) = rodapé de sempre, botão a
    *  botão (__tests__/components/CartPanelRodapeIgual.test.tsx). */
   pedido?: { onNovoPedido: () => void } | null;
+  /** C12 (26/11/2026): o carrinho é o de uma condicional sendo cobrada.
+   *  Com ele: itens travados (sem + − nem lixeira; o preço continua
+   *  editável), "Limpar" vira "Sair", sem Guardar/Orçamento/Comandas e o
+   *  botão principal diz "Concluir a venda". null/ausente = carrinho de
+   *  sempre (__tests__/components/CartPanelRodapeIgual.test.tsx). */
+  condicional?: { onSair: () => void; textoDoBotao: string; textoSair: string } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
   discountType?: "%" | "R$";
@@ -319,7 +325,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
     onScan,
-    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete, pedido,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete, pedido, condicional,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     discountConfirm, discountPending,
@@ -563,6 +569,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               defaultWastePct={matcon.matcon_default_waste_pct}
               lotsEnabled={matcon.matcon_lots_enabled}
               onLotAllocations={onLotAllocations}
+              travado={!!condicional}
             />
           ))
         )}
@@ -945,8 +952,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             a linha de cima. Evita truncar/estourar fora da tela. */}
         {(() => {
           const clearBtn = (
-            <Pressable onPress={onClear} style={[s.ctaSec]}>
-              <Text style={s.ctaSecTxt} numberOfLines={1}>Limpar</Text>
+            <Pressable onPress={condicional ? condicional.onSair : onClear} style={[s.ctaSec]} testID={condicional ? "cond-sair-carrinho" : undefined}>
+              <Text style={s.ctaSecTxt} numberOfLines={1}>{condicional ? condicional.textoSair : "Limpar"}</Text>
             </Pressable>
           );
           // 22/09/2026 (Matcon M1, revisto no QA de 22/09): um botão só,
@@ -967,7 +974,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           // ou imprimir). Editando um orçamento do Matcon o botão continua
           // "Salvar orçamento" direto: ali o carrinho já é o orçamento.
           const acaoDoOrcamento = quoteSaveMode ? (onSaveQuote || null) : (showOrcamento && onGenerateQuote ? onGenerateQuote : null);
-          const quoteBtn = pedido && !(quoteSaveMode && editingQuote) ? (
+          const quoteBtn = condicional ? null : pedido && !(quoteSaveMode && editingQuote) ? (
             <GuardarMenu
               onPedido={pedido.onNovoPedido}
               onOrcamento={acaoDoOrcamento}
@@ -1067,7 +1074,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               ) : (
                 <>
                   <Icon name="check" size={16} color="#fff" />
-                  <Text style={s.ctaPriTxt} numberOfLines={1}>Finalizar venda</Text>
+                  <Text style={s.ctaPriTxt} numberOfLines={1}>{condicional ? condicional.textoDoBotao : "Finalizar venda"}</Text>
                   <EtiquetaDeTecla acao="finalizar" inv />
                 </>
               )}
@@ -1276,8 +1283,10 @@ function parseCurrencyInput(raw: string): number | null {
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange, onScan,
   matconEnabled, roundToPackage, defaultWastePct, lotsEnabled, onLotAllocations,
-  armadaPorTecla,
+  armadaPorTecla, travado,
 }: {
+  /** C12: peça da condicional — sem + − nem lixeira. */
+  travado?: boolean;
   item: CartDisplayItem;
   onInc: () => void;
   onDec: () => void;
@@ -1452,6 +1461,7 @@ function CartItem({
         <Text style={s.itemPrice} numberOfLines={1}>
           {fmtCurrency(item.price * item.qty)}
         </Text>
+        {!travado && (
         <Pressable
           onPress={handleDeletePress}
           style={[s.itemTrash, (confirmDelete || armadaPorTecla) && s.itemTrashConfirm]}
@@ -1463,6 +1473,7 @@ function CartItem({
             color={confirmDelete || armadaPorTecla ? "#ef4444" : Colors.ink3}
           />
         </Pressable>
+        )}
       </View>
 
       {/* Linha 2: indent | preço unitário editável | spacer | qtyCtrl */}
@@ -1519,7 +1530,11 @@ function CartItem({
           </Text>
         ) : null}
         <View style={{ flex: 1 }} />
-        {decimalQty ? (
+        {travado ? (
+          <Text testID={"carrinho-qty-travada-" + item.productId} style={s.itemMeta} numberOfLines={1}>
+            {item.qty === 1 ? "1 peça" : fmtQty(item.qty) + " peças"}
+          </Text>
+        ) : decimalQty ? (
           /* Campo decimal: o número se digita, não se clica. Sem − e +,
              com o sufixo da unidade em fonte menor ao lado (mockup .dec). */
           <View style={s.decCtrl}>

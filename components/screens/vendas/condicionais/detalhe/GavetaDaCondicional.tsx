@@ -19,8 +19,8 @@
 // (Aura-backend#1115) e moram em hooks/useCondicional.ts.
 //
 // FORA por enquanto:
-//   · "Cobrar no Caixa" (C12): o botão não aparece. Ponto de ligação:
-//     COBRAR_NO_CAIXA_PRONTO (regrasDoDetalhe.ts) e a prop `onCobrar`.
+//   · (C12, feito) "Cobrar no Caixa": a prop `onCobrar` recebe a condicional e
+//     os ids das peças que ficaram; antes de sair, salva as que voltaram.
 //   · "Acrescentar peça": o passo de peças da Nova condicional (C6) ainda não
 //     está no main; o hook já tem `acrescentar`.
 //   · "Ver a lista" de Peças para resolver (C16): só aparece com
@@ -36,6 +36,7 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { ScannerInput } from "@/components/ScannerInput";
 import { brl } from "@/components/screens/vendas/editarVendaUtils";
 import { dataCurtaComPonto } from "../regrasDasCondicionais";
+import { idsParaCobrar } from "@/utils/condicionalNoCaixa";
 import { SeloDaSituacao, SeloDaLoja } from "../AbaCondicionais";
 import { LembrarCondicional } from "../LembrarCondicional";
 import { NovaDataDaCondicional } from "./NovaDataDaCondicional";
@@ -62,8 +63,8 @@ type Props = {
   hoje: string;
   mostrarLoja: boolean;
   onClose: () => void;
-  /** C12: abre o Caixa com as peças que ficaram. Sem ele, o botão não existe. */
-  onCobrar?: (c: DetalheDaCondicional) => void;
+  /** C12: abre o Caixa com as peças que ficaram (ids). Sem ele, o botão não existe. */
+  onCobrar?: (c: DetalheDaCondicional, itemIds: string[]) => void;
   /** C16: abre a lista de Peças para resolver. Sem ele, o link não existe. */
   onVerPecasParaResolver?: () => void;
   /** "Ver a C-0029" no aviso de peça sem unidade livre dentro de "Acrescentar peça". */
@@ -115,12 +116,32 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
     }
   }
 
+  /** Tira só as marcas que foram gravadas: os "Ficou" locais continuam. */
+  function tirarMarcas(ids: string[]) {
+    setMarcas((x) => { const n = { ...x }; ids.forEach((i) => { delete n[i]; }); return n; });
+  }
+
   async function salvarDevolucao() {
     if (!vivo) return;
     const feitas = marcasParaSalvar(vivo, marcas);
     if (!feitas.length) return;
     const okk = await executar(() => acoes.marcar(feitas), F.salvou);
-    if (okk) setMarcas({});
+    if (okk) tirarMarcas(feitas.map((x) => x.item_id));
+  }
+
+  /** C12: as peças que voltaram são gravadas antes (senão a condicional não
+   *  fecha com a venda); as que ficaram vão no Caixa, que não grava nada até concluir. */
+  async function cobrarNoCaixa() {
+    if (!vivo || !resumo || !onCobrar) return;
+    const ids = idsParaCobrar(vivo, resumo.ficou.map((i) => i.id));
+    if (!ids.length) return;
+    const feitas = marcasParaSalvar(vivo, marcas);
+    if (feitas.length) {
+      const okk = await executar(() => acoes.marcar(feitas), F.salvou);
+      if (!okk) return;
+      tirarMarcas(feitas.map((x) => x.item_id));
+    }
+    onCobrar(vivo, ids);
   }
 
   async function tudoDevolvido() {
@@ -130,7 +151,7 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
     const okk = resumo.defeitos.length
       ? await executar(() => acoes.marcar(marcasParaSalvar(vivo, marcas)), F.encerrou)
       : await executar(() => acoes.tudoDevolvido(), F.encerrou);
-    if (okk) setMarcas({});
+    if (okk) tirarMarcas(marcasParaSalvar(vivo, marcas).map((x) => x.item_id));
   }
 
   async function aoBipar(code: string) {
@@ -343,7 +364,7 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
               {!!resumo.sub && <Text style={s.infoSub} testID="cond-resumo-sub">{resumo.sub}</Text>}
             </View>
             {resumo.acao === "cobrar" && COBRAR_NO_CAIXA_PRONTO && !!onCobrar && (
-              <Button title={T.cobrarNoCaixa} icon="cart" variant="primary" disabled={resumo.desligado} onPress={() => onCobrar(vivo)} style={s.botao44} testID="cond-cobrar" />
+              <Button title={T.cobrarNoCaixa} icon="cart" variant="primary" disabled={resumo.desligado} loading={acoes.salvando} onPress={cobrarNoCaixa} style={s.botao44} testID="cond-cobrar" />
             )}
             {resumo.acao === "salvar" && (
               <Button title={T.salvarDevolucao} icon="check" variant="success" loading={acoes.salvando} onPress={salvarDevolucao} style={s.botao44} testID="cond-salvar" />

@@ -12,12 +12,12 @@ import { diaEMes } from "@/components/screens/vendas/pedidos/regrasDosPedidos";
 import type { DetalheDaCondicional, EventoDaCondicional, PecaDaCondicional } from "@/hooks/useCondicional";
 
 /**
- * "Cobrar no Caixa" (C12). Enquanto o Caixa não abre com as peças que
- * ficaram, o botão NÃO aparece (sem botão morto). Ao entregar o C12: ligar
- * esta chave e passar `onCobrar` à GavetaDaCondicional (recebe o detalhe e
- * leva a `/pdv?condicional=<id>&itens=<ids das que ficaram>`).
+ * "Cobrar no Caixa" (C12, 26/11/2026): o Caixa abre com as peças que ficaram
+ * (/pdv?condicional=<id>&loja=<company_id>&itens=<ids>, ver
+ * utils/condicionalNoCaixa). O botão só existe com `onCobrar` na gaveta, e a
+ * aba toda já está atrás da trava CONDICIONAL_LIBERADA.
  */
-export const COBRAR_NO_CAIXA_PRONTO = false;
+export const COBRAR_NO_CAIXA_PRONTO = true;
 
 export const TEXTOS_DO_DETALHE = {
   titulo: "Condicional",

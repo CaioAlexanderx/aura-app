@@ -29,6 +29,8 @@
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { rotaDoCaixaDaCondicional } from "@/utils/condicionalNoCaixa";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Colors, CondicionalCores as CD } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -67,9 +69,11 @@ export const LARGURA_DO_CELULAR = 700;
 type Props = {
   /** Observa a abertura do detalhe (a gaveta do C10 abre sozinha, por dentro da aba). */
   onAbrir?: (c: LinhaDaCondicional) => void;
+  /** C12: abre o detalhe desta condicional ao montar (volta do Caixa). */
+  abrirId?: { id: string; loja: string | null } | null;
 };
 
-export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
+export function AbaCondicionais({ onAbrir: aoAbrir, abrirId }: Props = {}) {
   const { width } = useWindowDimensions();
   const largo = width >= LARGURA_DA_TABELA;
   const celular = width < LARGURA_DO_CELULAR;
@@ -90,6 +94,15 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
       primeira_peca: null, created_at: "", closed_at: null, cancelled_at: null,
     });
   };
+  // C12: "Voltar à condicional" do Caixa chega por vendas.tsx (?condicional=<id>&loja=)
+  // e abre o detalhe dela; vendas.tsx tira os parâmetros da URL.
+  const voltouId = abrirId ? abrirId.id : null;
+  const voltouLoja = abrirId ? abrirId.loja : null;
+  useEffect(() => {
+    if (!voltouId) return;
+    abrirPeloId(voltouId, voltouLoja);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voltouId]);
   // "Nova condicional" (C6/C7): ao guardar, a lista, o totalizador e o número da aba recarregam.
   const qc = useQueryClient();
   const companyDoAuth = (useAuthStore() as any).company?.id as string | undefined;
@@ -275,6 +288,7 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
       <LembrarCondicional linha={lembrar} onClose={() => setLembrar(null)} />
       {!!aberta && (
         <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} onVerCondicional={abrirPeloId}
+          onCobrar={(c, ids) => router.push(rotaDoCaixaDaCondicional(c, ids) as any)}
           onVerPecasParaResolver={() => { setAberta(null); setFiltro("resolver"); }} />
       )}
     </View>

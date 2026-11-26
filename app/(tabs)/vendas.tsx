@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Dimensions, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -158,8 +158,17 @@ export default function VendasScreen() {
   // 02/08/2026: aba "Ranking" entra no meio (Vendas | Ranking | Fechamentos).
   // Veio da tela de Folha; ranking por vendedor e leitura de venda, nao de
   // folha — e assim o plano Essencial (que nao tem folha) tambem enxerga.
-  const params = useLocalSearchParams<{ tab?: string }>();
+  const params = useLocalSearchParams<{ tab?: string; condicional?: string; loja?: string }>();
   const paramTab = typeof params.tab === "string" ? params.tab : undefined;
+  // C12: "Voltar à condicional" do Caixa (?tab=condicionais&condicional=<id>&loja=<id>).
+  const idDaVolta = typeof params.condicional === "string" && params.condicional && params.condicional !== "undefined" ? params.condicional : null;
+  const lojaDaVolta = typeof params.loja === "string" && params.loja && params.loja !== "undefined" ? params.loja : null;
+  const [voltaDoCaixa] = useState<{ id: string; loja: string | null } | null>(idDaVolta ? { id: idDaVolta, loja: lojaDaVolta } : null);
+  useEffect(() => {
+    if (!idDaVolta) return;
+    try { router.setParams({ condicional: undefined, loja: undefined } as any); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idDaVolta]);
   const [activeTab, setActiveTab] = useState<AbaDeVendas>(
     paramTab === "ranking" || paramTab === "fechamentos" || paramTab === "pedidos" || paramTab === "condicionais" ? paramTab : "vendas"
   );
@@ -319,7 +328,7 @@ export default function VendasScreen() {
         quebraNoCelular={comCondicionais}
       />
 
-      {abaAtiva === "condicionais" && <AbaCondicionais />}
+      {abaAtiva === "condicionais" && <AbaCondicionais abrirId={voltaDoCaixa} />}
       {abaAtiva === "pedidos" && <AbaPedidos />}
 
       {/* Ranking depende de um CNPJ especifico (o endpoint e

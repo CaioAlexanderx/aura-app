@@ -377,4 +377,52 @@ describe("detalhe da condicional (C10)", () => {
     const { r } = await montar();
     expect(textos(r)).toContain("Hoje está R$ 209,90 na loja. Vale o preço do comprovante: R$ 189,90.");
   });
+
+  it("C12 · Cobrar no Caixa: grava o que voltou e leva as que ficaram ao Caixa", async () => {
+    const onCobrar = jest.fn();
+    const { r } = await montar({ onCobrar });
+    await tocar(r, "cond-ficou-a");
+    await tocar(r, "cond-voltou-b");
+    expect(textos(r)).toContain("Ela leva 1 peça: R$ 189,90");
+    responder(detalhe([peca("a", "Vestido Midi", 189.9), peca("b", "Blusa Tricô", 129.9, { situacao: "voltou", decided_at: new Date().toISOString() }), peca("c", "Brinco Argola", 59.9)], { parcial: true }));
+    await tocar(r, "cond-cobrar");
+    // as que voltaram são gravadas antes de sair; as que ficaram não gravam nada (a venda é que grava)
+    expect(escritas()).toHaveLength(1);
+    expect(escritas()[0][1].body).toEqual({ items: [{ item_id: "b", situacao: "voltou" }] });
+    expect(onCobrar).toHaveBeenCalledTimes(1);
+    expect(onCobrar.mock.calls[0][0].id).toBe("k1");
+    expect(onCobrar.mock.calls[0][1]).toEqual(["a"]);
+    // salvar o que voltou não apaga o "Ficou" marcado na tela
+    expect(textos(r)).toContain("Ela leva 1 peça: R$ 189,90");
+  });
+
+  it("C12 · Cobrar no Caixa só com o que ficou: sem escrita, vai direto", async () => {
+    const onCobrar = jest.fn();
+    const { r } = await montar({ onCobrar });
+    await tocar(r, "cond-ficou-a");
+    await tocar(r, "cond-ficou-c");
+    await tocar(r, "cond-cobrar");
+    expect(escritas()).toHaveLength(0);
+    expect(onCobrar.mock.calls[0][1]).toEqual(["a", "c"]);
+  });
+
+  it("C12 · Cobrar no Caixa sem nada marcado fica desligado", async () => {
+    const onCobrar = jest.fn();
+    const { r } = await montar({ onCobrar });
+    await tocar(r, "cond-cobrar");
+    expect(onCobrar).not.toHaveBeenCalled();
+  });
+
+  it("C12 · Falta cobrar: o botão leva as peças que ficaram sem venda", async () => {
+    mockDetalhe = detalhe([
+      peca("j", "Jaqueta Jeans", 259.8, { situacao: "ficou", decided_at: "2026-11-24T15:00:00Z" }),
+      peca("s", "Saia", 99.9, { situacao: "voltou", decided_at: "2026-11-24T15:00:00Z" }),
+    ], { situacao: "a_cobrar", parcial: true });
+    const onCobrar = jest.fn();
+    const { r } = await montar({ onCobrar });
+    expect(textos(r)).toContain("Falta cobrar: R$ 259,80");
+    await tocar(r, "cond-cobrar");
+    expect(escritas()).toHaveLength(0);
+    expect(onCobrar.mock.calls[0][1]).toEqual(["j"]);
+  });
 });
