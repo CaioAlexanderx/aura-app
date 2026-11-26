@@ -38,7 +38,11 @@ jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: j
 jest.mock("@expo-google-fonts/dm-sans", () => ({}), { virtual: true });
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
-jest.mock("@/constants/colors", () => ({ Colors: new Proxy({}, { get: (_t, k) => String(k) }), IS_DARK_MODE: false }));
+jest.mock("@/constants/colors", () => ({
+  Colors: new Proxy({}, { get: (_t, k) => String(k) }),
+  CondicionalCores: new Proxy({}, { get: (_t, k) => String(k) }),
+  IS_DARK_MODE: false,
+}));
 const mockPush = jest.fn();
 // useFocusEffect: o primeiro foco é a abertura; mockFoco() simula voltar
 // para a tela (ex.: da tela de custos).
@@ -310,6 +314,37 @@ function difCom(item: any) {
   return { resumo: { faltam: 1, sobram: 0, batem: 0, nao_contados: 0, valor_faltam: 4, valor_sobram: 0, itens_sem_custo: 0 }, itens: [item], nao_contados: [] };
 }
 const APLICADA = { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z", pode_desfazer: true };
+
+describe("peças com clientes (C14)", () => {
+  // 10 no sistema, 2 com clientes: esperado 8 na loja; contou 7 (falta 1).
+  const COM_CLIENTES = {
+    resumo: { faltam: 1, sobram: 0, batem: 0, nao_contados: 1, valor_faltam: null, valor_sobram: null, itens_sem_custo: 0 },
+    itens: [
+      { item_id: "c1", product_id: "p9", variant_id: null, nome: "Blusa Linho", variante: null, codigo: null, contado: 7, estoque_no_bipe: 8, estoque_atual: 8, com_clientes: 2, diferenca: -1, estoque_depois: 9, custo: null, valor: null, grupo: "faltam" },
+    ],
+    nao_contados: [
+      { product_id: "p8", variant_id: null, nome: "Saia Midi", variante: null, estoque_atual: 3, com_clientes: 1, custo: null },
+    ],
+  };
+
+  it("mostra o esperado sem as peças fora, a linha 'N com clientes' e a prévia na régua da loja", async () => {
+    mockDiferencas.mockResolvedValue(COM_CLIENTES);
+    const tree = await montar();
+    expect(textoDe(tree, "dif-sub-p:p9")).toBe("sistema 8, contado 7");
+    expect(existe(tree, "dif-com-clientes-p:p9")).toBe(true);
+    await tocar(tree, "dif-ver-nao-contados");
+    expect(textoDe(tree, "dif-nao-contado-p:p8")).toBe("Saia Midi · tem 3 no sistema · 1 com cliente");
+    await tocar(tree, "dif-ajustar");
+    // o ajuste grava 9 (7 na loja + 2 com clientes); a prévia diz o que fica na loja: 8 → 7
+    expect(um(tree, "confirm").props.message).toContain("Fica assim: Blusa Linho: 8 → 7.");
+  });
+
+  it("sem peça com clientes a linha não aparece", async () => {
+    const tree = await montar();
+    expect(existe(tree, "dif-com-clientes-p:p1:v:v1")).toBe(false);
+    expect(porTestID(tree, "dif-com-clientes-p:p9")).toHaveLength(0);
+  });
+});
 
 describe("aviso 'mudou depois que você contou'", () => {
   it("rascunho: só quando o atual difere do que tinha no bipe", async () => {

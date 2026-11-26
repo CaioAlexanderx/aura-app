@@ -53,6 +53,8 @@ import {
   montarTransferencia, pecas, podeDesfazerAgora, qtd, rotuloDoEscopo, somaDasPecas,
 } from "@/utils/conferenciaResultado";
 import { plural as pluralQtd, textoDosNumeros } from "@/utils/transferenciaEstoque";
+import { SeloComClientes } from "@/components/screens/pdv/SeloComClientes";
+import { TEXTOS_COM_CLIENTES } from "@/utils/comClientes";
 import { Aviso, Botao, Cartao, Marcar, Selo, ui } from "./ui";
 import { NavDaConferencia } from "../NavDaConferencia";
 
@@ -64,8 +66,12 @@ function sufixoLoja(loja: string | null | undefined): string {
   return loja ? "?loja=" + encodeURIComponent(loja) : "";
 }
 
+// O que o ajuste deixa NA LOJA (a mesma régua de "sistema" e "contado"): o
+// estoque gravado menos o que está com clientes (C14).
 function depoisDoAjuste(it: ItemDiferenca): number {
-  return it.estoque_depois != null ? it.estoque_depois : Math.max(0, it.estoque_atual + it.diferenca);
+  var fora = it.com_clientes || 0;
+  var gravado = it.estoque_depois != null ? it.estoque_depois : Math.max(0, it.estoque_atual + fora + it.diferenca);
+  return Math.max(0, gravado - fora);
 }
 
 export function DiferencasScreen({ countId, lojaDaRota }: Props) {
@@ -228,6 +234,11 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
         <Text style={ui.nota} testID={"dif-sub-" + k}>
           {(it.variante ? it.variante + " · " : "") + "sistema " + qtd(it.estoque_no_bipe) + ", contado " + qtd(it.contado)}
         </Text>
+        {it.com_clientes > 0 ? (
+          <View style={{ alignSelf: "flex-start", marginTop: 4 }}>
+            <SeloComClientes quantidade={it.com_clientes} testID={"dif-com-clientes-" + k} />
+          </View>
+        ) : null}
         {mudou ? (
           <Text style={ui.nota} testID={"dif-mudou-" + k}>{mudou}</Text>
         ) : null}
@@ -449,7 +460,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
                 var k = chaveDoItem(n);
                 return (
                   <Text key={k} style={[ui.nota, { paddingVertical: 4 }]} testID={"dif-nao-contado-" + k}>
-                    {n.nome + (n.variante ? " · " + n.variante : "") + " · tem " + qtd(n.estoque_atual) + " no sistema"}
+                    {n.nome + (n.variante ? " · " + n.variante : "") + " · tem " + qtd(n.estoque_atual) + " no sistema" + (n.com_clientes > 0 ? " · " + TEXTOS_COM_CLIENTES.selo(n.com_clientes) : "")}
                   </Text>
                 );
               })}
