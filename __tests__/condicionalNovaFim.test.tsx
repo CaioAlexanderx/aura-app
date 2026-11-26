@@ -12,11 +12,12 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
 jest.mock("@/components/CalendarioDoDia", () => ({ CalendarioDoDia: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+let mockUsuarioId = "u-9";
 jest.mock("@/stores/auth", () => ({
-  useAuthStore: () => ({ company: { id: "loja-1", trade_name: "Loja Centro" }, availableCompanies: [], token: "t" }),
+  useAuthStore: () => ({ company: { id: "loja-1", trade_name: "Loja Centro" }, availableCompanies: [], token: "t", user: { id: mockUsuarioId } }),
 }));
 jest.mock("@/hooks/useCustomers", () => ({
-  useCustomers: () => ({ customers: [{ id: "c-1", name: "Marina Duarte", phone: "(11) 98888-0142" }], isLoading: false }),
+  useCustomers: () => ({ customers: [{ id: "c-1", name: "Marina Duarte", phone: "(11) 98888-0142" }, { id: "c-2", name: "Carla Menezes", phone: null }], isLoading: false }),
 }));
 const mockSetQueryData = jest.fn();
 let mockEquipe: any[] = [];
@@ -25,8 +26,9 @@ jest.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => ({ data: queryKey[0] === "condicional-vendedoras" ? { employees: mockEquipe } : null, isLoading: false }),
 }));
 const mockSalvarSettings = jest.fn();
+const mockAtualizarCliente = jest.fn();
 jest.mock("@/services/api", () => ({
-  companiesApi: { createCustomer: jest.fn(), products: jest.fn(), variants: jest.fn() },
+  companiesApi: { createCustomer: jest.fn(), products: jest.fn(), variants: jest.fn(), updateCustomer: (...a: any[]) => mockAtualizarCliente(...a) },
   pdvSettingsApi: { save: (...a: any[]) => mockSalvarSettings(...a) },
   request: jest.fn(),
 }));
@@ -90,8 +92,9 @@ function montar() {
   act(() => { tree = renderer.create(<NovaCondicionalModal visible onClose={onClose} onCriada={onCriada} hoje={HOJE} />); });
   return { tree, onCriada, onClose };
 }
-async function ateOPasso3(t: renderer.ReactTestRenderer) {
-  await tocar(t, "nova-cliente-opcao-c-1");
+async function ateOPasso3(t: renderer.ReactTestRenderer, clienteId = "c-1", telefone?: string) {
+  await tocar(t, "nova-cliente-opcao-" + clienteId);
+  if (telefone) await digitar(t, "nova-telefone-avulso", telefone);
   await tocar(t, "nova-continuar");
   await act(async () => { um(t, "nova-busca-peca").props.onChangeText("brinco"); });
   await tocar(t, "nova-sugestao-p-brinco");
@@ -107,6 +110,9 @@ beforeEach(() => {
   mockWhats.mockReset();
   mockWhats.mockReturnValue(true);
   mockSalvarSettings.mockReset();
+  mockAtualizarCliente.mockReset();
+  mockAtualizarCliente.mockResolvedValue({});
+  mockUsuarioId = "u-9";
   mockSetQueryData.mockReset();
 });
 
@@ -221,6 +227,76 @@ describe("Passo 3 · Prazo e conferência", () => {
     expect(um(tree, "nova-continuar").props.disabled).toBe(true);
     await tocar(tree, "nova-falta-tirar");
     expect(texto(tree)).toContain(T.nenhumaPeca);
+  });
+});
+
+describe("Telefone, vendedora e avisos com saída", () => {
+  it("telefone digitado para cliente sem telefone vai no corpo e é gravado no cadastro (o backend não grava)", async () => {
+    mockGuardarApi.mockResolvedValue({ condicional: GUARDADA });
+    const { tree } = montar();
+    await ateOPasso3(tree, "c-2", "11977776666");
+    await tocar(tree, "nova-guardar");
+    expect(mockGuardarApi.mock.calls[0][1].customer_phone).toBe("11977776666");
+    expect(mockAtualizarCliente).toHaveBeenCalledWith("loja-1", "c-2", { phone: "11977776666" });
+  });
+
+  it("cliente que já tem telefone não é atualizada", async () => {
+    mockGuardarApi.mockResolvedValue({ condicional: GUARDADA });
+    const { tree } = montar();
+    await ateOPasso3(tree);
+    await tocar(tree, "nova-guardar");
+    expect(mockAtualizarCliente).not.toHaveBeenCalled();
+    expect(mockGuardarApi.mock.calls[0][1].customer_phone).toBeUndefined();
+  });
+
+  it("quem está logada e é funcionária cadastrada vem marcada como vendedora", async () => {
+    mockEquipe = [{ id: "e-1", name: "Jéssica", status: "active", user_id: "u-1" }, { id: "e-2", name: "Paula", status: "active", user_id: "u-2" }];
+    mockUsuarioId = "u-2";
+    mockGuardarApi.mockResolvedValue({ condicional: GUARDADA });
+    const { tree } = montar();
+    await ateOPasso3(tree);
+    expect(um(tree, "nova-vendedora-e-2").props.accessibilityState.selected).toBe(true);
+    expect(um(tree, "nova-vendedora-e-1").props.accessibilityState.selected).toBe(false);
+    await tocar(tree, "nova-guardar");
+    expect(mockGuardarApi.mock.calls[0][1]).toMatchObject({ employee_id: "e-2", seller_name: "Paula" });
+  });
+
+  it("sem funcionária ligada ao usuário, nenhuma vem marcada", async () => {
+    mockEquipe = [{ id: "e-1", name: "Jéssica", status: "active", user_id: "u-1" }];
+    const { tree } = montar();
+    await ateOPasso3(tree);
+    expect(um(tree, "nova-vendedora-e-1").props.accessibilityState.selected).toBe(false);
+  });
+
+  it("pop-up bloqueado: explica como liberar e o 'Tentar de novo' imprime de novo", async () => {
+    mockImprimir.mockResolvedValue("blocked");
+    mockGuardarApi.mockResolvedValue({ condicional: GUARDADA });
+    const { tree } = montar();
+    await ateOPasso3(tree);
+    await tocar(tree, "nova-guardar");
+    await tocar(tree, "nova-imprimir-a4");
+    expect(texto(tree)).toContain("Libere os pop-ups");
+    mockImprimir.mockResolvedValue("ok");
+    await tocar(tree, "nova-imprimir-tentar");
+    expect(mockImprimir).toHaveBeenLastCalledWith("loja-1", "cond-31", "a4");
+    expect(tem(tree, "nova-imprimir-tentar")).toBe(false);
+  });
+
+  it("WhatsApp sem telefone válido: 'Corrigir telefone' leva ao campo, abre o WhatsApp com o número e grava no cadastro", async () => {
+    mockGuardarApi.mockResolvedValue({ condicional: GUARDADA });
+    const { tree } = montar();
+    await ateOPasso3(tree);
+    await tocar(tree, "nova-guardar");
+    mockWhats.mockReturnValue(false);
+    await tocar(tree, "nova-whatsapp");
+    expect(texto(tree)).toContain(T.corrigirTelefone);
+    await tocar(tree, "nova-corrigir-telefone");
+    expect(tem(tree, "nova-corrigir-tel")).toBe(true);
+    mockWhats.mockReturnValue(true);
+    await digitar(tree, "nova-corrigir-tel", "11977776666");
+    await tocar(tree, "nova-corrigir-enviar");
+    expect(mockWhats).toHaveBeenLastCalledWith({ ...GUARDADA, customer_phone: "11977776666" }, "Loja Centro");
+    expect(mockAtualizarCliente).toHaveBeenCalledWith("loja-1", "c-1", { phone: "11977776666" });
   });
 });
 

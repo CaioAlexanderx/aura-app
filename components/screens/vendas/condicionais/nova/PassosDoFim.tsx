@@ -17,7 +17,10 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
-import { pdvSettingsApi } from "@/services/api";
+import { pdvSettingsApi, companiesApi } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { maskPhone } from "@/utils/masks";
+import { normalizarTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { employeesApi } from "@/services/employeesApi";
 import { novaChaveDaVenda, chaveDaVendaJaUsada } from "@/utils/chaveDaVenda";
 import { telefoneParaEnviar } from "@/utils/telefone";
@@ -81,7 +84,8 @@ export function useGuardarCondicional(estado: EstadoDaNova, opts: { onCriada: (c
   const [prazo, setPrazo] = useState<PrazoEscolhido>(() => prazoInicial(hoje, padrao));
   const [prazoMexido, setPrazoMexido] = useState(false);
   const [outraDataAberta, setOutraDataAberta] = useState(false);
-  const [vendedoraId, setVendedoraId] = useState<string | null>(null);
+  const [vendedoraEscolhida, setVendedoraEscolhida] = useState<string | null | undefined>(undefined);
+  const usuarioId = String((useAuthStore() as any)?.user?.id || "");
   const [obs, setObs] = useState("");
   const [editandoTermos, setEditandoTermos] = useState(false);
   const [rascunho, setRascunho] = useState("");
@@ -107,10 +111,14 @@ export function useGuardarCondicional(estado: EstadoDaNova, opts: { onCriada: (c
   const vendedoras = useMemo(
     () => ((dadosDeEquipe as any)?.employees || [])
       .filter((x: any) => x && x.id && x.is_active !== false && (x.status || "active") === "active")
-      .map((x: any) => ({ id: String(x.id), name: String(x.name || "") }))
+      .map((x: any) => ({ id: String(x.id), name: String(x.name || ""), userId: x.user_id ? String(x.user_id) : "" }))
       .filter((x: { name: string }) => !!x.name),
     [dadosDeEquipe],
   );
+  // Quem está logada é funcionária cadastrada (employee ligado ao usuário): já vem marcada. Senão, nenhuma.
+  const vendedoraDaSessao = usuarioId ? (vendedoras.find((v: { userId: string }) => v.userId === usuarioId)?.id ?? null) : null;
+  const vendedoraId = vendedoraEscolhida !== undefined ? vendedoraEscolhida : vendedoraDaSessao;
+  const setVendedoraId = (id: string | null) => setVendedoraEscolhida(id);
 
   const termos = termosSalvos !== null ? termosSalvos : termosDaLoja;
 
@@ -160,6 +168,12 @@ export function useGuardarCondicional(estado: EstadoDaNova, opts: { onCriada: (c
     try {
       const r = await condicionaisApi.guardar(estado.lojaId, body, chaveRef.current.chave);
       chaveRef.current = null;
+      // O backend usa o telefone só nesta condicional (não altera o cadastro): quem digitou aqui grava no cadastro.
+      if (!estado.cliente?.phone && estado.telefoneAvulso) {
+        companiesApi.updateCustomer(estado.lojaId, estado.cliente!.id, { phone: telefoneParaEnviar(estado.telefoneAvulso) })
+          .then(() => qc.invalidateQueries({ queryKey: ["customers"] }))
+          .catch(() => { /* a condicional já está guardada; o cadastro se completa depois na ficha */ });
+      }
       setGuardada(r.condicional);
       opts.onCriada(r.condicional);
       return { tipo: "ok" };
@@ -185,7 +199,7 @@ export function useGuardarCondicional(estado: EstadoDaNova, opts: { onCriada: (c
     setPrazo(prazoInicial(hoje, padrao));
     setPrazoMexido(false);
     setOutraDataAberta(false);
-    setVendedoraId(null);
+    setVendedoraEscolhida(undefined);
     setObs("");
     setEditandoTermos(false);
     setErro(null);
@@ -372,6 +386,11 @@ function LinhasDoResumo({ estado, guardar: g }: { estado: EstadoDaNova; guardar:
 // ── Pronto ───────────────────────────────────────────────────────────
 function Pronto({ guardada, lojaId, lojaNome }: { guardada: CondicionalGuardada; lojaId: string | null; lojaNome: string }) {
   const [aviso, setAviso] = useState<string | null>(null);
+  const [tentarFormato, setTentarFormato] = useState<FormatoDoComprovante | null>(null);
+  const [corrigindo, setCorrigindo] = useState(false);
+  const [semTelefone, setSemTelefone] = useState(false);
+  const [telefone, setTelefone] = useState("");
+  const qc = useQueryClient();
   const n = guardada.items?.length || guardada.resumo?.pecas || 0;
   const quando = guardada.due_date ? dataLonga(String(guardada.due_date).slice(0, 10)) : "";
 
@@ -379,14 +398,30 @@ function Pronto({ guardada, lojaId, lojaNome }: { guardada: CondicionalGuardada;
   function imprimir(formato: FormatoDoComprovante) {
     if (!lojaId) return;
     setAviso(null);
+    setTentarFormato(null);
     imprimirComprovanteDaCondicional(lojaId, guardada.id, formato).then((r) => {
-      if (r === "blocked") setAviso(T.impressaoBloqueada);
+      if (r === "blocked") { setAviso(T.impressaoBloqueada); setTentarFormato(formato); }
       else if (r === "error") setAviso(T.impressaoFalhou);
     }).catch(() => setAviso(T.impressaoFalhou));
   }
   function whatsapp() {
     setAviso(null);
-    if (!abrirWhatsappDaCondicional(guardada as any, lojaNome)) setAviso(T.semWhatsapp);
+    setTentarFormato(null);
+    if (!abrirWhatsappDaCondicional(guardada as any, lojaNome)) { setAviso(T.semWhatsapp); setCorrigindo(false); setSemTelefone(true); }
+  }
+  // Abre o WhatsApp no clique (antes de qualquer await) com o telefone corrigido e grava no cadastro em segundo plano.
+  function salvarEEnviar() {
+    const digitos = normalizarTelefone(telefone).digitos;
+    if (digitos.length < 10 || digitos.length > 11) { setAviso(T.erroTelefone); return; }
+    const abriu = abrirWhatsappDaCondicional({ ...(guardada as any), customer_phone: digitos }, lojaNome);
+    if (!abriu) { setAviso(T.semWhatsapp); return; }
+    setAviso(null);
+    setCorrigindo(false);
+    setSemTelefone(false);
+    if (guardada.customer_id && lojaId) {
+      companiesApi.updateCustomer(lojaId, guardada.customer_id, { phone: digitos })
+        .then(() => qc.invalidateQueries({ queryKey: ["customers"] })).catch(() => {});
+    }
   }
 
   const nome = guardada.customer_name || "";
@@ -412,7 +447,29 @@ function Pronto({ guardada, lojaId, lojaNome }: { guardada: CondicionalGuardada;
         {!!aviso && (
           <View style={[e.nota, e.notaAmbar, { alignSelf: "stretch", maxWidth: 520 }]} testID="nova-pronto-aviso" accessibilityRole="alert">
             <Icon name="alert" size={14} color={Colors.amber} />
-            <Text style={e.notaTxt}>{aviso}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={e.notaTxt}>{aviso}</Text>
+              {!!tentarFormato && (
+                <Pressable testID="nova-imprimir-tentar" onPress={() => imprimir(tentarFormato)} style={[e.btnSec, { alignSelf: "flex-start", marginTop: 8 }]} accessibilityRole="button">
+                  <Text style={e.btnSecTxt}>{T.tentarDeNovo}</Text>
+                </Pressable>
+              )}
+              {semTelefone && !corrigindo && (
+                <Pressable testID="nova-corrigir-telefone" onPress={() => setCorrigindo(true)} style={[e.btnSec, { alignSelf: "flex-start", marginTop: 8 }]} accessibilityRole="button">
+                  <Text style={e.btnSecTxt}>{T.corrigirTelefone}</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+        {corrigindo && (
+          <View style={{ alignSelf: "stretch", maxWidth: 520 }} testID="nova-corrigir">
+            <Text style={e.rotulo}>{T.campoTelefone}</Text>
+            <TextInput testID="nova-corrigir-tel" value={telefone} onChangeText={(v) => setTelefone(maskPhone(v))} keyboardType="phone-pad"
+              maxLength={TELEFONE_MAX_CARACTERES} placeholder="(11) 98888-0142" placeholderTextColor={Colors.ink3} style={e.input} accessibilityLabel={T.campoTelefone} autoFocus />
+            <Pressable testID="nova-corrigir-enviar" onPress={salvarEEnviar} style={[e.btnPri, { marginTop: 8 }]} accessibilityRole="button">
+              <Icon name="whatsapp" size={14} color="#fff" /><Text style={e.btnPriTxt}>{T.salvarEEnviar}</Text>
+            </Pressable>
           </View>
         )}
       </View>
