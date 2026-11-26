@@ -49,6 +49,8 @@ export interface HubMessage {
   tipo?: string | null;
   /** Foto do produto mandada (cartão de produto na thread). */
   image_url?: string | null;
+  /** Foto ou áudio guardado (URL assinada de 1 h). null = não foi guardado. */
+  media?: { kind: "image" | "audio"; mime: string; url: string | null } | null;
 }
 
 export type HubEnvioTipo = "produto" | "orcamento" | "pix" | "link_loja";
@@ -120,6 +122,12 @@ export const hubApi = {
   send: (companyId: string, convId: string, body: { type: HubEnvioTipo; product_id?: string; quote_id?: string; amount?: number }) =>
     request<{ ok: boolean; wamid: string | null }>(
       `/companies/${companyId}/hub/conversations/${convId}/send`, { method: "POST", body }
+    ),
+
+  /** Foto ou áudio da conversa aberta. `data` é base64 puro; o servidor converte o WebM do Chrome. */
+  midia: (companyId: string, convId: string, body: { kind: "foto" | "audio"; mime: string; data: string; caption?: string }) =>
+    request<{ ok: boolean; wamid: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/midia`, { method: "POST", body, timeout: 60000, retry: 0 }
     ),
 
   catalogo: (companyId: string, q: string) =>

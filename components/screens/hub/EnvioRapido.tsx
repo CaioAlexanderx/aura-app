@@ -22,12 +22,14 @@ const ATALHOS: { key: HubEnvioTipo; label: string }[] = [
   { key: "link_loja", label: "Link da loja" },
 ];
 
-export function EnvioRapido({ companyId, convId, onSent, onError, extras }: {
+export function EnvioRapido({ companyId, convId, onSent, onError, extras, painelExtra }: {
   companyId: string; convId: string;
   onSent: () => void;
   onError: (mensagem: string) => void;
   /** Botões a mais na mesma linha (foto, áudio, etiqueta). */
   extras?: React.ReactNode;
+  /** Painel dos botões extras (gravação, prévia da foto), abaixo da linha de atalhos. */
+  painelExtra?: React.ReactNode;
 }) {
   const [painel, setPainel] = useState<Painel>(null);
   const [busca, setBusca] = useState("");
@@ -71,6 +73,8 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras }: {
         ))}
         {extras}
       </View>
+
+      {painelExtra}
 
       {painel === "produto" && (
         <View testID="hub-envio-painel-produto" style={s.painel}>

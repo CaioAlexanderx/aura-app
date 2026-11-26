@@ -15,6 +15,8 @@ import { Icon } from "@/components/Icon";
 import { hubApi, type HubCategory } from "@/services/hubApi";
 import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, displayName, rotuloDoAutor } from "./types";
 import { EnvioRapido } from "./EnvioRapido";
+import { useMidiaConversa } from "./MidiaConversa";
+import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: {
   companyId: string; convId: string; onBack?: () => void;
@@ -62,6 +64,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
         : (e?.message || "Não foi possível enviar."));
     },
   });
+
+  // Foto e áudio (hook antes do return antecipado: a ordem dos hooks não muda).
+  const midia = useMidiaConversa({ companyId, convId, onSent: invalidate, onError: (m) => setFeedback(m) });
 
   if (isLoading || !data || !conv) {
     return <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>;
@@ -146,7 +151,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
               {m.tipo === "produto" && m.image_url && (
                 <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url }} style={s.bubbleFoto} resizeMode="cover" />
               )}
-              <Text style={s.bubbleText}>{m.content}</Text>
+              {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={m.media} /> : null}
+              {textoDaBolha(m) != null && <Text style={s.bubbleText}>{textoDaBolha(m)}</Text>}
               <Text style={s.bubbleTime}>{shortTime(m.created_at)}{mine && m.status ? ` · ${m.status}` : ""}</Text>
             </View>
           );
@@ -200,7 +206,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
       )}
       {abertaAte && (
         <EnvioRapido companyId={companyId} convId={convId} onSent={invalidate}
-          onError={(msg) => setFeedback(msg)} />
+          onError={(msg) => setFeedback(msg)} extras={midia.botoes} painelExtra={midia.painel} />
       )}
       <View style={s.composer}>
         <TextInput
