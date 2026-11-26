@@ -211,6 +211,10 @@ export type StudioOrder = {
   payment_method?: "pix" | "card" | "on_delivery" | string | null;
   payment_status?: string | null;
   has_payment_proof?: boolean;
+  // 26/11/2026 (C1, backend#1125): o pedido já tem dinheiro recebido (sinal,
+  // saldo ou Pix da loja confirmado); "Tirar da fila" seria recusado.
+  fila_tem_recebimento?: boolean;
+  fila_recebido?: number;
   // 17/11/2026 (p-177, backend#1051): o item que o cartão da Fila mostra
   // ("2 × Caneca com nome") e de onde o pedido veio. Só somados; ausentes
   // no backend de antes, e null quando a consulta não achou.

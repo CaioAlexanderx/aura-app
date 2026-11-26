@@ -25,6 +25,7 @@ import {
   lerPreco, lerQuantidade, modeloEfetivo, seloDoModelo, textoDaQuantidade, textoDoPreco,
   type ProdutoDoCatalogo,
 } from "./regras";
+import { useSelecionarAoFocar } from "@/components/studio/storefront/ui/selecaoAoFocar";
 import { Botao, Campo, FotoDoProduto, Rotulo, Selo, type Tema } from "./ui";
 
 /** A peça em memória: o item do orçamento com uma chave local e a foto. */
@@ -51,6 +52,9 @@ type Props = {
 
 export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templates, specs, onAlternar, onMudar, onTirar }: Props) {
   const { t, estreito } = tema;
+  // Seleciona o número inteiro no foco e no clique, pelo DOM (o selectTextOnFocus
+  // do RNW falha na 1ª vez: o mouseup desfaz a seleção e 2 virava 21).
+  const selecionarAoFocar = useSelecionarAoFocar();
   const [qtdTxt, setQtdTxt] = useState(textoDaQuantidade(peca.quantity));
   const [precoTxt, setPrecoTxt] = useState(textoDoPreco(peca.unit_price));
   useEffect(() => { if (lerQuantidade(qtdTxt) !== peca.quantity) setQtdTxt(textoDaQuantidade(peca.quantity)); }, [peca.quantity]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -137,6 +141,7 @@ export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templa
                   keyboardType="decimal-pad"
                   accessibilityLabel="Quantidade"
                   testID="qtd"
+                  ref={selecionarAoFocar as any}
                   selectTextOnFocus
                   onChangeText={(v) => { setQtdTxt(v); const n = lerQuantidade(v); if (n !== null) onMudar({ quantity: n }); }}
                   onBlur={() => setQtdTxt(textoDaQuantidade(peca.quantity))}

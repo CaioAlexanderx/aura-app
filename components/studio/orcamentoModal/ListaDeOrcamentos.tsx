@@ -43,6 +43,7 @@ import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { useStudioFabAction, useStudioFabHidden } from "@/components/studio/StudioShell/fabControl";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { formatarTelefone } from "@/utils/telefone";
 
 // ─── Status config ────────────────────────────────────────────
 export const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
@@ -299,7 +300,7 @@ export function ListaDeOrcamentos({
                     {q.customer_name || "Cliente não informado"}
                   </Text>
                   {q.customer_phone ? (
-                    <Text style={s.cardPhone}>{q.customer_phone}</Text>
+                    <Text style={s.cardPhone}>{formatarTelefone(q.customer_phone)}</Text>
                   ) : null}
                 </View>
                 {consolidado && lojas.length > 1 ? (
