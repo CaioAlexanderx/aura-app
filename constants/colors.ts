@@ -64,8 +64,6 @@ var Dark = {
   green: "#34d399", greenD: "rgba(52,211,153,0.10)",
   red: "#f87171", redD: "rgba(248,113,113,0.10)",
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
-  // Venda condicional (C13): cabide, azul-petroleo. Cor do selo tracejado e seu fundo.
-  condicional: "#22d3ee", condicionalD: "rgba(34,211,238,0.10)",
 } as const;
 
 // Light: contraste forte. bg da página em cinza-violáceo (#e6e4f0) faz cards
@@ -81,7 +79,6 @@ var Light = {
   green: "#059669", greenD: "rgba(5,150,105,0.08)",
   red: "#dc2626", redD: "rgba(220,38,38,0.06)",
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
-  condicional: "#0e7490", condicionalD: "rgba(8,145,178,0.10)",
 } as const;
 
 export var Colors = IS_DARK ? { ...Dark } : { ...Light };
@@ -259,7 +256,8 @@ export var Stage = {
 //        mockup (o red/amber/green do app ficam abaixo de AA em texto de
 //        12 px no tema claro; medido no mockup: pior 4,67)
 // Objeto próprio (como Stage), fora de Light/Dark: AuraColors é o formato de
-// Light, e paletas de fora (Studio) não têm estas chaves.
+// Light, e paletas de fora (Studio, studioNotificationColors) não têm estas
+// chaves. Fonte única da condicional: o selo do C13 (SeloComClientes) lê daqui.
 var CondicionalLight = {
   cd: "#0e7490", cdInk: "#155e75", cdBg: "rgba(8,145,178,0.10)", cdLine: "rgba(8,145,178,0.50)",
   fcInk: "#5b21b6", fcBg: "rgba(124,58,237,0.09)", fcLine: "rgba(217,119,6,0.62)", fcIc: "#b45309",

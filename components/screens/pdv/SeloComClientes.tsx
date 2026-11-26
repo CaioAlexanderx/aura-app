@@ -7,7 +7,7 @@
 // antes.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
-import { Colors, IS_DARK_MODE } from "@/constants/colors";
+import { CondicionalCores as CD } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { TEXTOS_COM_CLIENTES as T } from "@/utils/comClientes";
 
@@ -21,15 +21,16 @@ export function SeloComClientes({ quantidade, testID }: { quantidade: number; te
   );
 }
 
-// Texto do mockup: #155e75 no claro, #67e8f9 no escuro (a borda usa o token).
-const TEXTO = IS_DARK_MODE ? "#67e8f9" : "#155e75";
+// Texto do mockup: #155e75 no claro, #67e8f9 no escuro. Cores da condicional
+// numa fonte só (CondicionalCores, constants/colors.ts).
+const TEXTO = CD.cdInk;
 
 const s = StyleSheet.create({
   selo: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 7, paddingVertical: 1, borderRadius: 99,
-    backgroundColor: Colors.condicionalD,
-    borderWidth: 1, borderStyle: "dashed", borderColor: Colors.condicional,
+    backgroundColor: CD.cdBg,
+    borderWidth: 1, borderStyle: "dashed", borderColor: CD.cd,
   },
   txt: { fontSize: 11, fontWeight: "700", color: TEXTO },
 });
