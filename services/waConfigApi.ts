@@ -19,6 +19,9 @@ const base = (companyId: string) => `/companies/${companyId}/whatsapp`;
 /** Caminhos desta tela. Trocar uma rota do backend = trocar uma linha aqui. */
 export const ROTAS = {
   saldo: (c: string) => `${base(c)}/saldo`,
+  automaticas: (c: string) => `${base(c)}/automaticas`,
+  divisao: (c: string) => `${base(c)}/automaticas/divisao`,
+  ligada: (c: string, key: string) => `${base(c)}/automaticas/${key}/ligada`,
 };
 
 // ── Saldo ─────────────────────────────────────────────────────
@@ -41,7 +44,34 @@ export interface WaSaldoRaw {
   aurinha?: WaSaldoBaldeRaw | null;
 }
 
+// ── Automáticas ───────────────────────────────────────────────
+export type WaAutoKey = "aniversario" | "vendamais" | "crediario";
+
+export interface WaAutomaticaRaw {
+  ligada?: boolean | null;
+  /** Linhas de resumo já calculadas pelo servidor ("11 clientes aptos hoje"). */
+  linhas?: string[] | null;
+}
+
+export interface WaAutomaticasRaw {
+  /** Divisão das novidades do mês entre as três. */
+  divisao?: Partial<Record<WaAutoKey, number>> | null;
+  /** Quanto cada parte já gastou no mês. */
+  usadas?: Partial<Record<WaAutoKey, number>> | null;
+  automaticas?: Partial<Record<WaAutoKey, WaAutomaticaRaw>> | null;
+}
+
 export const waConfigApi = {
   getSaldo: (companyId: string): Promise<WaSaldoRaw> =>
     request<WaSaldoRaw>(ROTAS.saldo(companyId)),
+
+  getAutomaticas: (companyId: string): Promise<WaAutomaticasRaw> =>
+    request<WaAutomaticasRaw>(ROTAS.automaticas(companyId)),
+
+  /** O servidor recusa uma divisão cuja soma passe do saldo (resposta 4xx). */
+  putDivisao: (companyId: string, divisao: Record<WaAutoKey, number>): Promise<WaAutomaticasRaw> =>
+    request<WaAutomaticasRaw>(ROTAS.divisao(companyId), { method: "PUT", body: divisao }),
+
+  setLigada: (companyId: string, key: WaAutoKey, ligada: boolean): Promise<WaAutomaticasRaw> =>
+    request<WaAutomaticasRaw>(ROTAS.ligada(companyId, key), { method: "PUT", body: { ligada } }),
 };

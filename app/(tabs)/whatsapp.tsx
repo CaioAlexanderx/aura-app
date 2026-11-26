@@ -52,6 +52,8 @@ import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenH
 import { HubView } from "@/components/screens/hub/HubView";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useWaSaldo } from "@/hooks/useWaSaldo";
+import { useWaAutomaticas } from "@/hooks/useWaAutomaticas";
+import { AutomaticasCard } from "@/components/whatsapp/AutomaticasCard";
 import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -62,6 +64,7 @@ type AbaReal = "conversas" | "config";
 // próprio: acrescentar uma é acrescentar uma linha aqui + o bloco abaixo.
 const SECOES_CONFIG = [
   { key: "conexao", label: "Conexão" },
+  { key: "automaticas", label: "Automáticas" },
   { key: "cobrancas", label: "Cobranças" },
   { key: "templates", label: "Templates" },
 ] as const;
@@ -79,6 +82,8 @@ export default function WhatsAppScreen() {
   const wa = useWaVarejo(companyId, !demo);
   // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView);
+  const autoAtiva = !demo && !consolidatedView && secao === "automaticas";
+  const auto = useWaAutomaticas(companyId, autoAtiva);
 
   // A entrada da reativação conta em cima da lista de clientes. Mesma
   // queryKey do hook da tela de Clientes (react-query), então isto é
@@ -248,6 +253,18 @@ export default function WhatsAppScreen() {
                 companyCount={clientes.consolidatedView ? clientes.companyCount : 1}
                 compacto
                 idBase="wa-varejo-ir-para-reativacao"
+              />
+            </View>
+          )}
+
+          {secao === "automaticas" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-automaticas">
+              <AutomaticasCard
+                companyId={companyId}
+                saldo={saldo.saldo}
+                auto={auto}
+                status={wa.status}
+                onStatusChanged={wa.reloadStatus}
               />
             </View>
           )}
