@@ -46,6 +46,7 @@ import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import NovoInsumoModal from "@/components/studio/NovoInsumoModal";
+import { reais } from "@/components/studio/pagamentoDoPedido";
 
 // ─── Semáforo de margem ───────────────────────────────────────────────────────
 function marginColor(pct: number | null): string {
@@ -328,7 +329,7 @@ export function TelaDeInsumos({ destinos }: { destinos?: DestinosDosInsumos } = 
                       )}
                     </View>
                     <Text style={s.itemMeta}>
-                      R$ {Number(i.unit_cost).toFixed(2)} / {i.unit}
+                      {reais(i.unit_cost)} / {i.unit}
                       {i.supplier_name && <Text style={{ color: t.ink3 }}> · {i.supplier_name}</Text>}
                     </Text>
                   </View>
@@ -435,11 +436,11 @@ export function TelaDeInsumos({ destinos }: { destinos?: DestinosDosInsumos } = 
                     <View style={{ flex: 2, minWidth: 0 }}>
                       <Text style={s.itemName} numberOfLines={1}>{c.product_name}</Text>
                       <Text style={s.itemMeta}>
-                        Venda: R$ {Number(c.product_price).toFixed(2)}
+                        Venda: {reais(c.product_price)}
                       </Text>
                     </View>
                     <Text style={[s.fichaCell, { flex: 1, textAlign: "right" }]}>
-                      R$ {Number(c.total_cost).toFixed(2)}
+                      {reais(c.total_cost)}
                     </Text>
                     <View style={{ flex: 1, alignItems: "flex-end" }}>
                       <Text style={[s.fichaCell, { color: marginColor(c.margin_pct), fontWeight: "800" }]}>

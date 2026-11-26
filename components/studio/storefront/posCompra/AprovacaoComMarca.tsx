@@ -30,7 +30,7 @@ import { Botao, MolduraDaLoja, Nota, Painel, Rotulo, Selo, Titulo, abrirFora } f
 import { PedidoNaoEncontrado } from "./PedidoNaoEncontrado";
 import { separarReferencia } from "../../referenciaDoAjuste";
 import {
-  avisoDoAjuste, linkDoWhatsAppDoPedido, nomeDaLoja, primeiroNome, telaDaAprovacao,
+  avisoDoAjuste, ehOrcamentoVencido, FRASE_ORCAMENTO_VENCIDO, linkDoWhatsAppDoPedido, nomeDaLoja, primeiroNome, telaDaAprovacao,
   textoDasRevisoes, tituloDaAprovacao,
 } from "./posCompra";
 
@@ -81,6 +81,7 @@ export function AprovacaoComMarca({
     } catch (e: any) {
       const status = e?.status;
       if (status === 410) { setFolha(false); setExpirou(true); return; }
+      if (ehOrcamentoVencido(e)) { setErro(FRASE_ORCAMENTO_VENCIDO); return; }
       // 409: alguém já respondeu este link (outra aba, outro aparelho).
       setErro(status === 409
         ? "Esta arte já foi respondida. Recarregue a página para ver como ficou."

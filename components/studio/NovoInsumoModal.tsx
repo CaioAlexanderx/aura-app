@@ -24,6 +24,7 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
 import { formatarTelefone } from "@/utils/telefone";
+import { maskCurrency } from "@/utils/masks";
 
 type Unit = "un" | "g" | "kg" | "ml" | "L" | "folha" | "cm" | "m";
 
@@ -50,6 +51,7 @@ type Props = {
   onUpdated?: (insumo: StudioInput) => void;
 };
 
+// Custo unitário: máscara de dinheiro do Caixa (dígitos entram como centavos: "085" = 0,85).
 function parseDecimal(v: string): number {
   if (!v) return 0;
   const norm = v.replace(/\./g, "").replace(",", ".");
@@ -104,7 +106,7 @@ export default function NovoInsumoModal({
       if (editing) {
         setName(editing.name || "");
         setUnit(((editing.unit as Unit) || "un"));
-        setUnitCost(editing.unit_cost != null ? String(editing.unit_cost).replace(".", ",") : "");
+        setUnitCost(editing.unit_cost != null ? maskCurrency(String(Math.round(Number(editing.unit_cost) * 100))) : "");
         setStockQty(editing.stock_qty != null ? String(editing.stock_qty).replace(".", ",") : "");
         setStockMin(editing.stock_min != null ? String(editing.stock_min).replace(".", ",") : "");
         setSupplierName(editing.supplier_name || "");
@@ -329,7 +331,7 @@ export default function NovoInsumoModal({
                   <Text style={styles.prefix}>R$</Text>
                   <TextInput
                     value={unitCost}
-                    onChangeText={setUnitCost}
+                    onChangeText={(v) => setUnitCost(v.replace(/\D/g, "") ? maskCurrency(v) : "")}
                     placeholder="0,00"
                     placeholderTextColor={t.ink3}
                     keyboardType="decimal-pad"

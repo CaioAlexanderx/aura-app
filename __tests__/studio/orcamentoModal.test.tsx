@@ -284,7 +284,7 @@ describe("modal do orçamento", () => {
       quote: {
         id: "q1", company_id: CID, status: "sent", customer_name: "Mariana Costa", customer_phone: "11987654321",
         total: 532.8, discount: 5.9, validity_days: 7, deposit_pct: 50, sent_at: "2026-09-28T17:32:00Z",
-        expires_at: "2026-10-06T17:32:00Z", canal_envio: "whatsapp", video_key: "v.mp4", video_expira_em: "2099-10-28T00:00:00Z",
+        expires_at: "2099-10-06T17:32:00Z", canal_envio: "whatsapp", video_key: "v.mp4", video_expira_em: "2099-10-28T00:00:00Z",
         condicoes: { pix_desconto_pct: 5, parcelas: null, prazo_dias_uteis: null, observacao: null }, versao: 1,
       },
       items: [{ id: "i1", product_id: "p1", description: "Caneca clássica 325 ml", quantity: 12, unit_price: 39.9, visual_template_key: "caneca-magica" }],
@@ -341,7 +341,7 @@ describe("modal do orçamento", () => {
       quote: {
         id: "q1", company_id: CID, status: "sent", customer_name: "Mariana Costa", customer_phone: "11987654321",
         total: 478.8, discount: 0, validity_days: 7, deposit_pct: null, sent_at: "2026-09-28T17:32:00Z",
-        expires_at: "2026-10-06T17:32:00Z", canal_envio: "whatsapp", condicoes: null, versao: 1,
+        expires_at: "2099-10-06T17:32:00Z", canal_envio: "whatsapp", condicoes: null, versao: 1,
       },
       items: [{ id: "i1", product_id: "p1", description: "Caneca clássica 325 ml", quantity: 12, unit_price: 39.9, visual_template_key: "caneca-magica" }],
       ajustes: [],

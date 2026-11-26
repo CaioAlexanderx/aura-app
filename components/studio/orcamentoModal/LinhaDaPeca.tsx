@@ -137,6 +137,7 @@ export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templa
                   keyboardType="decimal-pad"
                   accessibilityLabel="Quantidade"
                   testID="qtd"
+                  selectTextOnFocus
                   onChangeText={(v) => { setQtdTxt(v); const n = lerQuantidade(v); if (n !== null) onMudar({ quantity: n }); }}
                   onBlur={() => setQtdTxt(textoDaQuantidade(peca.quantity))}
                   style={{ width: 56, minHeight: 44, textAlign: "center", fontSize: 14, color: t.ink }}

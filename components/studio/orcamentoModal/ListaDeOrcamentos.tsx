@@ -34,6 +34,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { OrcamentoModal, type LojaDoOrcamento } from "./OrcamentoModal";
 import { studioApi, type StudioQuote, type StudioQuoteStatus } from "@/services/studioApi";
+import { orcamentoVencido } from "./regras";
 import { temAjustePendente, COR_DO_AJUSTE } from "@/components/studio/orcamentoVideo/ajusteDoOrcamento";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { StudioScreen } from "@/components/studio/StudioScreen";
@@ -99,6 +100,8 @@ export type ListaDeOrcamentosProps = {
   rotaDaLista?: string;
   /** Destino do "Ver pedido" do orçamento aprovado. Sem ele: /studio/pedidos/<id>. */
   rotaDoPedido?: (orderId: string) => string;
+  /** No shell Negócio a tela usa o fundo padrão, sem os arcos do Studio. */
+  semArcos?: boolean;
 };
 
 const CABECALHO_DO_STUDIO = {
@@ -113,6 +116,7 @@ export function ListaDeOrcamentos({
   semFlutuante = false,
   rotaDaLista = "/studio/gestao/orcamentos",
   rotaDoPedido,
+  semArcos = false,
 }: ListaDeOrcamentosProps) {
   const router        = useRouter();
   const { companyId, company } = useAuth();
@@ -218,7 +222,7 @@ export function ListaDeOrcamentos({
   ];
 
   return (
-    <StudioScreen variant="reading">
+    <StudioScreen variant="reading" semArcos={semArcos}>
       {/* Header */}
       <StudioPageHeader
         eyebrow={cabecalho.eyebrow}
@@ -315,6 +319,10 @@ export function ListaDeOrcamentos({
                   <View style={[pill.wrap, { backgroundColor: COR_DO_AJUSTE.bg }]}>
                     <Text style={[pill.txt, { color: COR_DO_AJUSTE.text }]}>Ajuste pedido</Text>
                   </View>
+                ) : orcamentoVencido(q) ? (
+                  <View style={[pill.wrap, { backgroundColor: STATUS_COLORS.expired.bg }]} testID={"vencido-" + q.id}>
+                    <Text style={[pill.txt, { color: STATUS_COLORS.expired.text }]}>Vencido</Text>
+                  </View>
                 ) : (
                   <StatusPill status={q.status} />
                 )}
@@ -324,7 +332,7 @@ export function ListaDeOrcamentos({
                 <Text style={s.cardTotal}>{fmtCurrency(q.total)}</Text>
                 <Text style={s.cardDate}>
                   {q.expires_at
-                    ? `Válido até ${fmtDate(q.expires_at)}`
+                    ? `${orcamentoVencido(q) ? "Venceu em" : "Válido até"} ${fmtDate(q.expires_at)}`
                     : `Criado ${fmtDate(q.created_at)}`}
                 </Text>
               </View>
