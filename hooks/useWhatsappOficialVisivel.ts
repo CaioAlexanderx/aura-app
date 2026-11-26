@@ -12,19 +12,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { waApi } from "@/services/waApi";
-import { whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 
 export function useWhatsappOficialVisivel(): boolean {
   const company = useAuthStore((s) => s.company) as any;
   const user = useAuthStore((s) => s.user);
+  const consolidado = useAuthStore((s) => s.consolidatedView) === true;
+  const sandbox = empresaSandbox(company, consolidado);
   const companyId: string | null = company?.id ?? null;
   const q = useQuery({
     queryKey: ["wa-status", companyId],
     queryFn: () => waApi.getStatus(companyId as string),
-    enabled: !whatsappOficialLiberadoPara(user) && !!companyId,
+    enabled: !whatsappOficialLiberadoPara(user, undefined, sandbox) && !!companyId,
     staleTime: 60 * 1000,
     retry: false,
     refetchOnWindowFocus: false,
   });
-  return whatsappOficialVisivel(q.data ?? null, user);
+  return whatsappOficialVisivel(q.data ?? null, user, undefined, sandbox);
 }

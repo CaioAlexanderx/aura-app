@@ -26,7 +26,7 @@
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
 import { router, Redirect } from "expo-router";
-import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { empresaSandbox, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -70,7 +70,7 @@ export default function WhatsAppScreen() {
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secao, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
-  const { company, isDemo, user } = useAuthStore();
+  const { company, isDemo, user, consolidatedView } = useAuthStore();
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
@@ -124,7 +124,7 @@ export default function WhatsAppScreen() {
   // tela. O menu já não mostra o item; quem chega pela URL volta ao Painel,
   // depois de o status responder (sem status, a tela fica vazia).
   // 26/11/2026 — a equipe Aura abre sempre: conecta o número da própria Aura.
-  if (!whatsappOficialVisivel(wa.status, user)) {
+  if (!whatsappOficialVisivel(wa.status, user, undefined, empresaSandbox(company, consolidatedView === true))) {
     if (!demo && wa.statusLoading) return null;
     return <Redirect href={"/" as any} />;
   }
