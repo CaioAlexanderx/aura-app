@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
 import { lerNotaFiscal } from "@/utils/notaDoItem";
 import { camposDaReserva } from "@/utils/reservaDoPedido";
+import { camposDeComClientes } from "@/utils/comClientes";
 
 async function deleteBatched(
   ids: string[],
@@ -126,6 +127,8 @@ export function mapApiProduct(p: any): Product {
     // 17/11/2026 (Pedido, A4): reserva do pedido do balcão. Só entra quando o
     // backend mandou (trava ligada); ausente, o objeto é o de antes.
     ...camposDaReserva(p),
+    // C13 (Venda condicional): peças com clientes; ausente (trava desligada), sem chave nova.
+    ...camposDeComClientes(p),
   };
 }
 

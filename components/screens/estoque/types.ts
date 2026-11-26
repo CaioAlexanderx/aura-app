@@ -104,6 +104,9 @@ export type Product = {
   // Aura-backend#1072). Ausentes = backend sem a trava: nada muda.
   reservedQty?: number;
   reservedByVariant?: Record<string, number>;
+  /** C13 (Venda condicional): peças com clientes (GET /products, só com a trava ligada). */
+  outQty?: number;
+  outByVariant?: Record<string, number>;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];

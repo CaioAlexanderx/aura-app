@@ -64,6 +64,8 @@ var Dark = {
   green: "#34d399", greenD: "rgba(52,211,153,0.10)",
   red: "#f87171", redD: "rgba(248,113,113,0.10)",
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
+  // Venda condicional (C13): cabide, azul-petroleo. Cor do selo tracejado e seu fundo.
+  condicional: "#22d3ee", condicionalD: "rgba(34,211,238,0.10)",
 } as const;
 
 // Light: contraste forte. bg da página em cinza-violáceo (#e6e4f0) faz cards
@@ -79,6 +81,7 @@ var Light = {
   green: "#059669", greenD: "rgba(5,150,105,0.08)",
   red: "#dc2626", redD: "rgba(220,38,38,0.06)",
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
+  condicional: "#0e7490", condicionalD: "rgba(8,145,178,0.10)",
 } as const;
 
 export var Colors = IS_DARK ? { ...Dark } : { ...Light };
