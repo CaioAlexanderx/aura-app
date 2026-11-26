@@ -54,11 +54,17 @@ export interface PagamentoDoPedido {
   // QA final 28/09/2026 (LJ-33, P2): quem cancelou e o motivo escrito
   // pela lojista. Ausente em backend antigo — o texto cai no genérico.
   cancelamento?: { tipo: string; motivo: string | null } | null;
+  // 26/11/2026 (A2 do QA de Personalizados): só o pedido que saiu de
+  // orçamento traz estes três (backend #1106). São a fonte do que foi
+  // recebido — o mesmo número do "Falta receber" do detalhe.
+  orcamento_recebido?: number | string | null;
+  orcamento_falta_receber?: number | string | null;
+  orcamento_pagamentos_pendentes?: unknown[] | null;
 }
 
 export type ChaveDaSituacao =
   | "aguardando" | "aguardando_cartao" | "cliente_disse_que_pagou" | "comprovante_enviado"
-  | "pago" | "na_entrega" | "vencido" | "cancelado";
+  | "pago" | "na_entrega" | "vencido" | "cancelado" | "a_receber" | "sinal_recebido";
 
 export interface SituacaoDoPagamento {
   chave: ChaveDaSituacao;
@@ -71,6 +77,34 @@ export interface SituacaoDoPagamento {
 
 const PAGO = ["confirmed", "paid", "received"];
 const ANDOU = ["confirmed", "preparing", "ready", "delivered"];
+
+const arred2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Pedido que saiu de orçamento: o que foi recebido e o que falta (sinal e
+ * saldo). `null` para o pedido comum da loja online, que não traz os campos.
+ * Neste pedido o status "confirmed" só diz que a loja aprovou o orçamento —
+ * não que o dinheiro entrou.
+ */
+export function recebidoDoOrcamento(p: {
+  orcamento_recebido?: number | string | null;
+  orcamento_falta_receber?: number | string | null;
+  orcamento_pagamentos_pendentes?: unknown[] | null;
+  total?: number | string | null;
+  total_amount?: number | string | null;
+} | null | undefined): { recebido: number; falta: number } | null {
+  if (!p) return null;
+  const bruto = p.orcamento_falta_receber;
+  if (bruto === null || bruto === undefined || bruto === "" || !Array.isArray(p.orcamento_pagamentos_pendentes)) return null;
+  const falta = arred2(Number(bruto));
+  if (!Number.isFinite(falta)) return null;
+  let recebido = Number(p.orcamento_recebido);
+  if (p.orcamento_recebido === null || p.orcamento_recebido === undefined || !Number.isFinite(recebido)) {
+    const total = Number(p.total ?? p.total_amount);
+    recebido = Number.isFinite(total) ? Math.max(0, total - falta) : 0;
+  }
+  return { recebido: arred2(recebido), falta: falta > 0.004 ? falta : 0 };
+}
 
 /** "R$ 1.234,56" — nunca "1234.56". */
 export function reais(v: number | string | null | undefined): string {
@@ -132,6 +166,25 @@ export function situacaoDoPagamento(p: PagamentoDoPedido): SituacaoDoPagamento {
     return {
       chave: "pago", rotulo: "Pago", tom: "sucesso", precisaAgir: false,
       detalhe: metodo === "card" ? "Pagamento confirmado pelo cartão." : "Pagamento confirmado.",
+    };
+  }
+
+  // Pedido de orçamento aprovado: "confirmed" não é pagamento. Vale o que
+  // entrou (sinal/saldo); só quitado vira "Pago".
+  const orc = recebidoDoOrcamento(p);
+  if (orc) {
+    if (orc.falta === 0) {
+      return { chave: "pago", rotulo: "Pago", tom: "sucesso", precisaAgir: false, detalhe: "Pagamento confirmado." };
+    }
+    if (orc.recebido > 0.004) {
+      return {
+        chave: "sinal_recebido", rotulo: `Sinal recebido · falta ${reais(orc.falta)}`, tom: "neutro", precisaAgir: false,
+        detalhe: "O saldo é recebido na Produção, antes de entregar.",
+      };
+    }
+    return {
+      chave: "a_receber", rotulo: "A receber", tom: "neutro", precisaAgir: false,
+      detalhe: "Nada recebido ainda. O sinal e o saldo são registrados na Produção.",
     };
   }
 
@@ -234,9 +287,21 @@ export function situacaoDoPixNoCartao(item: {
   payment_method?: string | null;
   payment_status?: string | null;
   has_payment_proof?: boolean | null;
+  orcamento_recebido?: number | string | null;
+  orcamento_falta_receber?: number | string | null;
+  orcamento_pagamentos_pendentes?: unknown[] | null;
 }): { rotulo: string; tom: TomDoPagamento } | null {
   if (item.payment_method === "card" || item.payment_method === "on_delivery") return null;
   const status = item.status ?? "";
+  // Pedido de orçamento: lê o que entrou, não o status (A2, 26/11/2026).
+  const orc = recebidoDoOrcamento(item);
+  // Cancelado sem recebimento: o backend zera a falta, e isso não é "recebido".
+  if (orc && status === "cancelled") return null;
+  if (orc && !PAGO.includes(item.payment_status || "")) {
+    if (orc.falta === 0) return orc.recebido > 0.004 ? { rotulo: "Pix recebido", tom: "sucesso" } : null;
+    if (orc.recebido > 0.004) return { rotulo: "Sinal recebido", tom: "neutro" };
+    return { rotulo: "A receber", tom: "atencao" };
+  }
   if (PAGO.includes(item.payment_status || "") || ANDOU.includes(status)) {
     return { rotulo: "Pix recebido", tom: "sucesso" };
   }
@@ -383,7 +448,9 @@ export function podeCancelarOPedido(p: PagamentoDoPedido | null | undefined): bo
 
 /** O que o cancelamento faz, dito antes de confirmar. */
 export function avisoDoCancelamento(p: PagamentoDoPedido): string {
-  const pago = PAGO.includes(p.payment_status || "") || ANDOU.includes(p.status || "");
+  const orc = recebidoDoOrcamento(p);
+  const pago = PAGO.includes(p.payment_status || "")
+    || (orc ? orc.recebido > 0.004 : ANDOU.includes(p.status || ""));
   return pago
     ? "O pedido sai da produção e a cliente vê que a loja cancelou, com o motivo abaixo. O valor que já entrou não volta sozinho: combine a devolução com ela."
     : "O pedido sai da produção e a cliente vê que a loja cancelou, com o motivo abaixo.";
