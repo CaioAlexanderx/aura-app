@@ -8,9 +8,12 @@
 //   - AÇÕES SEMPRE VISÍVEIS. Nada aparece só no hover (regra 7 do
 //     CLAUDE.md): o botão da etapa seguinte fica no cartão o tempo todo, no
 //     mouse e no toque.
-//   - SEM ARRASTAR. O cartão anda pelo botão. "O arrastar só funciona bem no
-//     computador" (mockup), e o arraste do Studio já deu defeito no
-//     react-native-web.
+//   - ARRASTAR SÓ NO WEB, POR CIMA DOS BOTÕES. O botão continua sendo o
+//     caminho de todo mundo (toque, nativo, teclado). No web o cartão também
+//     arrasta entre colunas (26/11/2026), por eventos HTML5 do DOM
+//     (useStudioKanbanDnD) e não pelo responder system do react-native-web,
+//     que ficou morto no arraste do Odonto. Soltar faz o que o botão faz,
+//     com a mesma pergunta ao voltar; ver decidirSolta em regrasDaProducao.
 //   - NO CELULAR, UMA ETAPA POR VEZ. Abaixo de 768 px o quadro vira uma
 //     lista da etapa escolhida nos botões do alto.
 //   - OVERLAY POR WebPortal. O pedido de aprovação da arte abre por
@@ -72,11 +75,12 @@ import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studi
 import { labelStudioStatus } from "@/constants/studio-status";
 import {
   ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, ehAtivo, etapaDe, etapaInicialNoCelular, fraseDoResumo,
-  itemDoCartao, nomeDoCliente, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
+  decidirSolta, itemDoCartao, nomeDoCliente, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
 import { CapaMiniatura } from "@/components/personalizados/CapaMiniatura";
 import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
-import { BotaoVoltarEtapa } from "@/components/personalizados/BotaoVoltarEtapa";
+import { BotaoVoltarEtapa, ConfirmacaoDeVoltar } from "@/components/personalizados/BotaoVoltarEtapa";
+import { useDraggableCardRef, useDropZoneRef, useStudioKanbanDnD } from "@/components/studio/kanban/useStudioKanbanDnD";
 import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
 import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
 import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
@@ -110,6 +114,8 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
   const [saida, setSaida] = useState<Saida>("delivered");
   // p-185: o pedido de orçamento que ia ser entregue com dinheiro faltando.
   const [avisoDe, setAvisoDe] = useState<StudioOrder | null>(null);
+  // Arraste para uma coluna de trás que pede confirmação (a mesma do botão).
+  const [voltarDe, setVoltarDe] = useState<{ pedido: StudioOrder; destino: Etapa } | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -178,6 +184,19 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
     mover(pedido, proxima);
   }, [mover]);
 
+  // Soltar o cartão numa coluna: o mesmo que os botões (decidirSolta).
+  const soltar = useCallback((pedidoId: string, destino: StudioProductionStatus) => {
+    const pedido = naFila.find((o) => o.id === pedidoId);
+    if (!pedido) return;
+    const d = decidirSolta(etapaDe(pedido), destino);
+    if (d.acao === "avancar") avancar(pedido);
+    else if (d.acao === "mover") mover(pedido, d.destino);
+    else if (d.acao === "pular") toast.info("Avance uma etapa de cada vez.");
+    else if (d.acao === "confirmar-voltar") setVoltarDe({ pedido, destino: d.destino });
+  }, [naFila, avancar, mover]);
+  const dnd = useStudioKanbanDnD<StudioProductionStatus>(soltar);
+  const arrasta = dnd.isWeb && !celular;
+
   const { cobrar, cobrandoId } = useCobrarSaldo(companyId);
   const baixa = useRegistrarPagamento(companyId, { onSucesso: carregar });
   const receber = useReceberDoOrcamento(companyId, { onSucesso: carregar });
@@ -190,6 +209,8 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       t={t}
       s={s}
       destacado={!!destacarId && o.id === destacarId}
+      dnd={dnd}
+      arrasta={arrasta}
       onAvancar={avancar}
       onVoltar={mover}
       onAprovacao={setAprovacaoDe}
@@ -298,15 +319,9 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
     corpo = (
       <ScrollView horizontal style={{ flex: 1 }} contentContainerStyle={s.quadro} testID="producao-colunas">
         {ETAPAS.map((e) => (
-          <View key={e.key} style={s.coluna} testID={`producao-coluna-${e.key}`}>
-            <View style={s.colunaTopo}>
-              <Text style={s.colunaTitulo} numberOfLines={2}>{e.label}</Text>
-              <Text style={s.colunaConta}>{grupos[e.key].length}</Text>
-            </View>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.colunaDentro}>
-              {grupos[e.key].map((o) => cartao(o, e))}
-            </ScrollView>
-          </View>
+          <Coluna key={e.key} e={e} s={s} dnd={dnd} arrasta={arrasta} total={grupos[e.key].length}>
+            {grupos[e.key].map((o) => cartao(o, e))}
+          </Coluna>
         ))}
       </ScrollView>
     );
@@ -379,6 +394,19 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
         }}
       />
 
+      {/* Arraste para trás de "Em produção" ou "Pronto": a mesma pergunta do botão. */}
+      <ConfirmacaoDeVoltar
+        ativa={!!voltarDe}
+        destino={voltarDe?.destino || ETAPAS[0]}
+        idDeTeste="producao-arraste-voltar"
+        onCancelar={() => setVoltarDe(null)}
+        onConfirmar={() => {
+          const v = voltarDe;
+          setVoltarDe(null);
+          if (v) mover(v.pedido, v.destino.key);
+        }}
+      />
+
       {/* Arte e texto das peças: ResponsiveSheet (Modal, em document.body). */}
       <FolhaDeRecolher
         companyId={companyId}
@@ -386,6 +414,28 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
         onFechar={() => setRecolherDe(null)}
         onSalvo={() => carregar()}
       />
+    </View>
+  );
+}
+
+type Dnd = ReturnType<typeof useStudioKanbanDnD<StudioProductionStatus>>;
+
+/** Uma coluna do quadro; no web, também é onde o cartão arrastado cai. */
+function Coluna({
+  e, s, dnd, arrasta, total, children,
+}: { e: Etapa; s: ReturnType<typeof estilos>; dnd: Dnd; arrasta: boolean; total: number; children: React.ReactNode }) {
+  const ref = useDropZoneRef<StudioProductionStatus>(e.key, dnd.onDrop, dnd.onHoverChange);
+  // Coluna-alvo realçada enquanto um cartão passa por cima.
+  const alvo = arrasta && !!dnd.draggingId && dnd.hoverStatus === e.key;
+  return (
+    <View ref={ref} style={[s.coluna, alvo && s.colunaAlvo]} testID={`producao-coluna-${e.key}`}>
+      <View style={s.colunaTopo}>
+        <Text style={s.colunaTitulo} numberOfLines={2}>{e.label}</Text>
+        <Text style={s.colunaConta}>{total}</Text>
+      </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.colunaDentro}>
+        {children}
+      </ScrollView>
     </View>
   );
 }
@@ -440,13 +490,16 @@ function LinhaSaida({
 }
 
 function Cartao({
-  o, etapa, t, s, destacado, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, onReceberOrcamento, cobrando,
+  o, etapa, t, s, destacado, dnd, arrasta, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, onReceberOrcamento, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
   t: StudioPalette;
   s: ReturnType<typeof estilos>;
   destacado?: boolean;
+  dnd: Dnd;
+  /** Web com o quadro em colunas: o cartão arrasta. */
+  arrasta: boolean;
   onAvancar: (o: StudioOrder) => void;
   /** Mesmo `mover` do avançar: mesma rota, mesmo desfazer no erro. */
   onVoltar: (o: StudioOrder, destino: StudioProductionStatus) => void;
@@ -471,8 +524,11 @@ function Cartao({
   // Duas ações na etapa: a principal é a da etapa, e o avançar fica discreto.
   const duasAcoes = naArte || naPersonalizacao;
 
+  const cartaoRef = useDraggableCardRef(arrasta, o.id, dnd.onCardDragStart, dnd.onCardDragEnd);
+  const arrastando = arrasta && dnd.draggingId === o.id;
+
   return (
-    <View style={[s.cartao, destacado && s.cartaoDestacado]} testID={`producao-cartao-${o.id}`}>
+    <View ref={cartaoRef} style={[s.cartao, destacado && s.cartaoDestacado, arrastando && s.cartaoArrastando]} testID={`producao-cartao-${o.id}`}>
       <View style={s.topoDoCartao}>
         <CapaMiniatura o={o} nome={nome} t={t} />
         <View style={s.cresce}>
@@ -613,6 +669,7 @@ function estilos(t: StudioPalette) {
 
     quadro: { gap: 10, paddingBottom: 16 },
     coluna: { width: 232, backgroundColor: t.bgSoft, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
+    colunaAlvo: { borderColor: t.primary, borderWidth: 2, backgroundColor: t.primaryGhost },
     colunaTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, paddingHorizontal: 11, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 },
     colunaTitulo: { flex: 1, fontSize: 12, fontWeight: "700", color: t.ink },
     colunaConta: { fontSize: 11.5, color: t.ink3, fontVariant: ["tabular-nums"] },
@@ -629,6 +686,7 @@ function estilos(t: StudioPalette) {
     listaDoCelular: { gap: 10, paddingBottom: 24 },
 
     cartao: { backgroundColor: t.paperCard, borderRadius: 11, borderWidth: 1, borderColor: t.ink5, padding: 10, gap: 6 },
+    cartaoArrastando: { opacity: 0.45 },
     cartaoDestacado: { borderWidth: 2, borderColor: t.primary },
     linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
     numero: { fontSize: 11.5, fontWeight: "700", color: t.accentInk, fontVariant: ["tabular-nums"] },

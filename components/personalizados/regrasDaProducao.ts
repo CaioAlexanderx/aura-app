@@ -93,6 +93,32 @@ export const textoDoVoltar = (anterior: Pick<Etapa, "label">) => `Voltar para ${
 /** "Voltar este pedido para Aprovado?" */
 export const perguntaDoVoltar = (anterior: Pick<Etapa, "label">) => `Voltar este pedido para ${anterior.label}?`;
 
+// ── Arrastar o cartão entre colunas (web) ───────────────────────────────
+//
+// O arraste faz o que os botões fazem, e nada mais:
+//   - mesma coluna: nada;
+//   - a coluna seguinte: o "avançar" do cartão;
+//   - duas ou mais colunas adiante: "pular", não faz nada (não se pula a etapa
+//     da arte; o botão também só anda uma de cada vez);
+//   - coluna de trás: o "voltar", com a MESMA pergunta de sempre (sair de
+//     "Em produção" ou de "Pronto" confirma; das outras, volta direto).
+export type DecisaoDoSolta =
+  | { acao: "nada" }
+  | { acao: "avancar" }
+  | { acao: "pular" }
+  | { acao: "mover"; destino: StudioProductionStatus }
+  | { acao: "confirmar-voltar"; destino: Etapa };
+
+export function decidirSolta(atual: StudioProductionStatus, destino: string | null | undefined): DecisaoDoSolta {
+  const de = ETAPAS.findIndex((e) => e.key === atual);
+  const para = ETAPAS.findIndex((e) => e.key === destino);
+  if (de < 0 || para < 0 || de === para) return { acao: "nada" };
+  if (para > de) return para === de + 1 ? { acao: "avancar" } : { acao: "pular" };
+  return voltarPedeConfirmacao(atual)
+    ? { acao: "confirmar-voltar", destino: ETAPAS[para] }
+    : { acao: "mover", destino: ETAPAS[para].key };
+}
+
 const DO_QUADRO = new Set<string>(ETAPAS.map((e) => e.key));
 
 export function etapaDe(o: Pick<StudioOrder, "studio_production_status">): StudioProductionStatus {
