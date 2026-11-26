@@ -30,6 +30,11 @@ describe("orçamento vencido", () => {
     expect(ids).not.toContain("aprovar");
     expect(estadoDoOrcamento(enviado("2026-11-30T23:59:59-03:00"), HOJE)).toBe("enviado");
   });
+  test("status 'expired' (gravado pelo backend) também é Vencido e oferece Renovar", () => {
+    const q = { status: "expired" as const, expires_at: "2026-11-20T23:59:59-03:00", ajuste_pedido_em: null };
+    expect(estadoDoOrcamento(q, HOJE)).toBe("vencido");
+    expect(acoesDoRodape("vencido", { temPecas: true, catalogoAberto: false }).map((a) => a.id)).toContain("renovar");
+  });
   test("a página pública reconhece o código ORCAMENTO_VENCIDO", () => {
     expect(ehOrcamentoVencido({ code: "ORCAMENTO_VENCIDO" })).toBe(true);
     expect(ehOrcamentoVencido({ data: { error: "ORCAMENTO_VENCIDO" } })).toBe(true);

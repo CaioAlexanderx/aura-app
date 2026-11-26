@@ -41,7 +41,10 @@ export function orcamentoVencido(
   q: Pick<StudioQuote, "status" | "expires_at" | "ajuste_pedido_em"> | null | undefined,
   agora: Date = new Date(),
 ): boolean {
-  if (!q || q.status !== "sent" || !q.expires_at || temAjustePendente(q)) return false;
+  if (!q) return false;
+  // O backend grava 'expired' quando a cliente tenta aprovar depois do prazo; renova-se igual.
+  if (q.status === "expired") return true;
+  if (q.status !== "sent" || !q.expires_at || temAjustePendente(q)) return false;
   const validade = diaEmSaoPaulo(q.expires_at);
   const hoje = diaEmSaoPaulo(agora);
   return !!validade && !!hoje && validade < hoje;
