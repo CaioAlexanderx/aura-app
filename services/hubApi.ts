@@ -18,7 +18,16 @@ export type HubChannel = "instagram" | "whatsapp" | "storefront";
 export type HubStatus = "ia" | "precisa_humano" | "humano" | "resolvida";
 export type HubCategory = "produto" | "troca" | "entrega" | "pagamento" | "novidades";
 
+export interface HubLabel { id: string; name: string; color: string; n?: number }
+
+export interface HubCliente {
+  id: string; name: string; phone: string | null; email: string | null;
+  birth_date: string | null; since: string | null; last_purchase_at: string | null; total_spent: number | null;
+}
+
 export interface HubConversation {
+  /** Etiquetas aplicadas (migration 474). */
+  labels?: HubLabel[];
   id: string;
   channel: HubChannel;
   external_id: string;
@@ -82,8 +91,9 @@ export interface HubSettings {
 }
 
 export const hubApi = {
-  conversations: (companyId: string, filters?: { channel?: string; status?: string; category?: string }) => {
+  conversations: (companyId: string, filters?: { channel?: string; status?: string; category?: string; label?: string }) => {
     const qs = new URLSearchParams();
+    if (filters?.label) qs.set("label", filters.label);
     if (filters?.channel) qs.set("channel", filters.channel);
     if (filters?.status) qs.set("status", filters.status);
     if (filters?.category) qs.set("category", filters.category);
@@ -128,6 +138,32 @@ export const hubApi = {
   midia: (companyId: string, convId: string, body: { kind: "foto" | "audio"; mime: string; data: string; caption?: string }) =>
     request<{ ok: boolean; wamid: string | null }>(
       `/companies/${companyId}/hub/conversations/${convId}/midia`, { method: "POST", body, timeout: 60000, retry: 0 }
+    ),
+
+  // ── Etiquetas ──
+  etiquetas: (companyId: string) =>
+    request<{ labels: HubLabel[]; schema_pending?: boolean }>(`/companies/${companyId}/hub/etiquetas`),
+  criarEtiqueta: (companyId: string, body: { name: string; color?: string }) =>
+    request<{ label: HubLabel }>(`/companies/${companyId}/hub/etiquetas`, { method: "POST", body }),
+  apagarEtiqueta: (companyId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/etiquetas/${labelId}`, { method: "DELETE" }),
+  aplicarEtiqueta: (companyId: string, convId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/conversations/${convId}/etiquetas/${labelId}`, { method: "PUT" }),
+  tirarEtiqueta: (companyId: string, convId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/conversations/${convId}/etiquetas/${labelId}`, { method: "DELETE" }),
+
+  // ── "É ela": cadastro de Clientes da conversa ──
+  clienteDaConversa: (companyId: string, convId: string) =>
+    request<{ cliente: HubCliente | null; sugestao: HubCliente | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/cliente`
+    ),
+  buscarClientes: (companyId: string, q: string) =>
+    request<{ clientes: Pick<HubCliente, "id" | "name" | "phone" | "email">[] }>(
+      `/companies/${companyId}/hub/clientes?q=${encodeURIComponent(q)}`
+    ),
+  ligarCliente: (companyId: string, convId: string, customerId: string | null) =>
+    request<{ ok: boolean; customer_id: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/cliente`, { method: "PUT", body: { customer_id: customerId } }
     ),
 
   catalogo: (companyId: string, q: string) =>

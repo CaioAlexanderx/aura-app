@@ -17,6 +17,8 @@ import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, 
 import { EnvioRapido } from "./EnvioRapido";
 import { useMidiaConversa } from "./MidiaConversa";
 import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
+import { EtiquetasConversa } from "./EtiquetasConversa";
+import { ClienteConversa } from "./ClienteConversa";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: {
   companyId: string; convId: string; onBack?: () => void;
@@ -108,6 +110,15 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
             <Text style={s.abertaBold}>Conversa aberta</Text> até {abertaAte} · responder não gasta mensagens
           </Text>
         </View>
+      )}
+
+      {/* WhatsApp: cadastro de Clientes ("É ela") e etiquetas */}
+      {conv.channel === "whatsapp" && (
+        <>
+          <ClienteConversa companyId={companyId} convId={convId} onChanged={invalidate} onError={(m) => setFeedback(m)} />
+          <EtiquetasConversa companyId={companyId} convId={convId} aplicadas={conv.labels || []}
+            onChanged={invalidate} onError={(m) => setFeedback(m)} />
+        </>
       )}
 
       {/* Ações de estado + triagem */}

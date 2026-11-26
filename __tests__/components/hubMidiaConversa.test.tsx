@@ -22,7 +22,7 @@ jest.mock("@/stores/auth", () => ({ useAuthStore: () => mockAuth }));
 
 const mockHub: Record<string, jest.Mock> = {
   settings: jest.fn(), conversations: jest.fn(), messages: jest.fn(), midia: jest.fn(),
-  send: jest.fn(), catalogo: jest.fn(), orcamentos: jest.fn(),
+  send: jest.fn(), catalogo: jest.fn(), orcamentos: jest.fn(), etiquetas: jest.fn(), clienteDaConversa: jest.fn(),
 };
 jest.mock("@/services/hubApi", () => ({
   hubApi: new Proxy({}, { get: (_t, k: string) => (...a: any[]) => (mockHub as any)[k](...a) }),
@@ -88,6 +88,8 @@ beforeEach(() => {
   Object.values(mockHub).forEach((f) => f.mockReset());
   mockEscolher.mockReset(); mockPrepararFoto.mockReset();
   mockAuth = { company: { id: COMPANY, member_role: "owner" }, isStaff: false };
+  mockHub.etiquetas.mockResolvedValue({ labels: [] });
+  mockHub.clienteDaConversa.mockResolvedValue({ cliente: null, sugestao: null });
   mockHub.settings.mockResolvedValue({ enabled: false, approval_mode: true, model: null, extra_instructions: null });
   mockHub.conversations.mockResolvedValue({ conversations: [CONV], counts: [] });
   mockHub.messages.mockResolvedValue({ conversation: CONV, messages: [], pending_approvals: [] });

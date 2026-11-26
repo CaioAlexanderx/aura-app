@@ -22,7 +22,7 @@ jest.mock("@/stores/auth", () => ({ useAuthStore: () => mockAuth }));
 
 const mockHub: Record<string, jest.Mock> = {
   settings: jest.fn(), conversations: jest.fn(), messages: jest.fn(), send: jest.fn(),
-  catalogo: jest.fn(), orcamentos: jest.fn(), reply: jest.fn(), assume: jest.fn(),
+  catalogo: jest.fn(), orcamentos: jest.fn(), etiquetas: jest.fn(), clienteDaConversa: jest.fn(), reply: jest.fn(), assume: jest.fn(),
 };
 jest.mock("@/services/hubApi", () => ({
   hubApi: new Proxy({}, { get: (_t, k: string) => (...a: any[]) => (mockHub as any)[k](...a) }),
@@ -55,6 +55,8 @@ function preparar(lastInbound: string) {
 beforeEach(() => {
   Object.values(mockHub).forEach((f) => f.mockReset());
   mockAuth = { company: { id: COMPANY, member_role: "owner" }, isStaff: false };
+  mockHub.etiquetas.mockResolvedValue({ labels: [] });
+  mockHub.clienteDaConversa.mockResolvedValue({ cliente: null, sugestao: null });
   mockHub.settings.mockResolvedValue({ enabled: false, approval_mode: true, model: null, extra_instructions: null });
   mockHub.send.mockResolvedValue({ ok: true, wamid: "w1" });
   mockHub.catalogo.mockResolvedValue({ products: [{ id: "p1", name: "Saia midi plissada", price: 189.9, image_url: "https://r2.getaura.com.br/p1.jpg" }] });
