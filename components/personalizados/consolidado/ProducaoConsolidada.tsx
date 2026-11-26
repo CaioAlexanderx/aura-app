@@ -29,7 +29,7 @@ import { meAggregatesApi, type StudioOrderConsolidado } from "@/services/meAggre
 import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { numeroDoPedido, reais } from "@/components/studio/pagamentoDoPedido";
 import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
-import { origemDoPedido, prazoDoCartao, ehAtivo } from "@/components/personalizados/regrasDaProducao";
+import { nomeDoCliente, origemDoPedido, prazoDoCartao, ehAtivo } from "@/components/personalizados/regrasDaProducao";
 import {
   DIAS_DOS_PEDIDOS, FILTROS_DE_ETAPA, rotaDoPedidoNaLoja, rotuloDaEtapa,
 } from "@/components/personalizados/regrasDoConsolidado";
