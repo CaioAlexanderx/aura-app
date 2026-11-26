@@ -160,7 +160,6 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
   test("ordem dos grupos", () => {
     expect(ordemDosGrupos()).toEqual([
       "Principal",
-      "Contábil",
       "Vendas",
       // 16/11/2026 (p-128, mockup p-131) — Personalizados entra logo depois
       // de Vendas. Só existe para quem tem a frente; para os demais o grupo
@@ -182,11 +181,10 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
     expect(ordem.indexOf("Clientes e WhatsApp")).toBeLessThan(ordem.indexOf("Equipe"));
   });
 
-  test("os quatro itens, na ordem da jornada, cada um com mod próprio", () => {
+  test("os três itens, na ordem da jornada, cada um com mod próprio (Reativação saiu em 26/11)", () => {
     expect(itensDoGrupo("Clientes e WhatsApp")).toEqual([
       { r: "/clientes", mod: "clientes" },
       { r: "/whatsapp", mod: "whatsapp" },
-      { r: "/clientes/reativacao", mod: "clientes.reativacao" },
       { r: "/canal", mod: "canal" },
     ]);
   });
@@ -197,12 +195,12 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
     mods.forEach((m) => expect(MODULE_PLAN_MAP[m]).toBeDefined());
   });
 
-  test("menu Mais (mobile): Clientes, WhatsApp e Reativação hasteados nessa ordem", () => {
+  test("menu Mais (mobile): Clientes e WhatsApp hasteados nessa ordem", () => {
     const m = LAYOUT.match(/const MORE_PRIORIDADE = \[([^\]]+)\]/);
     expect(m).not.toBeNull();
     const rotas = Array.from((m as RegExpMatchArray)[1].matchAll(/"([^"]+)"/g)).map((x) => x[1]);
     // 16/11/2026 (p-128): a Produção dos Personalizados vem antes, e só
     // existe para quem tem a frente. Para os demais a ordem é a de sempre.
-    expect(rotas.filter((r) => !r.startsWith("/personalizados"))).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
+    expect(rotas.filter((r) => !r.startsWith("/personalizados"))).toEqual(["/clientes", "/whatsapp"]);
   });
 });

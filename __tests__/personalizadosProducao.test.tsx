@@ -121,7 +121,7 @@ jest.mock("@/components/CompanyPickerModal", () => ({
 
 import {
   ETAPAS, PROXIMA_ETAPA, ETAPA_ANTERIOR, etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
-  fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
+  fraseDoResumo, nomeDoCliente, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
 } from "@/components/personalizados/regrasDaProducao";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
@@ -186,6 +186,22 @@ describe("regras da Fila", () => {
     expect(fraseDoResumo(r, reais)).toBe("2 pedidos ativos · 1 atrasado · R$ 1000,50 a receber");
     expect(fraseDoResumo({ ativos: 1, atrasados: 0, aReceber: 0 }, reais)).toBe("1 pedido ativo");
     expect(fraseDoResumo({ ativos: 0, atrasados: 0, aReceber: 0 }, reais)).toBe("Nenhum pedido ativo");
+  });
+
+  test("a receber do cabeçalho soma o falta receber do pedido de orçamento, sem somar duas vezes", () => {
+    const r = resumoDaFila([
+      pedido("a", { orcamento_falta_receber: 55.85, orcamento_pagamentos_pendentes: [{ id: "m1", kind: "balance", amount: 55.85 }] }),
+      pedido("b", { balance_amount: 19.94 }),
+      pedido("c", { balance_amount: 10, orcamento_falta_receber: 30, orcamento_pagamentos_pendentes: [] }),
+      pedido("d", { orcamento_falta_receber: 0, orcamento_pagamentos_pendentes: [] }),
+    ]);
+    expect(r.aReceber).toBe(105.79);
+  });
+
+  test("nome do cartão: sem cliente, a venda do Caixa não repete o número", () => {
+    expect(nomeDoCliente({ customer_name: "Ana", source: "pdv" })).toBe("Ana");
+    expect(nomeDoCliente({ customer_name: null, source: "pdv" })).toBe("Venda no Caixa");
+    expect(nomeDoCliente({ customer_name: "  ", source: "digital" })).toBe("Sem cadastro");
   });
 
   test("origem do pedido para o selo do cartão", () => {
@@ -322,6 +338,19 @@ describe("render do quadro", () => {
     expect(texto).toContain("Loja online");
     expect(texto).toContain("Atrasou");
     expect(tem(arvore, "producao-saldo-x1")).toBe(true);
+    arvore.unmount();
+  });
+
+  test("cartão: miniatura da peça e, sem cliente, 'Venda no Caixa' no lugar do número repetido", async () => {
+    const arvore = await montarQuadro([
+      pedido("x1", { card_image_url: "https://x/mockup.png", card_image_source: "mockup" }),
+      pedido("x2", { customer_name: null, display_name: "PDV-dd6d2358" }),
+    ]);
+    expect(tem(arvore, "producao-capa-x1")).toBe(true);
+    expect(tem(arvore, "producao-capa-imagem-x1")).toBe(true);
+    expect(tem(arvore, "producao-capa-x2")).toBe(true);
+    const texto = JSON.stringify(arvore.toJSON());
+    expect(texto).toContain("Venda no Caixa");
     arvore.unmount();
   });
 

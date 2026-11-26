@@ -85,9 +85,11 @@ describe("WhatsApp e Reativação voltaram ao menu (t3-06)", () => {
 });
 
 describe("plano e permissão por baixo do menu", () => {
-  test("as chaves continuam declaradas no NAV", () => {
+  test("o WhatsApp continua no NAV; a Reativação saiu da sidebar (26/11, rota e chave seguem)", () => {
     const doNav = modsDoNav();
-    RELIGADAS.forEach((m) => expect(doNav).toContain(m));
+    expect(doNav).toContain("whatsapp");
+    expect(doNav).not.toContain("clientes.reativacao");
+    expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBeDefined();
   });
 
   test("WhatsApp segue no Negócio; Reativação vale para o Essencial (wa.me)", () => {
