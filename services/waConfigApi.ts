@@ -5,10 +5,8 @@
 // desta tela moram neste arquivo, e os caminhos num objeto só (ROTAS),
 // para trocar uma rota ser uma linha.
 //
-// - Automáticas e modelos: seguem `contrato-automaticas.md` (agente B).
-// - Saldo: o contrato do agente A (`contrato-saldo.md`) ainda não existia
-//   quando isto foi escrito; rota e formato abaixo são suposição e ficam
-//   isolados aqui e em waSaldo.ts.
+// - Saldo e pacotes: `contrato-saldo.md` (agente A; Aura-backend #1132/#1134).
+// - Automáticas e modelos: `contrato-automaticas.md` (agente B).
 //
 // Regra de ouro do arquivo: nada aqui "completa" resposta faltando. O que
 // o servidor não mandou vira `null` na leitura e a tela trava. Na dúvida,
@@ -21,6 +19,7 @@ const base = (companyId: string) => `/companies/${companyId}/whatsapp`;
 /** Caminhos desta tela. Trocar uma rota do backend = trocar uma linha aqui. */
 export const ROTAS = {
   saldo: (c: string) => `${base(c)}/saldo`,
+  pacotes: (c: string) => `${base(c)}/saldo/pacotes`,
   automaticas: (c: string) => `${base(c)}/automaticas`,
   divisao: (c: string) => `${base(c)}/automaticas/divisao`,
   automatica: (c: string, key: string) => `${base(c)}/automaticas/${key}`,
@@ -32,24 +31,57 @@ export const ROTAS = {
   modeloRestaurar: (c: string, key: string) => `${base(c)}/modelos/${key}/restaurar`,
 };
 
-// ── Saldo (agente A — formato suposto) ───────────────────────
-/** Um dos três baldes. Tudo opcional: o que faltar a tela lê como "desconhecido". */
+// ── Saldo (agente A) ─────────────────────────────────────────
+export type WaBucket = "novidades" | "avisos" | "aurinha";
+
+/** Um dos três saldos. Tudo opcional: o que faltar a tela lê como "desconhecido". */
 export interface WaSaldoBaldeRaw {
+  bucket?: WaBucket | (string & {}) | null;
+  /** Somados das fontes (franquia, boas-vindas, pacote). */
   total?: number | null;
   usado?: number | null;
   restante?: number | null;
+  /** restante > 0 e <= 20% do total. */
+  baixo?: boolean | null;
+  /** restante == 0. */
+  esgotado?: boolean | null;
+  /** Chave do aviso de 20% ("novidades:2026-11"): a tela avisa uma vez por chave. */
+  aviso_chave?: string | null;
+  /** null no Essencial sem add-on (o saldo não volta sozinho). */
+  renova_em?: string | null;
+  /** "NUMERO_EM_ATENCAO" (só novidades). */
+  bloqueado_por?: string | null;
+  /** O que a tela oferece comprar. */
+  pacote?: { qty?: number | null; preco_centavos?: number | null } | null;
 }
 
 export interface WaSaldoRaw {
-  /** "AAAA-MM" do mês a que o saldo se refere (America/Sao_Paulo). */
-  mes_ref?: string | null;
-  /** "negocio" | "essencial" | ... Aberto a string. */
-  plano?: string | null;
-  /** Essencial: o saldo é o presente de boas-vindas (uma vez só, não renova). */
-  presente_boas_vindas?: boolean | null;
-  novidades?: WaSaldoBaldeRaw | null;
-  avisos?: WaSaldoBaldeRaw | null;
-  aurinha?: WaSaldoBaldeRaw | null;
+  /** Trava WA_SALDO_ATIVO. Desligado: as guardas antigas valem; a leitura segue. */
+  ativo?: boolean | null;
+  /** "AAAA-MM" (America/Sao_Paulo). */
+  mes?: string | null;
+  renova_em?: string | null;
+  plano?: { renova?: boolean | null; origem?: "plano" | "addon" | "vertical" | "essencial" | (string & {}) | null } | null;
+  numero?: { em_atencao?: boolean | null; motivo?: "QUALIDADE" | "PAUSA" | (string & {}) | null } | null;
+  saldos?: { novidades?: WaSaldoBaldeRaw | null; avisos?: WaSaldoBaldeRaw | null; aurinha?: WaSaldoBaldeRaw | null } | null;
+}
+
+// ── Pacotes (agente A, #1134) ────────────────────────────────
+export interface WaPacoteRaw {
+  id?: string;
+  bucket?: WaBucket | (string & {});
+  qty?: number;
+  price_cents?: number | null;
+  status?: "pending" | "active" | "cancelled" | (string & {});
+  payment_url?: string | null;
+}
+
+export interface WaCompraPacoteRaw {
+  pack?: WaPacoteRaw | null;
+  /** Pix/link da Asaas. Só credita depois do pagamento confirmado. */
+  payment_url?: string | null;
+  /** Sem cliente Asaas ou Asaas fora: fica pendente e a Gestão ativa. */
+  needs_manual?: boolean | null;
 }
 
 // ── Automáticas (agente B) ───────────────────────────────────
@@ -172,6 +204,14 @@ export function erroConfig(e: any, fallback: string = "Não consegui falar com o
 export const waConfigApi = {
   getSaldo: (companyId: string): Promise<WaSaldoRaw> =>
     request<WaSaldoRaw>(ROTAS.saldo(companyId)),
+
+  /** Preço e quantidade vêm do servidor. NUNCA cobra sozinho: devolve o link de pagamento. */
+  comprarPacote: (companyId: string, bucket: WaBucket): Promise<WaCompraPacoteRaw> =>
+    request<WaCompraPacoteRaw>(ROTAS.pacotes(companyId), { method: "POST", body: { bucket }, timeout: 20000 }),
+
+  /** Últimos 12 pacotes (para mostrar o que está aguardando pagamento). */
+  listarPacotes: (companyId: string): Promise<{ data?: WaPacoteRaw[] | null }> =>
+    request<{ data?: WaPacoteRaw[] | null }>(ROTAS.pacotes(companyId)),
 
   getAutomaticas: (companyId: string): Promise<WaAutomaticasRaw> =>
     request<WaAutomaticasRaw>(ROTAS.automaticas(companyId)),
