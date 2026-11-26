@@ -28,6 +28,7 @@
 // Quem decide se a aba existe é useAbaCondicionais (trava + módulo).
 // ============================================================
 import React, { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Colors, CondicionalCores as CD } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -46,6 +47,7 @@ import {
 } from "./regrasDasCondicionais";
 import { LembrarCondicional } from "./LembrarCondicional";
 import { GavetaDaCondicional } from "./detalhe/GavetaDaCondicional";
+import { useNovaCondicional } from "./nova/useNovaCondicional";
 
 export const TEXTOS_DAS_CONDICIONAIS = {
   aba: "Condicionais",
@@ -76,6 +78,11 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   // C10: a condicional aberta na gaveta de detalhe e decisão.
   const [aberta, setAberta] = useState<LinhaDaCondicional | null>(null);
   const onAbrir = (c: LinhaDaCondicional) => { setAberta(c); if (aoAbrir) aoAbrir(c); };
+  // "Nova condicional" (C6/C7): ao guardar, a lista, o totalizador e o número da aba recarregam.
+  const qc = useQueryClient();
+  const nova = useNovaCondicional({
+    onCriada: () => { qc.invalidateQueries({ queryKey: ["condicionais"] }); },
+  });
 
   // A busca sai 300 ms depois da última tecla (uma ida ao servidor, não uma por letra).
   useEffect(() => {
@@ -131,7 +138,9 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
           <View style={s.vazioIcone}><Icon name="hanger" size={26} color={CD.cdInk} /></View>
           <Text style={s.vazioTitulo}>{TEXTOS_DAS_CONDICIONAIS.vazioTitulo}</Text>
           <Text style={s.vazioTexto}>{TEXTOS_DAS_CONDICIONAIS.vazioTexto}</Text>
+          <Button title={L.nova} onPress={nova.abrir} style={s.botaoNova} testID="condicionais-nova-vazio" />
         </View>
+        {nova.modal}
       </View>
     );
   }
@@ -143,6 +152,10 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
 
   return (
     <View testID="aba-condicionais">
+      <View style={s.topo}>
+        <Button title={L.nova} onPress={nova.abrir} style={s.botaoNova} testID="condicionais-nova" />
+      </View>
+      {nova.modal}
       <View style={s.kpis}>
         <View style={[s.kpi, s.kpiCd]} testID="kpi-com-clientes" accessibilityLabel={totalizador?.texto}>
           <View style={s.kpiRotuloLinha}>
@@ -466,6 +479,8 @@ const s = StyleSheet.create({
   erro: { flexDirection: "row", alignItems: "flex-start", gap: 9, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: CD.badLine, backgroundColor: CD.badBg },
   erroTexto: { fontSize: 13, lineHeight: 19, color: Colors.ink },
   erroAcoes: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  topo: { flexDirection: "row", justifyContent: "flex-end", marginBottom: 12 },
+  botaoNova: { minHeight: 44 },
   vazio: { alignItems: "center", gap: 10, paddingVertical: 44, paddingHorizontal: 24, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, backgroundColor: Colors.bg3 },
   vazioIcone: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: CD.cdBg, borderWidth: 1, borderStyle: "dashed", borderColor: CD.cdLine },
   vazioTitulo: { fontSize: 18, fontWeight: "700", color: Colors.ink, textAlign: "center" },

@@ -52,6 +52,7 @@ export const TEXTOS_DA_LISTA = {
   erroTitulo: "Não deu para buscar as condicionais agora.",
   erroTexto: "A internet pode ter caído. Nada foi perdido: as peças continuam marcadas com as clientes.",
   tentarDeNovo: "Tentar de novo",
+  nova: "Nova condicional",
 } as const;
 
 // ── Fora do mockup (para a Nina decidir) ─────────────────────────────

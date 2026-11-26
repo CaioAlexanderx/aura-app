@@ -22,6 +22,7 @@ import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
+import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { fmtBRL } from "../../../pdv/troca/types";
 import { Casca, e } from "./Casca";
 import { TEXTOS_DA_NOVA as T } from "./textos";
@@ -64,6 +65,12 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
   const vendeSemEstoque = lerVendaSemEstoque(settings);
   const { produtos, carregando, variantesDe, acharNoServidor } = usePecasDaLoja(lojaAtiva, visible && passo >= 1);
 
+  const estado: EstadoDaNova = {
+    lojaId: lojaAtiva, cliente, telefoneAvulso, pecas, faltas, hoje,
+  };
+  const guardar = useGuardarCondicional(estado, { onCriada });
+  const ocupado = guardar.enviando;
+
   // Abriu: recomeça do zero.
   const abertoAntes = useRef(false);
   useEffect(() => {
@@ -76,16 +83,11 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
       setNovoCliente(null);
       setPecas([]);
       setFaltas(null);
+      guardar.recomecar();
     }
     abertoAntes.current = visible;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
-
-  const estado: EstadoDaNova = {
-    lojaId: lojaAtiva, cliente, telefoneAvulso, pecas, faltas, hoje,
-  };
-  const guardar = useGuardarCondicional(estado, { onCriada });
-  const ocupado = guardar.enviando;
 
   function fechar() {
     if (ocupado) return;
@@ -107,7 +109,22 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
 
   // ── Pronto (C7) ─────────────────────────────────────────────────────
   if (passo === 4 && guardar.guardada) {
-    return <PassosDoFim.Pronto guardada={guardar.guardada} onNova={() => { setPasso(consolidado ? 0 : 1); setLojaId(null); setCliente(null); setPecas([]); setFaltas(null); guardar.recomecar(); }} onVerNaLista={onClose} onFechar={onClose} />;
+    const loja = lojasDoGrupo.find((l) => l.id === lojaAtiva) || auth.company;
+    return (
+      <Casca
+        titulo={T.tituloGuardada}
+        passo={4}
+        fechaPeloFundo={false}
+        onFechar={onClose}
+        corpo={<PassosDoFim.Pronto guardada={guardar.guardada} lojaId={lojaAtiva} lojaNome={nomeDaLojaDe(loja)} />}
+        rodape={
+          <PassosDoFim.RodapeDoPronto
+            onNova={() => { setPasso(consolidado ? 0 : 1); setLojaId(null); setCliente(null); setTelefoneAvulso(""); setPecas([]); setFaltas(null); guardar.recomecar(); }}
+            onVerNaLista={onClose}
+          />
+        }
+      />
+    );
   }
 
   // ── Rodapé ──────────────────────────────────────────────────────────
@@ -156,7 +173,7 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
       <Text style={e.credRot}>{T.resumo}</Text>
       <View style={e.rLinha}><Text style={e.rRot}>{T.rCliente}</Text><Text style={e.rVal}>{cliente ? cliente.name : T.rAEscolher}</Text></View>
       <View style={e.rLinha}><Text style={e.rRot}>{T.rPecas}</Text><Text style={e.rVal}>{pecas.length ? T.pecas(pecas.length) : T.rNenhuma}</Text></View>
-      <PassosDoFim.LinhasDoResumo estado={estado} />
+      <PassosDoFim.LinhasDoResumo estado={estado} guardar={guardar} />
       <View style={[e.rLinha, e.rTot]}><Text style={e.rRot}>{T.rTotal}</Text><Text style={e.rTotVal} testID="nova-resumo-total">{fmtBRL(total)}</Text></View>
       <View style={e.rNota}><Icon name="hanger" size={14} color="#ddd6fe" /><Text style={e.rNotaTxt}>{T.notaNadaCobrado}</Text></View>
     </View>
