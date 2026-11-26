@@ -9,7 +9,9 @@
 // número torto = null.
 // ============================================================
 import type { WaPublicoRaw } from "@/services/waConfigApi";
+import type { WaStatus } from "@/services/waApi";
 import { AUTO_KEYS, type AutoKey, type Partes } from "./waDivisao";
+import { TEXTO_NUMERO_EM_ATENCAO, waNumeroEmAtencao, type SaldoInfo } from "./waSaldo";
 
 export interface PessoaPrevia {
   nome: string;
@@ -97,20 +99,22 @@ export function quantoTrazer(corte: Corte | null, div: Partes, usadas: Partes, p
 
 /**
  * O botão "Mandar para as N agora" pode estar ativo? Só com tudo certo:
- * aceite dado, novidades com sobra, número fora de atenção e alguém que
- * caiba. Qualquer dúvida = false + o motivo em português.
+ * status e saldo lidos, aceite dado, número fora de atenção (pelo saldo OU
+ * pelo status), novidades com sobra e alguém que caiba. Qualquer dúvida
+ * (inclusive saldo ou status nulos) = false + o motivo em português.
  */
 export function podeMandarNovidades(args: {
   aceiteEm: string | null | undefined;
-  numeroEmAtencao: boolean;
-  novidadesEsgotadas: boolean | null;
-  textoEsgotado?: string | null;
+  saldo: SaldoInfo | null | undefined;
+  status: WaStatus | null | undefined;
   corte: Corte | null | undefined;
 }): { pode: boolean; motivo: string | null } {
-  const { aceiteEm, numeroEmAtencao, novidadesEsgotadas, corte } = args;
+  const { aceiteEm, saldo, status, corte } = args;
   if (!aceiteEm) return { pode: false, motivo: "Ligue uma automática e responda se seus clientes aceitaram receber novidades." };
-  if (numeroEmAtencao) return { pode: false, motivo: "O WhatsApp pediu uma pausa nas novidades. Avisos e cobranças continuam." };
-  if (novidadesEsgotadas === true) return { pode: false, motivo: args.textoEsgotado || "As novidades do mês acabaram." };
+  if (!status) return { pode: false, motivo: "Não consegui ler a conexão do WhatsApp agora." };
+  if (!saldo) return { pode: false, motivo: "Não consegui ler o saldo agora." };
+  if (saldo.numeroEmAtencao || waNumeroEmAtencao(status)) return { pode: false, motivo: TEXTO_NUMERO_EM_ATENCAO };
+  if (saldo.novidades.esgotado !== false) return { pode: false, motivo: saldo.novidades.textoEsgotado || "As novidades do mês acabaram." };
   if (!corte || corte.cabem <= 0) return { pode: false, motivo: "Não sobra novidade para esta automática." };
   return { pode: true, motivo: null };
 }

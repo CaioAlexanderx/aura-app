@@ -20,7 +20,7 @@ import {
   rotuloDoPresente, type PresenteChave, type SegmentoVenda,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
-import { waMesDoSaldo, waNumeroEmAtencao, type SaldoInfo } from "./waSaldo";
+import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
 interface Props {
@@ -53,13 +53,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const travado = auto.salvando;
   const salvar = (patch: Record<string, any>) => auto.salvarConfig("venda_mais", patch);
   const corte = pub.corte;
-  const pode = podeMandarNovidades({
-    aceiteEm: info.aceiteEm,
-    numeroEmAtencao: waNumeroEmAtencao(status),
-    novidadesEsgotadas: saldo ? saldo.novidades.esgotado : null,
-    textoEsgotado: saldo?.novidades.textoEsgotado,
-    corte,
-  });
+  const pode = podeMandarNovidades({ aceiteEm: info.aceiteEm, saldo, status, corte });
   const fora = pub.publico?.fora;
 
   const comPresente = presenteChave != null && presenteChave !== "nenhum";
@@ -68,7 +62,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const mensagem = modelo?.texto_em_uso
     ? renderizar(modelo.texto_em_uso, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
-      })
+      }, !primeira)
     : null;
 
   const proximoMes = waMesDoSaldo(undefined).proximo;
@@ -124,7 +118,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         )}
       </Passo>
 
-      <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como a cliente vê"} mensagem={mensagem} />
+      <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem} />
 
       <View style={s.card}>
         {!!pub.enviado && (pub.enviado.enfileiradas ?? 0) > 0 ? (

@@ -59,7 +59,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
     ? renderizar(modelo.texto_em_uso, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined,
         "Presente": rotuloDoPresente(cfg.presente) || undefined,
-      })
+      }, !primeira)
     : null;
 
   const trazer = quantoTrazer(pub.corte, info.divisao, info.usadas, "aniversario");
@@ -108,7 +108,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
         />
       </Passo>
 
-      <BolhaExemplo titulo="Como a cliente vê" mensagem={mensagem} />
+      <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem} />
 
       <View style={s.card}>
         <View style={s.linha}>

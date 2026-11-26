@@ -19,7 +19,7 @@ import { ModelosLista } from "./ModelosLista";
 import { podeMandarNovidades, quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import { PONTOS_ROTULO, alternarPonto, lerPontos } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
-import { waNumeroEmAtencao, type SaldoInfo } from "./waSaldo";
+import { type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 import type { WaModeloRaw } from "@/services/waConfigApi";
 
@@ -58,18 +58,12 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome, onEd
   const foraCobrar = (pubCobrar.publico?.fora_lista || []).filter((p) => p && p.nome);
   const corte = pubVender.corte;
   const trazer = quantoTrazer(corte, info.divisao, info.usadas, "crediario");
-  const pode = podeMandarNovidades({
-    aceiteEm: info.aceiteEm,
-    numeroEmAtencao: waNumeroEmAtencao(status),
-    novidadesEsgotadas: saldo ? saldo.novidades.esgotado : null,
-    textoEsgotado: saldo?.novidades.textoEsgotado,
-    corte,
-  });
+  const pode = podeMandarNovidades({ aceiteEm: info.aceiteEm, saldo, status, corte });
 
   const modeloOferta = (modelos.modelos || []).find((m) => m.key === "cred_oferta");
   const primeira = corte?.recebem[0]?.nome.split(" ")[0] || undefined;
   const mensagemOferta = modeloOferta?.texto_em_uso
-    ? renderizar(modeloOferta.texto_em_uso, { "Nome": primeira, "Nome da loja": lojaNome || undefined })
+    ? renderizar(modeloOferta.texto_em_uso, { "Nome": primeira, "Nome da loja": lojaNome || undefined }, !primeira)
     : null;
 
   const avisosTxt = saldo
@@ -135,7 +129,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome, onEd
             if (prox) auto.aplicarDivisao(prox).then(() => pubVender.recarregar());
           }}
         />
-        <BolhaExemplo titulo="Prévia" mensagem={mensagemOferta} />
+        <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagemOferta} />
         {!!pubVender.enviado && (pubVender.enviado.enfileiradas ?? 0) > 0 && (
           <Text style={s.ok} testID="wa-cred-enviado">Pronto. A oferta sai ainda hoje.</Text>
         )}

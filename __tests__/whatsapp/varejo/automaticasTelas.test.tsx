@@ -83,16 +83,27 @@ describe("Trazer do Venda+", () => {
 
 describe("podeMandarNovidades", () => {
   const c = waCorte(publico(), 4);
-  const base = { aceiteEm: "2026-12-01", numeroEmAtencao: false, novidadesEsgotadas: false, corte: c };
+  const bk2 = (b: string, total: number, usado: number, over: any = {}) => ({ bucket: b, total, usado, restante: total - usado, renova_em: "2027-01-01", esgotado: total === usado, ...over });
+  const mk = (n: number, numero: any = { em_atencao: false }) => waSaldoInfo({
+    ativo: true, mes: "2026-12", plano: { renova: true }, numero,
+    saldos: { novidades: bk2("novidades", 10, n), avisos: bk2("avisos", 100, 0), aurinha: bk2("aurinha", 80, 0) },
+  } as any, new Date(2026, 11, 1));
+  const st: any = { connected: true, quality_rating: "GREEN" };
+  const base = { aceiteEm: "2026-12-01", saldo: mk(0), status: st, corte: c };
   it("libera só com tudo certo", () => {
     expect(podeMandarNovidades(base).pode).toBe(true);
   });
-  it("trava em toda dúvida", () => {
+  it("trava em toda dúvida, inclusive saldo ou status nulos", () => {
     expect(podeMandarNovidades({ ...base, aceiteEm: null }).pode).toBe(false);
-    expect(podeMandarNovidades({ ...base, numeroEmAtencao: true }).pode).toBe(false);
-    expect(podeMandarNovidades({ ...base, novidadesEsgotadas: true }).pode).toBe(false);
+    expect(podeMandarNovidades({ ...base, saldo: null }).pode).toBe(false);
+    expect(podeMandarNovidades({ ...base, status: null }).pode).toBe(false);
+    expect(podeMandarNovidades({ ...base, saldo: mk(10) }).pode).toBe(false); // esgotado
     expect(podeMandarNovidades({ ...base, corte: null }).pode).toBe(false);
     expect(podeMandarNovidades({ ...base, corte: waCorte(publico({ cabem: 0 }), 4) }).pode).toBe(false);
+  });
+  it("número em atenção, pelo saldo OU pelo status", () => {
+    expect(podeMandarNovidades({ ...base, saldo: mk(0, { em_atencao: true, motivo: "QUALIDADE" }) }).pode).toBe(false);
+    expect(podeMandarNovidades({ ...base, status: { ...st, quality_rating: "YELLOW" } }).pode).toBe(false);
   });
 });
 
@@ -262,6 +273,28 @@ describe("VendaMaisConfig", () => {
     const sEsg = mkSaldo(10, 0, 0);
     const esg = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sEsg} status={statusOk} lojaNome="" />);
     expect(achar(esg, "wa-venda-enviar").props.disabled).toBe(true);
+  });
+
+  it("com saldo nulo o botão fica travado", () => {
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={null} status={statusOk} lojaNome="" />);
+    expect(achar(t, "wa-venda-enviar").props.disabled).toBe(true);
+    expect(textos(t)).toContain("Não consegui ler o saldo agora.");
+  });
+
+  it("bolha com nome real: campo sem valor sai como [Campo], nunca exemplo de outra pessoa", () => {
+    mockModelos.current = modelosHook([{ key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Sua última compra: {Última compra}. Use até {Validade}." }]);
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    expect(textos(t)).toContain("Oi, Ana. Sua última compra: [Última compra]. Use até [Validade].");
+    expect(textos(t)).not.toContain("Vestido Verde");
+    expect(textos(t)).toContain("Como a Ana vê");
+  });
+
+  it("sem nome real, diz que é cliente de exemplo", () => {
+    mockPub.current = pubHook(publico({ vao: [] }), { corte: waCorte(publico({ vao: [] }), 4) });
+    mockModelos.current = modelosHook([{ key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}." }]);
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    expect(textos(t)).toContain("cliente de exemplo");
+    expect(textos(t)).toContain("Oi, Marta.");
   });
 
   it("sem prévia do servidor, trava o envio", () => {

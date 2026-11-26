@@ -35,10 +35,16 @@ export function tokensDe(texto: string): string[] {
 }
 
 /** Troca {Campo} pelo valor; sem valor, usa o exemplo do campo (ou o próprio nome). */
-export function renderizar(texto: string, valores: Record<string, string | null | undefined> = EXEMPLOS): string {
+export function renderizar(
+  texto: string,
+  valores: Record<string, string | null | undefined> = EXEMPLOS,
+  /** false = campo sem valor vira "[Campo]" em vez do exemplo (prévia com cliente real). */
+  usarExemplos: boolean = true,
+): string {
   return String(texto || "").replace(TOKEN_RE, (_m, nome: string) => {
     const n = nome.trim();
     const v = valores[n];
-    return v === undefined || v === null || v === "" ? EXEMPLOS[n] || n : String(v);
+    if (v !== undefined && v !== null && v !== "") return String(v);
+    return usarExemplos ? EXEMPLOS[n] || n : `[${n}]`;
   });
 }
