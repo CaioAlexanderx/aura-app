@@ -9,6 +9,7 @@
 // ============================================================
 
 export const MAX_SEGUNDOS_AUDIO = 5 * 60;
+export const BITS_POR_SEGUNDO = 32000;
 const LADO_MAXIMO_FOTO = 1600;
 const QUALIDADE_FOTO = 0.85;
 /** O parser JSON do servidor é de 5 MB (base64 incha 4/3): foto acima disto não vai. */
@@ -43,12 +44,22 @@ export class Gravador {
     this.stream = await g.navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
-    const mime = escolherMimeDeGravacao();
-    this.rec = mime ? new g.MediaRecorder(this.stream, { mimeType: mime }) : new g.MediaRecorder(this.stream);
-    this.pedacos = [];
-    this.rec.ondataavailable = (e: any) => { if (e.data && e.data.size > 0) this.pedacos.push(e.data); };
-    this.inicio = Date.now();
-    this.rec.start();
+    // Se o MediaRecorder falhar depois do getUserMedia, o microfone tem de ser solto
+    // (senão a aba fica com o ícone de gravando para sempre).
+    try {
+      const mime = escolherMimeDeGravacao();
+      // 32 kbps: 5 min cabem em ~1,2 MB (base64 ~1,6 MB), longe do limite de 5 MB do corpo.
+      const opts = { audioBitsPerSecond: BITS_POR_SEGUNDO, ...(mime ? { mimeType: mime } : {}) };
+      this.rec = new g.MediaRecorder(this.stream, opts);
+      this.pedacos = [];
+      this.rec.ondataavailable = (e: any) => { if (e.data && e.data.size > 0) this.pedacos.push(e.data); };
+      this.inicio = Date.now();
+      this.rec.start();
+    } catch (e) {
+      this.rec = null;
+      this.soltarMicrofone();
+      throw e;
+    }
   }
 
   segundos(): number {

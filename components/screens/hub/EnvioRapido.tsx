@@ -13,6 +13,21 @@ import { Colors } from "@/constants/colors";
 import { fmt } from "@/constants/helpers";
 import { hubApi, type HubEnvioTipo } from "@/services/hubApi";
 
+/**
+ * "189,90" e "1.189,90" (pt-BR) e também "10.50" (ponto como decimal, vindo de
+ * teclado ou colagem). Com vírgula, o ponto é milhar; sem vírgula, um único
+ * ponto seguido de 1 ou 2 dígitos é decimal ("10.50" = 10,50, nunca 1.050).
+ * NaN se não for número.
+ */
+export function parseValorBR(bruto: string): number {
+  const t = String(bruto || "").trim().replace(/^R\$\s*/i, "").replace(/\s+/g, "");
+  if (!t || /[^0-9.,]/.test(t)) return NaN;
+  if (t.includes(",")) return Number(t.replace(/\./g, "").replace(",", "."));
+  const pontos = (t.match(/\./g) || []).length;
+  if (pontos === 1 && /\.\d{1,2}$/.test(t)) return Number(t);
+  return Number(t.replace(/\./g, ""));
+}
+
 type Painel = null | "produto" | "orcamento" | "pix";
 
 const ATALHOS: { key: HubEnvioTipo; label: string }[] = [
@@ -59,7 +74,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras, painel
     setPainel((p) => (p === key ? null : (key as Painel)));
   };
 
-  const valorNum = Number(String(valor).replace(/\./g, "").replace(",", "."));
+  const valorNum = parseValorBR(valor);
   const valorOk = valor.trim() !== "" && Number.isFinite(valorNum) && valorNum > 0;
 
   return (

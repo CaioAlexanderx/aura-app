@@ -52,11 +52,16 @@ const CONV = {
 let agora = 1_000_000;
 let tracksParados = 0;
 let negarMicrofone = false;
+let quebrarRecorder = false;
+let ultimasOpcoes: any = null;
 class FakeRecorder {
   static isTypeSupported = (t: string) => t === "audio/webm;codecs=opus";
   mimeType = "audio/webm;codecs=opus";
   ondataavailable: any; onstop: any; onerror: any;
-  constructor(public stream: any, public opts?: any) {}
+  constructor(public stream: any, public opts?: any) {
+    if (quebrarRecorder) throw new Error("NotSupportedError");
+    ultimasOpcoes = opts;
+  }
   start() {}
   stop() {
     this.ondataavailable?.({ data: new Blob(["opus!"], { type: this.mimeType }) });
@@ -94,7 +99,7 @@ beforeEach(() => {
   mockHub.conversations.mockResolvedValue({ conversations: [CONV], counts: [] });
   mockHub.messages.mockResolvedValue({ conversation: CONV, messages: [], pending_approvals: [] });
   mockHub.midia.mockResolvedValue({ ok: true, wamid: "w1" });
-  agora = 1_000_000; tracksParados = 0; negarMicrofone = false;
+  agora = 1_000_000; tracksParados = 0; negarMicrofone = false; quebrarRecorder = false; ultimasOpcoes = null;
   jest.spyOn(Date, "now").mockImplementation(() => agora);
   instalarMicrofone();
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -206,6 +211,50 @@ describe("gravar áudio", () => {
     await act(async () => { await porId(r, "hub-envio-audio")[0].props.onPress(); });
     await flush(6);
     expect(tudo(r)).toContain("Grave de novo");
+  });
+});
+
+describe("robustez", () => {
+  it("se o MediaRecorder falhar depois do microfone, o microfone é solto", async () => {
+    quebrarRecorder = true;
+    const r = await abrirThread();
+    await act(async () => { await porId(r, "hub-envio-audio")[0].props.onPress(); });
+    await flush();
+    expect(tracksParados).toBe(1);
+    expect(porId(r, "hub-gravando")).toHaveLength(0);
+  });
+
+  it("grava com bitrate fixo (5 min cabem no limite do corpo)", async () => {
+    const r = await abrirThread();
+    await act(async () => { await porId(r, "hub-envio-audio")[0].props.onPress(); });
+    await flush();
+    expect(ultimasOpcoes.audioBitsPerSecond).toBe(32000);
+    expect(32000 / 8 * 300 * 4 / 3).toBeLessThan(5 * 1024 * 1024);
+  });
+
+  it("trocar de conversa não leva a foto nem a gravação para a outra", async () => {
+    mockEscolher.mockResolvedValue({ name: "a.jpg", type: "image/jpeg" });
+    mockPrepararFoto.mockResolvedValue({ base64: "QUJD", mime: "image/jpeg", previa: "data:image/jpeg;base64,QUJD" });
+    const B = { ...CONV, id: "conv-2", external_id: "5511977776666", customer_name: "Bia" };
+    mockHub.conversations.mockResolvedValue({ conversations: [CONV, B], counts: [] });
+    const r = await abrirThread();
+    await act(async () => { await porId(r, "hub-envio-foto")[0].props.onPress(); });
+    await flush();
+    expect(porId(r, "hub-foto-previa")).toHaveLength(1);
+    await act(async () => { porId(r, "hub-conv-conv-2")[0].props.onPress(); });
+    await flush();
+    expect(porId(r, "hub-foto-previa")).toHaveLength(0);
+  });
+
+  it("a URL da mídia não muda entre leituras da thread", async () => {
+    const msg = (url: string) => ({ id: "a1", direction: "inbound", content: "[audio]", author: "cliente", created_at: recente, media: { kind: "audio", mime: "audio/ogg", url } });
+    mockHub.messages.mockResolvedValue({ conversation: CONV, pending_approvals: [], messages: [msg("https://r2/a.ogg?sig=1")] });
+    const r = await abrirThread();
+    expect(r.root.findAll((n) => n.type === "audio")[0].props.src).toBe("https://r2/a.ogg?sig=1");
+    mockHub.messages.mockResolvedValue({ conversation: CONV, pending_approvals: [], messages: [msg("https://r2/a.ogg?sig=2")] });
+    await act(async () => { await qc.invalidateQueries({ queryKey: ["hub-thread", COMPANY, "conv-1"] }); });
+    await flush();
+    expect(r.root.findAll((n) => n.type === "audio")[0].props.src).toBe("https://r2/a.ogg?sig=1");
   });
 });
 
