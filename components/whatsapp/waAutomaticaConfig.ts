@@ -51,31 +51,44 @@ export const OPCOES_TOM: { valor: TomAniversario; rotulo: string }[] = [
   { valor: "animado", rotulo: "Animado" },
 ];
 
-export interface PassosAniversario { antes: boolean; dia: boolean; depois: boolean }
-
 export function lerTom(v: unknown): TomAniversario | null {
   return v === "carinhoso" || v === "direto" || v === "animado" ? v : null;
 }
 
-/** Passos do servidor. Torto = null (nada marcado, nada enviado). */
-export function lerPassos(v: any): PassosAniversario | null {
-  if (!v || typeof v !== "object") return null;
-  if (typeof v.antes !== "boolean" || typeof v.dia !== "boolean" || typeof v.depois !== "boolean") return null;
-  return { antes: v.antes, dia: v.dia, depois: v.depois };
+/**
+ * Quando sai (decisão do Caio, 26/11): UMA mensagem por aniversário, e a
+ * lojista escolhe o momento. "3 dias depois" não existe mais.
+ */
+export type QuandoAniversario = "no_dia" | "3_dias_antes" | "7_dias_antes";
+
+export const OPCOES_QUANDO: { valor: QuandoAniversario; rotulo: string }[] = [
+  { valor: "no_dia", rotulo: "No dia" },
+  { valor: "3_dias_antes", rotulo: "3 dias antes" },
+  { valor: "7_dias_antes", rotulo: "Na semana (7 dias antes)" },
+];
+
+export function lerQuando(v: unknown): QuandoAniversario | null {
+  return v === "no_dia" || v === "3_dias_antes" || v === "7_dias_antes" ? v : null;
 }
 
-export function quantosPassos(p: PassosAniversario): number {
-  return (p.antes ? 1 : 0) + (p.dia ? 1 : 0) + (p.depois ? 1 : 0);
+/** Sem presente só vale "no dia" (o servidor recusa o resto: 422 CONFIG_INVALIDA, campo quando). */
+export function quandoPermitido(q: QuandoAniversario, comPresente: boolean): boolean {
+  return comPresente || q === "no_dia";
 }
 
-/** Alterna um passo. Nunca desliga o último: aniversário sem passo não manda nada. */
-export function alternarPasso(p: PassosAniversario, k: keyof PassosAniversario): PassosAniversario {
-  const prox = { ...p, [k]: !p[k] };
-  return quantosPassos(prox) === 0 ? p : prox;
+/** Ao tirar o presente, o "quando" volta para "no dia" junto, no mesmo envio. */
+export function patchDePresente(chave: PresenteChave, quandoAtual: QuandoAniversario | null): Record<string, any> {
+  const patch: Record<string, any> = { presente: presenteDaChave(chave) };
+  if (chave === "nenhum" && quandoAtual && quandoAtual !== "no_dia") patch.quando = "no_dia";
+  return patch;
 }
 
-/** Chave do modelo do corpo do aniversário para o tom e com/sem presente. */
-export function modeloDoAniversario(tom: TomAniversario, comPresente: boolean): string {
+/**
+ * Modelo que vai no aniversário: no dia, o do tom (com/sem presente); antes,
+ * o texto genérico "seu aniversário está chegando" (`aniv_antes`).
+ */
+export function modeloDoAniversario(tom: TomAniversario, comPresente: boolean, quando: QuandoAniversario = "no_dia"): string {
+  if (quando !== "no_dia") return "aniv_antes";
   return `aniv_${tom}_${comPresente ? "com" : "sem"}`;
 }
 

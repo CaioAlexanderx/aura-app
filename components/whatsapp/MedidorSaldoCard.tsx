@@ -16,12 +16,16 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-nati
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { WaStatus } from "@/services/waApi";
+import { useWaPacotes } from "@/hooks/useWaPacotes";
+import type { WaBucket } from "@/services/waConfigApi";
 import {
   TEXTO_NUMERO_EM_ATENCAO, TEXTO_OFERTA_ESSENCIAL, waNumeroEmAtencao,
   type Balde, type SaldoInfo,
 } from "./waSaldo";
 
 interface Props {
+  /** Sem companyId não há compra de pacote (a tela só lê). */
+  companyId?: string | null;
   saldo: SaldoInfo | null;
   carregando: boolean;
   falhou: boolean;
@@ -49,7 +53,9 @@ function BaldeView({ b }: { b: Balde }) {
   );
 }
 
-export function MedidorSaldoCard({ saldo, carregando, falhou, status, onRetry }: Props) {
+export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status, onRetry }: Props) {
+  const algumEsgotado = !!saldo && saldo.baldes.some((b) => b.esgotado);
+  const pac = useWaPacotes(companyId, algumEsgotado);
   if (carregando && !saldo) {
     return (
       <View style={s.card} testID="wa-saldo-carregando">
@@ -79,7 +85,7 @@ export function MedidorSaldoCard({ saldo, carregando, falhou, status, onRetry }:
   }
 
   const esgotados = saldo.baldes.filter((b) => b.esgotado && b.textoEsgotado);
-  const atencao = waNumeroEmAtencao(status);
+  const atencao = saldo.numeroEmAtencao || waNumeroEmAtencao(status);
 
   return (
     <View style={s.card} testID="wa-saldo-medidor">
@@ -101,6 +107,51 @@ export function MedidorSaldoCard({ saldo, carregando, falhou, status, onRetry }:
           </Text>
         </View>
       ))}
+
+      {esgotados.some((b) => !!b.pacote) && !!companyId && (
+        <View style={s.pacotes} testID="wa-saldo-pacotes">
+          {esgotados.filter((b) => !!b.pacote).map((b) => (
+            <Pressable
+              key={b.key}
+              onPress={() => pac.comprar(b.key as WaBucket)}
+              disabled={pac.comprando !== null}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: pac.comprando !== null }}
+              style={[s.btnPacote, pac.comprando !== null && { opacity: 0.6 }]}
+              testID={`wa-saldo-pacote-${b.key}`}
+            >
+              {pac.comprando === b.key && <ActivityIndicator size="small" color="#fff" />}
+              <Text style={s.btnPacoteTxt}>{b.pacote!.rotulo}</Text>
+            </Pressable>
+          ))}
+          <Text style={s.pacoteNota} testID="wa-saldo-pacote-nota">
+            Só passa a valer depois do pagamento. A Aura nunca compra sozinha.
+          </Text>
+          {!!pac.erro && <Text style={s.erro} testID="wa-saldo-pacote-erro">{pac.erro}</Text>}
+          {!!pac.manual && (
+            <Text style={s.pacoteNota} testID="wa-saldo-pacote-manual">
+              Pedido registrado. Ainda não gerei o link de pagamento: a Aura vai te chamar para combinar o pagamento
+              e soma o pacote depois que for confirmado.
+            </Text>
+          )}
+        </View>
+      )}
+
+      {pac.pendentes.length > 0 && (
+        <View style={s.pacotes} testID="wa-saldo-pacotes-pendentes">
+          {pac.pendentes.map((p) => (
+            <Pressable
+              key={p.id} onPress={() => pac.abrir(String(p.payment_url))} accessibilityRole="button"
+              style={s.btnLink} testID={`wa-saldo-pacote-pagar-${p.id}`}
+            >
+              <Text style={s.btnLinkTxt}>Pacote de {p.qty} aguardando pagamento: abrir o pagamento</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={onRetry} accessibilityRole="button" style={s.btnLink} testID="wa-saldo-pacote-atualizar">
+            <Text style={s.btnLinkTxt}>Já paguei: atualizar o saldo</Text>
+          </Pressable>
+        </View>
+      )}
 
       {saldo.mostrarOferta && (
         <Text style={s.oferta} testID="wa-saldo-oferta">{TEXTO_OFERTA_ESSENCIAL}</Text>
@@ -133,6 +184,14 @@ const s = StyleSheet.create({
   linhaAviso: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
   avisoTxt: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
   oferta: { fontSize: 12, fontWeight: "600", color: Colors.ink2, lineHeight: 17 },
+  pacotes: { gap: 8 },
+  btnPacote: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48,
+    backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 16,
+  },
+  btnPacoteTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  pacoteNota: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
+  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
   btnLink: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
   btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
 } as any);

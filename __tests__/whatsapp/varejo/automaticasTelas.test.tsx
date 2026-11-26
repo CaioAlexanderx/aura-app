@@ -13,7 +13,7 @@ jest.mock("@/hooks/useClientesPrevia", () => ({ useClientesPrevia: () => [] }));
 
 import { waCorte, trazerDoVendaMais, quantoTrazer, podeMandarNovidades } from "@/components/whatsapp/waCorte";
 import {
-  alternarPasso, alternarPonto, chaveDoPresente, lerPassos, lerPontos, modeloDoAniversario, modeloDaVenda,
+  alternarPonto, chaveDoPresente, lerPontos, lerQuando, modeloDoAniversario, modeloDaVenda, patchDePresente, quandoPermitido,
   presenteDaChave, rotuloDoPresente,
 } from "@/components/whatsapp/waAutomaticaConfig";
 import { renderizar, tokensDe } from "@/components/whatsapp/waMensagem";
@@ -109,11 +109,17 @@ describe("escolhas do contrato do B", () => {
     expect(rotuloDoPresente(null)).toBeNull();
   });
 
-  it("passos do aniversário: nunca desliga o último", () => {
-    const p = lerPassos({ antes: false, dia: true, depois: false })!;
-    expect(alternarPasso(p, "dia")).toBe(p);
-    expect(alternarPasso(p, "antes")).toEqual({ antes: true, dia: true, depois: false });
-    expect(lerPassos({ antes: true })).toBeNull();
+  it("quando sai: uma mensagem, a lojista escolhe; sem presente só no dia", () => {
+    expect(lerQuando("3_dias_antes")).toBe("3_dias_antes");
+    expect(lerQuando("3_dias_depois")).toBeNull(); // o passo "3 dias depois" não existe mais
+    expect(lerQuando(undefined)).toBeNull();
+    expect(quandoPermitido("7_dias_antes", true)).toBe(true);
+    expect(quandoPermitido("7_dias_antes", false)).toBe(false);
+    expect(quandoPermitido("no_dia", false)).toBe(true);
+    // tirar o presente leva o "quando" de volta para "no dia" no mesmo envio
+    expect(patchDePresente("nenhum", "3_dias_antes")).toEqual({ presente: null, quando: "no_dia" });
+    expect(patchDePresente("nenhum", "no_dia")).toEqual({ presente: null });
+    expect(patchDePresente("percent-15", "7_dias_antes")).toEqual({ presente: { tipo: "percent", valor: 15 } });
   });
 
   it("pontos da cobrança e chaves de modelo", () => {
@@ -121,6 +127,7 @@ describe("escolhas do contrato do B", () => {
     expect(alternarPonto(p, "depois7").depois7).toBe(true);
     expect(lerPontos({ antes3: true })).toBeNull();
     expect(modeloDoAniversario("direto", true)).toBe("aniv_direto_com");
+    expect(modeloDoAniversario("direto", true, "7_dias_antes")).toBe("aniv_antes");
     expect(modeloDaVenda("sumiu", false)).toBe("venda_sumiu_sem");
   });
 
@@ -148,7 +155,7 @@ function respostaAuto(over: any = {}) {
     mes: "2026-12", aceite_novidades_em: "2026-12-01T00:00:00Z",
     novidades: { total: 10, livres: 10, divisao: DIVISAO_PADRAO, usadas: zero, sem_dono: 0 },
     automaticas: [
-      { key: "aniversario", ligada: false, livres: 4, config: { tom: "carinhoso", presente: { tipo: "percent", valor: 10 }, passos: { antes: false, dia: true, depois: false } } },
+      { key: "aniversario", ligada: false, livres: 4, config: { tom: "carinhoso", presente: { tipo: "percent", valor: 10 }, quando: "no_dia" } },
       { key: "venda_mais", ligada: false, livres: 4, config: { segmento: "sumindo", presente: { tipo: "fixed", valor: 20 }, automatico: false } },
       { key: "crediario_cobrar", ligada: false, config: { pontos: { antes3: true, dia: true, depois1: true, depois7: false, depois15: false } } },
       { key: "crediario_vender", ligada: false, livres: 2, config: { dia_do_mes: 10, presente: null } },
@@ -179,7 +186,12 @@ const toque = (t: any, id: string) => {
 };
 const tem = (t: any, id: string) => t.root.findAllByProps({ testID: id }).length > 0;
 const textos = (t: any) => JSON.stringify(t.toJSON()).replace(/","/g, "");
-const saldo = waSaldoInfo({ mes_ref: "2026-12", novidades: { total: 10, usado: 0 }, avisos: { total: 100, usado: 28 }, aurinha: { total: 80, usado: 0 } }, new Date(2026, 11, 1));
+const bk = (bucket: string, total: number, usado: number) => ({ bucket, total, usado, restante: total - usado, renova_em: "2027-01-01", baixo: false, esgotado: total === usado });
+const mkSaldo = (n: number, a: number, r: number) => waSaldoInfo({
+  ativo: true, mes: "2026-12", plano: { renova: true }, numero: { em_atencao: false },
+  saldos: { novidades: bk("novidades", 10, n), avisos: bk("avisos", 100, a), aurinha: bk("aurinha", 80, r) },
+} as any, new Date(2026, 11, 1));
+const saldo = mkSaldo(0, 28, 0);
 const statusOk: any = { connected: true, marketing_consent_at: "2026-12-01", quality_rating: "GREEN" };
 
 describe("AniversarioConfig", () => {
@@ -204,7 +216,7 @@ describe("AniversarioConfig", () => {
     expect(a.aplicarDivisao).toHaveBeenCalledWith({ aniversario: 7, venda_mais: 1, crediario: 2 });
   });
 
-  it("escolhas gravam no servidor; o último passo não desliga", async () => {
+  it("escolhas gravam no servidor, inclusive o quando", async () => {
     const a = auto();
     const t = renderer.create(<AniversarioConfig companyId="c" auto={a} lojaNome="Lume" />);
     await act(async () => { achar(t, "wa-aniv-tom-direto").props.onPress(); });
@@ -212,8 +224,14 @@ describe("AniversarioConfig", () => {
     await act(async () => { achar(t, "wa-aniv-presente-nenhum").props.onPress(); });
     expect(a.salvarConfig).toHaveBeenCalledWith("aniversario", { presente: null });
     a.salvarConfig.mockClear();
-    await act(async () => { toque(t, "wa-aniv-passo-dia"); });
-    expect(a.salvarConfig).toHaveBeenCalledWith("aniversario", { passos: { antes: false, dia: true, depois: false } });
+    a.salvarConfig.mockClear();
+    await act(async () => { toque(t, "wa-aniv-quando-7_dias_antes"); });
+    expect(a.salvarConfig).toHaveBeenCalledWith("aniversario", { quando: "7_dias_antes" });
+    // tirar o presente com "antes" escolhido leva o quando junto
+    const antes = auto(respostaAuto({ automaticas: respostaAuto().automaticas.map((x: any) => x.key === "aniversario" ? { ...x, config: { ...x.config, quando: "3_dias_antes" } } : x) }));
+    const t2 = renderer.create(<AniversarioConfig companyId="c" auto={antes} lojaNome="" />);
+    await act(async () => { achar(t2, "wa-aniv-presente-nenhum").props.onPress(); });
+    expect(antes.salvarConfig).toHaveBeenCalledWith("aniversario", { presente: null, quando: "no_dia" });
   });
 
   it("sem leitura do servidor, trava", () => {
@@ -242,7 +260,7 @@ describe("VendaMaisConfig", () => {
     expect(achar(renderer.create(<VendaMaisConfig companyId="c" auto={sem} saldo={saldo} status={statusOk} lojaNome="" />), "wa-venda-enviar").props.disabled).toBe(true);
     const atencao = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={{ ...statusOk, quality_rating: "YELLOW" }} lojaNome="" />);
     expect(achar(atencao, "wa-venda-enviar").props.disabled).toBe(true);
-    const sEsg = waSaldoInfo({ mes_ref: "2026-12", novidades: { total: 10, usado: 10 }, avisos: { total: 100, usado: 0 }, aurinha: { total: 80, usado: 0 } }, new Date(2026, 11, 1));
+    const sEsg = mkSaldo(10, 0, 0);
     const esg = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sEsg} status={statusOk} lojaNome="" />);
     expect(achar(esg, "wa-venda-enviar").props.disabled).toBe(true);
   });

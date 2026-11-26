@@ -193,6 +193,7 @@ export default function WhatsAppScreen() {
             </View>
           ) : (
             <MedidorSaldoCard
+              companyId={companyId}
               saldo={saldo.saldo}
               carregando={saldo.carregando}
               falhou={saldo.falhou}

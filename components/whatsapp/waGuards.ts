@@ -161,6 +161,12 @@ const SKIP_REASON_PT: Record<string, string> = {
   nao_enfileirado: "A mensagem não entrou na fila de envio.",
   token_expirado: "A autorização da Meta expirou — reconecte o número da loja.",
 
+  // ── Saldo do WhatsApp (26/11/2026, contrato do agente A) ─
+  saldo_esgotado: "O saldo de mensagens deste mês acabou. Compre um pacote ou espere o saldo voltar.",
+  numero_em_atencao: "O WhatsApp pediu uma pausa nas novidades. Avisos e cobranças continuam.",
+  saldo_indisponivel: "Não consegui conferir o saldo agora. Por segurança, a mensagem não saiu.",
+  schema_pending: "O servidor ainda está sendo atualizado. Tente de novo em alguns minutos.",
+
   // ── Crediário (Fase 6) ─────────────────────────────────
   // Motivos que o runForCompany do backend devolve quando a régua do
   // crediário não casa. Nenhum deles é erro: são o desenho funcionando.
@@ -185,6 +191,9 @@ export function waSkipReasonLabel(reason: string | null | undefined): string | n
  * ("opt-out 3 · já enviados 2"). A frase longa não cabe numa contagem.
  */
 const SKIP_REASON_SHORT_PT: Record<string, string> = {
+  saldo_esgotado: "sem saldo",
+  numero_em_atencao: "número em atenção",
+  saldo_indisponivel: "saldo não lido",
   opt_out: "opt-out",
   opted_out: "opt-out",
   no_opt_in: "sem autorização",

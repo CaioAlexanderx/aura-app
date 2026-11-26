@@ -31,6 +31,12 @@ export interface Balde {
   livres: string;
   /** Frase de esgotado; null enquanto sobra. */
   textoEsgotado: string | null;
+  /** Chave do aviso de 20% (uma vez por chave); null se o servidor não mandou. */
+  avisoChave: string | null;
+  /** ISO "AAAA-MM-DD" de quando volta; null = não volta sozinho (Essencial sem add-on). */
+  renovaEm: string | null;
+  /** O pacote que a tela oferece comprar (preço e quantidade vêm do servidor). */
+  pacote: { qty: number; precoCentavos: number; precoTxt: string; rotulo: string } | null;
 }
 
 export interface SaldoInfo {
@@ -43,8 +49,12 @@ export interface SaldoInfo {
   /** Essencial no presente de boas-vindas: o saldo não renova. */
   presente: boolean;
   textoPresente: string | null;
-  /** A oferta "+ R$ 29/mês" só existe com o presente acabado (decisão do Caio, 26/11). */
+  /** A oferta "+ R$ 29/mês" só existe com o presente acabado (regra 11 do plano). */
   mostrarOferta: boolean;
+  /** O número está em atenção (qualidade/pausa): pausa as novidades. */
+  numeroEmAtencao: boolean;
+  /** Trava WA_SALDO_ATIVO ligada no servidor (desligada: as guardas antigas valem). */
+  ativo: boolean;
 }
 
 const MESES = [
@@ -73,6 +83,27 @@ export function waMesDoSaldo(mesRef: string | null | undefined, hoje: Date = new
   return { nome: MESES[idx], proximo: MESES[(idx + 1) % 12] };
 }
 
+const ROTULO_PACOTE: Record<BaldeKey, string> = {
+  novidades: "novidades",
+  avisos: "avisos",
+  aurinha: "conversas da Aurinha",
+};
+
+/** 6900 -> "R$ 69"; 1990 -> "R$ 19,90". */
+export function precoPacote(centavos: number): string {
+  const reais = Math.floor(centavos / 100);
+  const cent = centavos % 100;
+  return cent === 0 ? `R$ ${reais}` : `R$ ${reais},${String(cent).padStart(2, "0")}`;
+}
+
+/** Mês (nome) de um ISO "AAAA-MM-DD"; torto = null. */
+function mesDoIso(iso: string | null | undefined): string | null {
+  const m = /^\d{4}-(\d{2})-\d{2}/.exec(String(iso || ""));
+  if (!m) return null;
+  const i = Number(m[1]) - 1;
+  return i >= 0 && i <= 11 ? MESES[i] : null;
+}
+
 function lerBalde(key: BaldeKey, raw: WaSaldoBaldeRaw | null | undefined, mes: { nome: string; proximo: string }): Balde | null {
   if (!raw || typeof raw !== "object") return null;
   const total = inteiro(raw.total);
@@ -83,19 +114,30 @@ function lerBalde(key: BaldeKey, raw: WaSaldoBaldeRaw | null | undefined, mes: {
   if (restante == null) return null;
   restante = Math.min(restante, total);
   const gastoN = usado != null ? usado : total - restante;
-  const esgotado = restante <= 0;
-  const acabando = !esgotado && total > 0 && restante <= total * 0.2;
+  // Na dúvida, o mais cauteloso: esgotado se o número OU a flag disserem.
+  const esgotado = restante <= 0 || raw.esgotado === true;
+  const acabando = !esgotado && ((total > 0 && restante <= total * 0.2) || raw.baixo === true);
+  const renovaEm = typeof raw.renova_em === "string" && raw.renova_em ? raw.renova_em : null;
+  const mesVolta = mesDoIso(renovaEm) || mes.proximo;
 
   let textoEsgotado: string | null = null;
   if (esgotado) {
     if (key === "novidades") {
-      textoEsgotado = `As ${total} novidades de ${mes.nome} acabaram. Voltam em 1º de ${mes.proximo}.`;
+      textoEsgotado = renovaEm
+        ? `As ${total} novidades de ${mes.nome} acabaram. Voltam em 1º de ${mesVolta}.`
+        : `As ${total} novidades acabaram.`;
     } else if (key === "avisos") {
-      textoEsgotado = `Os ${total} avisos de ${mes.nome} acabaram.`;
+      textoEsgotado = renovaEm ? `Os ${total} avisos de ${mes.nome} acabaram.` : `Os ${total} avisos acabaram.`;
     } else {
-      textoEsgotado = `A Aurinha atendeu as ${total} conversas do mês. As novas ficam com você.`;
+      textoEsgotado = `A Aurinha atendeu as ${total} conversas${renovaEm ? " do mês" : ""}. As novas ficam com você.`;
     }
   }
+
+  const qty = inteiro(raw.pacote?.qty);
+  const preco = inteiro(raw.pacote?.preco_centavos);
+  const pacote = qty != null && qty > 0 && preco != null && preco > 0
+    ? { qty, precoCentavos: preco, precoTxt: precoPacote(preco), rotulo: `Adicionar ${qty} ${ROTULO_PACOTE[key]} por ${precoPacote(preco)}` }
+    : null;
 
   return {
     key,
@@ -109,6 +151,9 @@ function lerBalde(key: BaldeKey, raw: WaSaldoBaldeRaw | null | undefined, mes: {
     faltam: acabando ? `Faltam ${restante}` : null,
     livres: `${restante} de ${total} livres`,
     textoEsgotado,
+    avisoChave: typeof raw.aviso_chave === "string" ? raw.aviso_chave : null,
+    renovaEm,
+    pacote,
   };
 }
 
@@ -119,29 +164,38 @@ function lerBalde(key: BaldeKey, raw: WaSaldoBaldeRaw | null | undefined, mes: {
  */
 export function waSaldoInfo(raw: WaSaldoRaw | null | undefined, hoje: Date = new Date()): SaldoInfo | null {
   if (!raw || typeof raw !== "object") return null;
-  const mes = waMesDoSaldo(raw.mes_ref, hoje);
-  const novidades = lerBalde("novidades", raw.novidades, mes);
-  const avisos = lerBalde("avisos", raw.avisos, mes);
-  const aurinha = lerBalde("aurinha", raw.aurinha, mes);
+  const mes = waMesDoSaldo(raw.mes, hoje);
+  const s = raw.saldos;
+  if (!s || typeof s !== "object") return null;
+  const novidades = lerBalde("novidades", s.novidades, mes);
+  const avisos = lerBalde("avisos", s.avisos, mes);
+  const aurinha = lerBalde("aurinha", s.aurinha, mes);
   if (!novidades || !avisos || !aurinha) return null;
 
-  const presente = raw.presente_boas_vindas === true;
+  // Sem a informação do plano, não afirma que o saldo "não renova".
+  const renova = raw.plano?.renova;
+  const presente = renova === false;
+  const baldes = [novidades, avisos, aurinha];
   const textoPresente = presente
     ? `Presente de boas-vindas: ${avisos.total} avisos, ${novidades.total} novidades, ${aurinha.total} conversas da Aurinha · não renova`
     : null;
 
-  // A oferta "+ R$ 29/mês" fica ao lado do "WhatsApp do celular", que é o
-  // que a loja usa quando os AVISOS acabam. Só então, e só no presente.
-  const mostrarOferta = presente && avisos.esgotado;
+  // Regra 11: a oferta dos R$ 29 só aparece quando o presente acaba
+  // (plano que não renova e algum saldo esgotado).
+  const mostrarOferta = presente && baldes.some((b) => b.esgotado);
+
+  const numeroEmAtencao = raw.numero?.em_atencao === true;
 
   return {
-    baldes: [novidades, avisos, aurinha],
+    baldes,
     novidades, avisos, aurinha,
     mesNome: mes.nome,
     proximoMesNome: mes.proximo,
     presente,
     textoPresente,
     mostrarOferta,
+    numeroEmAtencao,
+    ativo: raw.ativo === true,
   };
 }
 
