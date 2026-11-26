@@ -42,6 +42,12 @@ export const VERDE_WHATSAPP = { fundo: "#1F7A4D", tinta: TINTA_SOBRE_VERDE } as 
 export const VEU_DA_FOLHA = "rgba(20,16,12,0.42)";
 
 /** Mockup do motor 3D pode ser um vídeo turntable (.webm/.mp4). */
+/** Recusa do backend ao aprovar um orçamento cuja validade passou. */
+export const FRASE_ORCAMENTO_VENCIDO = "Este orçamento venceu. Fale com a loja para renovar.";
+export function ehOrcamentoVencido(e: any): boolean {
+  return (e?.code || e?.data?.code || e?.data?.error) === "ORCAMENTO_VENCIDO";
+}
+
 export function isVideoUrl(v?: string | null): boolean {
   if (!v) return false;
   const p = String(v).split("?")[0].toLowerCase();

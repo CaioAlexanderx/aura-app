@@ -114,6 +114,7 @@ function novaChave() {
   return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 function erroDaApi(e: any, padrao: string) {
+  if ((e?.code || e?.data?.code || e?.data?.error) === "ORCAMENTO_VENCIDO") return "Este orçamento venceu. Renove a validade para aprovar.";
   return e?.data?.error || e?.message || padrao;
 }
 
@@ -389,6 +390,19 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
           },
         });
         return;
+      case "renovar":
+        setConfirmacao({
+          titulo: "Renovar a validade?",
+          texto: `O orçamento volta a ficar em aberto por mais ${Number(quote?.validity_days) || 7} dias, a partir de hoje.`,
+          rotulo: "Renovar validade",
+          acao: async () => {
+            const r = await studioApi.renovarOrcamento(cid, quote!.id, Math.max(1, Number(quote?.validity_days) || 7));
+            const q = { ...quote!, ...r.quote } as StudioQuote;
+            setQuote(q); onMudou?.(q);
+            toast.success("Validade renovada");
+          },
+        });
+        return;
       case "fechar_sem_venda":
         setConfirmacao({
           titulo: "Fechar sem venda?",
@@ -452,6 +466,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
   else if (estado === "rascunho" && pecas.length) subtitulo = `${textoDePecas(pecas.length)} · toque numa peça para enviar a arte e ver o vídeo`;
   else if (estado === "ajuste") subtitulo = `${versao || "Versão " + ((Number(quote?.versao) || 1))} · o cliente pediu mudança; edite e reenvie`;
   else if (estado === "enviado") subtitulo = `Enviado ${dataHora(quote?.sent_at)}${quote?.canal_envio ? " pelo WhatsApp" : ""} · em aberto até o cliente responder`;
+  else if (estado === "vencido") subtitulo = `Venceu em ${dia(quote?.expires_at, true)} · renove a validade para o cliente poder aprovar`;
   else if (estado === "aprovado") subtitulo = "Virou pedido · está na Produção";
   else if (estado === "aceito") subtitulo = "O cliente aceitou pela página do orçamento";
   else if (estado === "encerrado") subtitulo = quote?.status === "closed" ? "Fechado sem venda" : `${STATUS_LABEL[quote!.status]}`;
@@ -459,7 +474,9 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
   const selo = quote
     ? estado === "ajuste"
       ? { bg: COR_DO_AJUSTE.bg, fg: COR_DO_AJUSTE.text, txt: "Ajuste pedido" }
-      : { bg: STATUS_COLORS[quote.status].bg, fg: STATUS_COLORS[quote.status].text, txt: STATUS_LABEL[quote.status] }
+      : estado === "vencido"
+        ? { bg: STATUS_COLORS.expired.bg, fg: STATUS_COLORS.expired.text, txt: "Vencido" }
+        : { bg: STATUS_COLORS[quote.status].bg, fg: STATUS_COLORS[quote.status].text, txt: STATUS_LABEL[quote.status] }
     : { bg: STATUS_COLORS.draft.bg, fg: STATUS_COLORS.draft.text, txt: "Rascunho" };
 
   // ── Rodapé ──────────────────────────────────────────────────
@@ -469,6 +486,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
   else if (catalogoAberto) info = `${textoDePecas(pecas.length)} no orçamento · ${reais(resumo.subtotal)}`;
   else if (!pecas.length) { info = "Sem peças ainda"; infoMenor = "Adicione ao menos uma para enviar"; }
   else if (estado === "enviado") { info = `Total ${reais(resumo.total)}${resumo.pix ? ` · ${reais(resumo.pix)} no Pix` : ""}`; infoMenor = `Válido até ${dia(vence)}`; }
+  else if (estado === "vencido") { info = `Total ${reais(resumo.total)}`; infoMenor = `Venceu em ${dia(quote?.expires_at, true)}`; }
   else if (estado === "aprovado") { info = resumo.sinal ? `Pedido criado · sinal de ${reais(resumo.sinal)} a receber` : "Pedido criado"; }
   else {
     info = `${textoDePecas(pecas.length)} · ${textoDeUnidades(resumo.unidades)} · ${reais(resumo.total)}`;
@@ -485,7 +503,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
       tipo={a.tipo}
       rotulo={estreito && flex ? rotuloNoCelular(a) : a.rotulo}
       accessibilityLabel={a.rotulo}
-      icone={a.id === "enviar" ? "whatsapp" : a.id === "aprovar" || a.id === "converter" ? "check" : undefined}
+      icone={a.id === "enviar" ? "whatsapp" : a.id === "aprovar" || a.id === "converter" || a.id === "renovar" ? "check" : undefined}
       desabilitado={a.desabilitada || (!!ocupado && ocupado !== a.id)}
       ocupado={ocupado === a.id}
       onPress={() => acionar(a)}
@@ -557,10 +575,11 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
         {quote.token ? <LinhaDoTempo t={t} ok={!!quote.viewed_at} rotulo="Cliente abriu" valor={quote.viewed_at ? dataHora(quote.viewed_at) : "ainda não abriu"} mudo={!quote.viewed_at} /> : null}
         <LinhaDoTempo
           t={t}
-          ok={estado !== "enviado"}
+          ok={estado !== "enviado" && estado !== "vencido"}
           rotulo="Resposta"
-          mudo={estado === "enviado"}
-          valor={estado === "enviado" ? `aguardando · válido até ${dia(quote.expires_at)}`
+          mudo={estado === "enviado" || estado === "vencido"}
+          valor={estado === "vencido" ? `venceu em ${dia(quote.expires_at, true)} sem resposta`
+            : estado === "enviado" ? `aguardando · válido até ${dia(quote.expires_at)}`
             : estado === "ajuste" ? `Pediu ajuste · ${dataHora(quote.ajuste_pedido_em)}`
             : estado === "aprovado" ? `Aprovado${quote.responded_at ? " · " + dataHora(quote.responded_at) : ""}`
             : estado === "aceito" ? `Aceito · ${dataHora(quote.responded_at)}`
@@ -710,6 +729,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
   const aviso = !cid || carregando ? null
     : estado === "ajuste" ? { bg: t.warningSoft, fg: t.warningInk, icone: "edit", titulo: `O cliente pediu ajuste na versão ${Number(quote?.versao) || 1}`, texto: `${ajustes[0]?.texto ? `"${ajustes[0].texto}" ` : ""}O orçamento voltou a ser editável. O vídeo anterior fica guardado até você gravar outro.` }
     : estado === "aprovado" ? { bg: t.successSoft, fg: t.successInk, icone: "check_circle", titulo: "Este orçamento virou pedido", texto: "Peças, arte, modelo e condições foram para a Produção. Aqui nada mais muda." }
+    : estado === "vencido" ? { bg: t.warningSoft, fg: t.warningInk, icone: "alert", titulo: `Este orçamento venceu em ${dia(quote?.expires_at, true)}`, texto: "O cliente não consegue mais aprovar. Toque em \"Renovar validade\" para reabrir o prazo." }
     : estado === "enviado" ? { bg: t.infoSoft, fg: t.infoInk, icone: "info", titulo: "Em aberto: quando o cliente topar pelo WhatsApp, toque em Aprovar.", texto: "Se pedir mudança, \"Cliente pediu ajuste\". Se não seguir, \"Fechar sem venda\"." }
     : quote?.status === "closed" ? { bg: t.bgSoft, fg: t.ink2, icone: "x_circle", titulo: "Orçamento fechado sem venda", texto: "" }
     : null;

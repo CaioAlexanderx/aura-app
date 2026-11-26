@@ -117,6 +117,7 @@ function Tela() {
           abrirId={abrirId}
           cabecalho={CABECALHO_DOS_ORCAMENTOS_3D}
           semFlutuante
+          semArcos
           rotaDaLista="/personalizados/orcamentos"
           rotaDoPedido={ROTA_DO_PEDIDO}
         />

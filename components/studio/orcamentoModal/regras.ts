@@ -23,11 +23,40 @@ export { SEM_MODELO };
 
 // ─── Estado ─────────────────────────────────────────────────
 export type EstadoDoOrcamento =
-  | "novo" | "rascunho" | "ajuste" | "enviado" | "aceito" | "aprovado" | "encerrado";
+  | "novo" | "rascunho" | "ajuste" | "enviado" | "vencido" | "aceito" | "aprovado" | "encerrado";
 
-export function estadoDoOrcamento(q: Pick<StudioQuote, "status" | "ajuste_pedido_em"> | null | undefined): EstadoDoOrcamento {
+/** "AAAA-MM-DD" do dia no fuso de São Paulo (o fuso da loja, não o do navegador). */
+export function diaEmSaoPaulo(d: Date | string | number): string | null {
+  const data = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(data.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(data);
+}
+
+/**
+ * Orçamento enviado cuja validade já passou (valid_until < hoje, no fuso de
+ * São Paulo). O último dia da validade ainda vale. Rascunho, ajuste pedido e
+ * os já resolvidos nunca vencem.
+ */
+export function orcamentoVencido(
+  q: Pick<StudioQuote, "status" | "expires_at" | "ajuste_pedido_em"> | null | undefined,
+  agora: Date = new Date(),
+): boolean {
+  if (!q) return false;
+  // O backend grava 'expired' quando a cliente tenta aprovar depois do prazo; renova-se igual.
+  if (q.status === "expired") return true;
+  if (q.status !== "sent" || !q.expires_at || temAjustePendente(q)) return false;
+  const validade = diaEmSaoPaulo(q.expires_at);
+  const hoje = diaEmSaoPaulo(agora);
+  return !!validade && !!hoje && validade < hoje;
+}
+
+export function estadoDoOrcamento(
+  q: Pick<StudioQuote, "status" | "ajuste_pedido_em"> & Partial<Pick<StudioQuote, "expires_at">> | null | undefined,
+  agora: Date = new Date(),
+): EstadoDoOrcamento {
   if (!q) return "novo";
   if (temAjustePendente(q)) return "ajuste";
+  if (orcamentoVencido({ expires_at: null, ...q } as any, agora)) return "vencido";
   switch (q.status) {
     case "draft": return "rascunho";
     case "sent": return "enviado";
@@ -45,7 +74,7 @@ export function podeEditar(e: EstadoDoOrcamento): boolean {
 // ─── Rodapé ─────────────────────────────────────────────────
 export type IdDaAcao =
   | "cancelar" | "salvar" | "enviar" | "fechar_sem_venda" | "ajuste" | "aprovar"
-  | "converter" | "fechar" | "ver_pedido" | "voltar_pecas" | "concluir";
+  | "converter" | "fechar" | "ver_pedido" | "voltar_pecas" | "concluir" | "renovar";
 export type TipoDaAcao = "pri" | "wa" | "ok" | "sec" | "ter" | "perigo";
 export type AcaoDoRodape = { id: IdDaAcao; rotulo: string; tipo: TipoDaAcao; desabilitada?: boolean };
 
@@ -86,6 +115,12 @@ export function acoesDoRodape(
         { id: "ajuste", rotulo: "Cliente pediu ajuste", tipo: "sec" },
         { id: "aprovar", rotulo: "Aprovar · vira pedido", tipo: "ok" },
       ];
+    case "vencido":
+      // Vencido não aprova: a loja renova a validade (1 clique) e o orçamento volta a ficar em aberto.
+      return [
+        { id: "fechar_sem_venda", rotulo: "Fechar sem venda", tipo: "perigo" },
+        { id: "renovar", rotulo: "Renovar validade", tipo: "ok" },
+      ];
     case "aceito":
       return [
         { id: "fechar", rotulo: "Fechar", tipo: "sec" },
@@ -121,6 +156,7 @@ const ROTULO_NO_CELULAR: Partial<Record<IdDaAcao, string>> = {
   aprovar: "Aprovar",
   converter: "Converter",
   voltar_pecas: "Voltar",
+  renovar: "Renovar",
 };
 export function rotuloNoCelular(a: AcaoDoRodape): string {
   if (a.id === "enviar") return a.rotulo.startsWith("Reenviar") ? "Reenviar no WhatsApp" : "Enviar no WhatsApp";

@@ -126,6 +126,8 @@ type StudioScreenProps = {
   contentStyle?: any;
   /** Estilo extra no container externo. */
   style?: any;
+  /** Sem os arcos de fundo do Studio (telas do Negócio usam o fundo padrão do shell). */
+  semArcos?: boolean;
 };
 
 export function StudioScreen({
@@ -138,6 +140,7 @@ export function StudioScreen({
   align = "left",
   contentStyle,
   style,
+  semArcos = false,
 }: StudioScreenProps) {
   const tk = useStudioTokens();
   const { width } = useWindowDimensions();
@@ -147,6 +150,7 @@ export function StudioScreen({
   const pathname = usePathname() || "";
   // Arcos em todas as telas Studio, EXCETO o grupo Gestão (genérico/varejo) e a Loja Digital.
   const showArcs =
+    !semArcos &&
     !/\/studio\/gestao\/(financeiro|nfe|contabilidade)/.test(pathname) &&
     !pathname.startsWith("/studio/vendas/loja-digital");
   useEffect(() => {

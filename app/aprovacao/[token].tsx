@@ -23,7 +23,8 @@ import { Icon } from "@/components/Icon";
 import { studioApi, type PublicApproval } from "@/services/studioApi";
 // F5: mockup pode ser um vídeo turntable (.webm/.mp4) gerado pelo motor 3D.
 // A regra mora com as páginas da Fase 4, que a usam também.
-import { isVideoUrl, usaVisualDaLoja } from "@/components/studio/storefront/posCompra/posCompra";
+import { isVideoUrl, usaVisualDaLoja, ehOrcamentoVencido, FRASE_ORCAMENTO_VENCIDO } from "@/components/studio/storefront/posCompra/posCompra";
+import { reais } from "@/components/studio/pagamentoDoPedido";
 import { AprovacaoComMarca } from "@/components/studio/storefront/posCompra/AprovacaoComMarca";
 
 export default function AprovacaoPublica() {
@@ -51,7 +52,7 @@ export default function AprovacaoPublica() {
       const r = await studioApi.respondPublicApproval(String(token), { action: "approve" });
       setResult(r);
     } catch (e: any) {
-      setError(e?.message || "Erro ao enviar resposta");
+      setError(ehOrcamentoVencido(e) ? FRASE_ORCAMENTO_VENCIDO : (e?.message || "Erro ao enviar resposta"));
     } finally { setSubmitting(false); }
   }
 
@@ -150,6 +151,12 @@ export default function AprovacaoPublica() {
     );
   }
 
+  // O desconto: o que o backend manda, ou a diferença entre os itens e o total.
+  const somaDosItens = data.order.items.reduce((a, it) => a + it.unit_price * it.quantity, 0);
+  const desconto = Number(data.order.discount) > 0
+    ? Number(data.order.discount)
+    : Math.max(0, Math.round((somaDosItens - data.order.total_amount) * 100) / 100);
+
   // Modal de pedir ajuste
   return (
     <View style={s.bg}>
@@ -163,19 +170,37 @@ export default function AprovacaoPublica() {
         {/* Pedido */}
         <View style={s.orderCard}>
           <Text style={s.orderEyebrow}>SEU PEDIDO</Text>
-          <Text style={s.orderName}>Oi {data.order.customer_name?.split(" ")[0] || "cliente"}! 👋</Text>
+          <Text style={s.orderName}>Oi, {data.order.customer_name?.split(" ")[0] || "cliente"}!</Text>
           <Text style={s.orderSub}>Sua arte ficou pronta. Dá uma olhada e nos confirma se podemos imprimir.</Text>
           <View style={s.orderItems}>
             {data.order.items.map((it, i) => (
               <View key={i} style={s.orderItem}>
                 <Text style={s.orderItemName}>{it.quantity}× {it.product_name}</Text>
-                <Text style={s.orderItemPrice}>R$ {(it.unit_price * it.quantity).toFixed(2)}</Text>
+                <Text style={s.orderItemPrice}>{reais(it.unit_price * it.quantity)}</Text>
               </View>
             ))}
+            {desconto > 0.004 ? (
+              <View style={s.orderItem} testID="aprovacao-desconto">
+                <Text style={s.orderItemName}>Desconto</Text>
+                <Text style={s.orderItemPrice}>- {reais(desconto)}</Text>
+              </View>
+            ) : null}
             <View style={s.orderTotal}>
               <Text style={s.orderTotalLabel}>Total</Text>
-              <Text style={s.orderTotalValue}>R$ {data.order.total_amount.toFixed(2)}</Text>
+              <Text style={s.orderTotalValue}>{reais(data.order.total_amount)}</Text>
             </View>
+            {Number(data.order.pix_total) > 0 ? (
+              <View style={s.orderItem} testID="aprovacao-pix">
+                <Text style={s.orderItemName}>No Pix</Text>
+                <Text style={s.orderItemPrice}>{reais(data.order.pix_total)}</Text>
+              </View>
+            ) : null}
+            {Number(data.order.deposit_amount) > 0 ? (
+              <View style={s.orderItem} testID="aprovacao-sinal">
+                <Text style={s.orderItemName}>Sinal combinado</Text>
+                <Text style={s.orderItemPrice}>{reais(data.order.deposit_amount)}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 

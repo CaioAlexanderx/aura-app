@@ -122,7 +122,7 @@ export function CatalogoDoOrcamento({ tema, produtos, erro, frequentes, template
         <View style={{ borderWidth: 1.5, borderColor: t.primary, borderRadius: 12, padding: 12, gap: 10, backgroundColor: t.paperCardElev }} testID="form-avulso">
           <Campo tema={tema} rotulo="Descrição" value={desc} onChangeText={setDesc} placeholder="Ex.: criação da arte" autoFocus={!estreito} />
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1 }}><Campo tema={tema} rotulo="Quantidade" value={qtd} onChangeText={setQtd} keyboardType="decimal-pad" /></View>
+            <View style={{ flex: 1 }}><Campo tema={tema} rotulo="Quantidade" value={qtd} onChangeText={setQtd} keyboardType="decimal-pad" selectTextOnFocus testID="avulso-qtd" /></View>
             <View style={{ flex: 1 }}><Campo tema={tema} rotulo="Preço unitário (R$)" value={preco} onChangeText={setPreco} keyboardType="decimal-pad" placeholder="0,00" /></View>
           </View>
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>

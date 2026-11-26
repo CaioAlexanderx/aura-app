@@ -402,6 +402,12 @@ export type PublicApproval = {
     numero?: string | null;
     customer_name: string;
     total_amount: number;
+    /** 26/11/2026 (QA Personalizados): opcionais; ausentes no backend de antes. */
+    discount?: number | null;
+    /** Total no Pix (já com o desconto do Pix). */
+    pix_total?: number | null;
+    /** Sinal combinado (valor). */
+    deposit_amount?: number | null;
     items: Array<{
       product_id?: string | null;
       product_name: string;
@@ -1118,6 +1124,9 @@ export const studioApi = {
     request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/fechar", { method: "POST", body: motivo ? { motivo } : {}, retry: 0, timeout: 10000 }),
   registrarAjusteDoOrcamento: (cid: string, qid: string, texto: string) =>
     request<{ quote: StudioQuote; ajuste: AjusteDoOrcamento }>(base(cid) + "/quotes/" + qid + "/ajuste", { method: "POST", body: { texto }, retry: 0, timeout: 10000 }),
+  /** Renova a validade do orçamento enviado/vencido (PATCH /quotes/:qid/validade; validity_days = dias a partir de hoje). */
+  renovarOrcamento: (cid: string, qid: string, validityDays: number) =>
+    request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/validade", { method: "PATCH", body: { validity_days: validityDays }, retry: 0, timeout: 10000 }),
   aprovarOrcamento: (cid: string, qid: string) =>
     request<{ order_id: string; quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/aprovar", { method: "POST", retry: 0, timeout: 15000 }),
 

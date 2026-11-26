@@ -318,7 +318,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
         {hasDeposit && (
           <View style={[ps.pill, depositPaid ? { backgroundColor: sem.approved.soft } : { backgroundColor: sem.waiting.soft }]}>
             <Text style={[ps.pillTxt, depositPaid ? { color: sem.approved.ink } : { color: sem.waiting.ink }]}>
-              {depositPaid ? "✓ Sinal recebido — produção liberada" : `⚠ Sinal pendente — R$ ${Number(depositRequired).toFixed(2)}`}
+              {depositPaid ? "✓ Sinal recebido — produção liberada" : `⚠ Sinal pendente — ${reais(depositRequired)}`}
             </Text>
           </View>
         )}
@@ -343,7 +343,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <Text style={ps.payLabel}>{kindLabel[p.kind as StudioPaymentKind] || p.kind}</Text>
-                    <Text style={ps.payAmount}>R$ {Number(p.amount).toFixed(2)}</Text>
+                    <Text style={ps.payAmount}>{reais(p.amount)}</Text>
                     <View style={[ps.pill, { backgroundColor: col.bg }]}>
                       <Text style={[ps.pillTxt, { color: col.fg }]}>
                         {p.status === "paid" ? "Pago" : p.status === "cancelled" ? "Cancelado" : "Pendente"}
@@ -375,7 +375,7 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
       <Modal visible={markModal} transparent animationType="fade">
         <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
           <Text style={ps.modalTitle}>Confirmar recebimento</Text>
-          <Text style={ps.modalBody}>Marcar {markTarget ? `R$ ${Number(markTarget.amount).toFixed(2)}` : ""} como recebido via Pix?</Text>
+          <Text style={ps.modalBody}>Marcar {markTarget ? reais(markTarget.amount) : ""} como recebido via Pix?</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
             <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }, btnFolha]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
             <Pressable style={[ps.modalBtn, { backgroundColor: tk.success }, btnFolha]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
