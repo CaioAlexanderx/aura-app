@@ -219,6 +219,8 @@ export type Mug3DHandle = {
    * controla o ângulo exato de cada quadro e lê o canvas logo depois.
    */
   renderizarQuadro: (rotacaoY: number) => void;
+  /** Gravação do vídeo: sombra simples (BasicShadowMap) enquanto ligado; desligar restaura a original. */
+  modoGravacao?: (ligado: boolean) => void;
   dispose: () => void;
 };
 
@@ -1711,6 +1713,30 @@ export async function createModelViewer(
     render();
   }
 
+  // 26/11/2026 — modo de gravação do vídeo do orçamento: troca a sombra
+  // suave (PCFSoft, a mais cara) pela simples só enquanto grava. Guarda o tipo
+  // original e o restaura ao desligar (idempotente).
+  let tipoDeSombraOriginal: number | null = null;
+  function recompilarMateriais() {
+    scene.traverse((obj: any) => {
+      const ms = obj.material ? (Array.isArray(obj.material) ? obj.material : [obj.material]) : [];
+      ms.forEach((m: any) => { m.needsUpdate = true; });
+    });
+  }
+  function modoGravacao(ligado: boolean) {
+    if (disposed) return;
+    if (ligado) {
+      if (tipoDeSombraOriginal !== null) return;
+      tipoDeSombraOriginal = renderer.shadowMap.type;
+      renderer.shadowMap.type = THREE.BasicShadowMap;
+    } else {
+      if (tipoDeSombraOriginal === null) return;
+      renderer.shadowMap.type = tipoDeSombraOriginal;
+      tipoDeSombraOriginal = null;
+    }
+    recompilarMateriais();
+  }
+
   // F5: grava uma volta completa (ease in-out) e devolve Blob webm.
   // null = navegador sem captureStream/MediaRecorder (caller mostra erro).
   function recordTurntable(durationMs = 3600): Promise<Blob | null> {
@@ -1780,7 +1806,7 @@ export async function createModelViewer(
   await update(values);
   loop();
 
-  return { update, giroAutomatico, pontoNaArea, definirArraste, mostrarArea, trocarPeca, resize, snapshot, recordTurntable, renderizarQuadro, dispose };
+  return { update, giroAutomatico, pontoNaArea, definirArraste, mostrarArea, trocarPeca, resize, snapshot, recordTurntable, renderizarQuadro, modoGravacao, dispose };
 }
 
 /** O nome de antes da generalização: quem chama não precisa mudar. */

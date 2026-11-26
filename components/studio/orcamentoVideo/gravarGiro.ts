@@ -73,13 +73,82 @@ export type Palco = {
   viewer: Mug3DHandle;
   canvas: HTMLCanvasElement;
   fechar: () => void;
+  /** ms gastos em abrir o palco (three, GLB, textura): o pré-roll do viewer. */
+  abrirMs?: number;
 };
+
+// ─── Medição (debug) ─────────────────────────────────────────
+// Liga com localStorage.aura_debug_video = "1" (e recarrega). Sem a flag,
+// nada é medido nem impresso. No fim da gravação sai um console.table com o
+// tempo de cada etapa, para achar onde o minuto e meio se perde.
+export function debugVideoLigado(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem("aura_debug_video") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export type Cronometro = {
+  ligado: boolean;
+  marca: () => number;
+  soma: (etapa: string, desde: number) => void;
+  tabela: (extra?: Record<string, number>) => void;
+};
+
+export function criarCronometro(ligado: boolean = debugVideoLigado(), agora: () => number = () => performance.now()): Cronometro {
+  const totais: Record<string, number> = {};
+  const quadros: Record<string, number> = {};
+  return {
+    ligado,
+    marca: () => (ligado ? agora() : 0),
+    soma: (etapa, desde) => {
+      if (!ligado) return;
+      totais[etapa] = (totais[etapa] || 0) + (agora() - desde);
+      quadros[etapa] = (quadros[etapa] || 0) + 1;
+    },
+    tabela: (extra = {}) => {
+      if (!ligado) return;
+      const linhas: Record<string, { totalMs: number; quadros: number; mediaMs: number }> = {};
+      for (const k of Object.keys(totais)) {
+        linhas[k] = { totalMs: Math.round(totais[k]), quadros: quadros[k], mediaMs: Math.round((totais[k] / quadros[k]) * 10) / 10 };
+      }
+      for (const k of Object.keys(extra)) {
+        linhas[k] = { totalMs: Math.round(extra[k]), quadros: 1, mediaMs: Math.round(extra[k]) };
+      }
+      // eslint-disable-next-line no-console
+      console.table(linhas);
+    },
+  };
+}
+
+/**
+ * Limita o progresso a ~10 atualizações por segundo (a cada 100 ms), sempre
+ * deixando passar o primeiro, o 0 e o 1 (fim). Cada setState do modal
+ * re-renderiza a tela inteira; a 30 quadros por segundo isso disputava a
+ * thread com o render do vídeo.
+ */
+export function limitarProgresso(
+  aoProgredir: (f: number) => void,
+  intervaloMs = 100,
+  agora: () => number = () => performance.now(),
+): (f: number) => void {
+  let ultimo = -Infinity;
+  return (f: number) => {
+    const t = agora();
+    if (f <= 0 || f >= 1 || t - ultimo >= intervaloMs) {
+      ultimo = t;
+      aoProgredir(f);
+    }
+  };
+}
 
 export async function abrirPalco(
   spec: VisualTemplateSpec,
   values: Record<string, any>,
   opts: Mug3DOptions,
 ): Promise<Palco> {
+  const t0 = performance.now();
   const caixa = document.createElement("div");
   caixa.setAttribute("aria-hidden", "true");
   caixa.style.cssText =
@@ -92,7 +161,7 @@ export async function abrirPalco(
   document.body.appendChild(caixa);
   let viewer: Mug3DHandle;
   try {
-    viewer = await createModelViewer(canvas, spec, values, { cenario: "estudio", ...opts });
+    viewer = await createModelViewer(canvas, spec, values, { cenario: "estudio", ...opts, pixelRatio: 1 });
   } catch (e) {
     caixa.remove();
     throw e;
@@ -100,6 +169,7 @@ export async function abrirPalco(
   return {
     viewer,
     canvas,
+    abrirMs: performance.now() - t0,
     fechar: () => {
       try { viewer.dispose(); } catch { /* já foi */ }
       caixa.remove();
@@ -219,6 +289,7 @@ async function gravarComWebCodecs(
   palco: Palco,
   comp: Compositor,
   aoProgredir: (f: number) => void,
+  cron: Cronometro = criarCronometro(false),
 ): Promise<VideoGravado | null> {
   if (typeof (globalThis as any).VideoEncoder === "undefined") return null;
   let mb: typeof import("mediabunny");
@@ -244,12 +315,20 @@ async function gravarComWebCodecs(
     await saida.start();
     const n = FPS * DURACAO_S;
     for (let i = 0; i < n; i++) {
+      let t = cron.marca();
       palco.viewer.renderizarQuadro(anguloDoQuadro(i, n));
+      cron.soma("render", t);
+      t = cron.marca();
       comp.compor();
+      cron.soma("compor", t);
+      t = cron.marca();
       await fonte.add(i / FPS, 1 / FPS);
+      cron.soma("add (encoder)", t);
       aoProgredir((i + 1) / n);
     }
+    const tf = cron.marca();
     await saida.finalize();
+    cron.soma("finalize (mux)", tf);
     const buffer = (saida.target as InstanceType<typeof mb.BufferTarget>).buffer;
     if (!buffer || !buffer.byteLength) return null;
     return { blob: new Blob([buffer], { type: "video/mp4" }), contentType: "video/mp4", formato: "mp4-webcodecs", ext: "mp4" };
@@ -316,11 +395,27 @@ export async function gravarGiro(
   comLogo: boolean,
   aoProgredir: (f: number) => void = () => {},
 ): Promise<VideoGravado | null> {
-  const comp = await montarCompositor(palco.canvas, marca, comLogo);
-  const webcodecs = await gravarComWebCodecs(palco, comp, aoProgredir);
-  if (webcodecs) return webcodecs;
-  aoProgredir(0);
-  return gravarComMediaRecorder(palco, comp, aoProgredir);
+  const cron = criarCronometro();
+  const inicio = cron.marca();
+  const progresso = limitarProgresso(aoProgredir);
+  // Só durante a gravação: sombra simples no viewer do palco. Sempre
+  // restaurada no finally (gravação que falha ou é cancelada também).
+  try { palco.viewer.modoGravacao?.(true); } catch { /* sem o modo, segue */ }
+  try {
+    const comp = await montarCompositor(palco.canvas, marca, comLogo);
+    const web = await gravarComWebCodecs(palco, comp, progresso, cron);
+    if (web) return web;
+    progresso(0);
+    return await gravarComMediaRecorder(palco, comp, progresso);
+  } finally {
+    try { palco.viewer.modoGravacao?.(false); } catch { /* já foi */ }
+    if (cron.ligado) {
+      cron.tabela({
+        "pré-roll: abrir palco (three/GLB/textura)": palco.abrirMs || 0,
+        "total em gravarGiro": performance.now() - inicio,
+      });
+    }
+  }
 }
 
 /** Foto da peça de frente, com o selo da loja (plano B sem vídeo). */
