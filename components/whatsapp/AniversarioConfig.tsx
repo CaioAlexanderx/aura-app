@@ -13,12 +13,12 @@ import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
 import {
-  BolhaExemplo, Interruptor, Passo, PilulaToggle, Pilulas, PreviaCorteView,
+  BolhaExemplo, Interruptor, Passo, Pilulas, PreviaCorteView,
 } from "./configUi";
 import { quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import {
-  OPCOES_PRESENTE, OPCOES_TOM, alternarPasso, chaveDoPresente, lerPassos, lerTom, modeloDoAniversario,
-  nomeDoMes, presenteDaChave, quantosPassos, rotuloDoPresente, type PresenteChave, type TomAniversario,
+  OPCOES_PRESENTE, OPCOES_QUANDO, OPCOES_TOM, chaveDoPresente, lerQuando, lerTom, modeloDoAniversario,
+  nomeDoMes, patchDePresente, quandoPermitido, rotuloDoPresente, type PresenteChave, type QuandoAniversario, type TomAniversario,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
 
@@ -33,7 +33,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
   const lida = info?.autos.aniversario;
   const cfg = lida?.config || {};
   const tom = lerTom(cfg.tom);
-  const passos = lerPassos(cfg.passos);
+  const quando = lerQuando(cfg.quando);
   const presenteChave = chaveDoPresente(cfg.presente);
   const alt = useAlternarAutomatica(auto);
 
@@ -53,7 +53,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
 
   // A mensagem como a cliente vê: o modelo do tom e do presente, com a primeira aniversariante.
   const comPresente = presenteChave != null && presenteChave !== "nenhum";
-  const modelo = tom ? (modelos.modelos || []).find((m) => m.key === modeloDoAniversario(tom, comPresente)) : null;
+  const modelo = tom && quando ? (modelos.modelos || []).find((m) => m.key === modeloDoAniversario(tom, comPresente, quando)) : null;
   const primeira = pub.corte?.recebem[0]?.nome.split(" ")[0] || undefined;
   const mensagem = modelo?.texto_em_uso
     ? renderizar(modelo.texto_em_uso, {
@@ -63,7 +63,6 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
     : null;
 
   const trazer = quantoTrazer(pub.corte, info.divisao, info.usadas, "aniversario");
-  const porCliente = passos ? quantosPassos(passos) : null;
   const ligada = lida.ligada;
 
   return (
@@ -78,28 +77,25 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
       <Passo n="02" titulo="O presente" sub="O cupom nasce sozinho no dia: um por cliente, vale 15 dias, na loja e no site.">
         <Pilulas<PresenteChave>
           idBase="wa-aniv-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
-          onPick={(v) => salvar({ presente: presenteDaChave(v) })}
+          onPick={(v) => salvar(patchDePresente(v, quando))}
         />
       </Passo>
 
-      <Passo n="03" titulo="Quando sai" sub="Sempre às 10h. Quem pediu para não receber fica de fora sozinho.">
-        <View style={s.pilulas}>
-          {([
-            ["antes", "Uma semana antes"], ["dia", "No dia"], ["depois", "3 dias depois, se não usou"],
-          ] as const).map(([k, rotulo]) => (
-            <PilulaToggle
-              key={k} rotulo={rotulo} ligada={!!passos?.[k]} desabilitado={travado || !passos}
-              testID={`wa-aniv-passo-${k}`}
-              onToggle={() => passos && salvar({ passos: alternarPasso(passos, k) })}
-            />
-          ))}
-        </View>
+      <Passo n="03" titulo="Quando sai" sub="Uma mensagem só por aniversário, sempre às 10h. Quem pediu para não receber fica de fora sozinho. Sem presente, só sai no dia.">
+        <Pilulas<QuandoAniversario>
+          idBase="wa-aniv-quando" opcoes={OPCOES_QUANDO} valor={quando}
+          desabilitado={travado || !quando}
+          onPick={(v) => { if (quandoPermitido(v, comPresente)) salvar({ quando: v }); }}
+        />
+        {!comPresente && (
+          <Text style={s.sub} testID="wa-aniv-quando-nota">Para sair antes do dia, escolha um presente.</Text>
+        )}
       </Passo>
 
       <Passo
         titulo={nomeDoMes(null)}
         sub={pub.corte
-          ? `${pub.corte.total} aniversariantes com WhatsApp · ${porCliente === 1 ? "1 mensagem cada" : `${porCliente ?? "?"} mensagens cada`}`
+          ? `${pub.corte.total} aniversariantes com WhatsApp · 1 mensagem cada`
           : undefined}
       >
         <PreviaCorteView
