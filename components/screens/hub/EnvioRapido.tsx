@@ -22,7 +22,7 @@ const ATALHOS: { key: HubEnvioTipo; label: string }[] = [
   { key: "link_loja", label: "Link da loja" },
 ];
 
-export function EnvioRapido({ companyId, convId, onSent, onError, extras, painelExtra }: {
+export function EnvioRapido({ companyId, convId, onSent, onError, extras, painelExtra, compacto = false, nome }: {
   companyId: string; convId: string;
   onSent: () => void;
   onError: (mensagem: string) => void;
@@ -30,10 +30,14 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras, painel
   extras?: React.ReactNode;
   /** Painel dos botões extras (gravação, prévia da foto), abaixo da linha de atalhos. */
   painelExtra?: React.ReactNode;
+  /** Celular: atalhos em uma linha rolável e "Mandar para a Ana · tudo grátis agora". */
+  compacto?: boolean;
+  nome?: string;
 }) {
   const [painel, setPainel] = useState<Painel>(null);
   const [busca, setBusca] = useState("");
   const [valor, setValor] = useState("");
+  const Linha: any = compacto ? ScrollView : View;
 
   const mSend = useMutation({
     mutationFn: (body: Parameters<typeof hubApi.send>[2]) => hubApi.send(companyId, convId, body),
@@ -64,7 +68,15 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras, painel
 
   return (
     <View testID="hub-envio-rapido" style={s.wrap}>
-      <View style={s.atalhos}>
+      {compacto && (
+        <View style={s.mandarPara}>
+          <Text style={s.mandarParaText}>Mandar para {nome || "o cliente"}</Text>
+          <Text style={s.mandarParaGratis}>tudo grátis agora</Text>
+        </View>
+      )}
+      {/* Celular: uma linha rolável de lado; no desktop os atalhos quebram linha. */}
+      <Linha {...(compacto ? { horizontal: true, showsHorizontalScrollIndicator: false, contentContainerStyle: s.atalhosLinha, style: s.atalhosScroll } : {})}>
+      <View style={compacto ? s.atalhosNoScroll : s.atalhos}>
         {ATALHOS.map((a) => (
           <Pressable key={a.key} testID={`hub-envio-${a.key}`} onPress={() => escolher(a.key)} disabled={mSend.isPending}
             style={[s.atalho, painel === a.key && s.atalhoOn, mSend.isPending && { opacity: 0.6 }]}>
@@ -73,6 +85,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras, painel
         ))}
         {extras}
       </View>
+      </Linha>
 
       {painelExtra}
 
@@ -147,6 +160,12 @@ export function EnvioRapido({ companyId, convId, onSent, onError, extras, painel
 
 const s = StyleSheet.create({
   wrap: { paddingTop: 8, gap: 8 },
+  mandarPara: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  mandarParaText: { fontSize: 12.5, fontWeight: "800", color: Colors.ink },
+  mandarParaGratis: { fontSize: 11, fontWeight: "700", color: Colors.green },
+  atalhosScroll: { flexGrow: 0 },
+  atalhosLinha: { paddingRight: 8 },
+  atalhosNoScroll: { flexDirection: "row", gap: 6, alignItems: "center" },
   atalhos: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" },
   atalho: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.bg3 },
   atalhoOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },

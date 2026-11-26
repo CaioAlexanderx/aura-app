@@ -218,7 +218,7 @@ export function HubView() {
         {list}
         <View style={s.threadColumn}>
           {selectedId
-            ? <ThreadView companyId={companyId} convId={selectedId} aurinhaLigada={enabled} />
+            ? <ThreadView companyId={companyId} convId={selectedId} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
             : <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />}
         </View>
       </View>
@@ -227,7 +227,7 @@ export function HubView() {
 
   // Mobile: lista OU thread
   return selectedId
-    ? <ThreadView companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} />
+    ? <ThreadView companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
     : list;
 }
 

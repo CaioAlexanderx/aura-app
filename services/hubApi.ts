@@ -25,6 +25,33 @@ export interface HubCliente {
   birth_date: string | null; since: string | null; last_purchase_at: string | null; total_spent: number | null;
 }
 
+export interface HubConviteCampo { key: string; rotulo: string; auto: boolean; exemplo: string; max: number }
+
+export interface HubConvite {
+  key: string; titulo: string;
+  /** Estado do modelo na Meta: APPROVED | PENDING | REJECTED | PAUSED | NAO_CRIADO. */
+  estado: string; pronto: boolean;
+  /** Texto do modelo: pedaços fixos e `{ campo }` (campo.auto = a Aura preenche). */
+  partes: (string | { campo: string })[];
+  campos: HubConviteCampo[];
+}
+
+export interface HubSaldoAvisos {
+  ativo: boolean; restante: number; total: number; esgotado: boolean;
+  renova_em: string | null; mes: string | null;
+  pacote: { qty: number; preco_centavos: number } | null;
+}
+
+export interface HubConvites {
+  aberta: boolean; conectado: boolean;
+  /** https://wa.me/<número da loja> */
+  meu_link: string | null;
+  /** null = este servidor não informa o saldo (a tela só diz "Usa 1 aviso"). */
+  saldo: HubSaldoAvisos | null;
+  auto: { nome: string; loja: string };
+  convites: HubConvite[];
+}
+
 export interface HubConversation {
   /** Etiquetas aplicadas (migration 474). */
   labels?: HubLabel[];
@@ -165,6 +192,25 @@ export const hubApi = {
     request<{ ok: boolean; customer_id: string | null }>(
       `/companies/${companyId}/hub/conversations/${convId}/cliente`, { method: "PUT", body: { customer_id: customerId } }
     ),
+
+  // ── Conversa fechada: convites prontos (gastam 1 aviso) ──
+  convites: (companyId: string, convId: string) =>
+    request<HubConvites>(`/companies/${companyId}/hub/conversations/${convId}/convites`),
+  mandarConvite: (companyId: string, convId: string, body: { key: string; campos: Record<string, string> }) =>
+    request<{ ok: boolean; outbox_id: string }>(
+      `/companies/${companyId}/hub/conversations/${convId}/convites`, { method: "POST", body, retry: 0 }
+    ),
+  prepararConvites: (companyId: string) =>
+    request<{ criados: number; ja_existiam: number }>(`/companies/${companyId}/hub/convites/preparar`, { method: "POST", body: {} }),
+  /** Pedido de pacote de avisos (só gera a cobrança; o saldo soma depois do pagamento confirmado). */
+  pedirPacoteDeAvisos: (companyId: string) =>
+    request<{ pack?: unknown; payment_url?: string | null; needs_manual?: boolean }>(
+      `/companies/${companyId}/whatsapp/saldo/pacotes`, { method: "POST", body: { bucket: "avisos" }, retry: 0 }
+    ),
+
+  /** Medidor de avisos do mês (agente A: GET /whatsapp/saldo). Erro ou ausência = a tela não mostra o número. */
+  saldoAvisos: (companyId: string) =>
+    request<{ ativo: boolean; saldos?: { avisos?: { restante: number; total: number } } }>(`/companies/${companyId}/whatsapp/saldo`),
 
   catalogo: (companyId: string, q: string) =>
     request<{ products: HubCatalogItem[] }>(`/companies/${companyId}/hub/catalogo?q=${encodeURIComponent(q)}`),
