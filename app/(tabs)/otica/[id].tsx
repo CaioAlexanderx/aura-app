@@ -39,7 +39,7 @@ import {
   type LabStatus, type OpticalOrder, fmtIsoDate, daysUntil,
 } from "@/services/oticaApi";
 import { RxGrid } from "@/components/otica/RxGrid";
-import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
+import { whatsappOficialLiberadoPara } from "@/utils/whatsappOficialLiberado";
 
 const fmt = (n: number | string | null | undefined) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -95,7 +95,8 @@ export function buildTimeline(os: OpticalOrder): Step[] {
 
 export default function OticaOsDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { company } = useAuthStore();
+  const { company, user } = useAuthStore();
+  const waOficial = whatsappOficialLiberadoPara(user);
   const { settings } = usePdvSettings();
   const enabled = settings.otica_enabled === true;
   const qc = useQueryClient();
@@ -157,7 +158,7 @@ export default function OticaOsDetailScreen() {
       // 18/11/2026 — trava do WhatsApp oficial: desligada, nenhuma ótica tem
       // o número, e o aviso de "indisponível" só lembraria uma promessa. O
       // botão "Abrir no WhatsApp" (wa.me) aparece igual.
-      else if (r.wa_link && WHATSAPP_OFICIAL_LIBERADO) toast.info("WhatsApp oficial indisponível — abrindo o wa.me com o texto pronto");
+      else if (r.wa_link && waOficial) toast.info("WhatsApp oficial indisponível — abrindo o wa.me com o texto pronto");
     } catch (err: any) {
       toast.error(err?.data?.error || "Não deu para avisar o cliente");
     } finally {
@@ -326,7 +327,7 @@ export default function OticaOsDetailScreen() {
                 )}
               </View>
             )}
-            {notify && !notify.queued && WHATSAPP_OFICIAL_LIBERADO && (
+            {notify && !notify.queued && waOficial && (
               <Text style={st.hint}>Fila do WhatsApp oficial pulou ({notify.skip_reason || "sem motivo"}). O wa.me abre a conversa no seu celular ou WhatsApp Web com o texto pronto.</Text>
             )}
           </View>

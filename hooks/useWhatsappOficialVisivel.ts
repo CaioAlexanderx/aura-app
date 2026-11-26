@@ -2,7 +2,7 @@
 // useWhatsappOficialVisivel — a trava do WhatsApp oficial para telas que
 // NÃO carregam o /whatsapp/status por conta própria (18/11/2026).
 //
-// Trava ligada: true, sem chamada nenhuma. Desligada: pergunta o status
+// Trava ligada (ou equipe Aura): true, sem chamada nenhuma. Desligada: pergunta o status
 // da company (mesma queryKey ["wa-status", id] do Crediário e do
 // BirthdayCouponModal, então é cache compartilhado) e só devolve true para
 // quem já tem o número conectado — hoje, o dojô Kondei. Enquanto o status
@@ -12,18 +12,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { waApi } from "@/services/waApi";
-import { WHATSAPP_OFICIAL_LIBERADO, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 
 export function useWhatsappOficialVisivel(): boolean {
   const company = useAuthStore((s) => s.company) as any;
+  const user = useAuthStore((s) => s.user);
   const companyId: string | null = company?.id ?? null;
   const q = useQuery({
     queryKey: ["wa-status", companyId],
     queryFn: () => waApi.getStatus(companyId as string),
-    enabled: !WHATSAPP_OFICIAL_LIBERADO && !!companyId,
+    enabled: !whatsappOficialLiberadoPara(user) && !!companyId,
     staleTime: 60 * 1000,
     retry: false,
     refetchOnWindowFocus: false,
   });
-  return whatsappOficialVisivel(q.data ?? null);
+  return whatsappOficialVisivel(q.data ?? null, user);
 }

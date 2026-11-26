@@ -30,7 +30,7 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { oticaApi, OTICA_SETTINGS_DEFAULTS, type OpticalLab, type OticaSettings } from "@/services/oticaApi";
-import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
+import { whatsappOficialLiberadoPara } from "@/utils/whatsappOficialLiberado";
 import { maskPhone } from "@/utils/masks";
 import { termosAceitos, termosLongos, normalizarTermos, TERMOS_MAX } from "@/utils/oticaTermos";
 
@@ -38,7 +38,8 @@ type LabDraft = { name: string; contact_name: string; phone: string; email: stri
 const EMPTY_LAB: LabDraft = { name: "", contact_name: "", phone: "", email: "", portal_url: "", lead_days: "7", notes: "" };
 
 export default function OticaConfigScreen() {
-  const { company } = useAuthStore();
+  const { company, user } = useAuthStore();
+  const waOficial = whatsappOficialLiberadoPara(user);
   const qc = useQueryClient();
   const { settings: pdv } = usePdvSettings();
   const enabled = pdv.otica_enabled === true;
@@ -151,7 +152,7 @@ export default function OticaConfigScreen() {
         <Text style={st.backText}>Voltar</Text>
       </Pressable>
       <Text style={st.pageTitle}>Ótica · configurações<Text style={{ color: Colors.violet }}>.</Text></Text>
-      <Text style={st.pageSubtitle}>Laboratórios, validade da receita, garantia de adaptação, responsável técnico{WHATSAPP_OFICIAL_LIBERADO ? " e as mensagens automáticas do WhatsApp" : ""}.</Text>
+      <Text style={st.pageSubtitle}>Laboratórios, validade da receita, garantia de adaptação, responsável técnico{waOficial ? " e as mensagens automáticas do WhatsApp" : ""}.</Text>
 
       {!enabled && (
         <View style={st.warn}><Text style={st.warnText}>O módulo Ótica está desligado. Ligue em Configurações › Vendas para o menu mostrar Laboratório e Receitas.</Text></View>
@@ -276,7 +277,7 @@ export default function OticaConfigScreen() {
           18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
           os três avisos automáticos só aparecem quando a Meta aprovar. A tela
           não tem o status da conexão, e nenhuma ótica tem o número ligado. */}
-      {WHATSAPP_OFICIAL_LIBERADO && (
+      {waOficial && (
       <>
       <Text style={st.sectionTitle}>WhatsApp automático</Text>
       <View style={st.card}>

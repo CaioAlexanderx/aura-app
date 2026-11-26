@@ -78,7 +78,11 @@ jest.mock("@/services/waApi", () => {
 var mockLiberado = false;
 jest.mock("@/utils/whatsappOficialLiberado", () => {
   const real = jest.requireActual("@/utils/whatsappOficialLiberado");
-  const m: any = { ...real, whatsappOficialVisivel: (s: any) => real.whatsappOficialVisivel(s, mockLiberado) };
+  const m: any = {
+    ...real,
+    whatsappOficialVisivel: (s: any, u: any) => real.whatsappOficialVisivel(s, u, mockLiberado),
+    whatsappOficialLiberadoPara: (u: any) => real.whatsappOficialLiberadoPara(u, mockLiberado),
+  };
   // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
   Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
   return m;

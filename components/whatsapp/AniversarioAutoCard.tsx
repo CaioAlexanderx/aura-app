@@ -26,12 +26,14 @@ import { waApi, WaStatus, WA_ANIVERSARIO_TEMPLATES } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waMarketingBlockers } from "./waGuards";
 import { PreviaMarketingModal } from "./PreviaMarketingModal";
 import { whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { useAuthStore } from "@/stores/auth";
 
 interface Props {
   companyId: string;
 }
 
 export function AniversarioAutoCard({ companyId }: Props) {
+  const user = useAuthStore((s) => s.user);
   const [status, setStatus] = useState<WaStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [auto, setAuto] = useState(false);
@@ -106,7 +108,7 @@ export function AniversarioAutoCard({ companyId }: Props) {
   // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
   // até a Meta aprovar, o cartão só aparece para a loja que já tem o número
   // conectado. O parabéns pelo wa.me (BirthdayCouponModal) segue igual.
-  if (!whatsappOficialVisivel(status)) return null;
+  if (!whatsappOficialVisivel(status, user)) return null;
 
   return (
     <View style={s.box} testID="aniversario-wa-auto">

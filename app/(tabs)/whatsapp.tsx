@@ -50,7 +50,7 @@ const TABS_REAIS = ["Conexão", "Cobranças", "Templates"];
 export default function WhatsAppScreen() {
   const [tab, setTab] = useState(0);
   const scrollRef = useRef<any>(null);
-  const { company, isDemo } = useAuthStore();
+  const { company, isDemo, user } = useAuthStore();
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
@@ -97,7 +97,8 @@ export default function WhatsAppScreen() {
   // até a Meta aprovar, só a loja que já tem o número conectado abre esta
   // tela. O menu já não mostra o item; quem chega pela URL volta ao Painel,
   // depois de o status responder (sem status, a tela fica vazia).
-  if (!whatsappOficialVisivel(wa.status)) {
+  // 26/11/2026 — a equipe Aura abre sempre: conecta o número da própria Aura.
+  if (!whatsappOficialVisivel(wa.status, user)) {
     if (!demo && wa.statusLoading) return null;
     return <Redirect href={"/" as any} />;
   }
