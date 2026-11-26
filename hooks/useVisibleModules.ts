@@ -271,7 +271,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 14/11/2026 -- a secao da loja online na pagina Black Friday (p-120)
   // acompanha quem cuida do Canal Digital. A pagina em si exige estoque ou
   // configuracoes (black_friday); quem tem so uma das duas nao ve a secao.
-  clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal', 'black_friday.loja_online'],
+  // 26/11/2026 -- hub_social (aba Conversas do WhatsApp) tambem vem de
+  // clientes: quem atende o cliente nao precisa da permissao Agentes. O plano
+  // segue mandando (MODULE_PLAN_MAP.hub_social + overrides) -- sem hub_social
+  // na empresa, a permissao sozinha nao mostra as Conversas.
+  clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal', 'black_friday.loja_online', 'hub_social'],
   // 13/11/2026 -- a aba Relatorios do Financeiro (p-115a) acompanha quem ve
   // o Financeiro. Quem nao ve custo continua vendo a aba, sem as colunas e
   // os modelos de custo (a tela e o backend cortam).
