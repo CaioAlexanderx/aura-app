@@ -152,4 +152,17 @@ describe("AutomaticasCard", () => {
     await act(async () => { await achar(t, "wa-auto-liga-aniversario").props.onPress(); });
     expect(tem(t, "wa-auto-aceite")).toBe(true);
   });
+
+  it("a frase de erro do servidor aparece no cartão da automática tocada, não no rodapé da divisão", async () => {
+    const a = auto({ erro: "As automáticas estão desligadas no servidor." }, resposta({ aceite_novidades_em: "2026-12-01T00:00:00Z" }));
+    const t = renderer.create(<AutomaticasCard auto={a} />);
+    expect(tem(t, "wa-auto-erro")).toBe(false);
+    expect(tem(t, "wa-auto-erro-venda_mais")).toBe(false);
+    await act(async () => { await achar(t, "wa-auto-liga-venda_mais").props.onPress(); });
+    expect(tem(t, "wa-auto-erro-venda_mais")).toBe(true);
+    expect(tem(t, "wa-auto-erro")).toBe(false);
+    await act(async () => { achar(t, "wa-auto-menos-aniversario").props.onPress(); });
+    expect(tem(t, "wa-auto-erro")).toBe(true);
+    expect(tem(t, "wa-auto-erro-venda_mais")).toBe(false);
+  });
 });

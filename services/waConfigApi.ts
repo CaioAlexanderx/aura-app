@@ -233,7 +233,7 @@ export const waConfigApi = {
 
   /** Só venda_mais e crediario_vender. O servidor refaz o corte; a lista da tela não é aceita. */
   enviarAgora: (companyId: string, key: WaAutoKey, segmento?: string): Promise<WaEnviarAgoraRaw> =>
-    request<WaEnviarAgoraRaw>(ROTAS.enviarAgora(companyId, key), { method: "POST", body: segmento ? { segmento } : {} }),
+    request<WaEnviarAgoraRaw>(ROTAS.enviarAgora(companyId, key), { method: "POST", body: segmento ? { segmento } : {}, retry: 0 }),
 
   getModelos: (companyId: string, automatica?: string): Promise<{ data?: WaModeloRaw[] | null }> =>
     request<{ data?: WaModeloRaw[] | null }>(ROTAS.modelos(companyId) + (automatica ? `?automatica=${automatica}` : "")),
@@ -243,8 +243,8 @@ export const waConfigApi = {
 
   /** 202 {modelo, versao}. 422 TEXTO_INVALIDO, 429 EDICAO_LIMITE_24H/30D, 409 EM_APROVACAO. */
   enviarModelo: (companyId: string, key: string, texto: string): Promise<{ modelo?: WaModeloRaw | null; versao?: number | null }> =>
-    request(ROTAS.modelo(companyId, key), { method: "PUT", body: { texto }, timeout: 20000 }),
+    request(ROTAS.modelo(companyId, key), { method: "PUT", body: { texto }, timeout: 20000, retry: 0 }),
 
   restaurarModelo: (companyId: string, key: string): Promise<WaModeloRaw> =>
-    request<WaModeloRaw>(ROTAS.modeloRestaurar(companyId, key), { method: "POST", body: {} }),
+    request<WaModeloRaw>(ROTAS.modeloRestaurar(companyId, key), { method: "POST", body: {}, retry: 0 }),
 };
