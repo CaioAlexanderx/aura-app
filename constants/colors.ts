@@ -64,8 +64,6 @@ var Dark = {
   green: "#34d399", greenD: "rgba(52,211,153,0.10)",
   red: "#f87171", redD: "rgba(248,113,113,0.10)",
   amber: "#fbbf24", amberD: "rgba(251,191,36,0.10)",
-  // Venda condicional (C13): cabide, azul-petroleo. Cor do selo tracejado e seu fundo.
-  condicional: "#22d3ee", condicionalD: "rgba(34,211,238,0.10)",
 } as const;
 
 // Light: contraste forte. bg da página em cinza-violáceo (#e6e4f0) faz cards
@@ -81,7 +79,6 @@ var Light = {
   green: "#059669", greenD: "rgba(5,150,105,0.08)",
   red: "#dc2626", redD: "rgba(220,38,38,0.06)",
   amber: "#d97706", amberD: "rgba(217,119,6,0.06)",
-  condicional: "#0e7490", condicionalD: "rgba(8,145,178,0.10)",
 } as const;
 
 export var Colors = IS_DARK ? { ...Dark } : { ...Light };
@@ -246,3 +243,35 @@ export var Stage = {
   okMetal: "#3f9d7a", okText: "#8fd3b4",
   peach: "#f0bf9a", peachInk: "#f6d9c2", peachD: "rgba(240,191,154,0.10)", peachLine: "rgba(240,191,154,0.45)",
 } as const;
+
+// ── Venda condicional (C5, 26/11/2026) ─────────────────────────
+// Cor de apoio azul-petróleo da condicional (mockup aprovado em 25/11,
+// condicional/notas.md, "Identidade"): longe do violeta da marca, do azul do
+// "reservado" do Pedido, do verde de "concluída" e do vermelho/âmbar de prazo.
+// Sempre com borda TRACEJADA no selo ("ainda não é venda"). O violeta segue
+// sendo só a ação principal.
+//   cd*  "Com a cliente" (selo, cartão "Com clientes agora", vazio)
+//   fc*  "Falta cobrar": violeta com borda e ícone âmbar
+//   bad*/warn*/ok*  selos Atrasada, Vence hoje e Concluída, nos tons do
+//        mockup (o red/amber/green do app ficam abaixo de AA em texto de
+//        12 px no tema claro; medido no mockup: pior 4,67)
+// Objeto próprio (como Stage), fora de Light/Dark: AuraColors é o formato de
+// Light, e paletas de fora (Studio, studioNotificationColors) não têm estas
+// chaves. Fonte única da condicional: o selo do C13 (SeloComClientes) lê daqui.
+var CondicionalLight = {
+  cd: "#0e7490", cdInk: "#155e75", cdBg: "rgba(8,145,178,0.10)", cdLine: "rgba(8,145,178,0.50)",
+  fcInk: "#5b21b6", fcBg: "rgba(124,58,237,0.09)", fcLine: "rgba(217,119,6,0.62)", fcIc: "#b45309",
+  badInk: "#b91c1c", badBg: "rgba(220,38,38,0.07)", badLine: "rgba(220,38,38,0.32)",
+  warnInk: "#92400e", warnBg: "rgba(217,119,6,0.10)", warnLine: "rgba(217,119,6,0.38)",
+  okInk: "#03664a", okBg: "rgba(5,150,105,0.10)", okLine: "rgba(5,150,105,0.32)",
+} as const;
+var CondicionalDark = {
+  cd: "#22d3ee", cdInk: "#67e8f9", cdBg: "rgba(34,211,238,0.10)", cdLine: "rgba(34,211,238,0.42)",
+  fcInk: "#c4b5fd", fcBg: "rgba(124,58,237,0.20)", fcLine: "rgba(251,191,36,0.55)", fcIc: "#fbbf24",
+  badInk: "#f87171", badBg: "rgba(248,113,113,0.10)", badLine: "rgba(248,113,113,0.35)",
+  warnInk: "#fbbf24", warnBg: "rgba(251,191,36,0.10)", warnLine: "rgba(251,191,36,0.35)",
+  okInk: "#34d399", okBg: "rgba(52,211,153,0.10)", okLine: "rgba(52,211,153,0.30)",
+} as const;
+export var CondicionalCores: { [K in keyof typeof CondicionalLight]: string } = IS_DARK ? { ...CondicionalDark } : { ...CondicionalLight };
+export var CondicionalCoresLight = CondicionalLight;
+export var CondicionalCoresDark = CondicionalDark;
