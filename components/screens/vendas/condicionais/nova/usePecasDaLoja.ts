@@ -1,0 +1,41 @@
+// ============================================================
+// AURA. — Nova condicional · as peças da loja escolhida (C6)
+//
+// GET /products da loja de onde as peças saem (no consolidado, a loja
+// escolhida antes do passo 1) e as variantes sob demanda, com o mesmo cache
+// do seletor de variante (utils/cacheDeVariacoes). Os campos de "com
+// clientes" e reserva vêm crus no produto (livre.ts).
+// ============================================================
+import { useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { companiesApi } from "@/services/api";
+import { guardarVariacoes, variacoesEmCache } from "@/utils/cacheDeVariacoes";
+import { produtosDaResposta, variantesDoProduto, type ProdutoDaBusca, type VarianteDaBusca } from "./busca";
+
+export function usePecasDaLoja(lojaId: string | null | undefined, ativo: boolean) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["condicional-pecas", lojaId],
+    queryFn: () => companiesApi.products(lojaId as string),
+    enabled: !!lojaId && ativo,
+    staleTime: 30000,
+    retry: 1,
+  });
+
+  const produtos: ProdutoDaBusca[] = useMemo(() => produtosDaResposta(data), [data]);
+
+  const variantesDe = useCallback(async (produto: ProdutoDaBusca): Promise<VarianteDaBusca[]> => {
+    if (!lojaId) return [];
+    // Sempre o servidor (o estoque é o de agora); o cache só guarda para o seletor do Caixa.
+    try {
+      const res = await companiesApi.variants(lojaId, produto.id);
+      const lista = res?.variants || [];
+      guardarVariacoes(lojaId, produto.id, lista);
+      return variantesDoProduto(produto, lista);
+    } catch {
+      const doCache = variacoesEmCache(lojaId, produto.id);
+      return doCache ? variantesDoProduto(produto, doCache) : [];
+    }
+  }, [lojaId]);
+
+  return { produtos, carregando: isLoading, variantesDe };
+}
