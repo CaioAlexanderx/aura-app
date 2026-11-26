@@ -45,6 +45,7 @@ import {
   escalaMaxima, livreDaArea, PASSO_DA_ROTACAO, ESCALA_LIVRE_MIN,
   type AjusteLivre,
 } from "@/components/studio/orcamentoVideo/arteLivre";
+import { areaDoLadoEmCm, resolucaoDaArte, avisoDeResolucao } from "@/components/studio/orcamentoVideo/resolucaoDaArte";
 import { PalcoDaPeca, type VistaDoPalco, type ArrasteNoPainel, type ToqueNoPainel, type ApiDoPalco } from "./PalcoDaPeca";
 import { Botao, Rotulo, type Tema } from "./ui";
 
@@ -466,6 +467,13 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
         ))}
       </View>
 
+      {emUso.map((l) => artes.imagens[l] ? (
+        <AvisoDeResolucao
+          key={l} tema={tema} lado={l} url={artes.imagens[l] as string}
+          area={areaDoLadoEmCm(cfg, l)} escala={ajusteDoLado(artes, l).escala}
+        />
+      ) : null)}
+
       {editavel && artes.imagens[ativoValido] ? (
         <AjusteDoLugar
           tema={tema} lado={ativoValido} artes={artes} onMudar={(n) => { mudar(n); virarPara(ativoValido); }}
@@ -501,6 +509,25 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
           </View>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * B3 (QA 26/11/2026): a arte pequena para a área avisa cm/DPI, como na
+ * vitrine. Só aviso, não bloqueia.
+ */
+function AvisoDeResolucao({ tema, lado, url, area, escala }: {
+  tema: Tema; lado: LadoDaArte; url: string; area: { w: number; h: number } | null; escala: number;
+}) {
+  const { t } = tema;
+  const px = useDimensoes(url);
+  const texto = avisoDeResolucao(resolucaoDaArte(px, area, escala), area);
+  if (!texto) return null;
+  return (
+    <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: t.warningSoft, borderRadius: 10, padding: 10 }} testID={`aviso-resolucao-${lado}`} accessibilityRole="alert">
+      <Icon name="alert" size={14} color={t.warningInk} />
+      <Text style={{ fontSize: 12, color: t.warningInk, flex: 1 }}>{ROTULO_DO_LADO[lado]}: {texto}</Text>
     </View>
   );
 }
@@ -671,6 +698,24 @@ function Xadrez({ altura, children }: { altura: number; children?: React.ReactNo
  * Altura ÷ largura da imagem (1 até saber). A posição livre usa para a
  * caixa da arte, o "Encaixar no painel" e o teto do tamanho.
  */
+function useDimensoes(url: string | null): { w: number; h: number } | null {
+  const [dim, setDim] = useState<{ url: string; w: number; h: number } | null>(null);
+  useEffect(() => {
+    if (!url) return;
+    let vivo = true;
+    try {
+      const getSize = (Image as any).getSize;
+      if (typeof getSize === "function") {
+        getSize(url, (w: number, h: number) => { if (vivo && w > 0 && h > 0) setDim({ url, w, h }); }, () => {});
+      }
+    } catch {
+      // Sem medida, sem aviso.
+    }
+    return () => { vivo = false; };
+  }, [url]);
+  return dim && dim.url === url ? { w: dim.w, h: dim.h } : null;
+}
+
 function useAspecto(url: string | null): number {
   const [asp, setAsp] = useState<{ url: string | null; a: number }>({ url: null, a: 1 });
   useEffect(() => {
