@@ -206,8 +206,9 @@ export const waConfigApi = {
     request<WaSaldoRaw>(ROTAS.saldo(companyId)),
 
   /** Preço e quantidade vêm do servidor. NUNCA cobra sozinho: devolve o link de pagamento. */
+  // retry: 0 — compra não se repete sozinha (nem em 429 nem em falha de rede).
   comprarPacote: (companyId: string, bucket: WaBucket): Promise<WaCompraPacoteRaw> =>
-    request<WaCompraPacoteRaw>(ROTAS.pacotes(companyId), { method: "POST", body: { bucket }, timeout: 20000 }),
+    request<WaCompraPacoteRaw>(ROTAS.pacotes(companyId), { method: "POST", body: { bucket }, timeout: 20000, retry: 0 }),
 
   /** Últimos 12 pacotes (para mostrar o que está aguardando pagamento). */
   listarPacotes: (companyId: string): Promise<{ data?: WaPacoteRaw[] | null }> =>

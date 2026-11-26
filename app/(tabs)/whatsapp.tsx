@@ -26,7 +26,7 @@
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
 import { router, Redirect } from "expo-router";
-import { empresaSandbox, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -62,27 +62,35 @@ type AbaReal = "conversas" | "config";
 
 // Seções da aba Configurações, na ordem em que aparecem. Cada uma é um bloco
 // próprio: acrescentar uma é acrescentar uma linha aqui + o bloco abaixo.
+//
+// `nova: true` = seção da tela nova de 26/11/2026 (medidor, Automáticas,
+// Aniversário, Venda+, Crediário, Editor). Até a liberação elas só aparecem
+// para a equipe Aura e para a empresa sandbox (whatsappOficialLiberadoPara):
+// a loja real conectada continua vendo Conexão, Cobranças e Templates.
 const SECOES_CONFIG = [
-  { key: "conexao", label: "Conexão" },
-  { key: "automaticas", label: "Automáticas" },
-  { key: "cobrancas", label: "Cobranças" },
-  { key: "templates", label: "Templates" },
+  { key: "conexao", label: "Conexão", nova: false },
+  { key: "automaticas", label: "Automáticas", nova: true },
+  { key: "cobrancas", label: "Cobranças", nova: false },
+  { key: "templates", label: "Templates", nova: false },
 ] as const;
 type SecaoKey = (typeof SECOES_CONFIG)[number]["key"];
 
 export default function WhatsAppScreen() {
   const [tab, setTab] = useState(0);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
-  const [secao, setSecao] = useState<SecaoKey>("conexao");
+  const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user, consolidatedView } = useAuthStore();
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
+  // Seções novas: só equipe Aura ou empresa sandbox, até a liberação.
+  const novas = whatsappOficialLiberadoPara(user, undefined, empresaSandbox(company, consolidatedView === true));
+  const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
   // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
-  const saldo = useWaSaldo(companyId, !demo && !consolidatedView);
-  const autoAtiva = !demo && !consolidatedView && secao === "automaticas";
+  const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
+  const autoAtiva = !demo && !consolidatedView && novas && secao === "automaticas";
   const auto = useWaAutomaticas(companyId, autoAtiva);
 
   // A entrada da reativação conta em cima da lista de clientes. Mesma
@@ -183,7 +191,7 @@ export default function WhatsAppScreen() {
         </View>
       ) : (
         <View style={{ gap: 14 }} testID="wa-varejo-real">
-          {consolidatedView ? (
+          {!novas ? null : consolidatedView ? (
             <View style={s.linkCard} testID="wa-varejo-escolha-loja">
               <Icon name="alert" size={14} color={Colors.violet3} />
               <Text style={s.linkTxt}>
@@ -203,7 +211,7 @@ export default function WhatsAppScreen() {
           {/* Seções de Configurações: uma de cada vez, cada uma num bloco
               próprio (SECOES_CONFIG). */}
           <View style={s.secoes} testID="wa-varejo-config-secoes">
-            {SECOES_CONFIG.map((sc) => (
+            {SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => (
               <Pressable
                 key={sc.key}
                 onPress={() => setSecao(sc.key)}
