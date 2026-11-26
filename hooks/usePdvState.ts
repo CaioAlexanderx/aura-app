@@ -332,7 +332,7 @@ export function usePdvState() {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale: rawNewSale,
-    setQuoteId,
+    setQuoteId, retomarGuardada,
     comanda: comandaNoCarrinho, setComanda,
     freteValor, setFreteValor, frete,
     entrega, setEntrega,
@@ -499,7 +499,10 @@ export function usePdvState() {
     rota: quoteRouteParams,
     companyId: company?.id,
     isDemo,
-    limpar: () => newSale(),
+    temItens: cart.length > 0,
+    limpar: () => newSale({ manterGuarda: true }),
+    retomar: retomarGuardada,
+    produtos: products as any,
     addToCart,
     selectCustomer,
     trocarDeLoja: switchCompany,
@@ -509,10 +512,10 @@ export function usePdvState() {
   /** Peça da condicional não muda no Caixa: avisa e não faz. */
   function avisarTravada(mensagem: string = TCOND.travado) { toast.info(mensagem); }
 
-  function newSale() {
+  function newSale(opts?: { manterGuarda?: boolean }) {
     lastSaleRef.current = null;
     matconReferral.clear();
-    rawNewSale();
+    rawNewSale(opts);
     setQuery("");
   }
 
@@ -784,7 +787,7 @@ export function usePdvState() {
   const qtyById = useMemo(() => {
     const m: Record<string, number> = {};
     for (const it of cart) {
-      const base = it.productId.split("__")[0];
+      const base = it.productId.split("__")[0].replace(/~c[0-9]+$/, "");
       m[base] = (m[base] || 0) + it.qty;
     }
     return m;
@@ -1012,6 +1015,12 @@ export function usePdvState() {
   }
 
   function handleFinalize() {
+    // C12: no modo condicional só vende com o contexto fixado na montagem; sem
+    // ele, uma venda comum cobraria de novo as peças da condicional.
+    if (cond.ativa && !cond.naVenda) {
+      toast.error(cond.aviso || TCOND.naoFinalizar);
+      return;
+    }
     if (caixaEnabled && !isAberto) {
       toast.error("Abra o caixa antes de finalizar a venda");
       setShowCaixaModal(true);
@@ -1334,7 +1343,7 @@ export function usePdvState() {
   // produto. Item sem unidade (scanner que não achou o produto local) chega
   // com undefined e cai no stepper de sempre.
   const displayItems: CartDisplayItem[] = cart.map(it => {
-    const base = it.productId.split("__")[0];
+    const base = it.productId.split("__")[0].replace(/~c[0-9]+$/, "");
     // Preço no cartão: a linha mostra, em cinza ao lado, o preço do OUTRO
     // método ("· cartão R$ 42,20"). Desligada, o objeto é o de sempre.
     // No dividido a linha já é o preço rateado desta venda (useCart) — não
@@ -1662,7 +1671,7 @@ export function usePdvState() {
     closeTroca: () => { setShowTroca(false); setValeTroca(null); },
     // C12: a faixa "Cobrando a condicional" (ativa=false: nada na tela).
     condicional: {
-      ativa: cond.ativa, travada: condTravada, estado: cond.estado, numero: cond.numero, cliente: cond.cliente, aviso: cond.aviso,
+      ativa: cond.ativa, travada: condTravada, naVenda: cond.naVenda, estado: cond.estado, numero: cond.numero, cliente: cond.cliente, aviso: cond.aviso,
       sair: cond.sair, voltarACondicional: cond.voltarACondicional, trocarDeLoja: cond.trocarDeLoja, tentarDeNovo: cond.tentarDeNovo,
     },
     // Pedido separado de venda (A1): o Novo pedido abre pelo Guardar.

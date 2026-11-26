@@ -34,6 +34,8 @@ export const TEXTOS_DO_CAIXA_CONDICIONAL = {
   encerrada: "Esta condicional já foi concluída e não muda mais.",
   cancelada: "Esta condicional foi cancelada e não muda mais.",
   semPecas: "Nenhuma peça desta condicional está esperando cobrança.",
+  vendaEmAndamento: "Há uma venda em andamento no Caixa. Termine ou limpe essa venda e volte à condicional.",
+  naoFinalizar: "Não dá para concluir: a condicional não está pronta para cobrar. Saia da condicional e abra de novo.",
   erroAoAbrir: "Não deu para abrir a condicional. Tente de novo.",
   tentarDeNovo: "Tentar de novo",
   vendida: "Venda registrada. A condicional foi atualizada.",

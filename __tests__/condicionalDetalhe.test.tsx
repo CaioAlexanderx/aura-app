@@ -392,6 +392,8 @@ describe("detalhe da condicional (C10)", () => {
     expect(onCobrar).toHaveBeenCalledTimes(1);
     expect(onCobrar.mock.calls[0][0].id).toBe("k1");
     expect(onCobrar.mock.calls[0][1]).toEqual(["a"]);
+    // salvar o que voltou não apaga o "Ficou" marcado na tela
+    expect(textos(r)).toContain("Ela leva 1 peça: R$ 189,90");
   });
 
   it("C12 · Cobrar no Caixa só com o que ficou: sem escrita, vai direto", async () => {

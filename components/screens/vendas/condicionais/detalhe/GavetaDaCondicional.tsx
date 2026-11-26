@@ -116,12 +116,17 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
     }
   }
 
+  /** Tira só as marcas que foram gravadas: os "Ficou" locais continuam. */
+  function tirarMarcas(ids: string[]) {
+    setMarcas((x) => { const n = { ...x }; ids.forEach((i) => { delete n[i]; }); return n; });
+  }
+
   async function salvarDevolucao() {
     if (!vivo) return;
     const feitas = marcasParaSalvar(vivo, marcas);
     if (!feitas.length) return;
     const okk = await executar(() => acoes.marcar(feitas), F.salvou);
-    if (okk) setMarcas({});
+    if (okk) tirarMarcas(feitas.map((x) => x.item_id));
   }
 
   /** C12: as peças que voltaram são gravadas antes (senão a condicional não
@@ -134,7 +139,7 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
     if (feitas.length) {
       const okk = await executar(() => acoes.marcar(feitas), F.salvou);
       if (!okk) return;
-      setMarcas({});
+      tirarMarcas(feitas.map((x) => x.item_id));
     }
     onCobrar(vivo, ids);
   }
@@ -146,7 +151,7 @@ export function GavetaDaCondicional({ linha, hoje, mostrarLoja, onClose, onCobra
     const okk = resumo.defeitos.length
       ? await executar(() => acoes.marcar(marcasParaSalvar(vivo, marcas)), F.encerrou)
       : await executar(() => acoes.tudoDevolvido(), F.encerrou);
-    if (okk) setMarcas({});
+    if (okk) tirarMarcas(marcasParaSalvar(vivo, marcas).map((x) => x.item_id));
   }
 
   async function aoBipar(code: string) {

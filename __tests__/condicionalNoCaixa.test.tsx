@@ -91,6 +91,7 @@ jest.mock("@/services/api", () => ({
 }));
 
 import { usePdvState } from "@/hooks/usePdvState";
+import { guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import {
   condicionalDaUrl, estadoDaCobranca, camposDaCondicionalNaVenda, rotaDoCaixaDaCondicional,
   rotaDeVoltaDaCondicional, idsParaCobrar, ehErroDaCondicional,
@@ -304,8 +305,85 @@ describe("Caixa aberto pela condicional (trava ligada)", () => {
     expect(st.condicional.estado).toEqual({ tipo: "bloqueada", mensagem: "Estas peças já foram cobradas na venda #9." });
     expect(st.condicional.aviso).toBe("Estas peças já foram cobradas na venda #9.");
     expect(carrinho()).toEqual([]);
+    // sem contexto fixado o Concluir não manda nada (nem venda comum)
     await act(async () => { st.handleFinalize(); });
-    expect(mockMutate.mock.calls.every((c) => !c[0].condicional_id)).toBe(true);
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(mockToast.error).toHaveBeenCalledWith("Estas peças já foram cobradas na venda #9.");
+  });
+
+  test("busca nova que falha ou volta bloqueada com o carrinho montado: o Concluir continua cobrando a condicional", async () => {
+    await montar(); await esperar();
+    // a busca agora diria "já cobrada" e depois falharia
+    const d: any = detalhe();
+    d.items[0].sale_id = "venda-9"; d.items[0].venda_numero = 9;
+    (globalThis as any).__detalhe = { condicional: d };
+    await montar(); await esperar();
+    (globalThis as any).__detalhe = undefined;
+    await montar(); await esperar();
+    expect(st.condicional.estado).toEqual({ tipo: "pronta" });
+    expect(st.condicional.naVenda).toEqual({ id: COND_ID, itemIds: [I1, I2, I3] });
+    await act(async () => { st.handleFinalize(); });
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate.mock.calls[0][0].condicional_id).toBe(COND_ID);
+    // depois de montado a busca fica desligada e não refaz ao focar a janela
+    const buscas = mockQueries.filter((q) => q.queryKey && q.queryKey[0] === "condicional-detalhe");
+    expect(buscas[buscas.length - 1].enabled).toBe(false);
+    expect(buscas.every((q) => q.refetchOnWindowFocus === false)).toBe(true);
+  });
+
+  test("mesmo produto+variante com preços diferentes: uma linha por preço, cada uma com o seu", async () => {
+    const d: any = detalhe();
+    d.items = [peca(I1, P2, null, "Brinco Argola", 59.9), peca(I2, P2, null, "Brinco Argola", 49.9), peca(I3, P2, null, "Brinco Argola", 59.9)];
+    (globalThis as any).__detalhe = { condicional: d };
+    await montar(); await esperar();
+    expect(carrinho()).toEqual([[P2, 2, 59.9], [P2 + "~c2", 1, 49.9]]);
+    await act(async () => { st.handleFinalize(); });
+    const corpo = mockMutate.mock.calls[0][0];
+    expect(corpo.items.map((i: any) => [i.product_id, i.quantity, i.unit_price])).toEqual([[P2, 2, 59.9], [P2, 1, 49.9]]);
+  });
+
+  test("leva unidade e 'sai em' do catálogo ao item", async () => {
+    (globalThis as any).__produtos = [{ ...CATALOGO[1], unit: "par", notaFiscal: "nfce" }, CATALOGO[0]];
+    await montar(); await esperar();
+    const it: any = (st.displayItems as any[]).find((i) => i.productId === P2);
+    expect(it.unit).toBe("par");
+  });
+
+  test("com venda guardada de 3 itens: entrar não apaga, Sair devolve os 3", async () => {
+    const itens = [1, 2, 3].map((n) => ({ productId: "g" + n, name: "G" + n, price: 10 * n, qty: 1, listPrice: 10 * n }));
+    guardarVenda("co-1", "u-1", { cart: itens, payment: "pix" });
+    await montar(); await esperar();
+    expect(st.condicional.estado).toEqual({ tipo: "pronta" });
+    expect(carrinho().map((c) => c[0])).toEqual([P1 + "__" + V1, P2]);
+    expect(recuperarVenda("co-1", "u-1")).not.toBeNull();
+    await act(async () => { st.condicional.sair(); });
+    await esperar();
+    expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", "g3"]);
+    expect(recuperarVenda("co-1", "u-1")).not.toBeNull();
+  });
+
+  test("com venda guardada de 3 itens: depois de concluir a condicional, Nova venda devolve os 3", async () => {
+    const itens = [1, 2, 3].map((n) => ({ productId: "g" + n, name: "G" + n, price: 10 * n, qty: 1, listPrice: 10 * n }));
+    guardarVenda("co-1", "u-1", { cart: itens, payment: "pix" });
+    await montar(); await esperar();
+    await act(async () => { st.handleFinalize(); });
+    await act(async () => { mockMutate.mock.calls[0][1].onSuccess({ sale: { id: "venda-1", sale_number: 12 } }); });
+    expect(recuperarVenda("co-1", "u-1")).not.toBeNull();
+    await act(async () => { st.newSale(); });
+    await esperar();
+    expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", "g3"]);
+  });
+
+  test("venda comum em andamento no carrinho: a condicional não se mistura com ela", async () => {
+    (globalThis as any).__params = {};
+    await montar(); await esperar();
+    await act(async () => { st.handleAddProduct(CATALOGO[1] as any); });
+    (globalThis as any).__params = { ...URL_COBRAR };
+    await montar(); await esperar();
+    expect(st.condicional.estado && st.condicional.estado.tipo).toBe("bloqueada");
+    expect(carrinho()).toEqual([[P2, 1, 999]]);
+    await act(async () => { st.handleFinalize(); });
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   test("loja do Caixa diferente da dona: avisa, não monta o carrinho, não busca na loja errada", async () => {
