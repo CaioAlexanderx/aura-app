@@ -42,9 +42,22 @@ export const WHATSAPP_OFICIAL_LIBERADO = false;
 export function whatsappOficialLiberadoPara(
   user: unknown,
   liberado: boolean = WHATSAPP_OFICIAL_LIBERADO,
+  sandbox: boolean = false,
 ): boolean {
   if (liberado === true) return true;
+  if (sandbox === true) return true;
   return ehEquipeAura(user);
+}
+
+/**
+ * 26/11/2026 — a empresa de teste (is_sandbox, a conta de QA da Nina) vê a
+ * tela, só para ler; conectar o número segue pelo fluxo de sempre. Vale
+ * para a empresa ATUAL da sessão: no consolidado (company null) a flag não
+ * conta.
+ */
+export function empresaSandbox(company: unknown, consolidado: boolean = false): boolean {
+  if (consolidado === true) return false;
+  return !!company && (company as any).is_sandbox === true;
 }
 
 /** Recorte do WaStatus que interessa aqui (aceita null: status não veio). */
@@ -67,8 +80,9 @@ export function whatsappOficialVisivel(
   status: WaStatusConexao | null | undefined,
   user: unknown,
   liberado: boolean = WHATSAPP_OFICIAL_LIBERADO,
+  sandbox: boolean = false,
 ): boolean {
-  if (whatsappOficialLiberadoPara(user, liberado)) return true;
+  if (whatsappOficialLiberadoPara(user, liberado, sandbox)) return true;
   return lojaJaConectada(status);
 }
 

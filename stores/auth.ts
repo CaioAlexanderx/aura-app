@@ -716,6 +716,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
           };
           // tq-86: datas do atraso só quando o backend manda (campo ausente =
           // backend anterior, e o muro mantém o comportamento de antes).
+          // 26/11/2026: empresa de teste (QA) — a trava do WhatsApp oficial lê.
+          if ("is_sandbox" in (cc as any)) newCompany.is_sandbox = (cc as any).is_sandbox === true;
           for (const k of ["billing_overdue_since", "billing_pause_screens_on", "billing_pause_caixa_on"] as const) {
             if (k in cc) newCompany[k] = (cc as any)[k] ?? null;
           }

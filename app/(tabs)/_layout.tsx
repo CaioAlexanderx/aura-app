@@ -16,7 +16,7 @@ import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisib
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
-import { MODULO_WHATSAPP_OFICIAL, whatsappOficialLiberadoPara } from "@/utils/whatsappOficialLiberado";
+import { MODULO_WHATSAPP_OFICIAL, empresaSandbox, whatsappOficialLiberadoPara } from "@/utils/whatsappOficialLiberado";
 import { personalizadosAtivo } from "@/utils/personalizados";
 import { usePersonalizadosLiberado } from "@/hooks/usePersonalizadosLiberado";
 import { useLojasComPersonalizados } from "@/hooks/useLojasComPersonalizados";
@@ -327,7 +327,7 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // menu até a Meta aprovar o app (utils/whatsappOficialLiberado). O
       // menu não tem o status da conexão à mão; a tela guarda a rota.
       // 26/11/2026 — a equipe Aura (isStaff, o is_staff do usuário) já vê.
-      if (item.mod === MODULO_WHATSAPP_OFICIAL && !whatsappOficialLiberadoPara({ is_staff: isStaff })) return false;
+      if (item.mod === MODULO_WHATSAPP_OFICIAL && !whatsappOficialLiberadoPara({ is_staff: isStaff }, undefined, empresaSandbox(useAuthStore.getState().company, useAuthStore.getState().consolidatedView))) return false;
       return !item.mod || visibleMods.has(item.mod);
     }),
   })).filter(section => section.i.length > 0);
