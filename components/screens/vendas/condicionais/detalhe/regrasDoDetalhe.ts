@@ -257,6 +257,9 @@ export function textoDoEvento(e: EventoDaCondicional, c: Pick<DetalheDaCondicion
     case "ainda_com_ela": return `${peca} voltou a ficar com ela${d ? " em " + d : ""}.`;
     case "nova_data": return `Nova data${e.dados?.para ? " para " + diaEMes(e.dados.para) : ""}${d ? ", marcada em " + d : ""}.`;
     case "peca_acrescentada": return `${e.dados?.product_name || "Uma peça"} acrescentada${quando}. Comprovante atualizado.`;
+    case "resolvida_voltou": return `${peca} voltou ao estoque${d ? " em " + d : ""}.`;
+    case "resolvida_baixa": return `Baixa de ${peca}${d ? " em " + d : ""}.`;
+    case "resolucao_desfeita": return `${peca} voltou para Peças para resolver${d ? " em " + d : ""}.`;
     case "encerrada": return `Condicional encerrada${d ? " em " + d : ""}.`;
     case "cancelada": return `Condicional cancelada${d ? " em " + d : ""}.`;
     default: return null;

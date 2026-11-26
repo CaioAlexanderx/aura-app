@@ -173,6 +173,8 @@ export function useDecidirCondicional(companyId: string | null | undefined, id: 
       qc.setQueryData(["condicional-detalhe", companyId, id], { condicional: resp.condicional });
     }
     qc.invalidateQueries({ queryKey: ["condicionais"] });
+    // C16: marcar "voltou com defeito" põe a peça em Peças para resolver.
+    qc.invalidateQueries({ queryKey: ["para-resolver"] });
     if (companyId && id) qc.invalidateQueries({ queryKey: ["condicional-detalhe", companyId, id] });
   }, [qc, companyId, id]);
 

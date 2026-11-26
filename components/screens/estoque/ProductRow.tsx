@@ -25,7 +25,7 @@ import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
 import { ReservaNaLinha } from "./ReservaNaLinha";
 import { reservadoDoProduto } from "@/utils/reservaDoPedido";
-import { comClientesDoProduto } from "@/utils/comClientes";
+import { comClientesDoProduto, paraResolverDoProduto } from "@/utils/comClientes";
 import { SeloDaLoja } from "./FiltroDeLoja";
 
 // 14/11/2026 (CP2b da revisão de cores): a tabela própria desta lista (24
@@ -165,7 +165,7 @@ export function ProductRow({
                   <Text style={s.lotesChipSeta}>{lotesAbertos ? "▴" : "▾"}</Text>
                 </Pressable>
               ) : null}
-              <ReservaNaLinha estoque={product.stock} reservado={reservadoDoProduto(product, reservaLiberada)} comClientes={comClientesDoProduto(product, comClientesLiberado)} testID={"estoque-reservado-" + product.id} />
+              <ReservaNaLinha estoque={product.stock} reservado={reservadoDoProduto(product, reservaLiberada)} comClientes={comClientesDoProduto(product, comClientesLiberado)} paraResolver={paraResolverDoProduto(product, comClientesLiberado)} testID={"estoque-reservado-" + product.id} />
             </View>
           )}
           {!consulta && <Text style={s.price}>{m(fmt(product.price))}</Text>}

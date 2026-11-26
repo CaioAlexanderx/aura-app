@@ -49,6 +49,8 @@ import { LembrarCondicional } from "./LembrarCondicional";
 import { GavetaDaCondicional } from "./detalhe/GavetaDaCondicional";
 import { useAuthStore } from "@/stores/auth";
 import { useNovaCondicional } from "./nova/useNovaCondicional";
+import { useParaResolver } from "@/hooks/useParaResolver";
+import { PecasParaResolver, TEXTOS_PARA_RESOLVER_DA_ABA as PR } from "./PecasParaResolver";
 
 export const TEXTOS_DAS_CONDICIONAIS = {
   aba: "Condicionais",
@@ -71,7 +73,8 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   const { width } = useWindowDimensions();
   const largo = width >= LARGURA_DA_TABELA;
   const celular = width < LARGURA_DO_CELULAR;
-  const [filtro, setFiltro] = useState<FiltroDasCondicionais>("em_aberto");
+  // C16: "resolver" é o quinto chip (Peças para resolver), só com N > 0.
+  const [filtro, setFiltro] = useState<FiltroDasCondicionais | "resolver">("em_aberto");
   const [texto, setTexto] = useState("");
   const [busca, setBusca] = useState("");
   const [loja, setLoja] = useState<string | null>(null);
@@ -102,7 +105,8 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
     return () => clearTimeout(t);
   }, [texto]);
 
-  const lista = useCondicionais(filtro, busca, { loja });
+  const lista = useCondicionais(filtro === "resolver" ? "em_aberto" : filtro, filtro === "resolver" ? "" : busca, { loja });
+  const paraResolver = useParaResolver();
   // "Em aberto" sem busca: os cartões Vencem hoje e Atrasadas (R$ e peças).
   // No padrão é a mesma consulta da lista (mesma chave, uma ida só).
   const base = useCondicionais("em_aberto", "", { loja });
@@ -115,7 +119,10 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   const hoje = lista.hoje || base.hoje || hojeEmSaoPaulo();
   const mostrarLoja = lista.consolidado && (todas.lojas > 1 || lista.lojas > 1);
   const contagem = base.contagem || lista.contagem;
-  const chips = chipsDasCondicionais(contagem);
+  const chips: Array<{ key: FiltroDasCondicionais | "resolver"; label: string; contagem: number }> = [
+    ...chipsDasCondicionais(contagem),
+    ...(paraResolver.total > 0 ? [{ key: "resolver" as const, label: PR.chip, contagem: paraResolver.total }] : []),
+  ];
   const nenhuma = !!contagem && (contagem.todas || 0) === 0 && !loja;
 
   if (lista.isLoading && !lista.carregou) {
@@ -233,7 +240,13 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
         </View>
       </View>
 
-      {!lista.condicionais.length ? (
+      {filtro === "resolver" ? (
+        <PecasParaResolver
+          pecas={paraResolver.pecas} hoje={hoje} carregando={!paraResolver.carregou && !paraResolver.error}
+          erro={!!paraResolver.error && !paraResolver.carregou} mostrarLoja={mostrarLoja}
+          onTentarDeNovo={() => paraResolver.refetch()} onVerCondicionais={() => setFiltro("em_aberto")}
+        />
+      ) : !lista.condicionais.length ? (
         <View style={s.semResultado} testID={busca ? "condicionais-sem-resultado-busca" : "condicionais-sem-resultado"}>
           <Text style={s.semResultadoTexto}>{busca ? F.semResultadoNaBusca : F.semResultadoNoChip}</Text>
         </View>
@@ -261,7 +274,8 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
 
       <LembrarCondicional linha={lembrar} onClose={() => setLembrar(null)} />
       {!!aberta && (
-        <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} onVerCondicional={abrirPeloId} />
+        <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} onVerCondicional={abrirPeloId}
+          onVerPecasParaResolver={() => { setAberta(null); setFiltro("resolver"); }} />
       )}
     </View>
   );

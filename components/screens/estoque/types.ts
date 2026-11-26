@@ -107,6 +107,9 @@ export type Product = {
   /** C13 (Venda condicional): peças com clientes (GET /products, só com a trava ligada). */
   outQty?: number;
   outByVariant?: Record<string, number>;
+  /** C16: peças para resolver (voltaram com defeito ou sem etiqueta; GET /products, só com a trava). */
+  resolverQty?: number;
+  resolverByVariant?: Record<string, number>;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];
