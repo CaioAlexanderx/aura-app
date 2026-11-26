@@ -35,6 +35,9 @@ jest.mock("@/components/screens/whatsapp/TabAutomacoes", () => ({ TabAutomacoes:
 jest.mock("@/components/screens/whatsapp/TabCampanhas", () => ({ TabCampanhas: () => null }));
 jest.mock("@/components/screens/whatsapp/TabConfig", () => ({ TabConfig: () => null }));
 
+jest.mock("@/hooks/useVisibleModules", () => ({ useVisibleModules: () => new Set<string>() }));
+jest.mock("@/components/screens/hub/HubView", () => ({ HubView: () => null }));
+
 var mockUser: any = null;
 jest.mock("@/stores/auth", () => ({
   useAuthStore: Object.assign(
