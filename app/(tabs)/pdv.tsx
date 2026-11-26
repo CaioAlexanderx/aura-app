@@ -159,7 +159,7 @@ function CaixaScreenInner() {
   const precisaVendedora = st.requiredHints.some(h => h.label === "Vendedora obrigatória");
   // Garantia de produto: caixa acima das modalidades, só com a OS ligada.
   const { settings: pdvSettingsGarantia } = usePdvSettings();
-  const warrantySlot = pdvSettingsGarantia.os_enabled === true && company?.id && cartProps.items.length > 0 ? (
+  const warrantySlot = pdvSettingsGarantia.os_enabled === true && company?.id && cartProps.items.length > 0 && !(st.condicional && st.condicional.ativa) ? (
     <WarrantyBox
       companyId={company.id}
       items={cartProps.items.map((i: any) => ({ key: i.productId, name: i.name, qty: i.qty }))}

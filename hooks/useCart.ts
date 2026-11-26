@@ -222,6 +222,12 @@ function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } 
   return { pid: cartKey.slice(0, idx), vid: cartKey.slice(idx + 2) };
 }
 
+/** C12: o "~cN" que separa linhas da condicional não sai do carrinho (NFC-e, garantia, tela final). */
+function semSufixoDaCondicional(itens: CartItem[]): CartItem[] {
+  if (!itens.some(function(i) { return /~c[0-9]+$/.test(i.productId); })) return itens;
+  return itens.map(function(i) { return { ...i, productId: i.productId.replace(/~c[0-9]+$/, "") }; });
+}
+
 function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
@@ -510,20 +516,21 @@ export function useCart(
   // chegar, até recuperar uma vez. Venda de outra empresa fica guardada.
   // Carrinho que já começou nesta página NUNCA é sobrescrito.
   const jaRecuperou = useRef(false);
-  useEffect(() => {
-    if (jaRecuperou.current || !podeRecuperar.current || demoRef.current || !companyId || !usuarioId) return;
-    if (vendaRef.current) return;
+  // Repõe a venda guardada (usada ao abrir, depois de Sair da condicional e, de forma
+  // síncrona, em newSale depois de uma venda da condicional). `extra` entra por cima.
+  function aplicarGuardada(extra: CartItem[]): boolean {
+    if (!companyId || !usuarioId) return false;
     const v = recuperarVenda<VendaGuardada>(companyId, usuarioId);
-    if (!v || !Array.isArray(v.cart)) return;
+    if (!v || !Array.isArray(v.cart)) return false;
     // Não confia no que veio do storage: item sem id, sem quantidade ou sem
     // preço válido fica de fora.
     const itens = v.cart.filter(function (i) {
       return !!i && typeof i.productId === "string" && i.productId !== ""
         && isFinite(i.qty) && i.qty > 0 && isFinite(i.price) && i.price >= 0;
     });
-    if (itens.length === 0) { apagarVendaGuardada(companyId, usuarioId); return; }
+    if (itens.length === 0) { apagarVendaGuardada(companyId, usuarioId); return false; }
     jaRecuperou.current = true;
-    setCart(itens);
+    setCart(extra.length ? itens.concat(extra) : itens);
     setRecuperada({ itens: itens });
     if (v.payment) setPayment(v.payment);
     setSelectedCustomerId(v.selectedCustomerId ?? null);
@@ -548,6 +555,12 @@ export function useCart(
     // tq-15: a venda restaurada continua com a chave dela (outra aba pode
     // estar com o mesmo carrinho). Guardada antes disso: fica a desta aba.
     if (typeof v.idempotencyKey === "string" && v.idempotencyKey) setChaveDaVenda(v.idempotencyKey);
+    return true;
+  }
+  useEffect(() => {
+    if (jaRecuperou.current || !podeRecuperar.current || demoRef.current || !companyId || !usuarioId) return;
+    if (vendaRef.current) return;
+    aplicarGuardada([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, usuarioId, retomada]);
 
@@ -1278,7 +1291,7 @@ export function useCart(
         total: conta.total,
         payment: primaryPayment,
         payments: paymentsSnapshot,
-        items: cartSnapshot,
+        items: semSufixoDaCondicional(cartSnapshot),
         date: new Date().toLocaleString("pt-BR"),
         // Cliente cadastrado na própria venda (frete sem cliente): o id vem
         // do servidor e o nome é o de quem recebe.
@@ -1414,7 +1427,9 @@ export function useCart(
     // QA 23/09/2026: não herda mais o dividido nem o método da venda
     // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
     voltarAoPagamentoInicial();
-    if (veioDaCond) retomarGuardada();
+    // C12: a venda guardada da lojista volta já, junto com o que foi lançado na espera;
+    // o que for bipado em seguida entra por cima (nada é sobrescrito pelo autosave).
+    if (veioDaCond && !aplicarGuardada(daEspera)) retomarGuardada();
   }
 
   return {

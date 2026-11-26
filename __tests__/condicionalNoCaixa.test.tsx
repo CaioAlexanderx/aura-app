@@ -340,6 +340,9 @@ describe("Caixa aberto pela condicional (trava ligada)", () => {
     await act(async () => { st.handleFinalize(); });
     const corpo = mockMutate.mock.calls[0][0];
     expect(corpo.items.map((i: any) => [i.product_id, i.quantity, i.unit_price])).toEqual([[P2, 2, 59.9], [P2, 1, 49.9]]);
+    // o sufixo não vaza para a tela final, a NFC-e nem a garantia: as duas linhas levam o UUID limpo
+    await act(async () => { mockMutate.mock.calls[0][1].onSuccess({ sale: { id: "venda-1", sale_number: 12 } }); });
+    expect((st.lastSale as any).items.map((i: any) => i.productId)).toEqual([P2, P2]);
   });
 
   test("leva unidade e 'sai em' do catálogo ao item", async () => {
@@ -372,6 +375,20 @@ describe("Caixa aberto pela condicional (trava ligada)", () => {
     await act(async () => { st.newSale(); });
     await esperar();
     expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", "g3"]);
+  });
+
+  test("a próxima venda começa pelo bipe na tela final: a guardada volta junto e o autosave não a perde", async () => {
+    const itens = [1, 2, 3].map((n) => ({ productId: "g" + n, name: "G" + n, price: 10 * n, qty: 1, listPrice: 10 * n }));
+    guardarVenda("co-1", "u-1", { cart: itens, payment: "pix" });
+    await montar(); await esperar();
+    await act(async () => { st.handleFinalize(); });
+    await act(async () => { mockMutate.mock.calls[0][1].onSuccess({ sale: { id: "venda-1", sale_number: 12 } }); });
+    // newSale e o item bipado no mesmo tique, como o abrirVendaNova do Caixa
+    await act(async () => { st.newSale(); st.handleAddProduct(CATALOGO[1] as any); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+    expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", "g3", P2]);
+    const guardada: any = recuperarVenda("co-1", "u-1");
+    expect(guardada.cart.map((i: any) => i.productId)).toEqual(["g1", "g2", "g3", P2]);
   });
 
   test("venda comum em andamento no carrinho: a condicional não se mistura com ela", async () => {
