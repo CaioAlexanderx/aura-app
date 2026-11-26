@@ -537,7 +537,7 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
 
         {/* Garantia de produto (extensão da OS): emite o que foi escolhido
             no PDV e oferece imprimir. Silencioso sem rascunho. */}
-        {company?.id && (
+        {company?.id && !sale.daCondicional && (
           <WarrantySaleActions companyId={company.id} saleId={sale.id} saleKeys={(sale.items || []).map((i: any) => i.productId)} />
         )}
 

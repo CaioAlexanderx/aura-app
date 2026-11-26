@@ -143,6 +143,8 @@ export type ControleDaCondicional = {
 
 export type SaleResult = {
   id: string;
+  /** C12: venda que cobrou uma condicional (sem garantia de rascunho antigo). */
+  daCondicional?: boolean;
   // 01/09/2026: sequencial legivel por empresa que o backend passou a devolver
   // em body.sale.sale_number. SO EXIBICAO (recibo) — `id` continua sendo a
   // chave de toda rota. null/undefined em venda antiga ou fallback offline.
@@ -348,6 +350,9 @@ export function useCart(
 
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
+  // O cupom de agora, lido por quem roda no mesmo tique de um setCouponApplied (venda guardada reposta + bipe).
+  const couponRef = useRef(couponApplied);
+  couponRef.current = couponApplied;
   // Preço no cartão: a REGRA do cupom (percent/fixed + valor), vinda do
   // validate. Com ela o cupom em % vale sobre o preço do método escolhido;
   // sem ela (ou opção desligada) vale o `discount` de sempre, fixo.
@@ -540,6 +545,7 @@ export function useCart(
     setSelectedEmployeeName(v.selectedEmployeeName ?? null);
     setSellerName(v.sellerName || "");
     setCouponCode(v.couponCode || "");
+    couponRef.current = v.couponApplied ?? null;
     setCouponApplied(v.couponApplied ?? null);
     setCouponRule(v.couponRule ?? null);
     setDiscountType(v.discountType === "R$" ? "R$" : "%");
@@ -921,7 +927,7 @@ export function useCart(
     setCart(juntar);
     // 17/11/2026 (p-152): o primeiro item marca o começo do atendimento.
     tempos.aoAdicionarItem();
-    if (couponApplied) setCouponApplied(null);
+    if (couponRef.current) { couponRef.current = null; setCouponApplied(null); }
   }
 
   // 22/09/2026 (Matcon M0): `qty` pode chegar fracionada (12,5 m²) vinda do
@@ -1282,11 +1288,13 @@ export function useCart(
       contaLocal = { ...contaLocal, subtotal: r2(contaLocal.subtotal + frete), total: r2(contaLocal.total + frete) };
     }
 
+    var daCondicional = !!(opcoes.condicional && opcoes.condicional.current && opcoes.condicional.current.naVenda);
     function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any, matcon?: any): SaleResult {
       // Com a resposta do servidor, vale o que ele gravou.
       var conta = contaComOServidor(contaLocal, venda);
       return {
         id: String(saleId),
+        ...(daCondicional ? { daCondicional: true } : {}),
         saleNumber: saleNumber ?? null,
         total: conta.total,
         payment: primaryPayment,

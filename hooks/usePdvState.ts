@@ -1393,7 +1393,7 @@ export function usePdvState() {
   // telefone) — senão a venda sairia e a garantia não, e o aviso viria tarde.
   const warrantyDraft = useWarrantyDraft();
   const warrantyItems = Object.keys(diasValidos(warrantyDraft.days, cart.map(i => i.productId)));
-  const warrantyActive = pdvSettings.os_enabled === true && warrantyDraft.on && warrantyItems.length > 0;
+  const warrantyActive = pdvSettings.os_enabled === true && warrantyDraft.on && warrantyItems.length > 0 && !cond.ativa;
   const warrantyCheck = useQuery({
     queryKey: ["warranty-customer-check", company?.id, selectedCustomerId],
     queryFn: () => warrantiesApi.customerCheck(company!.id, selectedCustomerId as string),
