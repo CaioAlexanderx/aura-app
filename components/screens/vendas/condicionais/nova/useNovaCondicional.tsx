@@ -18,7 +18,7 @@ import type { CondicionalGuardada } from "./api";
 
 export function useNovaCondicional(opts: {
   onCriada?: (c: CondicionalGuardada) => void;
-  onVerCondicional?: (condicionalId: string) => void;
+  onVerCondicional?: (condicionalId: string, companyId?: string | null) => void;
 } = {}) {
   const [aberto, setAberto] = useState(false);
   const abrir = useCallback(() => setAberto(true), []);
@@ -28,7 +28,7 @@ export function useNovaCondicional(opts: {
       visible={aberto}
       onClose={fechar}
       onCriada={(c) => opts.onCriada?.(c)}
-      onVerCondicional={opts.onVerCondicional ? (id) => { setAberto(false); opts.onVerCondicional?.(id); } : undefined}
+      onVerCondicional={opts.onVerCondicional ? (id, lojaId) => { setAberto(false); opts.onVerCondicional?.(id, lojaId); } : undefined}
     />
   );
   return { aberto, abrir, fechar, modal };

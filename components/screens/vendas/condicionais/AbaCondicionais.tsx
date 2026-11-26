@@ -42,11 +42,12 @@ import { normalizeBrPhone } from "@/utils/whatsapp";
 import { useCondicionais, type FiltroDasCondicionais, type LinhaDaCondicional } from "@/hooks/useCondicionais";
 import {
   TEXTOS_DA_LISTA as L, TEXTOS_FORA_DO_MOCKUP as F, chipsDasCondicionais, mostraParcial, prazoNaTabela,
-  prazoNoCartao, seloDaSituacao, somaDaSituacao, subDaLinha, subDoTotalizador, valorDaLinha,
+  prazoNoCartao, seloDaSituacao, totalDoCartao, subDaLinha, subDoTotalizador, valorDaLinha,
   type Prazo, type TomDaSituacao,
 } from "./regrasDasCondicionais";
 import { LembrarCondicional } from "./LembrarCondicional";
 import { GavetaDaCondicional } from "./detalhe/GavetaDaCondicional";
+import { useAuthStore } from "@/stores/auth";
 import { useNovaCondicional } from "./nova/useNovaCondicional";
 
 export const TEXTOS_DAS_CONDICIONAIS = {
@@ -78,10 +79,21 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   // C10: a condicional aberta na gaveta de detalhe e decisão.
   const [aberta, setAberta] = useState<LinhaDaCondicional | null>(null);
   const onAbrir = (c: LinhaDaCondicional) => { setAberta(c); if (aoAbrir) aoAbrir(c); };
+  const abrirPeloId = (id: string, lojaId?: string | null) => {
+    setAberta({
+      id, company_id: lojaId || companyDoAuth || "", company_name: null, numero: 0, numero_exibicao: "", status: "aberta", situacao: "com_cliente",
+      parcial: false, dias_de_atraso: 0, customer_id: null, customer_name: null, customer_phone: null, seller_name: null, due_date: null, notes: null,
+      pecas: 0, pecas_com_cliente: 0, pecas_ficou: 0, pecas_a_cobrar: 0, pecas_voltou: 0, valor_total: 0, valor_com_cliente: 0, valor_a_cobrar: 0,
+      primeira_peca: null, created_at: "", closed_at: null, cancelled_at: null,
+    });
+  };
   // "Nova condicional" (C6/C7): ao guardar, a lista, o totalizador e o número da aba recarregam.
   const qc = useQueryClient();
+  const companyDoAuth = (useAuthStore() as any).company?.id as string | undefined;
   const nova = useNovaCondicional({
     onCriada: () => { qc.invalidateQueries({ queryKey: ["condicionais"] }); },
+    // "Ver a C-0029": a gaveta abre pelo id (o detalhe busca por ele, não precisa da linha da lista).
+    onVerCondicional: (id, lojaId) => abrirPeloId(id, lojaId),
   });
 
   // A busca sai 300 ms depois da última tecla (uma ida ao servidor, não uma por letra).
@@ -146,8 +158,10 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   }
 
   const totalizador = base.totalizador || lista.totalizador;
-  const hojeSoma = somaDaSituacao(base.condicionais, "vence_hoje");
-  const atrasadasSoma = somaDaSituacao(base.condicionais, "atrasada");
+  // C18: os cartões leem `totais` do backend (todas as abertas); sem ele, a soma das linhas.
+  const hojeSoma = totalDoCartao(base.totais || lista.totais, "vence_hoje", base.condicionais);
+  const atrasadasSoma = totalDoCartao(base.totais || lista.totais, "atrasadas", base.condicionais);
+  const cobrarSoma = totalDoCartao(base.totais || lista.totais, "a_cobrar", base.condicionais);
   const porEmpresa = loja ? [] : (base.porEmpresa.length ? base.porEmpresa : lista.porEmpresa);
 
   return (
@@ -177,6 +191,13 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
             <Text style={s.kpiRotulo}>{L.kpiAtrasadas}</Text>
             <Text style={[s.kpiValor, { color: CD.badInk }]}>{String(contagem?.atrasadas || 0)}</Text>
             {!!atrasadasSoma.texto && <Text style={s.kpiSub}>{atrasadasSoma.texto}</Text>}
+          </View>
+        )}
+        {!celular && cobrarSoma.pecas > 0 && (
+          <View style={s.kpi} testID="kpi-falta-cobrar">
+            <Text style={s.kpiRotulo}>{L.faltaCobrar}</Text>
+            <Text style={[s.kpiValor, { color: CD.fcInk }]}>{brl(cobrarSoma.valor)}</Text>
+            <Text style={s.kpiSub}>{cobrarSoma.texto}</Text>
           </View>
         )}
       </View>
@@ -240,7 +261,7 @@ export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
 
       <LembrarCondicional linha={lembrar} onClose={() => setLembrar(null)} />
       {!!aberta && (
-        <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} />
+        <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} onVerCondicional={abrirPeloId} />
       )}
     </View>
   );

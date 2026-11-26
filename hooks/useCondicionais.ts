@@ -57,12 +57,26 @@ export type LinhaDaCondicional = {
   valor_com_cliente: number;
   valor_a_cobrar: number;
   primeira_peca: string | null;
+  // C18 (Aura-backend#1116). Ausentes no backend antigo: a tela cai nos campos acima.
+  resumo?: { com_cliente: number; voltaram: number; ficaram: number; a_cobrar: number; valor_com_cliente: number; valor_a_cobrar: number };
+  /** Até 2, na ordem: com a cliente, ficou, voltou. */
+  primeiras_pecas?: Array<{ nome: string; cor?: string | null; tamanho?: string | null }>;
+  outras_pecas?: number;
+  /** Só concluída com venda. */
+  venda?: { numero: string | number; valor: number } | null;
   created_at: string;
   closed_at: string | null;
   cancelled_at: string | null;
 };
 
 export type TotalizadorDasCondicionais = { valor: number; pecas: number; clientes: number; texto: string };
+
+/** C18: totais dos cartões do topo, de TODAS as abertas (sem depender de página nem de filtro). */
+export type TotaisDasCondicionais = {
+  vence_hoje: { valor: number; pecas: number };
+  atrasadas: { valor: number; pecas: number };
+  a_cobrar: { valor: number; pecas: number };
+};
 
 export type ContagemDasCondicionais = Record<FiltroDasCondicionais, number>;
 
@@ -80,6 +94,7 @@ export type RespostaDasCondicionais = {
   hoje: string;
   totalizador: TotalizadorDasCondicionais;
   valor_a_cobrar: number;
+  totais?: TotaisDasCondicionais;
   counts: ContagemDasCondicionais;
   pagination: { page: number; limit: number; total: number; pages: number };
   por_empresa?: NumerosDaLojaCondicional[];
@@ -144,6 +159,7 @@ export function useCondicionais(
     condicionais: data?.condicionais || [],
     totalizador: data?.totalizador || null,
     valorACobrar: data?.valor_a_cobrar || 0,
+    totais: data?.totais || null,
     contagem: data?.counts || null,
     porEmpresa: data?.por_empresa || [],
     lojas: data?.company_count || 1,

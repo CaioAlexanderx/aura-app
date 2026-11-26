@@ -36,6 +36,10 @@ jest.mock("@/components/ScannerInput", () => {
   return { ScannerInput: R.forwardRef((p: any, _r: any) => { mockOnScan = p.onScan; return R.createElement("ScannerInput", { testID: p.testID }); }) };
 });
 jest.mock("@/services/api", () => ({ request: (...a: any[]) => mockRequest(...a) }));
+const mockBrincoD = { id: "p-brinco", name: "Brinco Argola Luz", code: "BAL", barcode: "111", variantBarcodes: [], coresDasVariantes: [], preco: 69.9, price: 69.9, emPromocao: false, precoEfetivo: null, estoque: 2, temVariantes: false, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {}, resolverTotal: 0, resolverPorVariante: {} } };
+jest.mock("@/components/screens/vendas/condicionais/nova/usePecasDaLoja", () => ({
+  usePecasDaLoja: () => ({ produtos: [mockBrincoD], carregando: false, variantesDe: async () => [], acharNoServidor: async () => null }),
+}));
 jest.mock("@/services/pdvApi", () => ({ pdvApi: { scan: (...a: any[]) => mockScan(...a) } }));
 jest.mock("@/services/imprimirCondicional", () => ({ imprimirComprovanteDaCondicional: jest.fn(() => Promise.resolve({ ok: true })) }));
 jest.mock("@/stores/auth", () => ({
@@ -303,6 +307,58 @@ describe("detalhe da condicional (C10)", () => {
     expect(existe(r, "cond-nova-data-abrir")).toBe(false);
     expect(existe(r, "cond-cancelar")).toBe(false);
     expect(existe(r, "cond-cobrar")).toBe(false);
+  });
+
+  it("C5b · Acrescentar peça: escolhe pelo passo de peças e manda POST /itens com Idempotency-Key", async () => {
+    const { r } = await montar();
+    await tocar(r, "cond-acrescentar-abrir");
+    expect(existe(r, "cond-acrescentar")).toBe(true);
+    await act(async () => { await mockOnScan!({ code: "111" }); });
+    expect(textos(r)).toContain("Brinco Argola Luz");
+    responder(detalhe([...TRES(), peca("d", "Brinco Argola Luz", 69.9)]));
+    await tocar(r, "cond-acrescentar-confirmar");
+    const [url, opts] = escritas()[0];
+    expect(url).toBe("/companies/c1/condicionais/k1/itens");
+    expect(opts.method).toBe("POST");
+    expect(opts.body).toEqual({ items: [{ product_id: "p-brinco" }] });
+    expect(typeof opts.headers["Idempotency-Key"]).toBe("string");
+    expect(existe(r, "cond-acrescentar")).toBe(false);
+    expect(mockToastSuccess).toHaveBeenCalledWith("Peça acrescentada.");
+  });
+
+  it("C5b · Acrescentar peça: aviso de quem vende sem estoque vem do servidor", async () => {
+    const { r } = await montar();
+    await tocar(r, "cond-acrescentar-abrir");
+    await act(async () => { await mockOnScan!({ code: "111" }); });
+    mockEscrita = () => ({ condicional: mockDetalhe, avisos: [{ mensagem: "Sem unidade livre. Entra mesmo assim porque sua loja vende sem estoque." }] });
+    await tocar(r, "cond-acrescentar-confirmar");
+    expect(textos(r)).toContain("Sem unidade livre. Entra mesmo assim porque sua loja vende sem estoque.");
+  });
+
+  it("C5b · Acrescentar peça: 409 mostra a condicional que segura a peça, com 'Ver a C-0029'", async () => {
+    const ver = jest.fn();
+    const { r } = await montar({ onVerCondicional: ver });
+    await tocar(r, "cond-acrescentar-abrir");
+    await act(async () => { await mockOnScan!({ code: "111" }); });
+    mockEscrita = () => {
+      throw Object.assign(new Error("x"), { status: 409, data: { code: "COND_SEM_SALDO", faltas: [{ product_id: "p-brinco", variant_id: null, nome: "Brinco Argola Luz", condicionais: [{ id: "k29", numero_exibicao: "C-0029", customer_name: "Tainá Moraes" }] }] } });
+    };
+    await tocar(r, "cond-acrescentar-confirmar");
+    expect(textos(r)).toContain("C-0029");
+    expect(textos(r)).toContain("Tainá Moraes");
+    await tocar(r, "nova-falta-ver");
+    expect(ver).toHaveBeenCalledWith("k29", "c1");
+  });
+
+  it("C5b · peça já cobrada: mostra a venda quando o backend traz venda_numero, senão só 'já foi cobrada'", async () => {
+    mockDetalhe = detalhe([
+      peca("j", "Jaqueta Jeans", 259.8, { situacao: "ficou", sale_id: "s1", venda_numero: 4812, decided_at: "2026-11-24T15:00:00Z" }),
+      peca("k", "Cinto", 59.9, { situacao: "ficou", sale_id: "s2", decided_at: "2026-11-24T15:00:00Z" }),
+    ], { situacao: "concluida", status: "encerrada" });
+    const { r } = await montar();
+    const t = textos(r);
+    expect(t).toContain("Ficou · já foi cobrada na venda #4812 em 24/11");
+    expect(t).toContain("Ficou · já foi cobrada em 24/11");
   });
 
   it("cancelar: pede confirmação e manda POST /cancelar", async () => {

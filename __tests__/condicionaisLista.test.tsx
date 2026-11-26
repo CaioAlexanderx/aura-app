@@ -14,6 +14,10 @@
 //   7. vazio, erro com "Tentar de novo", carregando, sem resultado na busca;
 //   8. celular: cartões, só o cartão "Com clientes agora".
 // ============================================================
+jest.mock("@/components/screens/vendas/condicionais/nova/useNovaCondicional", () => {
+  const real = jest.requireActual("@/components/screens/vendas/condicionais/nova/useNovaCondicional");
+  return { useNovaCondicional: (o: any) => { mockNovaOpts = o; return real.useNovaCondicional(o); } };
+});
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -24,6 +28,7 @@ let mockConsolidado = false;
 const mockRequest = jest.fn();
 const mockOpenWhatsApp = jest.fn((..._a: any[]) => true);
 const mockToastInfo = jest.fn();
+let mockNovaOpts: any = null;
 
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
@@ -58,7 +63,7 @@ jest.mock("react-native", () => {
 });
 
 import { AbaCondicionais } from "@/components/screens/vendas/condicionais/AbaCondicionais";
-import { textoDoLembrete } from "@/components/screens/vendas/condicionais/regrasDasCondicionais";
+import { textoDoLembrete, pecasDaCondicional, valorDaLinha, totalDoCartao } from "@/components/screens/vendas/condicionais/regrasDasCondicionais";
 import { parametrosDaLista } from "@/hooks/useCondicionais";
 import { CondicionalCoresLight, CondicionalCoresDark } from "@/constants/colors";
 
@@ -279,6 +284,48 @@ describe("Vendas › Condicionais: lista", () => {
     expect(tem(tree, "condicionais-nova")).toBe(true);
     expect(t).not.toContain("Decidir");
     expect(t).not.toContain("Cobrar no Caixa");
+  });
+
+  it("C18: dois nomes e 'e mais N'; parcial com a peça que segue com ela; concluída com venda; fallback sem os campos novos", () => {
+    const quatro = linha({ pecas: 4, primeiras_pecas: [{ nome: "Calça Wide Lara" }, { nome: "Saia Plissada Íris" }], outras_pecas: 2 });
+    expect(pecasDaCondicional(quatro)).toBe("4 peças: Calça Wide Lara, Saia Plissada Íris e mais 2");
+    const parcial = linha({
+      parcial: true, pecas: 3, pecas_com_cliente: 1, pecas_voltou: 2,
+      resumo: { com_cliente: 1, voltaram: 2, ficaram: 0, a_cobrar: 0, valor_com_cliente: 149.9, valor_a_cobrar: 0 },
+      primeiras_pecas: [{ nome: "Saia Plissada Íris" }, { nome: "Blusa Alice" }], outras_pecas: 1,
+    });
+    expect(pecasDaCondicional(parcial)).toBe("1 peça com ela: Saia Plissada Íris · 2 já voltaram");
+    const concluida = linha({
+      situacao: "concluida", status: "encerrada", pecas: 2, pecas_ficou: 1, pecas_com_cliente: 0, valor_com_cliente: 0,
+      resumo: { com_cliente: 0, voltaram: 1, ficaram: 1, a_cobrar: 0, valor_com_cliente: 0, valor_a_cobrar: 0 },
+      venda: { numero: 4812, valor: 259.8 },
+    });
+    expect(pecasDaCondicional(concluida)).toBe("Ficou 1 de 2 peças · venda #4812");
+    expect(valorDaLinha(concluida)).toBe(259.8);
+    expect(valorDaLinha({ ...concluida, venda: null })).toBe(0);
+    // Backend antigo: a frase de antes.
+    expect(pecasDaCondicional(linha({ pecas: 3 }))).toBe("3 peças: Vestido Midi Lívia e mais 2");
+  });
+
+  it("C18: os cartões leem `totais` do backend, não a soma das linhas", async () => {
+    const totais = { vence_hoje: { valor: 1000, pecas: 7 }, atrasadas: { valor: 2000, pecas: 9 }, a_cobrar: { valor: 259.8, pecas: 1 } };
+    mockRequest.mockImplementation(() => Promise.resolve(resposta({ totais })));
+    const tree = await montar();
+    const t = textos(tree);
+    expect(t).toContain("R$ 1.000,00 em 7 peças");
+    expect(t).toContain("R$ 2.000,00 em 9 peças");
+    expect(textoDe(um(tree, "kpi-falta-cobrar"))).toContain("R$ 259,80");
+    // Sem `totais` (backend antigo) vale a soma das linhas.
+    expect(totalDoCartao(null, "vence_hoje", [HOJE_LINHA]).texto).toBe("R$ 259,80 em 2 peças");
+  });
+
+  it("C5b: 'Ver a condicional' abre a gaveta pelo id (o detalhe busca por ele)", async () => {
+    const tree = await montar();
+    mockRequest.mockClear();
+    await act(async () => { mockNovaOpts.onVerCondicional("k-77", "comp-1"); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockRequest.mock.calls.some((c) => c[0] === "/companies/comp-1/condicionais/k-77")).toBe(true);
+    expect(tree).toBeTruthy();
   });
 
   it("5b. o botão Nova condicional abre o wizard (cliente primeiro)", async () => {
