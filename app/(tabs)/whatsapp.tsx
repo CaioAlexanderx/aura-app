@@ -26,7 +26,7 @@
 import { useState, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
 import { router, Redirect } from "expo-router";
-import { empresaSandbox, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
+import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -45,12 +45,18 @@ import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
 // Meta, custa mais e exige consentimento declarado. A declaração mora na
 // aba Conexão porque é uma propriedade do NÚMERO, não de uma rotina.
 import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
-import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
-import { useCustomers } from "@/hooks/useCustomers";
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { useWaSaldo } from "@/hooks/useWaSaldo";
+import { useWaAutomaticas } from "@/hooks/useWaAutomaticas";
+import { AutomaticasCard } from "@/components/whatsapp/AutomaticasCard";
+import { AniversarioConfig } from "@/components/whatsapp/AniversarioConfig";
+import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
+import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
+import type { WaAutoKey } from "@/services/waConfigApi";
+import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -58,29 +64,41 @@ type AbaReal = "conversas" | "config";
 
 // Seções da aba Configurações, na ordem em que aparecem. Cada uma é um bloco
 // próprio: acrescentar uma é acrescentar uma linha aqui + o bloco abaixo.
+//
+// `nova: true` = seção da tela nova de 26/11/2026 (medidor, Automáticas,
+// Aniversário, Venda+, Crediário, Editor). Até a liberação elas só aparecem
+// para a equipe Aura e para a empresa sandbox (whatsappOficialLiberadoPara):
+// a loja real conectada continua vendo Conexão, Cobranças e Templates.
 const SECOES_CONFIG = [
-  { key: "conexao", label: "Conexão" },
-  { key: "cobrancas", label: "Cobranças" },
-  { key: "templates", label: "Templates" },
+  { key: "conexao", label: "Conexão", nova: false },
+  { key: "automaticas", label: "Automáticas", nova: true },
+  { key: "aniversario", label: "Aniversário", nova: true },
+  { key: "venda_mais", label: "Venda+", nova: true },
+  { key: "crediario", label: "Crediário", nova: true },
+  { key: "cobrancas", label: "Cobranças", nova: false },
+  { key: "templates", label: "Templates", nova: false },
 ] as const;
 type SecaoKey = (typeof SECOES_CONFIG)[number]["key"];
 
 export default function WhatsAppScreen() {
   const [tab, setTab] = useState(0);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
-  const [secao, setSecao] = useState<SecaoKey>("conexao");
+  const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user, consolidatedView } = useAuthStore();
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
-
-  // A entrada da reativação conta em cima da lista de clientes. Mesma
-  // queryKey do hook da tela de Clientes (react-query), então isto é
-  // cache compartilhado, não uma chamada nova — e no consolidado a
-  // lista já vem de todas as lojas (MULTICNPJ).
-  const clientes = useCustomers();
+  // Seções novas: só equipe Aura ou empresa sandbox, até a liberação.
+  const novas = whatsappOficialLiberadoPara(user, undefined, empresaSandbox(company, consolidatedView === true));
+  const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
+  // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
+  const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
+  // As automáticas (divisão, liga/desliga, escolhas) alimentam as 4 seções.
+  const autoAtiva = !demo && !consolidatedView && novas && ["automaticas", "aniversario", "venda_mais", "crediario"].includes(secao);
+  const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
+  const auto = useWaAutomaticas(companyId, autoAtiva);
 
   // A maquete só aparece no modo demonstração; o hook dela já não busca
   // nada em company real (queries com enabled: !isDemo).
@@ -174,10 +192,27 @@ export default function WhatsAppScreen() {
         </View>
       ) : (
         <View style={{ gap: 14 }} testID="wa-varejo-real">
+          {!novas ? null : consolidatedView ? (
+            <View style={s.linkCard} testID="wa-varejo-escolha-loja">
+              <Icon name="alert" size={14} color={Colors.violet3} />
+              <Text style={s.linkTxt}>
+                As mensagens e as automáticas do WhatsApp são por loja. Saia da visão consolidada e escolha a loja.
+              </Text>
+            </View>
+          ) : (
+            <MedidorSaldoCard
+              companyId={companyId}
+              saldo={saldo.saldo}
+              carregando={saldo.carregando}
+              falhou={saldo.falhou}
+              status={wa.status}
+              onRetry={saldo.recarregar}
+            />
+          )}
           {/* Seções de Configurações: uma de cada vez, cada uma num bloco
               próprio (SECOES_CONFIG). */}
           <View style={s.secoes} testID="wa-varejo-config-secoes">
-            {SECOES_CONFIG.map((sc) => (
+            {SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => (
               <Pressable
                 key={sc.key}
                 onPress={() => setSecao(sc.key)}
@@ -216,19 +251,30 @@ export default function WhatsAppScreen() {
                   O envio automático das cobranças liga na régua, em Configurações do Crediário.
                 </Text>
               </Pressable>
-              {/* Fase 0 (I0.2): era um link que só dizia ONDE ficava a
-                  reativação. Agora diz QUANTOS clientes sumiram e quanto
-                  eles já gastaram, com o corte de dias escolhido aqui —
-                  mesma régua e mesmo bloco da aba Retenção de Clientes,
-                  na variante compacta. */}
-              <ReativacaoEntrada
-                customers={clientes.customers}
-                plan={clientes.plan}
-                carregando={clientes.isLoading}
-                companyCount={clientes.consolidatedView ? clientes.companyCount : 1}
-                compacto
-                idBase="wa-varejo-ir-para-reativacao"
-              />
+            </View>
+          )}
+
+          {secao === "automaticas" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-automaticas">
+              <AutomaticasCard auto={auto} onAjustar={(k: WaAutoKey) => setSecao(k === "venda_mais" ? "venda_mais" : k === "aniversario" ? "aniversario" : "crediario")} />
+            </View>
+          )}
+
+          {secao === "aniversario" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-aniversario">
+              <AniversarioConfig companyId={companyId} auto={auto} lojaNome={lojaNome} />
+            </View>
+          )}
+
+          {secao === "venda_mais" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-venda-mais">
+              <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
+            </View>
+          )}
+
+          {secao === "crediario" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-crediario">
+              <CrediarioConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
             </View>
           )}
 

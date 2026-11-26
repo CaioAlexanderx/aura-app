@@ -37,8 +37,8 @@ jest.mock("@/utils/whatsappOficialLiberado", () => {
   const real = jest.requireActual("@/utils/whatsappOficialLiberado");
   const m: any = {
     ...real,
-    whatsappOficialVisivel: (s: any, u: any) => real.whatsappOficialVisivel(s, u, mockLiberado),
-    whatsappOficialLiberadoPara: (u: any) => real.whatsappOficialLiberadoPara(u, mockLiberado),
+    whatsappOficialVisivel: (s: any, u: any, _l?: any, sb?: boolean) => real.whatsappOficialVisivel(s, u, mockLiberado, sb),
+    whatsappOficialLiberadoPara: (u: any, _l?: any, sb?: boolean) => real.whatsappOficialLiberadoPara(u, mockLiberado, sb),
   };
   // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
   Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
@@ -65,10 +65,12 @@ jest.mock("@/components/screens/hub/HubView", () => ({
 }));
 
 var mockDemo = false;
+var mockEmpresa: any = {};
+var mockUser: any = undefined;
 jest.mock("@/stores/auth", () => ({
   useAuthStore: Object.assign(
     function (selector: any) {
-      var state = { company: { id: "loja-1", name: "Loja Exemplo" }, token: "t", isDemo: mockDemo };
+      var state = { company: { id: "loja-1", name: "Loja Exemplo", ...mockEmpresa }, user: mockUser, token: "t", isDemo: mockDemo };
       return typeof selector === "function" ? selector(state) : state;
     },
     { getState: () => ({ token: "t" }) }
@@ -127,6 +129,13 @@ jest.mock("@/services/waApi", () => {
   };
 });
 
+// O medidor novo lê o saldo; aqui nenhuma rota responde (a tela trava, que é o certo).
+jest.mock("@/services/waConfigApi", () => {
+  const actual = jest.requireActual("@/services/waConfigApi");
+  const falha = () => Promise.reject(new Error("sem rota"));
+  return { ...actual, waConfigApi: { ...actual.waConfigApi, getSaldo: falha, getAutomaticas: falha, listarPacotes: falha } };
+});
+
 import WhatsAppScreen from "@/app/(tabs)/whatsapp";
 import { filtrarCrediario } from "@/components/whatsapp/FilaCard";
 
@@ -152,6 +161,33 @@ describe("aba WhatsApp do varejo", () => {
     mockHub = false;
     mockLiberado = false;
     mockOutbox = { data: [] };
+    mockEmpresa = {};
+    mockUser = undefined;
+  });
+
+  // Trava das seções novas (26/11/2026): só equipe Aura ou empresa sandbox, até a liberação.
+  const NOVAS = ["wa-saldo-medidor", "wa-saldo-indisponivel", "wa-saldo-carregando", "wa-varejo-secao-automaticas",
+    "wa-varejo-secao-aniversario", "wa-varejo-secao-venda_mais", "wa-varejo-secao-crediario"];
+
+  it("loja real conectada, sem ser equipe nem sandbox, não vê nenhuma seção nova", async () => {
+    let tree: any;
+    await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
+    await flush();
+    NOVAS.forEach((id) => expect(temTestId(tree, id)).toBe(false));
+    ["conexao", "cobrancas", "templates"].forEach((k) => expect(temTestId(tree, `wa-varejo-secao-${k}`)).toBe(true));
+    tree.unmount();
+  });
+
+  it("empresa sandbox e equipe Aura veem o medidor novo", async () => {
+    for (const quem of [() => { mockEmpresa = { is_sandbox: true }; }, () => { mockUser = { is_staff: true }; }]) {
+      mockEmpresa = {}; mockUser = undefined;
+      quem();
+      let tree: any;
+      await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
+      await flush();
+      expect(temTestId(tree, "wa-saldo-indisponivel") || temTestId(tree, "wa-saldo-medidor")).toBe(true);
+      tree.unmount();
+    }
   });
 
   it("company real vê a tela de verdade, nunca a maquete", async () => {
