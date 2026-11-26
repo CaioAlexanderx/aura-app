@@ -22,6 +22,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
   const [criando, setCriando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState("");
+  const [apagando, setApagando] = useState<HubLabel | null>(null);
   const [cor, setCor] = useState(CORES_ETIQUETA[0]);
 
   const { data } = useQuery({
@@ -53,7 +54,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
   });
   const mApagar = useMutation({
     mutationFn: (l: HubLabel) => hubApi.apagarEtiqueta(companyId, l.id),
-    onSuccess: depois, onError: falha,
+    onSuccess: () => { setApagando(null); depois(); }, onError: falha,
   });
 
   return (
@@ -69,7 +70,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
                 <Text style={[s.chipText, { color: on ? "#fff" : l.color }]}>{l.name}</Text>
               </Pressable>
               {editando && (
-                <Pressable testID={`hub-etiqueta-apagar-${l.id}`} onPress={() => mApagar.mutate(l)} accessibilityLabel={`Apagar a etiqueta ${l.name}`}>
+                <Pressable testID={`hub-etiqueta-apagar-${l.id}`} onPress={() => setApagando(l)} accessibilityLabel={`Apagar a etiqueta ${l.name}`}>
                   <Text style={s.apagar}>×</Text>
                 </Pressable>
               )}
@@ -85,6 +86,21 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
           </Pressable>
         )}
       </View>
+      {apagando && (
+        <View testID="hub-etiqueta-confirmar" style={s.confirmar}>
+          <Text style={s.confirmarText}>
+            Apagar a etiqueta "{apagando.name}"? Ela sai de todas as conversas da loja.
+          </Text>
+          <View style={s.confirmarAcoes}>
+            <Pressable testID="hub-etiqueta-confirmar-sim" disabled={mApagar.isPending} onPress={() => mApagar.mutate(apagando)}>
+              <Text style={s.confirmarSim}>{mApagar.isPending ? "Apagando…" : "Apagar"}</Text>
+            </Pressable>
+            <Pressable testID="hub-etiqueta-confirmar-nao" onPress={() => setApagando(null)}>
+              <Text style={s.editar}>Manter</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       {criando && (
         <View testID="hub-etiqueta-form" style={s.form}>
           <TextInput testID="hub-etiqueta-nome" style={s.input} value={nome} onChangeText={setNome}
@@ -116,6 +132,10 @@ const s = StyleSheet.create({
   novaText: { fontSize: 11.5, fontWeight: "700", color: Colors.ink3 },
   editar: { fontSize: 11.5, fontWeight: "700", color: Colors.ink3, paddingHorizontal: 4 },
   apagar: { fontSize: 16, fontWeight: "800", color: Colors.red, paddingHorizontal: 3 },
+  confirmar: { borderWidth: 1, borderColor: Colors.red + "66", borderRadius: 10, padding: 10, gap: 6, backgroundColor: Colors.red + "10" },
+  confirmarText: { fontSize: 12.5, color: Colors.ink },
+  confirmarAcoes: { flexDirection: "row", gap: 16, alignItems: "center" },
+  confirmarSim: { fontSize: 12.5, fontWeight: "800", color: Colors.red },
   form: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 10, gap: 8, backgroundColor: Colors.bg3 },
   input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg2 },
   cores: { flexDirection: "row", gap: 8 },

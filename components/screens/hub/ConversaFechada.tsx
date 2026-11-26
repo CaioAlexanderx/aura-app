@@ -102,7 +102,8 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
 
   if (isLoading || !data) return <View style={s.centro}><ActivityIndicator color={Colors.violet3} /></View>;
 
-  const saldo = data.saldo;
+  // Saldo com a trava desligada (ativo:false): não há contagem a mostrar nem limite a anunciar.
+  const saldo = data.saldo && data.saldo.ativo === false ? null : data.saldo;
   const esgotado = esgotadoAgora || !!saldo?.esgotado;
 
   // ── Estado 2 · avisos esgotados ──

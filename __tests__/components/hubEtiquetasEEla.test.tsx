@@ -145,6 +145,13 @@ describe("etiquetas na thread", () => {
     expect(porId(r, "hub-etiqueta-apagar-l1")).toHaveLength(0);
     await tocar(r, "hub-etiqueta-editar");
     await tocar(r, "hub-etiqueta-apagar-l1");
+    // pede confirmação antes de apagar da loja inteira
+    expect(mockHub.apagarEtiqueta).not.toHaveBeenCalled();
+    expect(tudo(r)).toContain("Ela sai de todas as conversas da loja");
+    await tocar(r, "hub-etiqueta-confirmar-nao");
+    expect(mockHub.apagarEtiqueta).not.toHaveBeenCalled();
+    await tocar(r, "hub-etiqueta-apagar-l1");
+    await tocar(r, "hub-etiqueta-confirmar-sim");
     expect(mockHub.apagarEtiqueta).toHaveBeenCalledWith(COMPANY, "l1");
   });
 

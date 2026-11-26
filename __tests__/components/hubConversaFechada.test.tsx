@@ -138,6 +138,19 @@ describe("estado 1 · ainda há avisos", () => {
     expect(textoDe(porId(r, "hub-fechada-custo")[0])).toBe("Usa 1 aviso · ficam 71 de 100");
   });
 
+  it("saldo com a trava desligada (ativo:false): não mostra contagem", async () => {
+    mockHub.convites.mockResolvedValue(convites({ saldo: { ...SALDO, ativo: false } }));
+    const r = await abrirThread();
+    expect(textoDe(porId(r, "hub-fechada-custo")[0])).toBe("Usa 1 aviso");
+  });
+
+  it("celular: sem pílula de avisos quando a trava do saldo está desligada", async () => {
+    mockWide = false;
+    mockHub.saldoAvisos.mockResolvedValue({ ativo: false, saldos: { avisos: { restante: 72, total: 100 } } });
+    const r = await abrirThread();
+    expect(porId(r, "hub-thread-avisos")).toHaveLength(0);
+  });
+
   it("sem o saldo no servidor, só diz que usa 1 aviso", async () => {
     mockHub.convites.mockResolvedValue(convites({ saldo: null }));
     const r = await abrirThread();
