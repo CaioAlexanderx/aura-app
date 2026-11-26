@@ -29,6 +29,7 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/ListSkeleton", () => ({ ListSkeleton: "ListSkeleton" }));
 jest.mock("@/components/Toast", () => ({ toast: { info: (...a: any[]) => mockToastInfo(...a), success: jest.fn(), error: jest.fn() } }));
+jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null) }));
 jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 jest.mock("@/services/api", () => ({ request: (...a: any[]) => mockRequest(...a) }));
 jest.mock("@/utils/whatsapp", () => {
@@ -408,11 +409,20 @@ describe("Vendas › Condicionais: lista", () => {
     expect(textoDe(um(tree, "selo-cancelada"))).toBe("Cancelada");
   });
 
-  it("linha só é tocável com onAbrir (o detalhe é do C10)", async () => {
+  it("tocar na linha abre a gaveta de detalhe (C10) e ainda avisa o onAbrir", async () => {
     const onAbrir = jest.fn();
     const tree = await montar(<AbaCondicionais onAbrir={onAbrir} />);
+    expect(tree.root.findAll((n: any) => n.props && n.props.testID === "cond-titulo")).toHaveLength(0);
     await act(async () => { tocavel(tree, "condicional-k1").props.onPress(); });
     expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ id: "k1" }));
+    expect(mockRequest.mock.calls.some((c) => c[0] === "/companies/comp-1/condicionais/k1")).toBe(true);
+    expect(tree.root.findAll((n: any) => n.props && n.props.testID === "cond-titulo").length).toBeGreaterThan(0);
+  });
+
+  it("sem onAbrir a linha também abre a gaveta", async () => {
+    const tree = await montar(<AbaCondicionais />);
+    await act(async () => { tocavel(tree, "condicional-k1").props.onPress(); });
+    expect(tree.root.findAll((n: any) => n.props && n.props.testID === "cond-titulo").length).toBeGreaterThan(0);
   });
 });
 

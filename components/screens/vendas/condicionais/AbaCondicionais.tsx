@@ -45,6 +45,7 @@ import {
   type Prazo, type TomDaSituacao,
 } from "./regrasDasCondicionais";
 import { LembrarCondicional } from "./LembrarCondicional";
+import { GavetaDaCondicional } from "./detalhe/GavetaDaCondicional";
 
 export const TEXTOS_DAS_CONDICIONAIS = {
   aba: "Condicionais",
@@ -59,11 +60,11 @@ export const LARGURA_DA_TABELA = 900;
 export const LARGURA_DO_CELULAR = 700;
 
 type Props = {
-  /** C10: abrir o detalhe da condicional. Sem ele, a linha não é tocável. */
+  /** Observa a abertura do detalhe (a gaveta do C10 abre sozinha, por dentro da aba). */
   onAbrir?: (c: LinhaDaCondicional) => void;
 };
 
-export function AbaCondicionais({ onAbrir }: Props = {}) {
+export function AbaCondicionais({ onAbrir: aoAbrir }: Props = {}) {
   const { width } = useWindowDimensions();
   const largo = width >= LARGURA_DA_TABELA;
   const celular = width < LARGURA_DO_CELULAR;
@@ -72,6 +73,9 @@ export function AbaCondicionais({ onAbrir }: Props = {}) {
   const [busca, setBusca] = useState("");
   const [loja, setLoja] = useState<string | null>(null);
   const [lembrar, setLembrar] = useState<LinhaDaCondicional | null>(null);
+  // C10: a condicional aberta na gaveta de detalhe e decisão.
+  const [aberta, setAberta] = useState<LinhaDaCondicional | null>(null);
+  const onAbrir = (c: LinhaDaCondicional) => { setAberta(c); if (aoAbrir) aoAbrir(c); };
 
   // A busca sai 300 ms depois da última tecla (uma ida ao servidor, não uma por letra).
   useEffect(() => {
@@ -222,6 +226,9 @@ export function AbaCondicionais({ onAbrir }: Props = {}) {
       )}
 
       <LembrarCondicional linha={lembrar} onClose={() => setLembrar(null)} />
+      {!!aberta && (
+        <GavetaDaCondicional key={aberta.id} linha={aberta} hoje={hoje} mostrarLoja={mostrarLoja} onClose={() => setAberta(null)} />
+      )}
     </View>
   );
 }
