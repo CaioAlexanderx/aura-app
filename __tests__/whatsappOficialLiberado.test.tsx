@@ -278,7 +278,7 @@ describe("menu", () => {
     const i = layout.indexOf("function buildRawNav(");
     expect(i).toBeGreaterThan(-1);
     const corpo = layout.slice(i, layout.indexOf("\n}", i));
-    expect(corpo).toContain("item.mod === MODULO_WHATSAPP_OFICIAL && !whatsappOficialLiberadoPara({ is_staff: isStaff })");
+    expect(corpo).toContain("item.mod === MODULO_WHATSAPP_OFICIAL && !whatsappOficialLiberadoPara({ is_staff: isStaff }, undefined, empresaSandbox(");
     expect(MODULO_WHATSAPP_OFICIAL).toBe("whatsapp");
   });
 });
