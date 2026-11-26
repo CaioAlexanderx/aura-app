@@ -30,6 +30,7 @@ jest.mock("@/services/hubApi", () => ({
 
 import { HubView } from "@/components/screens/hub/HubView";
 import { conversaAbertaAte } from "@/components/screens/hub/types";
+import { parseValorBR } from "@/components/screens/hub/EnvioRapido";
 
 const COMPANY = "645c1325-8865-48be-af6f-430d93fb2b6c";
 const horasAtras = (h: number) => new Date(Date.now() - h * 3600000).toISOString();
@@ -165,5 +166,17 @@ describe("conversaAbertaAte", () => {
   it("fechada ou sem mensagem do cliente: null", () => {
     expect(conversaAbertaAte(new Date(2026, 10, 25, 9, 0).toISOString(), agora)).toBeNull();
     expect(conversaAbertaAte(null, agora)).toBeNull();
+  });
+});
+
+describe("parseValorBR", () => {
+  it("10.50 é R$ 10,50, nunca R$ 1.050", () => {
+    expect(parseValorBR("10.50")).toBe(10.5);
+    expect(parseValorBR("189,90")).toBe(189.9);
+    expect(parseValorBR("1.189,90")).toBe(1189.9);
+    expect(parseValorBR("1.189")).toBe(1189);
+    expect(parseValorBR("R$ 25")).toBe(25);
+    expect(parseValorBR("abc")).toBeNaN();
+    expect(parseValorBR("")).toBeNaN();
   });
 });
