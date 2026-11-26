@@ -30,9 +30,13 @@ interface Props {
   carregando: boolean;
   /** Abre o editor. Sem ela, a lista é só leitura. */
   onEditar?: (m: WaModeloRaw) => void;
+  /** "Ficar com o da Aura": descarta o texto não aprovado. */
+  onRestaurar?: (m: WaModeloRaw) => void;
+  /** Só estes modelos (chaves). Sem ela, todos da automática. */
+  chaves?: string[];
 }
 
-export function ModelosLista({ automatica, modelos, carregando, onEditar }: Props) {
+export function ModelosLista({ automatica, modelos, carregando, onEditar, onRestaurar, chaves }: Props) {
   if (!modelos) {
     return (
       <Text style={s.aviso} testID={`wa-modelos-${automatica}-indisponivel`}>
@@ -40,7 +44,7 @@ export function ModelosLista({ automatica, modelos, carregando, onEditar }: Prop
       </Text>
     );
   }
-  const lista = modelos.filter((m) => m && m.automatica === automatica && typeof m.texto_em_uso === "string");
+  const lista = modelos.filter((m) => m && m.automatica === automatica && typeof m.texto_em_uso === "string" && (!chaves || chaves.includes(String(m.key))));
   return (
     <View style={{ gap: 10 }} testID={`wa-modelos-${automatica}`}>
       {lista.map((m) => {
@@ -65,11 +69,18 @@ export function ModelosLista({ automatica, modelos, carregando, onEditar }: Prop
                 {m.motivo ? `${m.motivo} ` : ""}O texto atual continua valendo.
               </Text>
             )}
-            {!!onEditar && !emAprovacao && m.estado !== "AGUARDANDO_PADRAO" && (
-              <Pressable onPress={() => onEditar(m)} accessibilityRole="button" style={s.btnLink} testID={`wa-modelo-${m.key}-editar`}>
-                <Text style={s.btnLinkTxt}>{m.estado === "NAO_APROVADA" ? "Ajustar" : "Editar"}</Text>
-              </Pressable>
-            )}
+            <View style={s.acoes}>
+              {!!onEditar && !emAprovacao && m.estado !== "AGUARDANDO_PADRAO" && (
+                <Pressable onPress={() => onEditar(m)} accessibilityRole="button" style={s.btnLink} testID={`wa-modelo-${m.key}-editar`}>
+                  <Text style={s.btnLinkTxt}>{m.estado === "NAO_APROVADA" ? "Ajustar para mim" : "Editar"}</Text>
+                </Pressable>
+              )}
+              {!!onRestaurar && m.estado === "NAO_APROVADA" && (
+                <Pressable onPress={() => onRestaurar(m)} accessibilityRole="button" style={s.btnLink} testID={`wa-modelo-${m.key}-restaurar`}>
+                  <Text style={s.btnLinkTxt}>Ficar com o da Aura</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         );
       })}
@@ -85,6 +96,7 @@ const s = StyleSheet.create({
   estado: { fontSize: 11.5, fontWeight: "700" },
   texto: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
   nota: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
+  acoes: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
   btnLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
 } as any);

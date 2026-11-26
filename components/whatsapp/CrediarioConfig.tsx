@@ -15,13 +15,12 @@ import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
 import { BolhaExemplo, Interruptor, Passo, PilulaToggle, PreviaCorteView } from "./configUi";
-import { ModelosLista } from "./ModelosLista";
+import { ModelosEditaveis } from "./ModelosEditaveis";
 import { podeMandarNovidades, quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import { PONTOS_ROTULO, alternarPonto, lerPontos } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
 import { waNumeroEmAtencao, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
-import type { WaModeloRaw } from "@/services/waConfigApi";
 
 interface Props {
   companyId: string;
@@ -29,11 +28,9 @@ interface Props {
   saldo: SaldoInfo | null;
   status: WaStatus | null;
   lojaNome: string;
-  /** Abre o Editor de um modelo (PR do Editor). Sem ela, a lista é só leitura. */
-  onEditarModelo?: (m: WaModeloRaw) => void;
 }
 
-export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome, onEditarModelo }: Props) {
+export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Props) {
   const info = auto.info;
   const cobrar = info?.autos.crediario_cobrar;
   const vender = info?.autos.crediario_vender;
@@ -174,7 +171,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome, onEd
         n="03 · MENSAGENS" titulo="O que o cliente lê"
         sub="Todas vêm prontas. Se você mudar um texto, ele passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá continua indo o anterior."
       >
-        <ModelosLista automatica="crediario" modelos={modelos.modelos} carregando={modelos.carregando} onEditar={onEditarModelo} />
+        <ModelosEditaveis companyId={companyId} automatica="crediario" lojaNome={lojaNome} modelosDoPai={modelos} />
       </Passo>
     </View>
   );

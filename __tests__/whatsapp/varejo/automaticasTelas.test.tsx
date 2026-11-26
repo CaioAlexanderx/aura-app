@@ -9,6 +9,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+jest.mock("@/hooks/useClientesPrevia", () => ({ useClientesPrevia: () => [] }));
 
 import { waCorte, trazerDoVendaMais, quantoTrazer, podeMandarNovidades } from "@/components/whatsapp/waCorte";
 import {
@@ -305,12 +306,13 @@ describe("CrediarioConfig", () => {
     expect(mockPub.current.enviarAgora).toHaveBeenCalled();
   });
 
-  it("Editar só aparece com onEditarModelo, e não em texto em aprovação", () => {
-    const so = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="" />);
-    expect(tem(so, "wa-modelo-cred_antes-editar")).toBe(false);
-    const ed = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="" onEditarModelo={jest.fn()} />);
-    expect(tem(ed, "wa-modelo-cred_antes-editar")).toBe(true);
-    expect(tem(ed, "wa-modelo-cred_atraso-editar")).toBe(false);
-    expect(tem(ed, "wa-modelo-cred_oferta-editar")).toBe(true);
+  it("Editar aparece nos prontos; no não aprovado 'Ajustar para mim' e 'Ficar com o da Aura'; nunca em aprovação", () => {
+    const t2 = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="" />);
+    expect(tem(t2, "wa-modelo-cred_antes-editar")).toBe(true);
+    expect(tem(t2, "wa-modelo-cred_atraso-editar")).toBe(false);
+    expect(tem(t2, "wa-modelo-cred_oferta-editar")).toBe(true);
+    expect(tem(t2, "wa-modelo-cred_oferta-restaurar")).toBe(true);
+    expect(textos(t2)).toContain("Ajustar para mim");
+    expect(textos(t2)).toContain("Ficar com o da Aura");
   });
 });

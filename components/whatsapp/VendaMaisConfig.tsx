@@ -20,6 +20,7 @@ import {
   rotuloDoPresente, type PresenteChave, type SegmentoVenda,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
+import { ModelosEditaveis } from "./ModelosEditaveis";
 import { waMesDoSaldo, waNumeroEmAtencao, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -125,6 +126,16 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
       </Passo>
 
       <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como a cliente vê"} mensagem={mensagem} />
+
+      <Passo
+        titulo="Quer escrever do seu jeito?"
+        sub="A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui."
+      >
+        <ModelosEditaveis
+          companyId={companyId} automatica="venda_mais" lojaNome={lojaNome} modelosDoPai={modelos}
+          chaves={segmento ? [modeloDaVenda(segmento, comPresente)] : []}
+        />
+      </Passo>
 
       <View style={s.card}>
         {!!pub.enviado && (pub.enviado.enfileiradas ?? 0) > 0 ? (

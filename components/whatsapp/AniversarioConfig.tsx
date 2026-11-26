@@ -21,6 +21,7 @@ import {
   nomeDoMes, presenteDaChave, quantosPassos, rotuloDoPresente, type PresenteChave, type TomAniversario,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
+import { ModelosEditaveis } from "./ModelosEditaveis";
 
 interface Props {
   companyId: string;
@@ -113,6 +114,16 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
       </Passo>
 
       <BolhaExemplo titulo="Como a cliente vê" mensagem={mensagem} />
+
+      <Passo
+        titulo="Quer escrever do seu jeito?"
+        sub="A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui."
+      >
+        <ModelosEditaveis
+          companyId={companyId} automatica="aniversario" lojaNome={lojaNome} modelosDoPai={modelos}
+          chaves={[tom ? modeloDoAniversario(tom, comPresente) : "", "aniv_antes", "aniv_depois"].filter(Boolean)}
+        />
+      </Passo>
 
       <View style={s.card}>
         <View style={s.linha}>
