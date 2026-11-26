@@ -65,7 +65,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@/hooks/useProducts", () => ({ useProducts: () => ({ products: (globalThis as any).__produtos || [] }) }));
 jest.mock("@/hooks/useCustomers", () => ({ useCustomers: () => ({ customers: [] }) }));
 jest.mock("@/hooks/usePdvSettings", () => ({
-  usePdvSettings: () => ({ settings: {}, isLoading: false, invalidate: jest.fn() }),
+  usePdvSettings: () => ({ settings: (globalThis as any).__settings || {}, isLoading: false, invalidate: jest.fn() }),
   validateSaleAgainstSettings: () => ({ ok: true, missing: [] }),
 }));
 jest.mock("@/hooks/useCategories", () => ({ useCategories: () => ({ flattened: [] }) }));
@@ -92,6 +92,7 @@ jest.mock("@/services/api", () => ({
 
 import { usePdvState } from "@/hooks/usePdvState";
 import { guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
+import { useWarrantyDraft } from "@/stores/warrantyDraft";
 import {
   condicionalDaUrl, estadoDaCobranca, camposDaCondicionalNaVenda, rotaDoCaixaDaCondicional,
   rotaDeVoltaDaCondicional, idsParaCobrar, ehErroDaCondicional,
@@ -389,6 +390,50 @@ describe("Caixa aberto pela condicional (trava ligada)", () => {
     expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", "g3", P2]);
     const guardada: any = recuperarVenda("co-1", "u-1");
     expect(guardada.cart.map((i: any) => i.productId)).toEqual(["g1", "g2", "g3", P2]);
+  });
+
+  test("rascunho antigo de garantia não age na venda da condicional e a tela final não emite garantia", async () => {
+    (globalThis as any).__settings = { os_enabled: true };
+    useWarrantyDraft.getState().setDays(P2, 30);
+    useWarrantyDraft.getState().setOn(true);
+    try {
+      await montar(); await esperar();
+      await act(async () => { st.selectCustomer(null, null); });
+      expect(st.cartProps.requiredHints.map((h: any) => h.label)).not.toContain("Cliente para a garantia");
+      await act(async () => { st.handleFinalize(); });
+      await act(async () => { mockMutate.mock.calls[0][1].onSuccess({ sale: { id: "venda-1", sale_number: 12 } }); });
+      expect((st.lastSale as any).daCondicional).toBe(true);
+    } finally {
+      useWarrantyDraft.getState().reset();
+      (globalThis as any).__settings = undefined;
+    }
+  });
+
+  test("venda comum com o mesmo rascunho de garantia segue exigindo o cliente (caminho comum)", async () => {
+    (globalThis as any).__settings = { os_enabled: true };
+    (globalThis as any).__params = {};
+    useWarrantyDraft.getState().setDays(P2, 30);
+    useWarrantyDraft.getState().setOn(true);
+    try {
+      await montar(); await esperar();
+      await act(async () => { st.handleAddProduct(CATALOGO[1] as any); });
+      expect(st.cartProps.requiredHints.map((h: any) => h.label)).toContain("Cliente para a garantia");
+    } finally {
+      useWarrantyDraft.getState().reset();
+      (globalThis as any).__settings = undefined;
+    }
+  });
+
+  test("bipe na tela final com a guardada reposta: o cupom da guardada é revalidado (limpo) como no fluxo comum", async () => {
+    const itens = [1, 2].map((n) => ({ productId: "g" + n, name: "G" + n, price: 10 * n, qty: 1, listPrice: 10 * n }));
+    guardarVenda("co-1", "u-1", { cart: itens, payment: "pix", couponCode: "OFF10", couponApplied: { code: "OFF10", discount: 5 } });
+    await montar(); await esperar();
+    await act(async () => { st.handleFinalize(); });
+    await act(async () => { mockMutate.mock.calls[0][1].onSuccess({ sale: { id: "venda-1", sale_number: 12 } }); });
+    await act(async () => { st.newSale(); st.handleAddProduct(CATALOGO[1] as any); });
+    await esperar();
+    expect(st.couponApplied).toBeNull();
+    expect(carrinho().map((c) => c[0])).toEqual(["g1", "g2", P2]);
   });
 
   test("venda comum em andamento no carrinho: a condicional não se mistura com ela", async () => {
