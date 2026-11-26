@@ -27,6 +27,7 @@ import { AdicionarAComandaModal, FecharComandaModal } from "@/components/screens
 import { ComandasAbertasPanel } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { PedidoModal } from "@/components/screens/pdv/pedido/PedidoModal";
 import { AvisoDeReserva, type AvisoDeReservaDados } from "@/components/screens/pdv/AvisoDeReserva";
+import { AvisoDeCondicional, type AvisoDeCondicionalDados } from "@/components/screens/pdv/AvisoDeCondicional";
 import type { LinhaDoCarrinho } from "@/components/screens/pdv/pedido/corpoDoPedido";
 import type { PedidoGuardado } from "@/services/pedidosApi";
 import type { Comanda } from "@/utils/comanda";
@@ -110,6 +111,10 @@ export interface PdvModalsProps {
   avisoReserva?: AvisoDeReservaDados | null;
   onNaoVenderReservado?: () => void;
   onVenderReservado?: () => void;
+  // ── Venda condicional (C13): peça bipada que consta com cliente.
+  avisoComClientes?: AvisoDeCondicionalDados | null;
+  onNaoVenderComClientes?: () => void;
+  onVenderComClientes?: () => void;
 }
 
 export function PdvModals({
@@ -121,6 +126,7 @@ export function PdvModals({
   showCrediario, customerId, customerName, saleTotal, onCrediarioConfirm, onCrediarioClose,
   comandas, cartItemCount, cartTotal, pedido,
   avisoReserva, onNaoVenderReservado, onVenderReservado,
+  avisoComClientes, onNaoVenderComClientes, onVenderComClientes,
 }: PdvModalsProps) {
   return (
     <>
@@ -141,6 +147,9 @@ export function PdvModals({
       />
       {avisoReserva && onNaoVenderReservado && onVenderReservado && (
         <AvisoDeReserva aviso={avisoReserva} onNaoVender={onNaoVenderReservado} onVender={onVenderReservado} />
+      )}
+      {avisoComClientes && onNaoVenderComClientes && onVenderComClientes && (
+        <AvisoDeCondicional aviso={avisoComClientes} onNaoVender={onNaoVenderComClientes} onVender={onVenderComClientes} />
       )}
       {pedido && (
         <PedidoModal

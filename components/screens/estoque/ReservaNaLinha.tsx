@@ -1,21 +1,29 @@
 // ============================================================
-// AURA. — Estoque · reserva do Pedido na linha do produto (A4, p-63d)
+// AURA. — Estoque · reserva do Pedido e peças com clientes na linha (A4, C13)
 //
 // Mockup "Pedido separado de venda", parte 1 ("No Estoque"): selo azul
-// "N reservado" e "X livres para vender". A quantidade da linha não muda:
-// a peça reservada ainda está na prateleira. Sem reserva, nada aparece (o
-// componente devolve null e a linha fica a de antes).
+// "N reservado" e "X livres para vender". Mockup da Venda condicional: selo
+// tracejado azul-petróleo "N com clientes" ao lado. A quantidade da linha não
+// muda: a peça reservada ainda está na prateleira e a que está com cliente
+// ainda é do estoque. Livres = estoque − com clientes − reservado. Sem reserva
+// e sem peça com cliente, nada aparece (devolve null e a linha fica a de antes).
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { IS_DARK_MODE, Colors } from "@/constants/colors";
 import { livresParaVender, TEXTOS_DA_RESERVA as T } from "@/utils/reservaDoPedido";
+import { livresDaPeca } from "@/utils/comClientes";
+import { SeloComClientes } from "@/components/screens/pdv/SeloComClientes";
 
-export function ReservaNaLinha({ estoque, reservado, testID }: { estoque: number; reservado: number; testID?: string }) {
-  if (!(reservado > 0)) return null;
+export function ReservaNaLinha({ estoque, reservado, comClientes = 0, testID }: { estoque: number; reservado: number; comClientes?: number; testID?: string }) {
+  const temReserva = reservado > 0;
+  const temComClientes = comClientes > 0;
+  if (!temReserva && !temComClientes) return null;
+  const livres = temComClientes ? livresDaPeca(estoque, comClientes, reservado) : livresParaVender(estoque, reservado);
   return (
     <View style={s.linha} testID={testID}>
-      <View style={s.selo}><Text style={s.seloTxt}>{T.selo(reservado)}</Text></View>
-      <Text style={s.livres}>{T.livres(livresParaVender(estoque, reservado))}</Text>
+      {temComClientes && <SeloComClientes quantidade={comClientes} testID={testID ? testID.replace("reservado", "com-clientes") : undefined} />}
+      {temReserva && <View style={s.selo}><Text style={s.seloTxt}>{T.selo(reservado)}</Text></View>}
+      <Text style={s.livres}>{T.livres(livres)}</Text>
     </View>
   );
 }

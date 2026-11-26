@@ -35,6 +35,8 @@ import { useTemTeclado } from "@/hooks/useTemTeclado";
 import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 import { TEXTOS_DOS_ATALHOS } from "./textosDosAtalhos";
 import { reservadoDoProduto, TEXTOS_DA_RESERVA } from "@/utils/reservaDoPedido";
+import { comClientesDoProduto } from "@/utils/comClientes";
+import { SeloComClientes } from "@/components/screens/pdv/SeloComClientes";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -79,6 +81,9 @@ export type GridProduct = {
   precoEfetivo?: number | null;
   /** 17/11/2026 (Pedido, A4): peças separadas em pedido (GET /products, B2). */
   reservedQty?: number;
+  /** C13 (Venda condicional): peças com clientes (GET /products, só com a trava ligada). */
+  outQty?: number;
+  outByVariant?: Record<string, number>;
 };
 
 type Props = {
@@ -104,6 +109,8 @@ type Props = {
   /** 17/11/2026 (Pedido, A4): trava do Pedido (utils/pedidoLiberado.ts). Sem ela
    *  (padrão), o cartão é o de sempre mesmo com reservedQty no produto. */
   reservaLiberada?: boolean;
+  /** C13: trava da Venda condicional. Desligada (padrão), sem o selo "N com clientes". */
+  comClientesLiberado?: boolean;
 };
 
 // 17/11/2026 (p-148): a cascata de entrada (0,5 s por cartão, 40 ms de
@@ -117,7 +124,7 @@ export function __reiniciarEntradaDaGrade() { gradeJaEntrou = false; }
 // O anel do destaque só aparece com mouse e teclado (no toque não há Enter).
 // 17/11/2026 (p-155): a mesma leitura das etiquetas (hooks/useTemTeclado).
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null, reservaLiberada = false }: Props) {
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null, reservaLiberada = false, comClientesLiberado = false }: Props) {
   const teclado = useTemTeclado();
   // true só no primeiro render da primeira grade; o cartão guarda o valor de
   // quando montou (ProdCard), então a cascata da entrada termina inteira.
@@ -150,13 +157,14 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           cardPrice={cardPriceFor ? cardPriceFor(p) : null}
           destacado={teclado && !!destaqueId && destaqueId === p.id}
           reservado={reservadoDoProduto(p, reservaLiberada)}
+          comClientes={comClientesDoProduto(p, comClientesLiberado)}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null, destacado = false, reservado = 0 }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null; destacado?: boolean; reservado?: number }) {
+function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null, destacado = false, reservado = 0, comClientes = 0 }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null; destacado?: boolean; reservado?: number; comClientes?: number }) {
   // Decidido na montagem: o cartão da entrada anima até o fim mesmo que a
   // grade redesenhe no meio; o que monta depois não anima.
   const animarAoEntrar = useRef(animar).current;
@@ -297,14 +305,18 @@ function ProdCard({ product, qty, index, animar = false, onAdd, compact = false,
       ) : (
         <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
       )}
-      {(product.stock != null || product.unit) && (reservado > 0 ? (
+      {(product.stock != null || product.unit) && ((reservado > 0 || comClientes > 0) ? (
         // 17/11/2026 (Pedido, A4): selo azul "N reservado" ao lado do estoque.
-        // A quantidade continua a da prateleira. Sem reserva, a linha de sempre.
+        // C13: selo tracejado azul-petróleo "N com clientes" antes dele.
+        // A quantidade continua a da prateleira. Sem nenhum dos dois, a linha de sempre.
         <View style={s.stockComReserva}>
           <Text style={[s.stock, { marginTop: 0 }]}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>
-          <View style={s.reserva} testID={"grid-reservado-" + product.id}>
-            <Text style={s.reservaTxt}>{TEXTOS_DA_RESERVA.selo(reservado)}</Text>
-          </View>
+          {comClientes > 0 && <SeloComClientes quantidade={comClientes} testID={"grid-com-clientes-" + product.id} />}
+          {reservado > 0 && (
+            <View style={s.reserva} testID={"grid-reservado-" + product.id}>
+              <Text style={s.reservaTxt}>{TEXTOS_DA_RESERVA.selo(reservado)}</Text>
+            </View>
+          )}
         </View>
       ) : (
         <Text style={s.stock}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>

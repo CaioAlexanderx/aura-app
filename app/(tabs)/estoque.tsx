@@ -42,6 +42,7 @@ import { resumoValorEstoque, legendaValorEstoque } from "@/utils/valorEstoque";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
+import { condicionalLiberada } from "@/utils/condicionalLiberada";
 import { companiesApi } from "@/services/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -407,6 +408,8 @@ export default function EstoqueScreen() {
   // 17/11/2026 (Pedido, A4): "N reservado · X livres para vender" na linha.
   // Trava do Pedido (a mesma da aba Pedidos); desligada, a linha de sempre.
   const reservaLiberada = pedidoLiberado(useAuthStore(st => (st as any).user));
+  // C13 (Venda condicional): selo tracejado "N com clientes" ao lado, com a trava dela.
+  const comClientesLiberado = condicionalLiberada(useAuthStore(st => (st as any).user));
   // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
   const modulosVisiveis = useVisibleModules();
   const podeMudarDesenho = modulosVisiveis.has("configuracoes");
@@ -1328,6 +1331,7 @@ export default function EstoqueScreen() {
                     canLink={canLinkProducts}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
+                    comClientesLiberado={comClientesLiberado}
                     nomeDaLojaDe={seloDaLojaDe}
                   />
                 ) : (
@@ -1361,6 +1365,7 @@ export default function EstoqueScreen() {
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
                     emiteNfse={emiteNfseEstoque}
                     reservaLiberada={reservaLiberada}
+                    comClientesLiberado={comClientesLiberado}
                     nomeDaLoja={seloDaLojaDe ? seloDaLojaDe(p) : null}
                   />
                 ))}

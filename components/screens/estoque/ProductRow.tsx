@@ -25,6 +25,7 @@ import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
 import { ReservaNaLinha } from "./ReservaNaLinha";
 import { reservadoDoProduto } from "@/utils/reservaDoPedido";
+import { comClientesDoProduto } from "@/utils/comClientes";
 import { SeloDaLoja } from "./FiltroDeLoja";
 
 // 14/11/2026 (CP2b da revisão de cores): a tabela própria desta lista (24
@@ -45,7 +46,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false, nomeDaLoja = null,
+  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false, comClientesLiberado = false, nomeDaLoja = null,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -65,6 +66,8 @@ export function ProductRow({
   emiteNfse?: boolean;
   // 17/11/2026 (Pedido, A4): trava do Pedido. Sem ela, a linha de sempre.
   reservaLiberada?: boolean;
+  /** C13: trava da Venda condicional (selo "N com clientes"). */
+  comClientesLiberado?: boolean;
   // 18/11/2026 (INC-2026-11-18-01): loja dona no grupo; null = sem selo.
   nomeDaLoja?: string | null;
 }) {
@@ -162,7 +165,7 @@ export function ProductRow({
                   <Text style={s.lotesChipSeta}>{lotesAbertos ? "▴" : "▾"}</Text>
                 </Pressable>
               ) : null}
-              <ReservaNaLinha estoque={product.stock} reservado={reservadoDoProduto(product, reservaLiberada)} testID={"estoque-reservado-" + product.id} />
+              <ReservaNaLinha estoque={product.stock} reservado={reservadoDoProduto(product, reservaLiberada)} comClientes={comClientesDoProduto(product, comClientesLiberado)} testID={"estoque-reservado-" + product.id} />
             </View>
           )}
           {!consulta && <Text style={s.price}>{m(fmt(product.price))}</Text>}

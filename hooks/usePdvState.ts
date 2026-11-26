@@ -110,6 +110,9 @@ import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
 import { pedidoNoCaixa } from "@/utils/pedido";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { reservadoDoProduto, vendaInvadeReserva, camposDaReserva } from "@/utils/reservaDoPedido";
+import { comClientesDoProduto, vendaInvadeComClientes, camposDeComClientes } from "@/utils/comClientes";
+import { condicionalLiberada } from "@/utils/condicionalLiberada";
+import type { AvisoDeCondicionalDados } from "@/components/screens/pdv/AvisoDeCondicional";
 import type { AvisoDeReservaDados } from "@/components/screens/pdv/AvisoDeReserva";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
@@ -277,6 +280,11 @@ export function usePdvState() {
   // servidor; sem eles a reserva é 0 e o toque e o bipe são os de sempre.
   const reservaLiberada = pedidoLiberado(user);
   const [avisoReserva, setAvisoReserva] = useState<(AvisoDeReservaDados & { vender: () => void }) | null>(null);
+  // C13 (Venda condicional): selo "N com clientes" e o aviso ao bipar peça que
+  // consta com cliente. Trava CONDICIONAL_LIBERADA (ou equipe Aura) e os campos
+  // out_qty do servidor; sem eles, o toque e o bipe são os de sempre.
+  const comClientesLiberado = condicionalLiberada(user);
+  const [avisoComClientes, setAvisoComClientes] = useState<(AvisoDeCondicionalDados & { vender: () => void }) | null>(null);
   useEffect(() => { if (!pedidoAtivo && showPedido) setShowPedido(false); }, [pedidoAtivo, showPedido]);
 
   const employees = useMemo(
@@ -780,16 +788,24 @@ export function usePdvState() {
   // aviso lança se ela quiser). Sem reserva devolve false e nada muda. Nunca
   // trava a venda.
   function perguntarSeReservado(
-    produto: { id: string; name?: string; reservedQty?: number; reservedByVariant?: Record<string, number> } | null | undefined,
+    produto: { id: string; name?: string; reservedQty?: number; reservedByVariant?: Record<string, number>; outQty?: number; outByVariant?: Record<string, number> } | null | undefined,
     variantId: string | null,
     estoque: number,
     vender: () => void,
   ): boolean {
     if (!produto) return false;
     const reservado = reservadoDoProduto(produto, reservaLiberada, variantId);
-    if (!(reservado > 0)) return false;
+    const comClientes = comClientesDoProduto(produto, comClientesLiberado, variantId);
+    if (!(reservado > 0) && !(comClientes > 0)) return false;
     const chave = variantId ? produto.id + "__" + variantId : produto.id;
     const noCarrinho = cart.filter(i => i.productId === chave).reduce((t, i) => t + (Number(i.qty) || 0), 0);
+    // C13: a peça consta com cliente e não sobra outra livre (provável devolução
+    // não registrada). Vem antes do aviso da reserva; nunca trava.
+    if (vendaInvadeComClientes({ estoque, comClientes, reservado, noCarrinho })) {
+      setAvisoComClientes({ nome: produto.name || "", estoque, comClientes, vender });
+      return true;
+    }
+    if (!(reservado > 0)) return false;
     if (!vendaInvadeReserva({ estoque, reservado, noCarrinho })) return false;
     setAvisoReserva({ nome: produto.name || "", estoque, reservado, vender });
     return true;
@@ -858,6 +874,10 @@ export function usePdvState() {
           ...((result as any).variant_reserved_qty !== undefined
             ? { reservedByVariant: { [result.variant_id]: Number((result as any).variant_reserved_qty) || 0 } }
             : {}),
+          // C13: peças com cliente da variante bipada (só com a trava da condicional).
+          ...((result as any).variant_out_qty !== undefined
+            ? { outByVariant: { [result.variant_id]: Number((result as any).variant_out_qty) || 0 } }
+            : {}),
         };
         // Não lança direto: o seletor abre com este tamanho marcado.
         abrirVendaNova();
@@ -893,7 +913,7 @@ export function usePdvState() {
         abrirVendaNova();
         // A4: peça separada em pedido pergunta antes (o bipe devolve reserved_qty).
         const lancarBp = () => { addToCart(bp); toast.success(bp.name); };
-        if (perguntarSeReservado({ ...bp, ...camposDaReserva(cru) }, null, parseFloat(cru.stock_qty) || 0, lancarBp)) return true;
+        if (perguntarSeReservado({ ...bp, ...camposDaReserva(cru), ...camposDeComClientes(cru) }, null, parseFloat(cru.stock_qty) || 0, lancarBp)) return true;
         lancarBp();
         return true;
       }
@@ -1240,6 +1260,7 @@ export function usePdvState() {
     // 17/11/2026 (Pedido, A2): a busca de cliente do Novo pedido é digitada.
     !showPedido &&
     !avisoReserva &&
+    !avisoComClientes &&
     // Número de comanda é digitado: o leitor não pode engolir as teclas.
     !comandas.showAdicionar &&
     !comandas.showFechar &&
@@ -1271,7 +1292,8 @@ export function usePdvState() {
     !!comandas.showFechar ||
     !!comandas.showPainel ||
     showPedido ||
-    !!avisoReserva;
+    !!avisoReserva ||
+    !!avisoComClientes;
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
   // 22/09/2026 (Matcon M0): unit/purchaseUnit/purchaseFactor descem pro
@@ -1605,6 +1627,10 @@ export function usePdvState() {
     pedidoAtivo, showPedido,
     // A4: selo no cartão e o aviso "Não vender / Vender mesmo assim".
     reservaLiberada,
+    comClientesLiberado,
+    avisoComClientes,
+    naoVenderComClientes: () => setAvisoComClientes(null),
+    venderComClientes: () => { const a = avisoComClientes; setAvisoComClientes(null); a?.vender(); },
     avisoReserva,
     naoVenderReservado: () => setAvisoReserva(null),
     venderReservado: () => { const a = avisoReserva; setAvisoReserva(null); a?.vender(); },

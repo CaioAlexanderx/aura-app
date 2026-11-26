@@ -78,6 +78,8 @@ const PATHS: Record<string, string> = {
   shopping_cart:  "M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6 M9 22a1 1 0 100-2 1 1 0 000 2z M20 22a1 1 0 100-2 1 1 0 000 2z",
   package:        "M16.5 9.4l-9-5.19 M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   bag:            "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0",
+  // Venda condicional (C13): cabide, o icone da condicional no mockup.
+  hanger:         "M12 8V7.2a2.1 2.1 0 1 0-2.1-2.1 M12 8L3.6 14.3A1.5 1.5 0 0 0 4.5 17h15a1.5 1.5 0 0 0 .9-2.7L12 8z",
   // shopping_bag e' usado em produto Studio — bag estilizada com alca completa
   shopping_bag:   "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z M3 6h18 M16 10a4 4 0 01-8 0",
     percent: "M19 5L5 19 M6.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M17.5 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
