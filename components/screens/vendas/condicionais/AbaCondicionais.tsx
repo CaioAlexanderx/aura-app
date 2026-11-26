@@ -27,12 +27,13 @@
 //
 // Quem decide se a aba existe é useAbaCondicionais (trava + módulo).
 // ============================================================
-import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Colors, CondicionalCores as CD } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/Button";
+import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { brl } from "@/components/screens/vendas/editarVendaUtils";
 import { hojeEmSaoPaulo } from "@/components/screens/vendas/pedidos/regrasDosPedidos";
@@ -265,6 +266,44 @@ function SeloMudo({ children, icone, testID }: { children: string; icone?: strin
   );
 }
 
+/**
+ * O valor da linha. Concluída com venda: o mockup mostra o valor do que ficou,
+ * que a lista do backend ainda não traz (card C18): fica sem valor, nunca "—".
+ * Concluída sem venda (tudo devolvido): "—" na tabela e "Sem venda" no cartão,
+ * como no mockup.
+ */
+function textoDoValor(c: LinhaDaCondicional, valor: number, semVenda: string): string {
+  if (valor) return brl(valor);
+  if (c.situacao === "concluida") return (Number(c.pecas_ficou) || 0) > 0 ? "" : semVenda;
+  return "—";
+}
+
+/**
+ * Selo da loja no consolidado: UMA linha, reticências no fim; o nome inteiro
+ * no title (web) e no toque longo. A linha da lista nunca cresce por causa dele.
+ */
+export function SeloDaLoja({ nome, testID }: { nome: string; testID?: string }) {
+  const ref = useRef<any>(null);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const el = ref.current;
+    if (el && typeof el.setAttribute === "function") el.setAttribute("title", nome);
+  }, [nome]);
+  const t = TONS.mut;
+  return (
+    <Pressable
+      ref={ref}
+      onLongPress={() => toast.info(nome)}
+      accessibilityLabel={nome}
+      style={[s.selo, s.seloLoja, { backgroundColor: t.bg, borderColor: t.line }]}
+      testID={testID}
+    >
+      <Icon name="store" size={13} color={t.ink} />
+      <Text style={[s.seloTexto, s.seloLojaTexto, { color: t.ink }]} numberOfLines={1} ellipsizeMode="tail">{nome}</Text>
+    </Pressable>
+  );
+}
+
 function corDoPrazo(p: Prazo): any {
   if (p.tom === "bad") return { color: CD.badInk, fontWeight: "700" };
   if (p.tom === "warn") return { color: CD.warnInk, fontWeight: "700" };
@@ -303,11 +342,11 @@ function Linha({ c, hoje, mostrarLoja, onAbrir, onLembrar }: LinhaProps) {
       <View style={s.colCliente}>
         <View style={s.nomeLinha}>
           <Text style={s.nome} numberOfLines={1}>{c.customer_name || ""}</Text>
-          {mostrarLoja && !!c.company_name && <SeloMudo icone="store" testID={"loja-da-linha-" + c.id}>{c.company_name}</SeloMudo>}
+          {mostrarLoja && !!c.company_name && <SeloDaLoja nome={c.company_name} testID={"loja-da-linha-" + c.id} />}
         </View>
         <Text style={s.sub} numberOfLines={2}>{subDaLinha(c)}</Text>
       </View>
-      <Text style={[s.valor, s.colValor]}>{valor ? brl(valor) : "—"}</Text>
+      <Text style={[s.valor, s.colValor]} testID={"valor-" + c.id}>{textoDoValor(c, valor, "—")}</Text>
       <View style={s.colPrazo} testID={"prazo-" + c.id}>
         {!!prazo.texto && <Text style={[s.prazo, corDoPrazo(prazo)]} numberOfLines={1}>{prazo.texto}</Text>}
         {!!prazo.sub && <Text style={s.sub}>{prazo.sub}</Text>}
@@ -343,7 +382,7 @@ function Cartao({ c, hoje, mostrarLoja, onAbrir, onLembrar }: LinhaProps) {
         {mostrarLoja && !!c.company_name && <Text> · <Text style={s.forte} testID={"loja-da-linha-" + c.id}>{c.company_name}</Text></Text>}
       </Text>
       <View style={s.r3} testID={"prazo-" + c.id}>
-        <Text style={s.valorCartao}>{valor ? brl(valor) : c.situacao === "concluida" && !c.pecas_ficou ? L.semVenda : "—"}</Text>
+        {!!textoDoValor(c, valor, L.semVenda) && <Text style={s.valorCartao} testID={"valor-" + c.id}>{textoDoValor(c, valor, L.semVenda)}</Text>}
         <Text style={s.prazo}>
           <Text style={corDoPrazo(prazo)}>{prazo.texto}</Text>
           {prazo.sub ? " · " + prazo.sub : ""}
@@ -391,14 +430,16 @@ const s = StyleSheet.create({
   colSit: { width: 134 },
   colAcoes: { width: 120 },
   cod: { fontSize: 12.5, color: Colors.ink2, fontFamily: Fonts.mono as any },
-  nomeLinha: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  nome: { fontSize: 14, fontWeight: "700", color: Colors.ink, flexShrink: 1 },
+  nomeLinha: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "nowrap", minWidth: 0 },
+  nome: { fontSize: 14, fontWeight: "700", color: Colors.ink, flexShrink: 1, minWidth: 0 },
   sub: { fontSize: 12.5, color: Colors.ink3, marginTop: 1 },
   valor: { fontSize: 13.5, fontWeight: "700", color: Colors.ink, fontFamily: Fonts.mono as any },
   prazo: { fontSize: 13, color: Colors.ink2 },
   selos: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   selo: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 22, paddingHorizontal: 9, paddingVertical: 1, borderRadius: 99, borderWidth: 1, alignSelf: "flex-start" },
   tracejado: { borderStyle: "dashed" },
+  seloLoja: { flexShrink: 1, minWidth: 0, maxWidth: "60%" as any },
+  seloLojaTexto: { flexShrink: 1, minWidth: 0 },
   seloTexto: { fontSize: 12, fontWeight: "700" },
   acoes: { flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap", gap: 6 },
   botao: { minHeight: 44 },

@@ -22,11 +22,13 @@ let mockLargura = 1280;
 let mockConsolidado = false;
 const mockRequest = jest.fn();
 const mockOpenWhatsApp = jest.fn((..._a: any[]) => true);
+const mockToastInfo = jest.fn();
 
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/ListSkeleton", () => ({ ListSkeleton: "ListSkeleton" }));
+jest.mock("@/components/Toast", () => ({ toast: { info: (...a: any[]) => mockToastInfo(...a), success: jest.fn(), error: jest.fn() } }));
 jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 jest.mock("@/services/api", () => ({ request: (...a: any[]) => mockRequest(...a) }));
 jest.mock("@/utils/whatsapp", () => {
@@ -145,6 +147,11 @@ function tocavel(tree: any, id: string) {
   if (!a.length) throw new Error("sem tocável " + id);
   return a[0];
 }
+function tocavelLongo(tree: any, id: string) {
+  const a = tree.root.findAll((n: any) => n.props && n.props.testID === id && typeof n.props.onLongPress === "function");
+  if (!a.length) throw new Error("sem toque longo " + id);
+  return a[0];
+}
 function tem(tree: any, id: string) {
   return tree.root.findAll((n: any) => n.props && n.props.testID === id, { deep: false }).length > 0;
 }
@@ -164,6 +171,7 @@ beforeEach(() => {
   mockConsolidado = false;
   mockRequest.mockReset();
   mockOpenWhatsApp.mockClear();
+  mockToastInfo.mockClear();
   mockRequest.mockImplementation(() => Promise.resolve(resposta()));
 });
 
@@ -287,6 +295,12 @@ describe("Vendas › Condicionais: lista", () => {
     expect(textoDe(um(tree, "loja-comp-1"))).toBe("Loja Centro4");
     expect(textoDe(um(tree, "loja-comp-2"))).toBe("Loja Shopping1");
     expect(textoDe(um(tree, "loja-da-linha-k29"))).toBe("Loja Shopping");
+    // Uma linha só, reticências no fim; nome inteiro no toque longo.
+    const textoDoSelo = um(tree, "loja-da-linha-k29").findAll((n: any) => n.props && n.props.numberOfLines === 1 && n.props.children === "Loja Shopping");
+    expect(textoDoSelo.length).toBeGreaterThan(0);
+    expect(textoDoSelo[0].props.ellipsizeMode).toBe("tail");
+    await act(async () => { tocavelLongo(tree, "loja-da-linha-k29").props.onLongPress(); });
+    expect(mockToastInfo).toHaveBeenCalledWith("Loja Shopping");
 
     await act(async () => { um(tree, "loja-comp-2").props.onPress(); });
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -365,6 +379,33 @@ describe("Vendas › Condicionais: lista", () => {
     const flat = (x: any): any[] => (Array.isArray(x) ? x.flatMap(flat) : x ? [x] : []);
     const estilo = Object.assign({}, ...flat(chip.props.style));
     expect(estilo.minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  it("concluída: com venda fica sem valor (nunca \"—\"); tudo devolvido segue o mockup", async () => {
+    const VENDIDA = linha({
+      id: "k27", numero_exibicao: "C-0027", status: "encerrada", situacao: "concluida", pecas: 2, pecas_com_cliente: 0,
+      pecas_ficou: 1, pecas_voltou: 1, valor_com_cliente: 0, closed_at: "2026-11-24T18:00:00Z",
+    });
+    const DEVOLVIDA = linha({
+      id: "k26", numero_exibicao: "C-0026", status: "encerrada", situacao: "concluida", pecas: 3, pecas_com_cliente: 0,
+      pecas_ficou: 0, pecas_voltou: 3, valor_com_cliente: 0, closed_at: "2026-11-23T18:00:00Z",
+    });
+    mockRequest.mockImplementation(() => Promise.resolve(resposta({ condicionais: [VENDIDA, DEVOLVIDA] })));
+    let tree = await montar();
+    expect(textoDe(um(tree, "valor-k27"))).toBe("");
+    expect(textoDe(um(tree, "condicional-k27"))).toContain("Ficou 1 de 2 peças");
+    expect(textoDe(um(tree, "valor-k26"))).toBe("—");
+    expect(textoDe(um(tree, "prazo-k27"))).toBe("concluída em 24/11");
+    mockLargura = 375;
+    tree = await montar();
+    expect(tem(tree, "valor-k27")).toBe(false);
+    expect(textoDe(um(tree, "valor-k26"))).toBe("Sem venda");
+  });
+
+  it("selo Cancelada em cinza neutro", async () => {
+    mockRequest.mockImplementation(() => Promise.resolve(resposta({ condicionais: [linha({ id: "k9", status: "cancelada", situacao: "cancelada" })] })));
+    const tree = await montar();
+    expect(textoDe(um(tree, "selo-cancelada"))).toBe("Cancelada");
   });
 
   it("linha só é tocável com onAbrir (o detalhe é do C10)", async () => {
