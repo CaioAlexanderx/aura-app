@@ -37,6 +37,20 @@ describe("orçamento vencido", () => {
   });
 });
 
+describe("renovar a validade (PATCH /validade)", () => {
+  test("manda validity_days para a rota certa", async () => {
+    jest.resetModules();
+    const request = jest.fn().mockResolvedValue({ quote: {} });
+    jest.doMock("@/services/api", () => ({ request }));
+    const { studioApi } = require("@/services/studioApi");
+    await studioApi.renovarOrcamento("c1", "q1", 7);
+    expect(request).toHaveBeenCalledWith(
+      "/companies/c1/studio/quotes/q1/validade",
+      expect.objectContaining({ method: "PATCH", body: { validity_days: 7 } }),
+    );
+  });
+});
+
 describe("custo do insumo com a máscara do Caixa", () => {
   test("dígitos entram como centavos", () => {
     expect(maskCurrency("085")).toBe("0,85");

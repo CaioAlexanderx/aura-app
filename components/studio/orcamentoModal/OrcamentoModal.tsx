@@ -396,7 +396,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
           texto: `O orçamento volta a ficar em aberto por mais ${Number(quote?.validity_days) || 7} dias, a partir de hoje.`,
           rotulo: "Renovar validade",
           acao: async () => {
-            const r = await studioApi.renovarOrcamento(cid, quote!.id);
+            const r = await studioApi.renovarOrcamento(cid, quote!.id, Math.max(1, Number(quote?.validity_days) || 7));
             const q = { ...quote!, ...r.quote } as StudioQuote;
             setQuote(q); onMudou?.(q);
             toast.success("Validade renovada");
