@@ -259,13 +259,7 @@ export default function WhatsAppScreen() {
 
           {secao === "automaticas" && !consolidatedView && (
             <View testID="wa-varejo-bloco-automaticas">
-              <AutomaticasCard
-                companyId={companyId}
-                saldo={saldo.saldo}
-                auto={auto}
-                status={wa.status}
-                onStatusChanged={wa.reloadStatus}
-              />
+              <AutomaticasCard auto={auto} />
             </View>
           )}
 

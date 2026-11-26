@@ -3,9 +3,9 @@
 //
 // As novidades do mês (10 no plano) vêm divididas 4/4/2 entre Aniversário,
 // Venda+ e a oferta do Crediário. A lojista mexe com + e −. As regras são
-// as mesmas que o servidor aplica ao salvar (ele recusa o que passar), e
-// moram aqui como função pura para a tela nunca oferecer um toque que o
-// servidor vai recusar:
+// as mesmas que o servidor aplica ao salvar (DIVISAO_ACIMA_DO_SALDO e
+// DIVISAO_ABAIXO_DO_USADO), e moram aqui como função pura para a tela
+// nunca oferecer um toque que o servidor vai recusar:
 //
 //   - a soma das partes nunca passa do saldo de novidades;
 //   - nenhuma parte fica abaixo do que já foi usado no mês;
@@ -14,15 +14,24 @@
 // Entrada torta (parte ausente, negativa, fracionada) = divisão inválida
 // (null / false): dúvida bloqueia.
 // ============================================================
+import type { WaAutoKey, WaParte } from "@/services/waConfigApi";
 
-export type AutoKey = "aniversario" | "vendamais" | "crediario";
+/** As três partes da divisão (e as chaves do Crediário: a parte é `crediario`). */
+export type AutoKey = WaParte;
 
-export const AUTO_KEYS: AutoKey[] = ["aniversario", "vendamais", "crediario"];
+export const AUTO_KEYS: AutoKey[] = ["aniversario", "venda_mais", "crediario"];
 
 export type Partes = Record<AutoKey, number>;
 
 /** Divisão que já vem pronta: Aniversário 4, Venda+ 4, Crediário 2. */
-export const DIVISAO_PADRAO: Partes = { aniversario: 4, vendamais: 4, crediario: 2 };
+export const DIVISAO_PADRAO: Partes = { aniversario: 4, venda_mais: 4, crediario: 2 };
+
+/** Automática que gasta cada parte (o Crediário "vender"; o "cobrar" usa avisos). */
+export const AUTOMATICA_DA_PARTE: Record<AutoKey, WaAutoKey> = {
+  aniversario: "aniversario",
+  venda_mais: "venda_mais",
+  crediario: "crediario_vender",
+};
 
 function inteiroNaoNegativo(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0;
@@ -77,38 +86,58 @@ export function ajustarParte(div: Partes, usadas: Partes, key: AutoKey, delta: 1
 
 export const ROTULO_AUTO: Record<AutoKey, string> = {
   aniversario: "Aniversário",
-  vendamais: "Venda+",
+  venda_mais: "Venda+",
   crediario: "Crediário: vender",
 };
 
 export const COR_AUTO: Record<AutoKey, string> = {
   aniversario: "#c4b5fd",
-  vendamais: "#f9a8d4",
+  venda_mais: "#f9a8d4",
   crediario: "#6ee7b7",
 };
 
+export interface AutoLida {
+  ligada: boolean;
+  /** Parte da divisão menos o usado (null quando a automática usa avisos). */
+  livres: number | null;
+  config: Record<string, any>;
+  resumo: string | null;
+}
+
 export interface AutomaticasInfo {
+  total: number;
   divisao: Partes;
   usadas: Partes;
-  ligadas: Record<AutoKey, boolean>;
-  linhas: Record<AutoKey, string[]>;
+  /** ISO do aceite das novidades; null = ainda não respondeu. */
+  aceiteEm: string | null;
+  autos: Partial<Record<WaAutoKey, AutoLida>>;
 }
 
 /**
- * Lê a resposta de /automaticas. Divisão ou usadas tortas = null (a tela
- * trava). `ligada` ausente = desligada: nunca liga por omissão.
+ * Lê a resposta de GET /automaticas. Total, divisão ou usadas tortos =
+ * null (a tela trava). `ligada` ausente = desligada: nunca liga por
+ * omissão.
  */
 export function lerAutomaticas(raw: any): AutomaticasInfo | null {
   if (!raw || typeof raw !== "object") return null;
-  const divisao = lerPartes(raw.divisao);
-  const usadas = lerPartes(raw.usadas);
-  if (!divisao || !usadas) return null;
-  const ligadas = {} as Record<AutoKey, boolean>;
-  const linhas = {} as Record<AutoKey, string[]>;
-  for (const k of AUTO_KEYS) {
-    const a = raw.automaticas && raw.automaticas[k];
-    ligadas[k] = !!a && a.ligada === true;
-    linhas[k] = a && Array.isArray(a.linhas) ? a.linhas.filter((l: unknown) => typeof l === "string") : [];
+  const nov = raw.novidades;
+  if (!nov || typeof nov !== "object") return null;
+  const total = nov.total;
+  const divisao = lerPartes(nov.divisao);
+  const usadas = lerPartes(nov.usadas);
+  if (!inteiroNaoNegativo(total) || !divisao || !usadas) return null;
+  const autos: AutomaticasInfo["autos"] = {};
+  if (Array.isArray(raw.automaticas)) {
+    for (const a of raw.automaticas) {
+      if (!a || typeof a.key !== "string") continue;
+      autos[a.key as WaAutoKey] = {
+        ligada: a.ligada === true,
+        livres: inteiroNaoNegativo(a.livres) ? a.livres : null,
+        config: a.config && typeof a.config === "object" ? a.config : {},
+        resumo: typeof a.resumo === "string" ? a.resumo : null,
+      };
+    }
   }
-  return { divisao, usadas, ligadas, linhas };
+  const aceiteEm = typeof raw.aceite_novidades_em === "string" && raw.aceite_novidades_em ? raw.aceite_novidades_em : null;
+  return { total, divisao, usadas, aceiteEm, autos };
 }

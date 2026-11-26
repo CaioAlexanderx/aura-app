@@ -5,84 +5,58 @@
 //    oferta do Crediário) tem um dono para cada novidade. + e − por
 //    automática; o + trava quando não sobra novidade sem dono e o − trava
 //    no que já foi usado. O servidor recusa o que a tela deixasse passar.
-// 2. Um cartão por automática, com o liga/desliga. Na primeira que se
-//    liga, a pergunta do aceite: "Seus clientes aceitaram receber
-//    novidades da loja pelo WhatsApp?" — grava a data (a mesma
-//    declaração de marketing que a aba Conexão já guardava).
+// 2. Um cartão por automática, com o liga/desliga. Ao ligar uma que gasta
+//    novidades sem o aceite gravado, a pergunta: "Seus clientes aceitaram
+//    receber novidades da loja pelo WhatsApp?" (uma vez só).
+// 3. As cobranças do crediário usam os AVISOS, não as novidades.
 //
-// Sem saldo ou sem automáticas lidas do servidor, tudo trava.
+// Sem as automáticas lidas do servidor, tudo trava.
 // ============================================================
-import React, { useCallback, useState } from "react";
+import React from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { birthdayApi } from "@/services/birthdayApi";
-import type { WaStatus } from "@/services/waApi";
-import type { SaldoInfo } from "./waSaldo";
+import type { WaAutoKey } from "@/services/waConfigApi";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
-import { mapWaError, waMarketingConsentOk } from "./waGuards";
+import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
 import {
-  AUTO_KEYS, COR_AUTO, ROTULO_AUTO, podeDarMais, podeTirar, semDono, type AutoKey,
+  AUTOMATICA_DA_PARTE, AUTO_KEYS, COR_AUTO, ROTULO_AUTO, podeDarMais, podeTirar, semDono,
 } from "./waDivisao";
 
 interface Props {
-  companyId: string;
-  saldo: SaldoInfo | null;
   auto: UseWaAutomaticas;
-  status: WaStatus | null;
-  /** O aceite mudou: o pai recarrega o /status. */
-  onStatusChanged: () => void;
   /** Abre a configuração da automática (Aniversário, Venda+, Crediário). */
-  onAjustar?: (key: AutoKey) => void;
+  onAjustar?: (key: WaAutoKey) => void;
 }
 
-const DESC: Record<AutoKey, { desc: string; linhas: string[] }> = {
+const DESC: Record<WaAutoKey, { titulo: string; desc: string; linhas: string[]; cor: string }> = {
   aniversario: {
+    titulo: "Aniversário", cor: COR_AUTO.aniversario,
     desc: "Manda parabéns com presente no dia.",
     linhas: ["Sai às 10h, no dia do aniversário", "Quem pediu para não receber fica de fora"],
   },
-  vendamais: {
+  venda_mais: {
+    titulo: "Venda+", cor: COR_AUTO.venda_mais,
     desc: "Chama de volta quem parou de comprar.",
-    linhas: ["Todo dia 1º, para quem sumiu", "Começa por quem mais comprava"],
+    linhas: ["Começa por quem mais comprava", "Quem pediu para não receber fica de fora"],
   },
-  crediario: {
+  crediario_vender: {
+    titulo: "Crediário: vender", cor: COR_AUTO.crediario,
     desc: "Oferta para quem paga em dia e tem limite livre.",
-    linhas: ["Uma vez por mês, no dia 10", "Começa por quem tem mais limite livre"],
+    linhas: ["Uma vez por mês", "Começa por quem tem mais limite livre"],
+  },
+  crediario_cobrar: {
+    titulo: "Crediário: cobrar", cor: Colors.violet3,
+    desc: "Avisa as parcelas que vencem. Usa os avisos do mês, não as novidades.",
+    linhas: ["Se os avisos acabarem, a cobrança passa para o seu WhatsApp, de graça"],
   },
 };
 
-export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChanged, onAjustar }: Props) {
-  const [perguntando, setPerguntando] = useState<AutoKey | null>(null);
-  const [gravandoAceite, setGravandoAceite] = useState(false);
-  const [erroAceite, setErroAceite] = useState<string | null>(null);
+const ORDEM: WaAutoKey[] = ["aniversario", "venda_mais", "crediario_vender", "crediario_cobrar"];
 
+export function AutomaticasCard({ auto, onAjustar }: Props) {
   const info = auto.info;
-  const total = saldo ? saldo.novidades.total : null;
-  const aceitou = waMarketingConsentOk(status);
-
-  const confirmarAceite = useCallback(async () => {
-    const key = perguntando;
-    if (!key) return;
-    setGravandoAceite(true);
-    setErroAceite(null);
-    try {
-      await birthdayApi.saveSettings(companyId, { wa_marketing_consent: true });
-      onStatusChanged();
-      setPerguntando(null);
-      await auto.ligar(key, true);
-    } catch (e: any) {
-      setErroAceite(mapWaError(e).message);
-    } finally {
-      setGravandoAceite(false);
-    }
-  }, [perguntando, companyId, onStatusChanged, auto]);
-
-  const alternar = useCallback((key: AutoKey) => {
-    if (!info) return;
-    if (info.ligadas[key]) { auto.ligar(key, false); return; }
-    if (!aceitou) { setPerguntando(key); return; }
-    auto.ligar(key, true);
-  }, [info, aceitou, auto]);
+  const alt = useAlternarAutomatica(auto);
 
   if (auto.carregando && !info) {
     return (
@@ -92,7 +66,7 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
     );
   }
 
-  if (!info || total == null) {
+  if (!info) {
     return (
       <View style={s.card} testID="wa-auto-indisponivel">
         <View style={s.linha}>
@@ -109,6 +83,7 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
     );
   }
 
+  const total = info.total;
   const livres = semDono(info.divisao, total);
   const travado = auto.salvando;
 
@@ -148,7 +123,7 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
                 <View style={[s.bolinha, { backgroundColor: COR_AUTO[k] }]} />
                 <Text style={s.rowRotulo}>{ROTULO_AUTO[k]}</Text>
                 <Pressable
-                  onPress={() => auto.ajustar(k, -1, total)}
+                  onPress={() => auto.ajustar(k, -1)}
                   disabled={!menos}
                   accessibilityRole="button"
                   accessibilityLabel={`Tirar 1 de ${ROTULO_AUTO[k]}`}
@@ -160,7 +135,7 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
                 </Pressable>
                 <Text style={s.rowN} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
                 <Pressable
-                  onPress={() => auto.ajustar(k, 1, total)}
+                  onPress={() => auto.ajustar(k, 1)}
                   disabled={!mais}
                   accessibilityRole="button"
                   accessibilityLabel={`Dar mais 1 para ${ROTULO_AUTO[k]}`}
@@ -183,25 +158,27 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
         {!!auto.erro && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
       </View>
 
-      {AUTO_KEYS.map((k) => {
-        const ligada = info.ligadas[k];
-        const restam = Math.max(0, info.divisao[k] - info.usadas[k]);
-        const linhas = info.linhas[k].length ? info.linhas[k] : DESC[k].linhas;
+      {ORDEM.map((k) => {
+        const lida = info.autos[k];
+        const ligada = lida?.ligada === true;
+        const d = DESC[k];
+        const linhas = lida?.resumo ? [lida.resumo, ...d.linhas] : d.linhas;
+        const usaNovidades = k !== "crediario_cobrar";
         return (
           <View key={k} style={s.card} testID={`wa-auto-cartao-${k}`}>
             <View style={s.cartaoTopo}>
-              <View style={[s.bolinha, { backgroundColor: COR_AUTO[k] }]} />
+              <View style={[s.bolinha, { backgroundColor: d.cor }]} />
               <View style={{ flex: 1 }}>
-                <Text style={s.titulo}>{ROTULO_AUTO[k]}</Text>
-                <Text style={s.sub}>{DESC[k].desc}</Text>
+                <Text style={s.titulo}>{d.titulo}</Text>
+                <Text style={s.sub}>{d.desc}</Text>
               </View>
               <Pressable
-                onPress={() => alternar(k)}
-                disabled={travado}
+                onPress={() => alt.alternar(k)}
+                disabled={travado || !lida}
                 accessibilityRole="switch"
-                accessibilityState={{ checked: ligada, disabled: travado }}
-                accessibilityLabel={(ligada ? "Desligar " : "Ligar ") + ROTULO_AUTO[k]}
-                style={[s.sw, ligada && s.swOn, travado && { opacity: 0.6 }]}
+                accessibilityState={{ checked: ligada, disabled: travado || !lida }}
+                accessibilityLabel={(ligada ? "Desligar " : "Ligar ") + d.titulo}
+                style={[s.sw, ligada && s.swOn, (travado || !lida) && { opacity: 0.6 }]}
                 testID={`wa-auto-liga-${k}`}
               >
                 <View style={[s.swBolinha, ligada && s.swBolinhaOn]} />
@@ -215,7 +192,11 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
             ))}
             <View style={s.rodape}>
               <Text style={[s.estado, { color: ligada ? Colors.green : Colors.ink3 }]} testID={`wa-auto-estado-${k}`}>
-                {ligada ? `Ligado · ${restam} de ${info.divisao[k]} livres este mês` : "Desligado · nada sai"}
+                {!lida
+                  ? "Indisponível"
+                  : ligada
+                    ? (usaNovidades ? `Ligado · ${lida.livres ?? 0} de ${info.divisao[parteDe(k)]} livres este mês` : "Ligado")
+                    : "Desligado · nada sai"}
               </Text>
               {!!onAjustar && (
                 <Pressable onPress={() => onAjustar(k)} accessibilityRole="button" style={s.btnLink} testID={`wa-auto-ajustar-${k}`}>
@@ -224,33 +205,19 @@ export function AutomaticasCard({ companyId, saldo, auto, status, onStatusChange
               )}
             </View>
 
-            {perguntando === k && (
-              <View style={s.aceite} testID="wa-auto-aceite">
-                <Text style={s.aceiteTitulo}>Seus clientes aceitaram receber novidades da loja pelo WhatsApp?</Text>
-                <View style={s.aceiteBotoes}>
-                  <Pressable
-                    onPress={confirmarAceite}
-                    disabled={gravandoAceite}
-                    accessibilityRole="button"
-                    style={[s.btnPrim, gravandoAceite && { opacity: 0.6 }]}
-                    testID="wa-auto-aceite-sim"
-                  >
-                    {gravandoAceite && <ActivityIndicator size="small" color="#fff" />}
-                    <Text style={s.btnPrimTxt}>Sim, aceitaram</Text>
-                  </Pressable>
-                  <Pressable onPress={() => { setPerguntando(null); setErroAceite(null); }} accessibilityRole="button" style={s.btnSec} testID="wa-auto-aceite-nao">
-                    <Text style={s.btnSecTxt}>Ainda não</Text>
-                  </Pressable>
-                </View>
-                <Text style={s.sub}>Pergunta feita uma vez só. Quem pedir para sair deixa de receber sozinho.</Text>
-                {!!erroAceite && <Text style={s.erro}>{erroAceite}</Text>}
-              </View>
+            {alt.perguntando === k && (
+              <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
             )}
           </View>
         );
       })}
     </View>
   );
+}
+
+function parteDe(k: WaAutoKey): "aniversario" | "venda_mais" | "crediario" {
+  const par = (Object.keys(AUTOMATICA_DA_PARTE) as ("aniversario" | "venda_mais" | "crediario")[]).find((p) => AUTOMATICA_DA_PARTE[p] === k);
+  return par || "crediario";
 }
 
 const s = StyleSheet.create({
@@ -287,14 +254,4 @@ const s = StyleSheet.create({
   swBolinhaOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
   btnLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-start" },
   btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
-  aceite: { backgroundColor: Colors.violetD, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, padding: 12, gap: 8 },
-  aceiteTitulo: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  aceiteBotoes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  btnPrim: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44,
-    backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14,
-  },
-  btnPrimTxt: { fontSize: 12.5, fontWeight: "700", color: "#fff" },
-  btnSec: { minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
-  btnSecTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
 } as any);
