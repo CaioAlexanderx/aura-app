@@ -150,7 +150,7 @@ function Cartao({
   abrindo: boolean;
   onAbrir: () => void;
 }) {
-  const nome = o.customer_name || o.display_name || "Sem cadastro";
+  const nome = nomeDoCliente(o);
   const origem = origemDoPedido(o);
   const ativo = ehAtivo(o);
   const prazo = ativo ? prazoDoCartao(o) : null;
