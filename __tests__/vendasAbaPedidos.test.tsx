@@ -170,7 +170,8 @@ describe("Vendas › aba Pedidos", () => {
   it("6. equipe Aura vê a aba com a trava desligada (QA em produção, como o backend)", async () => {
     mockUser = { id: "u1", is_staff: true };
     const tree = await montar();
-    expect(abas(tree).map((t: any) => t.key)).toEqual(["vendas", "pedidos", "ranking", "fechamentos"]);
+    // 25/11/2026 (C4): a equipe Aura também vê a aba Condicionais (mesma regra da trava).
+    expect(abas(tree).map((t: any) => t.key)).toEqual(["vendas", "condicionais", "pedidos", "ranking", "fechamentos"]);
   });
 
   it("7. consolidado: o número da aba vem de /me/pedidos", async () => {

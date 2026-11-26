@@ -30,6 +30,8 @@ jest.mock("@/hooks/usePedidos", () => ({
   usePedidos: () => ({ numeros: null, isFetching: false, refetch: jest.fn() }),
 }));
 jest.mock("@/components/screens/vendas/pedidos/AbaPedidos", () => ({ AbaPedidos: "AbaPedidos" }));
+// 25/11/2026 (C4): a aba Condicionais fica fora (trava desligada), sem consulta.
+jest.mock("@/hooks/useAbaCondicionais", () => ({ useAbaCondicionais: () => ({ visivel: false }) }));
 jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { push: jest.fn() } }));
 jest.mock("@/stores/auth", () => ({
   useAuthStore: () => ({ company: { id: "comp-1" }, consolidatedView: true }),
