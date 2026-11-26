@@ -69,6 +69,8 @@ export const TEXTOS_DA_NOVA = {
   comCliente: "com cliente",
   // FORA DO MOCKUP: variante zerada que nenhuma cliente segura.
   semEstoque: "sem estoque",
+  semEstoqueLivre: "sem estoque livre",
+  nComClientes: (n: number) => (n === 1 ? "1 com cliente" : `${n} com clientes`),
   escolhaCorETamanho: (preco: string) => `${preco} · escolha a cor e o tamanho`,
   colocar: "Colocar na condicional",
   umaUn: "1 un.",
@@ -81,7 +83,6 @@ export const TEXTOS_DA_NOVA = {
   carregandoPecas: "Carregando as peças…",
   semResultadoPeca: "Nenhuma peça com esse nome ou código.",
   naoAchouCodigo: (codigo: string) => `Não achei a peça do código ${codigo}.`,
-  semLivreNaLoja: (nome: string) => `${nome} não tem unidade livre e sua loja controla o estoque.`,
   noLimite: "Uma condicional leva até 60 peças.",
   tamanhoUnico: "tamanho único",
   ate: (a: string, b: string) => `${a} ao ${b}`,

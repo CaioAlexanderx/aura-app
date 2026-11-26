@@ -11,7 +11,7 @@
 // completa o cadastro.
 // ============================================================
 import { View, Text, TextInput, StyleSheet } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, CondicionalCores as CC } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { maskPhone } from "@/utils/masks";
 import { TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
@@ -58,7 +58,7 @@ export function PassoCliente({ cliente, onEscolher, onNovoCliente, telefoneAvuls
       {semTelefone && (
         <View style={s.semTel} testID="nova-sem-telefone">
           <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-            <Icon name="alert" size={14} color={Colors.amber} />
+            <Icon name="alert" size={14} color={CC.warnInk} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.semTelTit}>{T.semTelefoneTitulo}</Text>
               <Text style={e.notaTxt}>{T.semTelefoneTexto}</Text>
@@ -88,6 +88,6 @@ export function PassoCliente({ cliente, onEscolher, onNovoCliente, telefoneAvuls
 }
 
 const s = StyleSheet.create({
-  semTel: { marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.amber, backgroundColor: Colors.amberD },
+  semTel: { marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: CC.warnLine, backgroundColor: CC.warnBg },
   semTelTit: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 2 },
 });

@@ -5,47 +5,51 @@
 // estoque da prateleira não muda quando a peça sai em condicional: ela só
 // passa a contar em "com clientes". Funções puras.
 //
-// O app ainda não tem `utils/comClientes.ts` (C13, aura-app#1378): o cálculo
-// mora aqui, lendo os campos que o backend manda em GET /products
-// (`reserved_by_variant`, `out_by_variant`, e os totais `reserved_qty` e
-// `out_qty`). Quando o C13 entrar, esta leitura pode virar um import.
-// Campo ausente (trava desligada, backend antigo) = 0, e nada muda.
+// A conta é a do C13 (utils/comClientes.ts: camposDeComClientes e
+// livresDaPeca) e a reserva do Pedido (utils/reservaDoPedido.ts). Se o backend
+// mandar `resolver_by_variant` / `resolver_qty` (peças para resolver), entram
+// na conta. Campo ausente = 0, e nada muda.
 // ============================================================
+
+import { camposDeComClientes, livresDaPeca } from "@/utils/comClientes";
+import { camposDaReserva } from "@/utils/reservaDoPedido";
 
 export type ReservaDoProduto = {
   reservadoTotal: number;
   reservadoPorVariante: Record<string, number>;
   comClienteTotal: number;
   comClientePorVariante: Record<string, number>;
+  resolverTotal: number;
+  resolverPorVariante: Record<string, number>;
 };
-
-function positivo(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
 
 function mapa(bruto: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (bruto && typeof bruto === "object") {
     for (const k of Object.keys(bruto as Record<string, unknown>)) {
-      const n = positivo((bruto as Record<string, unknown>)[k]);
-      if (n > 0) out[k] = n;
+      const n = Number((bruto as Record<string, unknown>)[k]);
+      if (Number.isFinite(n) && n > 0) out[k] = n;
     }
   }
   return out;
 }
 
-/** Lê a reserva do pedido e o "com clientes" do produto cru da API. */
+/** Lê reserva do pedido, "com clientes" e "para resolver" do produto cru da API. */
 export function reservaDoProdutoCru(p: any): ReservaDoProduto {
+  const r = camposDaReserva(p);
+  const c = camposDeComClientes(p);
+  const n = Number(p?.resolver_qty);
   return {
-    reservadoTotal: positivo(p?.reserved_qty),
-    reservadoPorVariante: mapa(p?.reserved_by_variant),
-    comClienteTotal: positivo(p?.out_qty),
-    comClientePorVariante: mapa(p?.out_by_variant),
+    reservadoTotal: r.reservedQty || 0,
+    reservadoPorVariante: r.reservedByVariant || {},
+    comClienteTotal: c.outQty || 0,
+    comClientePorVariante: c.outByVariant || {},
+    resolverTotal: Number.isFinite(n) && n > 0 ? n : 0,
+    resolverPorVariante: mapa(p?.resolver_by_variant),
   };
 }
 
-/** Livres para levar: nunca negativo. */
-export function livresParaLevar(estoque: number, reservado: number, comCliente: number): number {
-  return Math.max(0, (Number(estoque) || 0) - (Number(reservado) || 0) - (Number(comCliente) || 0));
+/** Livres para levar: estoque − com clientes − reservado (− para resolver), nunca negativo. */
+export function livresParaLevar(estoque: number, reservado: number, comCliente: number, resolver: number = 0): number {
+  return livresDaPeca(estoque, comCliente, (Number(reservado) || 0) + (Number(resolver) || 0));
 }

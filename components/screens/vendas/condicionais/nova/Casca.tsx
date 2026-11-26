@@ -12,7 +12,7 @@
 // ============================================================
 import { type ReactNode } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform, useWindowDimensions } from "react-native";
-import { Colors, IS_DARK_MODE } from "@/constants/colors";
+import { Colors, CondicionalCores as CC, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import { TEXTOS_DA_NOVA as T } from "./textos";
@@ -57,7 +57,7 @@ export function Casca({ titulo, passo, corpo, trilho, rodape, corpoEscondido, mi
       <View style={[s.panel, IS_WEB ? panelWeb : { backgroundColor: Colors.bg3 }]} {...dialogo}>
         <View style={s.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <View style={s.headerIco}><Icon name="tag" size={16} color="#a78bfa" /></View>
+            <View style={s.headerIco}><Icon name="hanger" size={16} color="#a78bfa" /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.headerTitle}>{titulo}</Text>
               {largo && passo !== 4 && <Text style={s.headerSub}>{T.subtitulo}</Text>}
@@ -181,7 +181,7 @@ export const e = StyleSheet.create({
   desligado: { opacity: 0.45 },
   nota: { flexDirection: "row", gap: 8, alignItems: "flex-start", padding: 10, borderRadius: 10, backgroundColor: "rgba(37,99,235,0.16)", marginTop: 12 },
   notaTxt: { flex: 1, fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
-  notaAmbar: { backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber },
+  notaAmbar: { backgroundColor: CC.warnBg, borderWidth: 1, borderColor: CC.warnLine },
   notaVm: { backgroundColor: "rgba(248,113,113,0.12)", borderWidth: 1, borderColor: Colors.red },
   campo: { marginBottom: 12 },
   rotulo: { color: Colors.ink2, fontSize: 12, fontWeight: "600", marginBottom: 6 },

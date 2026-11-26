@@ -9,6 +9,7 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
+import { pdvApi } from "@/services/pdvApi";
 import { guardarVariacoes, variacoesEmCache } from "@/utils/cacheDeVariacoes";
 import { produtosDaResposta, variantesDoProduto, type ProdutoDaBusca, type VarianteDaBusca } from "./busca";
 
@@ -37,5 +38,16 @@ export function usePecasDaLoja(lojaId: string | null | undefined, ativo: boolean
     }
   }, [lojaId]);
 
-  return { produtos, carregando: isLoading, variantesDe };
+  // O catálogo vem inteiro (até 20 mil itens); o que não está nele o servidor confere
+  // com o mesmo bipe do Caixa (GET /pdv/scan/:code).
+  const acharNoServidor = useCallback(async (codigo: string): Promise<{ produto: ProdutoDaBusca; variantId: string | null } | null> => {
+    if (!lojaId) return null;
+    const r: any = await pdvApi.scan(lojaId, codigo);
+    if (r?.match !== "exact" || !r.product) return null;
+    const local = produtos.find((p) => p.id === String(r.product.id));
+    const produto = local || produtosDaResposta([r.product])[0];
+    return produto ? { produto, variantId: r.variant_id ? String(r.variant_id) : null } : null;
+  }, [lojaId, produtos]);
+
+  return { produtos, carregando: isLoading, variantesDe, acharNoServidor };
 }

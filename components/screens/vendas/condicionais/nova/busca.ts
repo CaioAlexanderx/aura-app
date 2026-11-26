@@ -130,7 +130,7 @@ export function variantesDoProduto(produto: ProdutoDaBusca, cruas: any[]): Varia
     if (cor && /^#[0-9a-fA-F]{6}$/.test(cor)) cor = nomeDaCorDaVariante(v, cor) || hexToName(cor);
     const tamanho = ct.tamanho ?? (!ct.cor && v.sku_suffix ? String(v.sku_suffix) : null);
     const estoque = parseFloat(v.stock_qty) || 0;
-    const reservado = produto.reserva.reservadoPorVariante[v.id] || 0;
+    const reservado = (produto.reserva.reservadoPorVariante[v.id] || 0) + (produto.reserva.resolverPorVariante[v.id] || 0);
     const comCliente = produto.reserva.comClientePorVariante[v.id] || 0;
     const pv = precoDaVariante(v, { price: produto.price, emPromocao: produto.emPromocao, precoEfetivo: produto.precoEfetivo });
     return {
@@ -148,7 +148,7 @@ export function variantesDoProduto(produto: ProdutoDaBusca, cruas: any[]): Varia
 
 /** Produto sem variantes: livres do produto. */
 export function livresDoProduto(p: ProdutoDaBusca): number {
-  return livresParaLevar(p.estoque, p.reserva.reservadoTotal, p.reserva.comClienteTotal);
+  return livresParaLevar(p.estoque, p.reserva.reservadoTotal, p.reserva.comClienteTotal, p.reserva.resolverTotal);
 }
 
 /** Quantas unidades desta peça (produto + variante) já estão na lista. */

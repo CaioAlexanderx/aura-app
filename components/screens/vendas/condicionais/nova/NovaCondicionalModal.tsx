@@ -62,7 +62,7 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
   const lojaAtiva = consolidado ? lojaId : (auth.company?.id as string | undefined) || null;
   const { settings } = usePdvSettings(lojaAtiva);
   const vendeSemEstoque = lerVendaSemEstoque(settings);
-  const { produtos, carregando, variantesDe } = usePecasDaLoja(lojaAtiva, visible && passo >= 1);
+  const { produtos, carregando, variantesDe, acharNoServidor } = usePecasDaLoja(lojaAtiva, visible && passo >= 1);
 
   // Abriu: recomeça do zero.
   const abertoAntes = useRef(false);
@@ -158,7 +158,7 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
       <View style={e.rLinha}><Text style={e.rRot}>{T.rPecas}</Text><Text style={e.rVal}>{pecas.length ? T.pecas(pecas.length) : T.rNenhuma}</Text></View>
       <PassosDoFim.LinhasDoResumo estado={estado} />
       <View style={[e.rLinha, e.rTot]}><Text style={e.rRot}>{T.rTotal}</Text><Text style={e.rTotVal} testID="nova-resumo-total">{fmtBRL(total)}</Text></View>
-      <View style={e.rNota}><Icon name="tag" size={14} color="#ddd6fe" /><Text style={e.rNotaTxt}>{T.notaNadaCobrado}</Text></View>
+      <View style={e.rNota}><Icon name="hanger" size={14} color="#ddd6fe" /><Text style={e.rNotaTxt}>{T.notaNadaCobrado}</Text></View>
     </View>
   );
 
@@ -194,6 +194,7 @@ export function NovaCondicionalModal({ visible, onClose, onCriada, onVerCondicio
             produtos={produtos}
             carregando={carregando}
             variantesDe={variantesDe}
+            acharNoServidor={acharNoServidor}
             pecas={pecas}
             onAdicionar={(p) => { setPecas((l) => [...l, p]); setFaltas(null); }}
             onTirar={(chave) => { setPecas((l) => l.filter((x) => x.chave !== chave)); setFaltas(null); }}

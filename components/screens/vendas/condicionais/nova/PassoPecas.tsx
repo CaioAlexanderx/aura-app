@@ -12,7 +12,7 @@
 // ============================================================
 import { useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Colors, CondicionalCores as CC } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ScannerInput, type ScannerInputHandle } from "@/components/ScannerInput";
 import { accentForProduct, productLetter } from "../../../pdv/types";
@@ -38,6 +38,8 @@ type Props = {
   produtos: ProdutoDaBusca[];
   carregando: boolean;
   variantesDe: (p: ProdutoDaBusca) => Promise<VarianteDaBusca[]>;
+  /** Código que não está no catálogo carregado: pergunta ao servidor (pdv/scan, o do Caixa). */
+  acharNoServidor?: (codigo: string) => Promise<{ produto: ProdutoDaBusca; variantId: string | null } | null>;
   pecas: PecaDaCondicional[];
   onAdicionar: (p: PecaDaCondicional) => void;
   onTirar: (chave: string) => void;
@@ -55,7 +57,7 @@ const novaChave = () => `peca-${Date.now().toString(36)}-${++contador}`;
 type Aberto = { produto: ProdutoDaBusca; variantes: VarianteDaBusca[] | null; cor: string | null; varianteId: string | null };
 
 export function PassoPecas({
-  produtos, carregando, variantesDe, pecas, onAdicionar, onTirar, vendeSemEstoque, faltas, onVerCondicional,
+  produtos, carregando, variantesDe, acharNoServidor, pecas, onAdicionar, onTirar, vendeSemEstoque, faltas, onVerCondicional,
 }: Props) {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<Aberto | null>(null);
@@ -67,7 +69,6 @@ export function PassoPecas({
 
   function entrar(p: ProdutoDaBusca, v: VarianteDaBusca | null, livreAgora: number) {
     if (pecas.length >= MAX_PECAS) { setAviso(T.noLimite); return; }
-    if (livreAgora <= 0 && !vendeSemEstoque) { setAviso(T.semLivreNaLoja(p.name)); return; }
     onAdicionar({
       chave: novaChave(),
       productId: p.id,
@@ -89,11 +90,12 @@ export function PassoPecas({
     entrar(p, null, livresDoProduto(p) - jaNaLista(pecas, p.id, null));
   }
 
-  async function abrirVariantes(p: ProdutoDaBusca, preferirCodigo?: string) {
+  async function abrirVariantes(p: ProdutoDaBusca, preferirCodigo?: string, preferirVarianteId?: string | null) {
     setAviso(null);
     setAberto({ produto: p, variantes: null, cor: null, varianteId: null });
     const vs = await variantesDe(p);
-    const doCodigo = preferirCodigo ? vs.find((v) => v.barcode && v.barcode.toLowerCase() === preferirCodigo.toLowerCase()) : null;
+    const doCodigo = (preferirVarianteId ? vs.find((v) => v.id === preferirVarianteId) : null)
+      || (preferirCodigo ? vs.find((v) => v.barcode && v.barcode.toLowerCase() === preferirCodigo.toLowerCase()) : null);
     if (doCodigo) {
       // Bipe de variante: a peça é exata, entra direto.
       entrar(p, doCodigo, doCodigo.livre - jaNaLista(pecas, p.id, doCodigo.id));
@@ -108,11 +110,17 @@ export function PassoPecas({
     else addSimples(p);
   }
 
-  function aoBipar(codigo: string) {
-    const achou = acharPeloCodigo(produtos, codigo);
+  async function aoBipar(codigo: string) {
+    let achou = acharPeloCodigo(produtos, codigo);
+    let varianteId: string | null = null;
+    if (!achou && acharNoServidor) {
+      // Não está no catálogo carregado: o servidor decide antes de dizer "não achei".
+      const doServidor = await acharNoServidor(codigo).catch(() => null);
+      if (doServidor) { achou = { produto: doServidor.produto, codigoDeVariante: !!doServidor.variantId }; varianteId = doServidor.variantId; }
+    }
     if (!achou) { setAviso(T.naoAchouCodigo(codigo)); return; }
     const { produto, codigoDeVariante } = achou;
-    if (produto.temVariantes) abrirVariantes(produto, codigoDeVariante ? codigo : undefined);
+    if (produto.temVariantes) abrirVariantes(produto, codigoDeVariante ? codigo : undefined, varianteId);
     else addSimples(produto);
   }
 
@@ -125,7 +133,7 @@ export function PassoPecas({
     const doTamanho = vs.filter((v) => !cores.length || v.cor === aberto.cor);
     const escolhida = vs.find((v) => v.id === aberto.varianteId) || null;
     const livreDaEscolhida = escolhida ? escolhida.livre - jaNaLista(pecas, produto.id, escolhida.id) : 0;
-    const podeColocar = !!escolhida && (livreDaEscolhida > 0 || vendeSemEstoque);
+    const podeColocar = !!escolhida;
     seletor = (
       <View style={s.varPicker} testID="nova-variantes">
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
@@ -161,16 +169,17 @@ export function PassoPecas({
                 <View style={s.opts}>
                   {doTamanho.map((v) => {
                     const livre = v.livre - jaNaLista(pecas, produto.id, v.id);
-                    const bloqueada = livre <= 0 && !vendeSemEstoque;
                     const on = aberto.varianteId === v.id;
-                    const sub = livre > 0 ? T.nLivres(livre) : v.comCliente > 0 ? T.comCliente : T.semEstoque;
+                    // Sem livre não bloqueia: quem recusa é o servidor (a loja controla ou não o estoque).
+                    const sub = livre > 0 ? T.nLivres(livre) : T.semEstoqueLivre;
                     return (
-                      <Pressable key={v.id} testID={"nova-tamanho-" + v.id} disabled={bloqueada}
+                      <Pressable key={v.id} testID={"nova-tamanho-" + v.id}
                         onPress={() => setAberto({ ...aberto, varianteId: v.id })}
-                        style={[s.opt, on && s.optOn, bloqueada && s.optOff]}
-                        accessibilityRole="radio" accessibilityState={{ selected: on, disabled: bloqueada }}>
+                        style={[s.opt, on && s.optOn]}
+                        accessibilityRole="radio" accessibilityState={{ selected: on }}>
                         <Text style={[s.optTxt, on && s.optTxtOn]}>{v.tamanho || v.rotulo}</Text>
-                        <Text style={[s.optSub, on && s.optTxtOn]}>{sub}</Text>
+                        <Text style={[s.optSub, on && s.optTxtOn]} testID={"nova-tamanho-sub-" + v.id}>{sub}</Text>
+                        {v.comCliente > 0 && <Text style={[s.optSub, on && s.optTxtOn]}>{T.nComClientes(v.comCliente)}</Text>}
                       </Pressable>
                     );
                   })}
@@ -207,12 +216,12 @@ export function PassoPecas({
   return (
     <View testID="nova-passo-2">
       <View style={s.busca}>
-        <ScannerInput ref={campo} testID="nova-busca-peca" placeholder={T.buscaPeca} onChangeText={setBusca} onScan={(r) => aoBipar(r.code)} />
+        <ScannerInput ref={campo} testID="nova-busca-peca" placeholder={T.buscaPeca} onChangeText={setBusca} onScan={(r) => { aoBipar(r.code); }} />
       </View>
 
       {!!aviso && (
         <View style={[e.nota, e.notaAmbar, { marginTop: 0, marginBottom: 10 }]} testID="nova-aviso-busca" accessibilityRole="alert">
-          <Icon name="alert" size={14} color={Colors.amber} />
+          <Icon name="alert" size={14} color={CC.warnInk} />
           <Text style={e.notaTxt}>{aviso}</Text>
         </View>
       )}
@@ -241,7 +250,7 @@ export function PassoPecas({
 
       {pecas.length === 0 && !aberto && !busca.trim() && (
         <View style={[e.nota, { marginTop: 0 }]} testID="nova-comece">
-          <Icon name="tag" size={14} color={Colors.violet3} />
+          <Icon name="hanger" size={14} color={Colors.violet3} />
           <Text style={e.notaTxt}><Text style={{ fontWeight: "700" }}>{T.comeceTitulo}</Text>{T.comeceTexto}</Text>
         </View>
       )}
@@ -252,14 +261,14 @@ export function PassoPecas({
           {pecas.map((p) => {
             const f = faltaDa(p);
             return (
-              <View key={p.chave} style={[s.pz, (p.semLivre || !!f) && s.pzAmbar]} testID={"nova-peca-" + p.chave}>
+              <View key={p.chave} style={[s.pz, ((p.semLivre && vendeSemEstoque) || !!f) && s.pzAmbar]} testID={"nova-peca-" + p.chave}>
                 <View style={s.pzTopo}>
                   <View style={[s.thumb, { backgroundColor: accentForProduct(p.productId) }]}><Text style={s.thumbTxt}>{productLetter(p.nome)}</Text></View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.nome} numberOfLines={2}>{p.nome}</Text>
                     <Text style={s.sub}>{[p.cor, p.tamanho, T.umaUn].filter(Boolean).join(" · ")}</Text>
                     {!!f && (
-                      <View style={s.chipAmbar}><Icon name="alert" size={12} color={Colors.amber} /><Text style={s.chipAmbarTxt}>{T.semUnidadeLivreChip}</Text></View>
+                      <View style={s.chipAmbar}><Icon name="alert" size={12} color={CC.warnInk} /><Text style={s.chipAmbarTxt}>{T.semUnidadeLivreChip}</Text></View>
                     )}
                   </View>
                   <Text style={s.preco}>{fmtBRL(p.preco)}</Text>
@@ -268,9 +277,9 @@ export function PassoPecas({
                     <Icon name="trash" size={15} color={Colors.ink3} />
                   </Pressable>
                 </View>
-                {p.semLivre && !f && (
+                {p.semLivre && !f && vendeSemEstoque && (
                   <View style={s.pzAviso} testID={"nova-peca-aviso-" + p.chave} accessibilityRole="alert">
-                    <Icon name="alert" size={13} color={Colors.amber} />
+                    <Icon name="alert" size={13} color={CC.warnInk} />
                     <Text style={s.pzAvisoTxt}>{T.semUnidadeLivre}</Text>
                   </View>
                 )}
@@ -284,7 +293,7 @@ export function PassoPecas({
         const c = f.condicionais && f.condicionais[0];
         return (
           <View key={(f.product_id || "") + (f.variant_id || "") + i} style={[e.nota, e.notaAmbar]} testID="nova-falta" accessibilityRole="alert">
-            <Icon name="alert" size={15} color={Colors.amber} />
+            <Icon name="alert" size={15} color={CC.warnInk} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={e.notaTxt}>
                 <Text style={{ fontWeight: "700", color: Colors.ink }}>{T.faltaTitulo(f.nome)}</Text>
@@ -337,18 +346,18 @@ const s = StyleSheet.create({
   optTxtOn: { color: "#fff" },
   optSub: { fontSize: 12, color: Colors.ink3 },
   pz: { borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.04)", padding: 10, marginBottom: 6 },
-  pzAmbar: { borderColor: Colors.amber },
+  pzAmbar: { borderColor: CC.warnLine },
   pzTopo: { flexDirection: "row", alignItems: "center", gap: 10 },
   pzAviso: {
     flexDirection: "row", gap: 6, alignItems: "flex-start", marginTop: 8, padding: 8, borderRadius: 8,
-    borderWidth: 1, borderStyle: "dashed", borderColor: Colors.amber, backgroundColor: Colors.amberD,
+    borderWidth: 1, borderStyle: "dashed", borderColor: CC.warnLine, backgroundColor: CC.warnBg,
   },
   pzAvisoTxt: { flex: 1, fontSize: 12, color: Colors.ink, lineHeight: 17 },
   tirar: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 10 },
   chipAmbar: {
     flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 4,
-    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber,
+    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, backgroundColor: CC.warnBg, borderWidth: 1, borderColor: CC.warnLine,
   },
-  chipAmbarTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink },
+  chipAmbarTxt: { fontSize: 12, fontWeight: "600", color: CC.warnInk },
   faltaAcoes: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8 },
 });

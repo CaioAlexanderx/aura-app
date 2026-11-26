@@ -32,9 +32,10 @@ jest.mock("@/hooks/usePdvSettings", () => ({
   usePdvSettings: () => ({ settings: { allow_sale_without_stock: mockSemEstoque } }),
 }));
 
-const mockVestido = { id: "p-vest", name: "Vestido Midi Lívia", code: "VML", barcode: "789", variantBarcodes: ["VAR-PRETO-M"], coresDasVariantes: ["Verde-oliva", "Preto"], preco: 189.9, price: 189.9, emPromocao: false, precoEfetivo: null, estoque: 3, temVariantes: true, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {} } };
-const mockBrinco = { id: "p-brinco", name: "Brinco Argola Luz", code: "BAL", barcode: "111", variantBarcodes: [], coresDasVariantes: [], preco: 69.9, price: 69.9, emPromocao: false, precoEfetivo: null, estoque: 2, temVariantes: false, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {} } };
-const mockBlusa = { ...mockBrinco, id: "p-blusa", name: "Blusa Tricô Nina", code: "BTN", barcode: "222", preco: 139.9, price: 139.9, estoque: 1, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 1, comClientePorVariante: {} } };
+const mockAcharNoServidor = jest.fn();
+const mockVestido = { id: "p-vest", name: "Vestido Midi Lívia", code: "VML", barcode: "789", variantBarcodes: ["VAR-PRETO-M"], coresDasVariantes: ["Verde-oliva", "Preto"], preco: 189.9, price: 189.9, emPromocao: false, precoEfetivo: null, estoque: 3, temVariantes: true, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {}, resolverTotal: 0, resolverPorVariante: {} } };
+const mockBrinco = { id: "p-brinco", name: "Brinco Argola Luz", code: "BAL", barcode: "111", variantBarcodes: [], coresDasVariantes: [], preco: 69.9, price: 69.9, emPromocao: false, precoEfetivo: null, estoque: 2, temVariantes: false, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {}, resolverTotal: 0, resolverPorVariante: {} } };
+const mockBlusa = { ...mockBrinco, id: "p-blusa", name: "Blusa Tricô Nina", code: "BTN", barcode: "222", preco: 139.9, price: 139.9, estoque: 1, reserva: { reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 1, comClientePorVariante: {}, resolverTotal: 0, resolverPorVariante: {} } };
 const mockVariantes = [
   { id: "v-ol-p", cor: "Verde-oliva", tamanho: "P", rotulo: "P", barcode: "", preco: 189.9, livre: 1, comCliente: 0 },
   { id: "v-ol-m", cor: "Verde-oliva", tamanho: "M", rotulo: "M", barcode: "", preco: 189.9, livre: 1, comCliente: 0 },
@@ -42,7 +43,7 @@ const mockVariantes = [
   { id: "v-pr-m", cor: "Preto", tamanho: "M", rotulo: "M", barcode: "VAR-PRETO-M", preco: 189.9, livre: 1, comCliente: 0 },
 ];
 jest.mock("@/components/screens/vendas/condicionais/nova/usePecasDaLoja", () => ({
-  usePecasDaLoja: () => ({ produtos: [mockVestido, mockBrinco, mockBlusa], carregando: false, variantesDe: async () => mockVariantes }),
+  usePecasDaLoja: () => ({ produtos: [mockVestido, mockBrinco, mockBlusa], carregando: false, variantesDe: async () => mockVariantes, acharNoServidor: (c: string) => mockAcharNoServidor(c) }),
 }));
 // O campo de bipe vira um input simples: onChangeText filtra, onScan bipa.
 jest.mock("@/components/ScannerInput", () => ({
@@ -102,6 +103,8 @@ beforeEach(() => {
   mockAuth = { company: { id: "loja-1", trade_name: "Loja Centro" }, availableCompanies: [], token: "t" };
   mockSemEstoque = false;
   mockCreateCustomer.mockReset();
+  mockAcharNoServidor.mockReset();
+  mockAcharNoServidor.mockResolvedValue(null);
 });
 
 describe("Passo 1 · Cliente", () => {
@@ -183,7 +186,10 @@ describe("Passo 2 · Peças", () => {
     expect(texto(tree)).toContain("Tamanho");
     expect(texto(tree)).toContain("1 livre");
     expect(texto(tree)).toContain(T.comCliente);
-    expect(um(tree, "nova-tamanho-v-ol-g").props.disabled).toBe(true);
+    // Sem livre não bloqueia: mostra "sem estoque livre" e quantas estão com clientes.
+    expect(um(tree, "nova-tamanho-v-ol-g").props.disabled).toBeFalsy();
+    expect(flat(um(tree, "nova-tamanho-sub-v-ol-g"))).toBe(T.semEstoqueLivre);
+    expect(texto(tree)).toContain(T.nComClientes(1));
     await tocar(tree, "nova-tamanho-v-ol-m");
     await tocar(tree, "nova-colocar");
     expect(texto(tree)).toContain("Verde-oliva · M · 1 un.");
@@ -199,7 +205,7 @@ describe("Passo 2 · Peças", () => {
       await buscar(tree, "vestido");
       await tocar(tree, "nova-sugestao-p-vest");
       await tocar(tree, "nova-cor-Preto");
-      if (i === 1) { expect(um(tree, "nova-tamanho-v-pr-m").props.disabled).toBe(true); break; }
+      if (i === 1) { expect(flat(um(tree, "nova-tamanho-sub-v-pr-m"))).toBe(T.semEstoqueLivre); break; }
       await tocar(tree, "nova-tamanho-v-pr-m");
       await tocar(tree, "nova-colocar");
     }
@@ -233,13 +239,23 @@ describe("Passo 2 · Peças", () => {
     expect(texto(tree)).toContain(T.naoAchouCodigo("000"));
   });
 
-  it("loja que controla estoque: peça sem unidade livre não entra", async () => {
+  it("loja que controla estoque: a peça sem livre entra sem o aviso de venda sem estoque (quem recusa é o servidor)", async () => {
     const { tree } = montar();
     await ateOPasso2(tree);
     await buscar(tree, "blusa");
     await tocar(tree, "nova-sugestao-p-blusa");
-    expect(texto(tree)).toContain(T.semLivreNaLoja("Blusa Tricô Nina"));
-    expect(tem(tree, "nova-lista-pecas")).toBe(false);
+    expect(tem(tree, "nova-lista-pecas")).toBe(true);
+    expect(texto(tree)).not.toContain(T.semUnidadeLivre);
+  });
+
+  it("bipe de código fora do catálogo carregado consulta o servidor antes de dizer que não achou", async () => {
+    mockAcharNoServidor.mockResolvedValue({ produto: mockBrinco, variantId: null });
+    const { tree } = montar();
+    await ateOPasso2(tree);
+    await act(async () => { um(tree, "nova-busca-peca").props.onScan({ code: "SRV-1", source: "scanner" }); });
+    expect(mockAcharNoServidor).toHaveBeenCalledWith("SRV-1");
+    expect(texto(tree)).toContain("Brinco Argola Luz");
+    expect(texto(tree)).not.toContain(T.naoAchouCodigo("SRV-1"));
   });
 
   it("loja que vende sem estoque: entra com o aviso âmbar na linha e o Continuar fica ativo", async () => {
@@ -295,14 +311,16 @@ describe("Livres e busca (funções puras)", () => {
   it("livres = estoque − com clientes − reservado, nunca negativo", () => {
     expect(livresParaLevar(4, 1, 1)).toBe(2);
     expect(livresParaLevar(1, 1, 1)).toBe(0);
-    expect(reservaDoProdutoCru({})).toEqual({ reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {} });
+    expect(reservaDoProdutoCru({})).toEqual({ reservadoTotal: 0, reservadoPorVariante: {}, comClienteTotal: 0, comClientePorVariante: {}, resolverTotal: 0, resolverPorVariante: {} });
+    expect(livresParaLevar(5, 1, 1, 2)).toBe(1);
+    expect(reservaDoProdutoCru({ resolver_qty: 2, resolver_by_variant: { v1: 2 } }).resolverPorVariante).toEqual({ v1: 2 });
     expect(reservaDoProdutoCru({ out_qty: 2, out_by_variant: { v1: 2 }, reserved_by_variant: { v1: 1 } }).comClientePorVariante).toEqual({ v1: 2 });
   });
-  it("variantes: livre desconta com clientes e reservado; cor em hex vira nome", () => {
-    const p = { ...mockVestido, reserva: { reservadoTotal: 1, reservadoPorVariante: { a: 1 }, comClienteTotal: 1, comClientePorVariante: { a: 1 } } };
+  it("variantes: livre desconta com clientes, reservado e para resolver; cor em hex vira nome", () => {
+    const p = { ...mockVestido, reserva: { reservadoTotal: 1, reservadoPorVariante: { a: 1 }, comClienteTotal: 1, comClientePorVariante: { a: 1 }, resolverTotal: 0, resolverPorVariante: { a: 1 } } };
     const vs = variantesDoProduto(p as any, [{ id: "a", stock_qty: 3, attributes: [{ attribute: "Cor", value: "Preto" }, { attribute: "Tamanho", value: "M" }] }, { id: "b", stock_qty: 1, is_active: false, attributes: [] }]);
     expect(vs).toHaveLength(1);
-    expect(vs[0]).toMatchObject({ id: "a", cor: "Preto", tamanho: "M", livre: 1, comCliente: 1 });
+    expect(vs[0]).toMatchObject({ id: "a", cor: "Preto", tamanho: "M", livre: 0, comCliente: 1 });
   });
   it("busca por nome sem acento, e bipe por código de barras ou de variante", () => {
     expect(filtrarProdutos([mockVestido, mockBrinco] as any, "LIVIA").map((p) => p.id)).toEqual(["p-vest"]);
