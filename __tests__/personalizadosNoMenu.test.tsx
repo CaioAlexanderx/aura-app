@@ -159,7 +159,7 @@ describe("NAV: seção Personalizados, um mod por item", () => {
     const m = LAYOUT.match(/const MORE_PRIORIDADE = \[([^\]]+)\]/);
     const rotas = Array.from((m as RegExpMatchArray)[1].matchAll(/"([^"]+)"/g)).map((x) => x[1]);
     expect(rotas[0]).toBe("/personalizados/producao");
-    expect(rotas.slice(1)).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
+    expect(rotas.slice(1)).toEqual(["/clientes", "/whatsapp"]);
   });
 });
 

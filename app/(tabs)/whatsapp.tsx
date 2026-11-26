@@ -7,10 +7,17 @@
 // viva — mas SÓ para `isDemo`. Company real nunca vê mock: ela vê o
 // WhatsApp oficial da loja, com as mesmas guardas de custo do dojô.
 //
-// Três abas, na ordem em que o lojista precisa delas:
-//   Conexão   — conectar o número (Embedded Signup) + uso do mês
-//   Cobranças — a fila do crediário, com o motivo de cada não-envio
-//   Templates — criar/acompanhar parcela_lembrete e parcela_atraso
+// 26/11/2026 — duas abas no topo:
+//   Conversas      — a caixa de atendimento (HubView), que morava em
+//                    Agentes → Atendimento. Só aparece com o módulo
+//                    hub_social visível; sem ele a tela é só Configurações.
+//   Configurações  — tudo o que o WhatsApp da loja precisa, em seções
+//                    separadas (SECOES_CONFIG). Para crescer (mensagens
+//                    automáticas, régua, aniversários, venda+), acrescente
+//                    uma entrada em SECOES_CONFIG e o bloco correspondente.
+//     Conexão   — conectar o número (Embedded Signup) + uso do mês
+//     Cobranças — a fila do crediário, com o motivo de cada não-envio
+//     Templates — criar/acompanhar parcela_lembrete e parcela_atraso
 //
 // Onde se LIGA o envio automático é a régua, em Configurações do
 // Crediário — não aqui. Aqui é onde se prepara e se audita. Um único
@@ -42,13 +49,26 @@ import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntra
 import { useCustomers } from "@/hooks/useCustomers";
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
+import { HubView } from "@/components/screens/hub/HubView";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-const TABS_REAIS = ["Conexão", "Cobranças", "Templates"];
+type AbaReal = "conversas" | "config";
+
+// Seções da aba Configurações, na ordem em que aparecem. Cada uma é um bloco
+// próprio: acrescentar uma é acrescentar uma linha aqui + o bloco abaixo.
+const SECOES_CONFIG = [
+  { key: "conexao", label: "Conexão" },
+  { key: "cobrancas", label: "Cobranças" },
+  { key: "templates", label: "Templates" },
+] as const;
+type SecaoKey = (typeof SECOES_CONFIG)[number]["key"];
 
 export default function WhatsAppScreen() {
   const [tab, setTab] = useState(0);
+  const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
+  const [secao, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user } = useAuthStore();
   const companyId = company?.id || "";
@@ -66,17 +86,23 @@ export default function WhatsAppScreen() {
   // nada em company real (queries com enabled: !isDemo).
   const mock = useWhatsApp();
 
-  const abas = demo ? TABS : TABS_REAIS;
-  const ativa = Math.min(tab, abas.length - 1);
+  // Atendimento (hub social) — módulo próprio vendável como add-on; é a
+  // mesma regra que o Agentes usava. Sem ele só existe Configurações.
+  const hubVisible = useVisibleModules().has("hub_social");
+  const abaAtiva: AbaReal = hubVisible ? abaReal : "config";
+
+  const abas: string[] = demo ? TABS : [];
+  const ativa = Math.min(tab, Math.max(abas.length - 1, 0));
 
   // I1.3 — cabeçalho editorial padrão (ScreenHero), igual às outras onze
   // telas. Subtítulo lê o estado da conexão + mensagens do mês direto do
   // wa.status que a aba Conexão já carrega — nenhuma chamada nova.
-  const tabsHero: ScreenTabItem[] = abas.map((t, i) => ({
-    key: String(i),
-    label: t,
-    testID: `wa-varejo-aba-${i}`,
-  }));
+  const tabsHero: ScreenTabItem[] = demo
+    ? abas.map((t, i) => ({ key: String(i), label: t, testID: `wa-varejo-aba-${i}` }))
+    : [
+        { key: "conversas", label: "Conversas", testID: "wa-varejo-aba-conversas" },
+        { key: "config", label: "Configurações", testID: "wa-varejo-aba-config" },
+      ];
 
   const heroSub = demo
     ? "Modo demonstrativo — conversas, automações e campanhas de exemplo."
@@ -91,7 +117,7 @@ export default function WhatsAppScreen() {
           : ""}
       </>
     )
-    : "Número da loja ainda não conectado — conecte na aba Conexão.";
+    : "Número da loja ainda não conectado — conecte em Configurações.";
 
   // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
   // até a Meta aprovar, só a loja que já tem o número conectado abre esta
@@ -103,15 +129,40 @@ export default function WhatsAppScreen() {
     return <Redirect href={"/" as any} />;
   }
 
+  const hero = <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />;
+
+  // Conversas: container próprio — o HubView tem os seus ScrollViews
+  // internos (lista + thread) e não pode ficar dentro de outro ScrollView.
+  // No consolidado multi-CNPJ o próprio HubView mostra "Escolha uma loja".
+  if (!demo && abaAtiva === "conversas") {
+    return (
+      <View style={s.screen} testID="wa-varejo-conversas">
+        <View style={[s.content, { flex: 1 }]}>
+          {hero}
+          <ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} />
+          <HubView />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />
+      {hero}
 
-      <ScreenTabs
-        tabs={tabsHero}
-        active={String(ativa)}
-        onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
-      />
+      {demo ? (
+        <ScreenTabs
+          tabs={tabsHero}
+          active={String(ativa)}
+          onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+        />
+      ) : hubVisible ? (
+        <ScreenTabs
+          tabs={tabsHero}
+          active="config"
+          onSelect={(k) => { setAbaReal(k as AbaReal); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+        />
+      ) : null}
 
       {demo ? (
         <View testID="wa-varejo-maquete">
@@ -123,14 +174,30 @@ export default function WhatsAppScreen() {
         </View>
       ) : (
         <View style={{ gap: 14 }} testID="wa-varejo-real">
+          {/* Seções de Configurações: uma de cada vez, cada uma num bloco
+              próprio (SECOES_CONFIG). */}
+          <View style={s.secoes} testID="wa-varejo-config-secoes">
+            {SECOES_CONFIG.map((sc) => (
+              <Pressable
+                key={sc.key}
+                onPress={() => setSecao(sc.key)}
+                accessibilityRole="button"
+                style={[s.secaoPill, secao === sc.key && s.secaoPillOn]}
+                testID={`wa-varejo-secao-${sc.key}`}
+              >
+                <Text style={[s.secaoTxt, secao === sc.key && s.secaoTxtOn]}>{sc.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
           {wa.statusLoading && !wa.status && (
             <View style={s.loadingBox} testID="wa-varejo-carregando">
               <ActivityIndicator size="small" color={Colors.violet3} />
             </View>
           )}
 
-          {ativa === 0 && (
-            <>
+          {secao === "conexao" && (
+            <View style={{ gap: 14 }} testID="wa-varejo-bloco-conexao">
               <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
               <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
               <ConsentimentoMarketingCard
@@ -162,10 +229,10 @@ export default function WhatsAppScreen() {
                 compacto
                 idBase="wa-varejo-ir-para-reativacao"
               />
-            </>
+            </View>
           )}
 
-          {ativa === 1 && (
+          {secao === "cobrancas" && (
             <FilaCard
               items={filtrarCrediario(wa.outbox)}
               loading={wa.outboxLoading}
@@ -175,7 +242,7 @@ export default function WhatsAppScreen() {
             />
           )}
 
-          {ativa === 2 && (
+          {secao === "templates" && (
             <TemplatesCard
               companyId={companyId}
               templates={wa.templates}
@@ -195,6 +262,11 @@ export default function WhatsAppScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  secoes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  secaoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  secaoPillOn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
+  secaoTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink3 },
+  secaoTxtOn: { color: Colors.violet3 },
   loadingBox: { paddingVertical: 28, alignItems: "center" },
   linkCard: {
     flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: Colors.violetD,

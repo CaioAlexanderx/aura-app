@@ -25,7 +25,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import type { StudioProductionStatus } from "@/services/studioApi";
 import { ALVO_DE_TOQUE, botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
-import { etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao } from "@/components/personalizados/regrasDaProducao";
+import { etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao, type Etapa } from "@/components/personalizados/regrasDaProducao";
 
 type Props = {
   /** A etapa em que o pedido está. Sem anterior (primeira, entregue, cancelado), nada aparece. */
@@ -49,9 +49,6 @@ type Props = {
 export function BotaoVoltarEtapa({ etapaAtual, onVoltar, idDeTeste, nome, disabled, estilo, estiloDoTexto, antes }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => estilos(t), [t]);
-  const celular = useModalNoCelular();
-  const folha = folhaDeBaixo(celular);
-  const btnFolha = botaoDoRodape(celular);
   const [perguntando, setPerguntando] = useState(false);
 
   const anterior = etapaAnterior(etapaAtual);
@@ -81,33 +78,63 @@ export function BotaoVoltarEtapa({ etapaAtual, onVoltar, idDeTeste, nome, disabl
         <Text style={[s.botaoTxt, estiloDoTexto]}>{texto}</Text>
       </Pressable>
 
-      <WebPortal active={perguntando}>
-        <View style={[s.fundo, folha.fundo]} testID={`${idDeTeste}-confirmacao`}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPerguntando(false)} accessibilityLabel="Cancelar" />
-          <View style={[s.caixa, folha.caixa]} accessibilityRole="alert">
-            <Text style={s.pergunta} testID={`${idDeTeste}-pergunta`}>{perguntaDoVoltar(anterior)}</Text>
-            <View style={s.rodape}>
-              <Pressable
-                style={[s.cancelar, btnFolha]}
-                onPress={() => setPerguntando(false)}
-                accessibilityRole="button"
-                testID={`${idDeTeste}-cancelar`}
-              >
-                <Text style={s.cancelarTxt}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                style={[s.confirmar, btnFolha]}
-                onPress={confirmar}
-                accessibilityRole="button"
-                testID={`${idDeTeste}-confirmar`}
-              >
-                <Text style={s.confirmarTxt}>Voltar</Text>
-              </Pressable>
-            </View>
+      <ConfirmacaoDeVoltar
+        ativa={perguntando}
+        destino={anterior}
+        idDeTeste={idDeTeste}
+        onConfirmar={confirmar}
+        onCancelar={() => setPerguntando(false)}
+      />
+    </>
+  );
+}
+
+/**
+ * A pergunta "Voltar este pedido para X?", por WebPortal. Quem monta decide
+ * quando abre (`ativa`); o botão de voltar e o arraste do quadro usam esta
+ * mesma caixa. testIDs: `<id>-confirmacao`, `-pergunta`, `-confirmar`, `-cancelar`.
+ */
+export function ConfirmacaoDeVoltar({
+  ativa, destino, idDeTeste, onConfirmar, onCancelar,
+}: {
+  ativa: boolean;
+  destino: Pick<Etapa, "label">;
+  idDeTeste: string;
+  onConfirmar: () => void;
+  onCancelar: () => void;
+}) {
+  const t = useStudioTokens();
+  const s = useMemo(() => estilos(t), [t]);
+  const celular = useModalNoCelular();
+  const folha = folhaDeBaixo(celular);
+  const btnFolha = botaoDoRodape(celular);
+  return (
+    <WebPortal active={ativa}>
+      <View style={[s.fundo, folha.fundo]} testID={`${idDeTeste}-confirmacao`}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancelar} accessibilityLabel="Cancelar" />
+        <View style={[s.caixa, folha.caixa]} accessibilityRole="alert">
+          <Text style={s.pergunta} testID={`${idDeTeste}-pergunta`}>{perguntaDoVoltar(destino)}</Text>
+          <View style={s.rodape}>
+            <Pressable
+              style={[s.cancelar, btnFolha]}
+              onPress={onCancelar}
+              accessibilityRole="button"
+              testID={`${idDeTeste}-cancelar`}
+            >
+              <Text style={s.cancelarTxt}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              style={[s.confirmar, btnFolha]}
+              onPress={onConfirmar}
+              accessibilityRole="button"
+              testID={`${idDeTeste}-confirmar`}
+            >
+              <Text style={s.confirmarTxt}>Voltar</Text>
+            </Pressable>
           </View>
         </View>
-      </WebPortal>
-    </>
+      </View>
+    </WebPortal>
   );
 }
 

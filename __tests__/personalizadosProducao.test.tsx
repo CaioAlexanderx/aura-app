@@ -36,6 +36,17 @@ jest.mock("@/components/personalizados/tirarDaFila", () => ({
   ...jest.requireActual("@/components/personalizados/tirarDaFila"),
   tirarDaFila: (...a: any[]) => mockTirar(...a),
 }));
+// O arraste é HTML5 do DOM (web). Aqui o hook entrega o onDrop que o quadro
+// montou, e o teste solta o cartão chamando-o, como o navegador faria.
+const mockDnd: { onDrop: ((id: string, to: string) => void) | null } = { onDrop: null };
+jest.mock("@/components/studio/kanban/useStudioKanbanDnD", () => ({
+  useStudioKanbanDnD: (onDrop: any) => {
+    mockDnd.onDrop = onDrop;
+    return { isWeb: true, draggingId: null, hoverStatus: null, onCardDragStart: jest.fn(), onCardDragEnd: jest.fn(), onHoverChange: jest.fn(), onDrop };
+  },
+  useDraggableCardRef: () => ({ current: null }),
+  useDropZoneRef: () => ({ current: null }),
+}));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/utils/webAlert", () => ({ confirmAlert: jest.fn() }));
 const mockParams: { valor: Record<string, any> } = { valor: {} };
@@ -126,7 +137,7 @@ jest.mock("@/components/CompanyPickerModal", () => ({
 
 import {
   ETAPAS, PROXIMA_ETAPA, ETAPA_ANTERIOR, etapaAnterior, perguntaDoVoltar, textoDoVoltar, voltarPedeConfirmacao, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
-  fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
+  decidirSolta, fraseDoResumo, nomeDoCliente, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
 } from "@/components/personalizados/regrasDaProducao";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
@@ -191,6 +202,22 @@ describe("regras da Fila", () => {
     expect(fraseDoResumo(r, reais)).toBe("2 pedidos ativos · 1 atrasado · R$ 1000,50 a receber");
     expect(fraseDoResumo({ ativos: 1, atrasados: 0, aReceber: 0 }, reais)).toBe("1 pedido ativo");
     expect(fraseDoResumo({ ativos: 0, atrasados: 0, aReceber: 0 }, reais)).toBe("Nenhum pedido ativo");
+  });
+
+  test("a receber do cabeçalho soma o falta receber do pedido de orçamento, sem somar duas vezes", () => {
+    const r = resumoDaFila([
+      pedido("a", { orcamento_falta_receber: 55.85, orcamento_pagamentos_pendentes: [{ id: "m1", kind: "balance", amount: 55.85 }] }),
+      pedido("b", { balance_amount: 19.94 }),
+      pedido("c", { balance_amount: 10, orcamento_falta_receber: 30, orcamento_pagamentos_pendentes: [] }),
+      pedido("d", { orcamento_falta_receber: 0, orcamento_pagamentos_pendentes: [] }),
+    ]);
+    expect(r.aReceber).toBe(105.79);
+  });
+
+  test("nome do cartão: sem cliente, a venda do Caixa não repete o número", () => {
+    expect(nomeDoCliente({ customer_name: "Ana", source: "pdv" })).toBe("Ana");
+    expect(nomeDoCliente({ customer_name: null, source: "pdv" })).toBe("Venda no Caixa");
+    expect(nomeDoCliente({ customer_name: "  ", source: "digital" })).toBe("Sem cadastro");
   });
 
   test("origem do pedido para o selo do cartão", () => {
@@ -330,11 +357,23 @@ describe("render do quadro", () => {
     arvore.unmount();
   });
 
+  test("cartão: miniatura da peça e, sem cliente, 'Venda no Caixa' no lugar do número repetido", async () => {
+    const arvore = await montarQuadro([
+      pedido("x1", { card_image_url: "https://x/mockup.png", card_image_source: "mockup" }),
+      pedido("x2", { customer_name: null, display_name: "PDV-dd6d2358" }),
+    ]);
+    expect(tem(arvore, "producao-capa-x1")).toBe(true);
+    expect(tem(arvore, "producao-capa-imagem-x1")).toBe(true);
+    expect(tem(arvore, "producao-capa-x2")).toBe(true);
+    const texto = JSON.stringify(arvore.toJSON());
+    expect(texto).toContain("Venda no Caixa");
+    arvore.unmount();
+  });
+
   test("Tirar da fila: a lixeira está sempre no cartão (sem hover); confirma, tira o cartão e não mexe na venda", async () => {
     mockTirar.mockResolvedValue({ ok: true });
     const arvore = await montarQuadro(TRES);
     expect(tem(arvore, "producao-tirar-a1")).toBe(true);
-    expect(FONTE_QUADRO).not.toMatch(/onMouseEnter|onHoverIn/);
     await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
     expect(mockTirar).not.toHaveBeenCalled();
     expect(JSON.stringify(arvore.toJSON())).toContain("Tirar da fila?");
@@ -353,6 +392,16 @@ describe("render do quadro", () => {
     await act(async () => { achar(arvore, "producao-tirar-cancelar")[0].props.onPress(); });
     expect(mockTirar).not.toHaveBeenCalled();
     expect(tem(arvore, "producao-cartao-a1")).toBe(true);
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: 404 PEDIDO_NAO_ENCONTRADO recarrega a lista", async () => {
+    mockTirar.mockRejectedValue({ status: 404, data: { error: "PEDIDO_NAO_ENCONTRADO" } });
+    const arvore = await montarQuadro(TRES);
+    expect(mockListOrders).toHaveBeenCalledTimes(1);
+    await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
+    await act(async () => { achar(arvore, "producao-tirar-confirmar")[0].props.onPress(); });
+    expect(mockListOrders).toHaveBeenCalledTimes(2);
     arvore.unmount();
   });
 
@@ -445,9 +494,56 @@ describe("render do quadro", () => {
     arvore.unmount();
   });
 
-  test("sem arrastar: o quadro não usa o arraste do Studio nem evento de drag", () => {
-    expect(FONTE_QUADRO).not.toMatch(/useStudioKanbanDnD|useDraggableCardRef|useDropZoneRef/);
-    expect(FONTE_QUADRO).not.toMatch(/onDragStart|draggable=|PanResponder/);
+  test("arrastar: eventos do DOM no web, nunca o responder system do react-native-web", () => {
+    expect(FONTE_QUADRO).toMatch(/useStudioKanbanDnD/);
+    expect(FONTE_QUADRO).not.toMatch(/PanResponder|onResponder|onStartShouldSetResponder/);
+  });
+
+  test("decidirSolta: mesma coluna nada; seguinte avança; duas ou mais adiante não faz nada; atrás volta (confirma de produção e pronto)", () => {
+    expect(decidirSolta("approved", "approved")).toEqual({ acao: "nada" });
+    expect(decidirSolta("approved", "delivered")).toEqual({ acao: "nada" });
+    expect(decidirSolta("approved", "in_production")).toEqual({ acao: "avancar" });
+    expect(decidirSolta("approved", "ready")).toEqual({ acao: "pular" });
+    expect(decidirSolta("pending_art", "in_production")).toEqual({ acao: "pular" });
+    expect(decidirSolta("approved", "pending_art")).toEqual({ acao: "mover", destino: "pending_art" });
+    const c = decidirSolta("in_production", "approved");
+    expect(c.acao).toBe("confirmar-voltar");
+    expect(decidirSolta("ready", "approved").acao).toBe("confirmar-voltar");
+  });
+
+  test("soltar na coluna seguinte faz o mesmo que o botão de avançar", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("a1", "approved"); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "a1", "approved", undefined);
+    arvore.unmount();
+  });
+
+  test("soltar na mesma coluna não faz nada", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("a1", "pending_art"); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "web-portal")).toBe(false);
+    arvore.unmount();
+  });
+
+  test("soltar numa coluna de trás pede a confirmação; só grava ao confirmar", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("b1", "approved"); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "producao-arraste-voltar-confirmacao")).toBe(true);
+    expect(JSON.stringify(arvore.toJSON())).toContain("Voltar este pedido para Aprovado?");
+    await act(async () => { achar(arvore, "producao-arraste-voltar-confirmar")[0].props.onPress(); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "b1", "approved", undefined);
+    arvore.unmount();
+  });
+
+  test("cancelar a confirmação do arraste não grava", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { mockDnd.onDrop!("b1", "approved"); });
+    await act(async () => { achar(arvore, "producao-arraste-voltar-cancelar")[0].props.onPress(); });
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(tem(arvore, "web-portal")).toBe(false);
+    arvore.unmount();
   });
 
   test("sem hover: nenhuma ação depende do mouse por cima", () => {

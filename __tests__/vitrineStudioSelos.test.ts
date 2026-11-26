@@ -25,7 +25,7 @@ function produto(over: Partial<StudioStoreProduct> = {}): StudioStoreProduct {
   } as StudioStoreProduct;
 }
 
-const diasAtras = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+const diasAtras = (n: number, agora: Date = new Date()) => new Date(agora.getTime() - n * 86400000).toISOString();
 
 describe("o selo de canto", () => {
   test("no máximo um: dois viram etiqueta de liquidação sobre a peça", () => {
@@ -43,9 +43,10 @@ describe("o selo de canto", () => {
   });
 
   test("novo vale por 14 dias", () => {
-    expect(ehNovo(diasAtras(3))).toBe(true);
-    expect(ehNovo(diasAtras(DIAS_PARA_NOVO))).toBe(true);
-    expect(ehNovo(diasAtras(DIAS_PARA_NOVO + 1))).toBe(false);
+    const agora = new Date();
+    expect(ehNovo(diasAtras(3, agora), agora)).toBe(true);
+    expect(ehNovo(diasAtras(DIAS_PARA_NOVO, agora), agora)).toBe(true);
+    expect(ehNovo(diasAtras(DIAS_PARA_NOVO + 1, agora), agora)).toBe(false);
     expect(ehNovo(null)).toBe(false);
     expect(ehNovo("data ruim")).toBe(false);
   });

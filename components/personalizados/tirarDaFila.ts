@@ -36,3 +36,9 @@ export function ehTemRecebimento(e: any): boolean {
   const cod = [e?.code, e?.error, e?.data?.error, e?.data?.code, e?.data?.codigo];
   return cod.some((c) => typeof c === "string" && c.toUpperCase() === "TEM_RECEBIMENTO");
 }
+
+/** 404: o pedido não existe (mais) para esta loja. */
+export function ehPedidoNaoEncontrado(e: any): boolean {
+  if (e?.status === 404) return true;
+  return [e?.code, e?.error, e?.data?.error, e?.data?.code].some((c) => typeof c === "string" && c.toUpperCase() === "PEDIDO_NAO_ENCONTRADO");
+}
