@@ -28,6 +28,8 @@ const mockHub = {
   saveSettings: jest.fn(),
   reply: jest.fn(),
   assume: jest.fn(),
+  etiquetas: jest.fn(),
+  clienteDaConversa: jest.fn(),
 };
 // A fábrica roda antes do `const mockHub` (imports sobem): cada função
 // procura o mock na hora da chamada.
@@ -60,6 +62,8 @@ beforeEach(() => {
   mockHub.conversations.mockResolvedValue({ conversations: [CONV], counts: [{ channel: "whatsapp", status: "ia", n: 1 }] });
   mockHub.messages.mockResolvedValue({ conversation: CONV, messages: MSGS, pending_approvals: [] });
   mockHub.reply.mockResolvedValue({ ok: true });
+  mockHub.etiquetas.mockResolvedValue({ labels: [] });
+  mockHub.clienteDaConversa.mockResolvedValue({ cliente: null, sugestao: null });
   mockHub.assume.mockResolvedValue({ ok: true });
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });

@@ -18,7 +18,43 @@ export type HubChannel = "instagram" | "whatsapp" | "storefront";
 export type HubStatus = "ia" | "precisa_humano" | "humano" | "resolvida";
 export type HubCategory = "produto" | "troca" | "entrega" | "pagamento" | "novidades";
 
+export interface HubLabel { id: string; name: string; color: string; n?: number }
+
+export interface HubCliente {
+  id: string; name: string; phone: string | null; email: string | null;
+  birth_date: string | null; since: string | null; last_purchase_at: string | null; total_spent: number | null;
+}
+
+export interface HubConviteCampo { key: string; rotulo: string; auto: boolean; exemplo: string; max: number }
+
+export interface HubConvite {
+  key: string; titulo: string;
+  /** Estado do modelo na Meta: APPROVED | PENDING | REJECTED | PAUSED | NAO_CRIADO. */
+  estado: string; pronto: boolean;
+  /** Texto do modelo: pedaços fixos e `{ campo }` (campo.auto = a Aura preenche). */
+  partes: (string | { campo: string })[];
+  campos: HubConviteCampo[];
+}
+
+export interface HubSaldoAvisos {
+  ativo: boolean; restante: number; total: number; esgotado: boolean;
+  renova_em: string | null; mes: string | null;
+  pacote: { qty: number; preco_centavos: number } | null;
+}
+
+export interface HubConvites {
+  aberta: boolean; conectado: boolean;
+  /** https://wa.me/<número da loja> */
+  meu_link: string | null;
+  /** null = este servidor não informa o saldo (a tela só diz "Usa 1 aviso"). */
+  saldo: HubSaldoAvisos | null;
+  auto: { nome: string; loja: string };
+  convites: HubConvite[];
+}
+
 export interface HubConversation {
+  /** Etiquetas aplicadas (migration 474). */
+  labels?: HubLabel[];
   id: string;
   channel: HubChannel;
   external_id: string;
@@ -45,6 +81,21 @@ export interface HubMessage {
   source_type: string | null;
   /** Quem falou (hub_messages, canal WhatsApp). Instagram não manda. */
   author?: HubAuthor | null;
+  /** Mensagem rica enviada pela tela: produto | orcamento | pix | link_loja. */
+  tipo?: string | null;
+  /** Foto do produto mandada (cartão de produto na thread). */
+  image_url?: string | null;
+  /** Foto ou áudio guardado (URL assinada de 1 h). null = não foi guardado. */
+  media?: { kind: "image" | "audio"; mime: string; url: string | null } | null;
+}
+
+export type HubEnvioTipo = "produto" | "orcamento" | "pix" | "link_loja";
+
+export interface HubCatalogItem { id: string; name: string; price: number; image_url: string | null }
+
+export interface HubQuote {
+  id: string; status: string; total: string | number; expires_at: string | null;
+  customer_name: string | null; sent_at: string | null;
 }
 
 export type HubAuthor = "cliente" | "humano" | "aurinha";
@@ -67,8 +118,9 @@ export interface HubSettings {
 }
 
 export const hubApi = {
-  conversations: (companyId: string, filters?: { channel?: string; status?: string; category?: string }) => {
+  conversations: (companyId: string, filters?: { channel?: string; status?: string; category?: string; label?: string }) => {
     const qs = new URLSearchParams();
+    if (filters?.label) qs.set("label", filters.label);
     if (filters?.channel) qs.set("channel", filters.channel);
     if (filters?.status) qs.set("status", filters.status);
     if (filters?.category) qs.set("category", filters.category);
@@ -102,6 +154,69 @@ export const hubApi = {
       `/companies/${companyId}/hub/conversations/${convId}/reply`,
       { method: "POST", body: { text } }
     ),
+
+  /** Mensagens de sessão (grátis, só com a conversa aberta). */
+  send: (companyId: string, convId: string, body: { type: HubEnvioTipo; product_id?: string; quote_id?: string; amount?: number }) =>
+    request<{ ok: boolean; wamid: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/send`, { method: "POST", body }
+    ),
+
+  /** Foto ou áudio da conversa aberta. `data` é base64 puro; o servidor converte o WebM do Chrome. */
+  midia: (companyId: string, convId: string, body: { kind: "foto" | "audio"; mime: string; data: string; caption?: string }) =>
+    request<{ ok: boolean; wamid: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/midia`, { method: "POST", body, timeout: 60000, retry: 0 }
+    ),
+
+  // ── Etiquetas ──
+  etiquetas: (companyId: string) =>
+    request<{ labels: HubLabel[]; schema_pending?: boolean }>(`/companies/${companyId}/hub/etiquetas`),
+  criarEtiqueta: (companyId: string, body: { name: string; color?: string }) =>
+    request<{ label: HubLabel }>(`/companies/${companyId}/hub/etiquetas`, { method: "POST", body }),
+  apagarEtiqueta: (companyId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/etiquetas/${labelId}`, { method: "DELETE" }),
+  aplicarEtiqueta: (companyId: string, convId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/conversations/${convId}/etiquetas/${labelId}`, { method: "PUT" }),
+  tirarEtiqueta: (companyId: string, convId: string, labelId: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/hub/conversations/${convId}/etiquetas/${labelId}`, { method: "DELETE" }),
+
+  // ── "É ela": cadastro de Clientes da conversa ──
+  clienteDaConversa: (companyId: string, convId: string) =>
+    request<{ cliente: HubCliente | null; sugestao: HubCliente | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/cliente`
+    ),
+  buscarClientes: (companyId: string, q: string) =>
+    request<{ clientes: Pick<HubCliente, "id" | "name" | "phone" | "email">[] }>(
+      `/companies/${companyId}/hub/clientes?q=${encodeURIComponent(q)}`
+    ),
+  ligarCliente: (companyId: string, convId: string, customerId: string | null) =>
+    request<{ ok: boolean; customer_id: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/cliente`, { method: "PUT", body: { customer_id: customerId } }
+    ),
+
+  // ── Conversa fechada: convites prontos (gastam 1 aviso) ──
+  convites: (companyId: string, convId: string) =>
+    request<HubConvites>(`/companies/${companyId}/hub/conversations/${convId}/convites`),
+  mandarConvite: (companyId: string, convId: string, body: { key: string; campos: Record<string, string> }) =>
+    request<{ ok: boolean; outbox_id: string }>(
+      `/companies/${companyId}/hub/conversations/${convId}/convites`, { method: "POST", body, retry: 0 }
+    ),
+  prepararConvites: (companyId: string) =>
+    request<{ criados: number; ja_existiam: number }>(`/companies/${companyId}/hub/convites/preparar`, { method: "POST", body: {} }),
+  /** Pedido de pacote de avisos (só gera a cobrança; o saldo soma depois do pagamento confirmado). */
+  pedirPacoteDeAvisos: (companyId: string) =>
+    request<{ pack?: unknown; payment_url?: string | null; needs_manual?: boolean }>(
+      `/companies/${companyId}/whatsapp/saldo/pacotes`, { method: "POST", body: { bucket: "avisos" }, retry: 0 }
+    ),
+
+  /** Medidor de avisos do mês (agente A: GET /whatsapp/saldo). Erro ou ausência = a tela não mostra o número. */
+  saldoAvisos: (companyId: string) =>
+    request<{ ativo: boolean; saldos?: { avisos?: { restante: number; total: number } } }>(`/companies/${companyId}/whatsapp/saldo`),
+
+  catalogo: (companyId: string, q: string) =>
+    request<{ products: HubCatalogItem[] }>(`/companies/${companyId}/hub/catalogo?q=${encodeURIComponent(q)}`),
+
+  orcamentos: (companyId: string, convId: string) =>
+    request<{ quotes: HubQuote[] }>(`/companies/${companyId}/hub/conversations/${convId}/orcamentos`),
 
   approve: (companyId: string, outboxId: string, editedText?: string) =>
     request<{ ok: boolean }>(`/companies/${companyId}/hub/outbox/${outboxId}/approve`, {

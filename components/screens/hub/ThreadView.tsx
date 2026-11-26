@@ -7,16 +7,25 @@
 // indicador da janela de 24h da Meta.
 // Toque, não hover: toda ação é botão visível (regra do app p/ touch).
 // ============================================================
-import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
+import { useRef, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Image, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
+import { IS_WIDE } from "@/constants/helpers";
 import { Icon } from "@/components/Icon";
 import { hubApi, type HubCategory } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, shortTime, displayName, rotuloDoAutor } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, displayName, rotuloDoAutor } from "./types";
+import { EnvioRapido } from "./EnvioRapido";
+import { useMidiaConversa } from "./MidiaConversa";
+import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
+import { EtiquetasConversa } from "./EtiquetasConversa";
+import { ClienteConversa } from "./ClienteConversa";
+import { ConversaFechada } from "./ConversaFechada";
 
-export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: {
+export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
   companyId: string; convId: string; onBack?: () => void;
+  /** Dono ou admin: pode pedir à Meta os modelos de convite que faltam. */
+  podeConfigurar?: boolean;
   /** Aurinha desligada: a equipe atende sozinha — sem "IA atendendo" nem "Devolver à Aurinha". */
   aurinhaLigada?: boolean;
 }) {
@@ -25,6 +34,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  // Celular (artboard "Celular"): lista e thread, cabeçalho enxuto e barra de envio compacta.
+  const compacto = !IS_WIDE;
+  const [detalhes, setDetalhes] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["hub-thread", companyId, convId],
@@ -62,6 +74,29 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
     },
   });
 
+  // Celular: "72 avisos" no cabeçalho. Sem o saldo no servidor, o número não aparece.
+  const { data: saldo } = useQuery({
+    queryKey: ["hub-saldo-avisos", companyId],
+    queryFn: () => hubApi.saldoAvisos(companyId),
+    enabled: compacto,
+    staleTime: 60000,
+    retry: false,
+  });
+
+  // URL da mídia estável por mensagem: o servidor reassina de tempos em tempos e a
+  // thread relê a cada 10 s; trocar o src no meio faria o áudio parar e a foto piscar.
+  // Mantém a primeira URL vista por até 25 min (a assinatura vale pelo menos 30).
+  const urlsDeMidia = useRef(new Map<string, { url: string; em: number }>());
+  const urlEstavel = (id: string, url: string) => {
+    const guardada = urlsDeMidia.current.get(id);
+    if (guardada && Date.now() - guardada.em < 25 * 60 * 1000) return guardada.url;
+    urlsDeMidia.current.set(id, { url, em: Date.now() });
+    return url;
+  };
+
+  // Foto e áudio (hook antes do return antecipado: a ordem dos hooks não muda).
+  const midia = useMidiaConversa({ companyId, convId, onSent: invalidate, onError: (m) => setFeedback(m) });
+
   if (isLoading || !data || !conv) {
     return <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>;
   }
@@ -69,6 +104,13 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
   const ch = CHANNEL_META[conv.channel];
   const st = STATUS_META[conv.status];
   const hoursLeft = windowHoursLeft(conv.last_inbound_at);
+  // WhatsApp com a conversa aberta: tudo que sai é grátis (mensagem de sessão).
+  const abertaAte = conv.channel === "whatsapp" ? conversaAbertaAte(conv.last_inbound_at) : null;
+  // WhatsApp com a conversa FECHADA: fala primeiro só com convite pronto (gasta 1 aviso).
+  const fechada = conv.channel === "whatsapp" && !abertaAte;
+  const nomeCurto = (conv.customer_name || "").trim().split(/\s+/)[0] || "o cliente";
+  // Trava do saldo desligada (ativo:false): não há limite a mostrar.
+  const avisos = saldo?.ativo === false ? undefined : saldo?.saldos?.avisos;
 
   return (
     <View style={s.wrap}>
@@ -86,12 +128,42 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           <Text style={s.name} numberOfLines={1}>{displayName(conv.customer_name, conv.external_id)}</Text>
           <Text style={s.sub} numberOfLines={1}>{ch.label}{conv.handoff_reason ? ` · ${conv.handoff_reason}` : ""}</Text>
         </View>
+        {compacto && conv.channel === "whatsapp" && avisos && (
+          <View testID="hub-thread-avisos" style={s.avisosPill}>
+            <Text style={s.avisosPillText}>{avisos.restante} avisos</Text>
+          </View>
+        )}
         {(aurinhaLigada || conv.status !== "ia") && (
           <View testID="hub-thread-status" style={[s.statusPill, { backgroundColor: st.color + "22" }]}>
             <Text style={[s.statusPillText, { color: st.color }]}>{st.label}</Text>
           </View>
         )}
       </View>
+
+      {abertaAte && (
+        <View testID="hub-janela-aberta" style={s.abertaBar}>
+          <View style={s.abertaDot} />
+          <Text style={s.abertaText}>
+            <Text style={s.abertaBold}>Conversa aberta</Text> até {abertaAte}{compacto ? "" : " · responder não gasta mensagens"}
+          </Text>
+        </View>
+      )}
+
+      {/* WhatsApp: cadastro de Clientes ("É ela") e etiquetas */}
+      {conv.channel === "whatsapp" && compacto && (
+        <Pressable testID="hub-detalhes-toggle" onPress={() => setDetalhes((v) => !v)} style={s.detalhesBtn}>
+          <Text style={s.detalhesText}>
+            {detalhes ? "Esconder cliente e etiquetas" : `Cliente e etiquetas${(conv.labels || []).length ? ` · ${(conv.labels || []).length}` : ""}`}
+          </Text>
+        </Pressable>
+      )}
+      {conv.channel === "whatsapp" && (!compacto || detalhes) && (
+        <>
+          <ClienteConversa companyId={companyId} convId={convId} onChanged={invalidate} onError={(m) => setFeedback(m)} />
+          <EtiquetasConversa companyId={companyId} convId={convId} aplicadas={conv.labels || []}
+            onChanged={invalidate} onError={(m) => setFeedback(m)} />
+        </>
+      )}
 
       {/* Ações de estado + triagem */}
       <View style={s.actionsRow}>
@@ -111,7 +183,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           </Pressable>
         )}
         <View style={{ flex: 1 }} />
-        {CATEGORIES.map((cat) => {
+        {(!compacto || detalhes) && CATEGORIES.map((cat) => {
           const meta = CATEGORY_META[cat];
           const on = conv.category === cat;
           return (
@@ -131,7 +203,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           return (
             <View key={m.id} testID={`hub-msg-${m.id}`} style={[s.bubble, mine ? s.bubbleOut : s.bubbleIn]}>
               {author && <Text testID={`hub-msg-autor-${m.id}`} style={[s.bubbleAuthor, !mine && s.bubbleAuthorIn]}>{author}</Text>}
-              <Text style={s.bubbleText}>{m.content}</Text>
+              {m.tipo === "produto" && m.image_url && (
+                <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url }} style={s.bubbleFoto} resizeMode="cover" />
+              )}
+              {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={{ ...m.media, url: urlEstavel(m.id, m.media.url) }} /> : null}
+              {textoDaBolha(m) != null && <Text style={s.bubbleText}>{textoDaBolha(m)}</Text>}
               <Text style={s.bubbleTime}>{shortTime(m.created_at)}{mine && m.status ? ` · ${m.status}` : ""}</Text>
             </View>
           );
@@ -183,6 +259,15 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           <Text style={s.feedbackText}>{feedback}</Text>
         </View>
       )}
+      {abertaAte && (
+        <EnvioRapido companyId={companyId} convId={convId} onSent={invalidate} compacto={compacto} nome={nomeCurto}
+          onError={(msg) => setFeedback(msg)} extras={midia.botoes} painelExtra={midia.painel} />
+      )}
+      {fechada && (
+        <ConversaFechada companyId={companyId} convId={convId} nome={nomeCurto} podeConfigurar={podeConfigurar}
+          onSent={invalidate} onError={(msg) => setFeedback(msg)} />
+      )}
+      {!fechada && (
       <View style={s.composer}>
         <TextInput
           style={s.composerInput}
@@ -199,11 +284,14 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           <Text style={s.primaryBtnText}>{mReply.isPending ? "..." : "Enviar"}</Text>
         </Pressable>
       </View>
-      <Text style={s.windowText}>
-        {hoursLeft != null
-          ? `Janela de resposta: ${Math.floor(hoursLeft)} h restantes`
-          : "Janela de 24h fechada — aguarde o cliente escrever de novo"}
-      </Text>
+      )}
+      {!abertaAte && !fechada && (
+        <Text style={s.windowText}>
+          {hoursLeft != null
+            ? `Janela de resposta: ${Math.floor(hoursLeft)} h restantes`
+            : "Janela de 24h fechada — aguarde o cliente escrever de novo"}
+        </Text>
+      )}
     </View>
   );
 }
@@ -245,5 +333,14 @@ const s = StyleSheet.create({
   feedbackText: { fontSize: 12, color: Colors.amber, flex: 1 },
   composer: { flexDirection: "row", gap: 8, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 },
   composerInput: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 9, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
+  avisosPill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: Colors.violet + "22" },
+  avisosPillText: { fontSize: 10.5, fontWeight: "800", color: Colors.violet3 },
+  detalhesBtn: { paddingVertical: 8 },
+  detalhesText: { fontSize: 12, fontWeight: "800", color: Colors.violet3 },
+  abertaBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, marginTop: 8, borderRadius: 9, backgroundColor: Colors.green + "14" },
+  abertaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.green },
+  abertaText: { fontSize: 12, color: Colors.ink2, flex: 1 },
+  abertaBold: { fontWeight: "800", color: Colors.green },
+  bubbleFoto: { width: 200, height: 200, maxWidth: "100%", borderRadius: 9, marginBottom: 6, backgroundColor: Colors.bg3 },
   windowText: { fontSize: 10.5, color: Colors.ink3, marginTop: 6 },
 });

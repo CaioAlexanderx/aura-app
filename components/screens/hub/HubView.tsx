@@ -52,6 +52,11 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
               <Text style={[s.miniChipText, { color: cat.color }]}>{cat.label}</Text>
             </View>
           )}
+          {(conv.labels || []).map((l) => (
+            <View key={l.id} style={[s.miniChip, { backgroundColor: l.color + "22" }]}>
+              <Text style={[s.miniChipText, { color: l.color }]}>{l.name}</Text>
+            </View>
+          ))}
           {conv.pending_approvals > 0 && (
             <View style={[s.miniChip, { backgroundColor: Colors.violet + "2e" }]}>
               <Text style={[s.miniChipText, { color: Colors.violet3 }]}>{conv.pending_approvals} p/ aprovar</Text>
@@ -73,6 +78,7 @@ export function HubView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todas");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [conviteAberto, setConviteAberto] = useState(false);
+  const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
 
   const { data: settings } = useQuery({
     queryKey: ["hub-settings", companyId],
@@ -84,11 +90,21 @@ export function HubView() {
   const enabled = !!settings?.enabled;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["hub-conversations", companyId, statusFilter],
-    queryFn: () => hubApi.conversations(companyId!, statusFilter === "todas" ? undefined : { status: statusFilter }),
+    queryKey: ["hub-conversations", companyId, statusFilter, etiquetaFiltro],
+    queryFn: () => hubApi.conversations(companyId!,
+      statusFilter === "todas" && !etiquetaFiltro
+        ? undefined
+        : { ...(statusFilter === "todas" ? {} : { status: statusFilter }), ...(etiquetaFiltro ? { label: etiquetaFiltro } : {}) }),
     // Aurinha desligada não esconde o inbox: a equipe atende sozinha.
     enabled: !!companyId && !settings?.schema_pending,
     refetchInterval: 15000,
+  });
+
+  const { data: etiquetas } = useQuery({
+    queryKey: ["hub-etiquetas", companyId],
+    queryFn: () => hubApi.etiquetas(companyId!),
+    enabled: !!companyId && !settings?.schema_pending,
+    staleTime: 30000,
   });
 
   const mSettings = useMutation({
@@ -168,6 +184,19 @@ export function HubView() {
           </Pressable>
         )}
       </View>
+      {(etiquetas?.labels || []).length > 0 && (
+        <View testID="hub-filtro-etiquetas" style={s.filters}>
+          {(etiquetas?.labels || []).map((l) => {
+            const on = etiquetaFiltro === l.id;
+            return (
+              <Pressable key={l.id} testID={`hub-filtro-etiqueta-${l.id}`} onPress={() => setEtiquetaFiltro(on ? null : l.id)}
+                style={[s.filterChip, { borderColor: l.color }, on && { backgroundColor: l.color }]}>
+                <Text style={[s.filterChipText, { color: on ? "#fff" : l.color }]}>{l.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       {convite}
       {isLoading && <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>}
       {!isLoading && conversations.length === 0 && (
@@ -189,7 +218,7 @@ export function HubView() {
         {list}
         <View style={s.threadColumn}>
           {selectedId
-            ? <ThreadView companyId={companyId} convId={selectedId} aurinhaLigada={enabled} />
+            ? <ThreadView key={selectedId} companyId={companyId} convId={selectedId} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
             : <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />}
         </View>
       </View>
@@ -198,7 +227,7 @@ export function HubView() {
 
   // Mobile: lista OU thread
   return selectedId
-    ? <ThreadView companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} />
+    ? <ThreadView key={selectedId} companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
     : list;
 }
 

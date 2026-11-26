@@ -38,6 +38,21 @@ export function windowHoursLeft(lastInboundAt: string | null): number | null {
   return left > 0 ? left : null;
 }
 
+/**
+ * "amanhã, 10h15": até quando a conversa fica aberta (24 h depois da última
+ * mensagem do cliente). null = fechada ou desconhecida.
+ */
+export function conversaAbertaAte(lastInboundAt: string | null, agora: Date = new Date()): string | null {
+  if (!lastInboundAt) return null;
+  const fim = new Date(new Date(lastInboundAt).getTime() + 24 * 3600000);
+  if (isNaN(fim.getTime()) || fim.getTime() <= agora.getTime()) return null;
+  const dia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((dia(fim) - dia(agora)) / 86400000);
+  const quando = diff <= 0 ? "hoje" : diff === 1 ? "amanhã" : fim.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const hora = `${fim.getHours()}h${fim.getMinutes() ? String(fim.getMinutes()).padStart(2, "0") : ""}`;
+  return `${quando}, ${hora}`;
+}
+
 /** "14:32" hoje, "ontem", "seg", "12/08" — curto, padrão de inbox. */
 export function shortTime(iso: string | null): string {
   if (!iso) return "";
