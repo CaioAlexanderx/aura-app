@@ -70,8 +70,12 @@ export type ItemDiferenca = {
   variante: string | null;
   codigo: string | null;
   contado: number;
+  /** Esperado na loja no bipe: sistema menos o que estava com clientes (C14). */
   estoque_no_bipe: number;
+  /** Esperado na loja agora (sistema menos com clientes). */
   estoque_atual: number;
+  /** Peças com clientes (condicional aberta). 0 sem condicional ou sem a trava. */
+  com_clientes: number;
   diferenca: number;
   /** Quanto fica depois do ajuste (estoque atual + diferença, piso 0). */
   estoque_depois: number | null;
@@ -94,6 +98,8 @@ export type NaoContado = {
   nome: string;
   variante: string | null;
   estoque_atual: number;
+  /** Peças com clientes (C14); 0 quando não há. */
+  com_clientes: number;
   custo: number | null;
 };
 
@@ -207,6 +213,7 @@ export function normalizarDiferencas(r: any): RespostaDiferencas {
         contado: num(it.contado),
         estoque_no_bipe: num(it.estoque_no_bipe),
         estoque_atual: num(it.estoque_atual),
+        com_clientes: num(it.com_clientes),
         diferenca: diferenca,
         estoque_depois: numOuNull(it.estoque_depois),
         diferenca_aplicada: numOuNull(it.diferenca_aplicada),
@@ -223,6 +230,7 @@ export function normalizarDiferencas(r: any): RespostaDiferencas {
         nome: String(it.nome || "Produto"),
         variante: it.variante ? String(it.variante) : null,
         estoque_atual: num(it.estoque_atual),
+        com_clientes: num(it.com_clientes),
         custo: numOuNull(it.custo),
       };
     }),

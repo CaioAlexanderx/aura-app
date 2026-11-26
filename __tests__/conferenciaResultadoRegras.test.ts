@@ -8,7 +8,7 @@ import type { ItemDiferenca } from "@/services/conferenciaEstoqueResultadoApi";
 function item(p: Partial<ItemDiferenca>): ItemDiferenca {
   return {
     item_id: "i", product_id: "p1", variant_id: null, nome: "Produto", variante: null, codigo: null,
-    contado: 0, estoque_no_bipe: 0, estoque_atual: 0, diferenca: 0, estoque_depois: null, custo: null, valor: null, grupo: "batem", ...p,
+    contado: 0, estoque_no_bipe: 0, estoque_atual: 0, com_clientes: 0, diferenca: 0, estoque_depois: null, custo: null, valor: null, grupo: "batem", ...p,
   };
 }
 
