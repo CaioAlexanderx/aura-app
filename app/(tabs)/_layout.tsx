@@ -24,6 +24,7 @@ import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
+import { SuporteButton } from "@/components/SuporteButton";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean; personalizadosToggle?: boolean; temporada?: boolean };
@@ -83,7 +84,9 @@ const NAV: NavSection[] = [
   // esconde o item fora do periodo (constants/blackFriday.ts), como os toggles
   // escondem OS/Otica/Matcon — filtrado em buildRawNav.
   { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/black-friday", l: "Black Friday", ic: "tag", mod: "black_friday", temporada: true },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
-  { s: "Contábil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
+  // 26/11/2026 (Caio): a secao "Contabil" (Contabilidade + Seu Analista) saiu
+  // da sidebar. As rotas /contabilidade e /suporte seguem existindo; o Suporte
+  // virou o botao SuporteButton ao lado do sino (mod "suporte").
   // /vendas (15/05/2026) — modulo proprio "vendas"; nao herda mais do pdv.
   // Permite controlar visibilidade separadamente do Caixa (ex: Kaila/Vitoria).
   // /crediario (14/05/2026) — dashboard inadimplencia + regua de cobranca.
@@ -125,15 +128,17 @@ const NAV: NavSection[] = [
   // estava órfã: nenhum item do NAV apontava para ela desde a Fase 7.
   //
   // A ordem interna é a da jornada: o cliente existe (Clientes), você fala
-  // com ele (WhatsApp), você traz de volta quem sumiu (Reativação), ele se
-  // serve sozinho (Canal Digital).
+  // com ele (WhatsApp), ele se serve sozinho (Canal Digital).
+  // 26/11/2026 (Caio): a Reativação saiu da sidebar e do "Mais" do celular;
+  // a rota /clientes/reativacao e a chave "clientes.reativacao" continuam
+  // (a tela é aberta pelos cartões de Clientes e do Painel).
   //
   // Cada item com `mod` PRÓPRIO (regra 3 do CLAUDE.md): "whatsapp" já tinha
   // plano em MODULE_PLAN_MAP e ganhou permissão em PERM_TO_MODULES;
   // "clientes.reativacao" é chave nova nos dois mapas. Nenhum deles herda o
   // "clientes", que é Essencial — disparo de mensagem é Negócio+.
   // ============================================================
-  { s: "Clientes e WhatsApp", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", mod: "whatsapp" },{ r: "/clientes/reativacao", l: "Reativação", ic: "rotate_ccw", mod: "clientes.reativacao" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
+  { s: "Clientes e WhatsApp", i: [{ r: "/clientes", l: "Clientes", ic: "users", mod: "clientes" },{ r: "/whatsapp", l: "WhatsApp", ic: "message", mod: "whatsapp" },{ r: "/canal", l: "Canal Digital", ic: "globe", mod: "canal" }]},
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
@@ -168,7 +173,7 @@ const NAV: NavSection[] = [
 // 16/11/2026 (p-128) — a Producao dos Personalizados vem primeiro: e a tela
 // que a loja de personalizados abre o dia inteiro no celular. O hasteamento
 // respeita o filteredNav, entao quem nao tem a frente nao ve diferenca.
-const MORE_PRIORIDADE = ["/personalizados/producao", "/clientes", "/whatsapp", "/clientes/reativacao"];
+const MORE_PRIORIDADE = ["/personalizados/producao", "/clientes", "/whatsapp"];
 
 
 function useWebFonts() {
@@ -884,9 +889,10 @@ function MBar() {
   // "Clientes e WhatsApp" subiu pra quarta posicao e isso basta pra ele
   // aparecer na primeira tela; aqui nao bastaria: o "Mais" e uma grade de 4
   // colunas achatada a partir do NAV, e a ordem plana deixaria NF-e,
-  // Contabilidade, Seu Analista, Vendas, Cupons, Crediario e OS na frente —
+  // Vendas, Cupons, Crediario e OS na frente (Contabilidade e Seu Analista
+  // sairam do menu em 26/11/2026) —
   // o WhatsApp cairia na terceira fileira, que e justamente o que ninguem
-  // rola no celular. Entao Clientes/WhatsApp/Reativacao sao hasteados pro
+  // rola no celular. Entao Clientes/WhatsApp sao hasteados pro
   // topo, nessa ordem, e o resto segue a ordem do NAV. Item ausente (sem
   // plano, sem permissao, escondido no editor) simplesmente nao entra: o
   // hasteamento respeita o filteredNav, nao reintroduz nada.
@@ -991,6 +997,7 @@ export default function TabsLayout() {
     <div key={themeKey} style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", background: grad, position: "relative", overflow: "hidden" } as any}>
       {/* Topbar sininho */}
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 16px", flexShrink: 0 } as any}>
+        <SuporteButton compact />
         <NotificationBell />
       </div>
       <ToastContainer />
@@ -1009,6 +1016,7 @@ export default function TabsLayout() {
       <div key={themeKey} style={{ flex: 1, minHeight: "100%", background: grad, overflow: "auto", position: "relative", minWidth: 0, display: "flex", flexDirection: "column" } as any}>
         {/* Topbar sininho */}
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "10px 24px 0", flexShrink: 0 } as any}>
+          <SuporteButton />
           <NotificationBell />
         </div>
         <ToastContainer />
@@ -1023,7 +1031,8 @@ export default function TabsLayout() {
     <ErrorBoundary>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         {/* Topbar sininho nativo */}
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", padding: 8 }}>
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", padding: 8 }}>
+          <SuporteButton compact />
           <NotificationBell />
         </View>
         <View key={themeKey} style={{ flex: 1 }}>
