@@ -34,7 +34,6 @@ const DENTAL_NAV: DentalNavSectionLocal[] = [
   ]},
   { label: "Negócio", items: [
     { route: "/dental/(clinic)/faturamento",  label: "Faturamento",  icon: "wallet",     tourKey: "faturamento" },
-    { route: "/dental/(clinic)/contabilidade",label: "Contabilidade",icon: "calculator", tourKey: "contabilidade" },
     { route: "/dental/(clinic)/materiais",    label: "Materiais",    icon: "package",    tourKey: "materiais" },
     { route: "/dental/(clinic)/comunicacao",  label: "Comunicação",  icon: "message",    tourKey: "comunicacao" },
   ]},
