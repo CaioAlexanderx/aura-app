@@ -54,6 +54,7 @@ import {
 } from "./regras";
 import { Botao, Campo, Chip, Dica, Rotulo, Secao, type Tema } from "./ui";
 import { ehCelular, respiroInferior } from "@/components/studio/modalNoCelular";
+import { formatarTelefone } from "@/utils/telefone";
 
 export type LojaDoOrcamento = { id: string; name: string; logo_url?: string | null };
 
@@ -180,7 +181,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rota
         setQuote(q);
         setAjustes(hist || []);
         setNome(q.customer_name || "");
-        setZap(q.customer_phone || "");
+        setZap(formatarTelefone(q.customer_phone));
         setValidade(Number(q.validity_days) || 7);
         setSinalTxt(textoDe(q.deposit_pct != null ? Number(q.deposit_pct) : null));
         const c = q.condicoes || null;

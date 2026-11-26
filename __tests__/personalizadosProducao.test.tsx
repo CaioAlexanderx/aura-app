@@ -419,10 +419,34 @@ describe("render do quadro", () => {
     await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
     await act(async () => { achar(arvore, "producao-tirar-confirmar")[0].props.onPress(); });
     expect(tem(arvore, "producao-tirar-recebimento")).toBe(true);
-    expect(JSON.stringify(arvore.toJSON())).toContain("Este pedido tem valor recebido");
+    expect(JSON.stringify(arvore.toJSON())).toContain("Este pedido já tem valor recebido");
     expect(tem(arvore, "producao-cartao-a1")).toBe(true);
     await act(async () => { achar(arvore, "producao-tirar-ir-cancelamento")[0].props.onPress(); });
     expect(aberto).toEqual(["a1"]);
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: pedido com fila_tem_recebimento já abre o aviso com o valor, sem perguntar nem chamar o backend", async () => {
+    const aberto: string[] = [];
+    mockListOrders.mockResolvedValue({ orders: [pedido("p1", { source: "digital", fila_tem_recebimento: true, fila_recebido: 49.9 }), pedido("p2")] });
+    let arvore!: renderer.ReactTestRenderer;
+    await act(async () => {
+      arvore = renderer.create(
+        <TemaDoNegocio><QuadroDeProducao companyId="loja-1" ativadoEm={null} onAbrirPedido={(id) => aberto.push(id)} /></TemaDoNegocio>,
+      );
+    });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { achar(arvore, "producao-tirar-p1")[0].props.onPress(); });
+    expect(tem(arvore, "producao-tirar-recebimento")).toBe(true);
+    expect(tem(arvore, "producao-tirar-confirmacao")).toBe(false);
+    expect(JSON.stringify(arvore.toJSON())).toMatch(/Este pedido já tem R\$\s*49,90 recebido/);
+    expect(JSON.stringify(arvore.toJSON())).toContain("cancele o pedido");
+    expect(mockTirar).not.toHaveBeenCalled();
+    await act(async () => { achar(arvore, "producao-tirar-ir-cancelamento")[0].props.onPress(); });
+    expect(aberto).toEqual(["p1"]);
+    // Sem recebimento, a pergunta de sempre.
+    await act(async () => { achar(arvore, "producao-tirar-p2")[0].props.onPress(); });
+    expect(tem(arvore, "producao-tirar-confirmacao")).toBe(true);
     arvore.unmount();
   });
 

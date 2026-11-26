@@ -10,22 +10,25 @@
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { reais } from "@/components/studio/pagamentoDoPedido";
 import { WebPortal } from "@/components/WebPortal";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { ALVO_DE_TOQUE, botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
-import { TEXTO_DE_TIRAR_DA_FILA as T } from "@/components/personalizados/tirarDaFila";
+import { TEXTO_DE_TIRAR_DA_FILA as T, tituloDoRecebimento } from "@/components/personalizados/tirarDaFila";
 
 type Props = {
   modo: "pergunta" | "recebimento" | null;
   trabalhando?: boolean;
+  /** Quanto já entrou (R$), para o aviso do modo "recebimento". */
+  recebido?: number | null;
   idDeTeste: string;
   onConfirmar: () => void;
   onIrParaCancelamento: () => void;
   onFechar: () => void;
 };
 
-export function ConfirmacaoDeTirarDaFila({ modo, trabalhando, idDeTeste, onConfirmar, onIrParaCancelamento, onFechar }: Props) {
+export function ConfirmacaoDeTirarDaFila({ modo, trabalhando, recebido, idDeTeste, onConfirmar, onIrParaCancelamento, onFechar }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => estilos(t), [t]);
   const celular = useModalNoCelular();
@@ -37,7 +40,7 @@ export function ConfirmacaoDeTirarDaFila({ modo, trabalhando, idDeTeste, onConfi
       <View style={[s.fundo, folha.fundo]} testID={`${idDeTeste}-${recebimento ? "recebimento" : "confirmacao"}`}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onFechar} accessibilityLabel="Cancelar" />
         <View style={[s.caixa, folha.caixa]} accessibilityRole="alert">
-          <Text style={s.pergunta} testID={`${idDeTeste}-pergunta`}>{recebimento ? T.temRecebimentoTitulo : T.titulo}</Text>
+          <Text style={s.pergunta} testID={`${idDeTeste}-pergunta`}>{recebimento ? tituloDoRecebimento(recebido, reais) : T.titulo}</Text>
           <Text style={s.corpo}>{recebimento ? T.temRecebimentoCorpo : T.corpo}</Text>
           <View style={s.rodape}>
             <Pressable style={[s.cancelar, btn]} onPress={onFechar} accessibilityRole="button" testID={`${idDeTeste}-cancelar`}>

@@ -38,6 +38,14 @@ export function useStudioKanbanDnD<S extends string = string>(
     setHoverStatus(status);
   }, []);
 
+  // Soltar zera o arraste na hora: o cartão que passa de coluna é remontado e o
+  // dragend do elemento antigo se perde, deixando o cartão "arrastando" (opaco).
+  const onDropLimpando = useCallback((orderId: string, toStatus: S) => {
+    setDraggingId(null);
+    setHoverStatus(null);
+    onDrop(orderId, toStatus);
+  }, [onDrop]);
+
   return {
     isWeb,
     draggingId,
@@ -45,7 +53,7 @@ export function useStudioKanbanDnD<S extends string = string>(
     onCardDragStart,
     onCardDragEnd,
     onHoverChange,
-    onDrop,
+    onDrop: onDropLimpando,
   };
 }
 
@@ -114,6 +122,11 @@ export function useDropZoneRef<S extends string = string>(
       if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
       onHover(status);
     };
+    // O navegador só aceita soltar numa zona que cancela dragenter E dragover.
+    const handleEnter = (e: DragEvent) => {
+      e.preventDefault();
+      onHover(status);
+    };
     const handleLeave = (e: DragEvent) => {
       // Evita "flicker" quando o pointer cruza nodes filhos
       const related = (e as any).relatedTarget as Node | null;
@@ -127,11 +140,13 @@ export function useDropZoneRef<S extends string = string>(
       onHover(null);
     };
 
+    el.addEventListener("dragenter", handleEnter);
     el.addEventListener("dragover", handleOver);
     el.addEventListener("dragleave", handleLeave);
     el.addEventListener("drop", handleDrop);
 
     return () => {
+      el.removeEventListener("dragenter", handleEnter);
       el.removeEventListener("dragover", handleOver);
       el.removeEventListener("dragleave", handleLeave);
       el.removeEventListener("drop", handleDrop);
