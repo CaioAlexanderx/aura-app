@@ -66,6 +66,10 @@ const PATHS: Record<string, string> = {
   // ── Finance ─────────────────────────────────────────────────
   wallet:         "M21 12V7H5a2 2 0 010-4h14v4 M3 5v16h18v-8H3 M18 16h.01",
   dollar:         "M12 1v22 M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
+  // Venda condicional (C5, 26/11/2026): cabide (provar roupa) e moeda do
+  // "Falta cobrar", os do mockup aprovado em 25/11 (condicional/mockup.html).
+  hanger:         "M12 8V7.2a2.1 2.1 0 10-2.1-2.1 M12 8L3.6 14.3A1.5 1.5 0 004.5 17h15a1.5 1.5 0 00.9-2.7L12 8z",
+  coin:           "M12 20.5a8.5 8.5 0 100-17 8.5 8.5 0 000 17z M14.5 9.3c-.5-.8-1.4-1.3-2.5-1.3-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.7.8 2.7 2-1.2 2-2.7 2c-1.2 0-2.2-.5-2.7-1.4 M12 6.5V8 M12 16v1.5",
   trending_up:    "M23 6l-9.5 9.5-5-5L1 18 M17 6h6v6",
   trending_down:  "M23 18l-9.5-9.5-5 5L1 6 M17 18h6v-6",
   receipt:        "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z M16 8H8 M16 12H8 M14 16H8",

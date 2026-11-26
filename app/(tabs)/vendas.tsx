@@ -33,6 +33,7 @@ import { TEXTOS_DOS_PEDIDOS } from "@/components/screens/vendas/pedidos/regrasDo
 // CONDICIONAL_LIBERADA e do modulo vendas.condicionais. Sem os dois, a tela e
 // a de antes: nenhuma aba, botao, selo ou cadeado.
 import { useAbaCondicionais } from "@/hooks/useAbaCondicionais";
+import { useCondicionais } from "@/hooks/useCondicionais";
 import { AbaCondicionais, TEXTOS_DAS_CONDICIONAIS } from "@/components/screens/vendas/condicionais/AbaCondicionais";
 
 // ============================================================
@@ -167,6 +168,9 @@ export default function VendasScreen() {
   const { visivel: comPedidos } = useAbaPedidos();
   const pedidosDaAba = usePedidos("abertos", "", { enabled: comPedidos });
   const { visivel: comCondicionais } = useAbaCondicionais();
+  // C5: o numero da aba sao as condicionais em aberto (a mesma consulta, e a
+  // mesma chave, do filtro padrao da aba).
+  const condicionaisDaAba = useCondicionais("em_aberto", "", { enabled: comCondicionais });
   const abaAtiva = (activeTab === "pedidos" && !comPedidos) || (activeTab === "condicionais" && !comCondicionais)
     ? "vendas" : activeTab;
 
@@ -250,7 +254,7 @@ export default function VendasScreen() {
     // Fechamentos de caixa.
     ...(comCondicionais ? [{
       key: "condicionais",
-      label: TEXTOS_DAS_CONDICIONAIS.aba,
+      label: TEXTOS_DAS_CONDICIONAIS.aba + (condicionaisDaAba.contagem && condicionaisDaAba.contagem.em_aberto > 0 ? " " + condicionaisDaAba.contagem.em_aberto : ""),
       testID: "aba-vendas-condicionais",
     }] : []),
     // Mockup (parte 3): "Pedidos" entre Vendas e Ranking, com o numero dos abertos.
