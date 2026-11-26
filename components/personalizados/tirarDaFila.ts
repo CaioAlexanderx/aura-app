@@ -19,8 +19,8 @@ export const TEXTO_DE_TIRAR_DA_FILA = {
   corpo: "A venda e o dinheiro continuam como estão.",
   confirmar: "Tirar da fila",
   feito: "Tirado da fila. A venda e o dinheiro continuam como estão.",
-  temRecebimentoTitulo: "Este pedido tem valor recebido",
-  temRecebimentoCorpo: "Tirar da fila não mexe no dinheiro. Para desfazer o pedido, o caminho é o cancelamento do pedido.",
+  temRecebimentoTitulo: "Este pedido já tem valor recebido",
+  temRecebimentoCorpo: "Tirar da fila não mexe no dinheiro. Para tirá-lo da fila, cancele o pedido.",
   irParaCancelamento: "Ir para o cancelamento do pedido",
 } as const;
 
@@ -41,4 +41,16 @@ export function ehTemRecebimento(e: any): boolean {
 export function ehPedidoNaoEncontrado(e: any): boolean {
   if (e?.status === 404) return true;
   return [e?.code, e?.error, e?.data?.error, e?.data?.code].some((c) => typeof c === "string" && c.toUpperCase() === "PEDIDO_NAO_ENCONTRADO");
+}
+
+/** "Este pedido já tem R$ 49,90 recebido." Sem valor, a frase genérica. */
+export function tituloDoRecebimento(recebido: number | null | undefined, formatar: (v: number) => string): string {
+  const v = Number(recebido);
+  return v > 0 ? `Este pedido já tem ${formatar(v)} recebido` : TEXTO_DE_TIRAR_DA_FILA.temRecebimentoTitulo;
+}
+
+/** O valor que a recusa do backend (409) traz em `recebido`. */
+export function recebidoDaRecusa(e: any): number | null {
+  const v = Number(e?.data?.recebido ?? e?.recebido);
+  return v > 0 ? v : null;
 }
