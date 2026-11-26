@@ -18,13 +18,34 @@
 // tela não tem o status à mão (menu, planos, Painel, Ótica), desligada
 // esconde: o Kondei usa as telas do dojô, que têm o status.
 //
+// 26/11/2026 — a Meta aprovou o App Review em 25/11. Antes de ligar para
+// as lojas, a EQUIPE AURA (is_staff que o backend devolve no usuário, mesmo
+// desenho de utils/pedidoLiberado.ts e utils/condicionalLiberada.ts) já vê
+// tudo: o Caio conecta o número da própria Aura pela tela do WhatsApp.
+// Para o lojista nada muda.
+//
 // O que NÃO passa por aqui: o WhatsApp manual pelo wa.me (cobrança manual,
 // parabéns manual, Chamar sumidos, cupom, suporte) segue igual.
 //
 // COMO LIGAR: trocar a constante para true e publicar o app.
 // ============================================================
 
+import { ehEquipeAura } from "@/utils/equipeAura";
+
 export const WHATSAPP_OFICIAL_LIBERADO = false;
+
+/**
+ * A trava para quem não tem o status da conexão à mão (menu, Planos,
+ * Ótica, Reativação): ligada OU equipe Aura.
+ * `liberado` existe para os testes ligarem a trava.
+ */
+export function whatsappOficialLiberadoPara(
+  user: unknown,
+  liberado: boolean = WHATSAPP_OFICIAL_LIBERADO,
+): boolean {
+  if (liberado === true) return true;
+  return ehEquipeAura(user);
+}
 
 /** Recorte do WaStatus que interessa aqui (aceita null: status não veio). */
 export interface WaStatusConexao {
@@ -39,14 +60,15 @@ export function lojaJaConectada(status: WaStatusConexao | null | undefined): boo
 }
 
 /**
- * Mostra o WhatsApp oficial? Trava ligada OU loja já conectada.
- * `liberado` existe para os testes ligarem a trava.
+ * Mostra o WhatsApp oficial? Trava ligada, equipe Aura OU loja já conectada.
+ * `user` é o do useAuthStore; `liberado` existe para os testes ligarem a trava.
  */
 export function whatsappOficialVisivel(
   status: WaStatusConexao | null | undefined,
+  user: unknown,
   liberado: boolean = WHATSAPP_OFICIAL_LIBERADO,
 ): boolean {
-  if (liberado === true) return true;
+  if (whatsappOficialLiberadoPara(user, liberado)) return true;
   return lojaJaConectada(status);
 }
 

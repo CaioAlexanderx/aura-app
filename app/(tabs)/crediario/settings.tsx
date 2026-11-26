@@ -110,7 +110,7 @@ function monthlyPctToDaily(monthlyPctStr: string): number {
 }
 
 export default function CrediarioSettingsScreen() {
-  const { company } = useAuthStore();
+  const { company, user } = useAuthStore();
   const qc = useQueryClient();
   const [dirty, setDirty] = useState(false);
   const touch = () => setDirty(true);
@@ -364,7 +364,7 @@ export default function CrediarioSettingsScreen() {
   // até a Meta aprovar, o bloco do envio automático só aparece para a loja
   // que já tem o número conectado. Escondido, a régua fala do wa.me, que é
   // o que de fato sai. O whatsapp_auto gravado não muda (o PUT ecoa waAuto).
-  const waOficial = whatsappOficialVisivel(waStatus);
+  const waOficial = whatsappOficialVisivel(waStatus, user);
   const waAutoNaTela = waOficial && waAuto;
 
   /**

@@ -12,7 +12,9 @@
 //   3. o Agendamento sem o cartão de notificações de mentira (render);
 //   4. a exceção da loja conectada no cartão do aniversário (render);
 //   5. o menu sem o item WhatsApp (o filtro em buildRawNav, lido do fonte
-//      como em __tests__/modulosOcultos.test.ts).
+//      como em __tests__/modulosOcultos.test.ts);
+//   6. (26/11/2026) a equipe Aura (is_staff) vê tudo antes das lojas, e o
+//      lojista segue exatamente como antes (paridade).
 // ============================================================
 import fs from "fs";
 import path from "path";
@@ -23,10 +25,12 @@ jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { info: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 
+var mockUser: any = null;
 jest.mock("@/stores/auth", () => ({
   useAuthStore: Object.assign(
     function (selector: any) {
       var state = {
+        user: mockUser,
         company: { id: "loja-1", name: "Loja Exemplo", plan: "negocio" },
         token: "t",
         isDemo: false,
@@ -76,7 +80,8 @@ jest.mock("@/services/birthdayApi", () => ({
 jest.mock("@/components/whatsapp/PreviaMarketingModal", () => ({ PreviaMarketingModal: () => null }));
 
 import {
-  WHATSAPP_OFICIAL_LIBERADO, lojaJaConectada, whatsappOficialVisivel, MODULO_WHATSAPP_OFICIAL,
+  WHATSAPP_OFICIAL_LIBERADO, lojaJaConectada, whatsappOficialVisivel, whatsappOficialLiberadoPara,
+  MODULO_WHATSAPP_OFICIAL,
 } from "@/utils/whatsappOficialLiberado";
 import PlanosScreen from "@/app/(tabs)/planos";
 import AgendamentoScreen from "@/app/(tabs)/agendamento";
@@ -109,21 +114,41 @@ describe("a trava", () => {
     expect(WHATSAPP_OFICIAL_LIBERADO).toBe(false);
   });
 
-  test("desligada: só a loja conectada vê", () => {
-    expect(whatsappOficialVisivel({ connected: true })).toBe(true);
-    expect(whatsappOficialVisivel({ connected: false })).toBe(false);
-    expect(whatsappOficialVisivel(null)).toBe(false);
-    expect(whatsappOficialVisivel(undefined)).toBe(false);
+  const LOJISTA = { id: "u-1", email: "dona@loja.com.br", is_staff: false };
+  const EQUIPE = { id: "u-2", email: "caio@getaura.com.br", is_staff: true };
+
+  test("desligada: lojista sem conexão não vê; só a loja conectada vê", () => {
+    for (const u of [LOJISTA, null, undefined, {}]) {
+      expect(whatsappOficialVisivel({ connected: true }, u)).toBe(true);
+      expect(whatsappOficialVisivel({ connected: false }, u)).toBe(false);
+      expect(whatsappOficialVisivel(null, u)).toBe(false);
+      expect(whatsappOficialVisivel(undefined, u)).toBe(false);
+      expect(whatsappOficialLiberadoPara(u)).toBe(false);
+    }
   });
 
   test("token vencido é loja conectada (precisa ver o aviso de reconectar)", () => {
     expect(lojaJaConectada({ connected: false, token_expired: true })).toBe(true);
-    expect(whatsappOficialVisivel({ connected: false, token_expired: true })).toBe(true);
+    expect(whatsappOficialVisivel({ connected: false, token_expired: true }, LOJISTA)).toBe(true);
+  });
+
+  test("desligada: a equipe Aura vê, conectada ou não", () => {
+    expect(whatsappOficialLiberadoPara(EQUIPE)).toBe(true);
+    expect(whatsappOficialVisivel(null, EQUIPE)).toBe(true);
+    expect(whatsappOficialVisivel({ connected: false }, EQUIPE)).toBe(true);
+    expect(whatsappOficialVisivel({ connected: true }, EQUIPE)).toBe(true);
+  });
+
+  test("equipe é só o is_staff === true do backend (e-mail não conta)", () => {
+    expect(whatsappOficialLiberadoPara({ email: "x@getaura.com.br" })).toBe(false);
+    expect(whatsappOficialLiberadoPara({ is_staff: "true" })).toBe(false);
+    expect(whatsappOficialVisivel(null, { is_staff: 1 })).toBe(false);
   });
 
   test("ligada: todo mundo vê, conectado ou não", () => {
-    expect(whatsappOficialVisivel(null, true)).toBe(true);
-    expect(whatsappOficialVisivel({ connected: false }, true)).toBe(true);
+    expect(whatsappOficialVisivel(null, LOJISTA, true)).toBe(true);
+    expect(whatsappOficialVisivel({ connected: false }, null, true)).toBe(true);
+    expect(whatsappOficialLiberadoPara(null, true)).toBe(true);
   });
 });
 
@@ -140,6 +165,21 @@ describe("planos com a trava desligada", () => {
     expect(essencial).toContain("Cobrança pelo WhatsApp: manual (wa.me)");
     expect(textoDe(tree.toJSON())).not.toContain("Mensagens promocionais extras");
     tree.unmount();
+  });
+
+  test("a equipe Aura vê a vitrine com o WhatsApp oficial", async () => {
+    mockUser = { id: "u-2", is_staff: true };
+    let tree: any;
+    try {
+      await act(async () => { tree = renderer.create(<PlanosScreen />); });
+      await flush();
+      const negocio = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
+      expect(negocio).toContain("Cobranças automáticas pelo WhatsApp oficial");
+      expect(textoDe(tree.toJSON())).toContain("Mensagens promocionais extras");
+      tree.unmount();
+    } finally {
+      mockUser = null;
+    }
   });
 });
 
@@ -202,6 +242,20 @@ describe("useWhatsappOficialVisivel (aba WhatsApp das Mensalidades do dojô)", (
     expect(tree.root.findAllByProps({ testID: "sonda" })[0].props.v).toBe(true);
     tree.unmount();
   });
+
+  test("equipe Aura vê sem perguntar o status", async () => {
+    mockUser = { id: "u-2", is_staff: true };
+    mockQueryData = null;
+    let tree: any;
+    try {
+      await act(async () => { tree = renderer.create(<Sonda />); });
+      expect(mockQueryOpts.enabled).toBe(false);
+      expect(tree.root.findAllByProps({ testID: "sonda" })[0].props.v).toBe(true);
+      tree.unmount();
+    } finally {
+      mockUser = null;
+    }
+  });
 });
 
 describe("entrada da Reativação no Negócio", () => {
@@ -224,7 +278,7 @@ describe("menu", () => {
     const i = layout.indexOf("function buildRawNav(");
     expect(i).toBeGreaterThan(-1);
     const corpo = layout.slice(i, layout.indexOf("\n}", i));
-    expect(corpo).toContain("item.mod === MODULO_WHATSAPP_OFICIAL && !WHATSAPP_OFICIAL_LIBERADO");
+    expect(corpo).toContain("item.mod === MODULO_WHATSAPP_OFICIAL && !whatsappOficialLiberadoPara({ is_staff: isStaff })");
     expect(MODULO_WHATSAPP_OFICIAL).toBe("whatsapp");
   });
 });

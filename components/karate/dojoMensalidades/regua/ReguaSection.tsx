@@ -89,6 +89,7 @@ export function ReguaSection() {
   const { federationId } = useKarateFederation();
   // No karatê o dojô É uma company — o /whatsapp/status é por company.
   const company = useAuthStore((s) => s.company) as any;
+  const user = useAuthStore((s) => s.user);
   const companyId: string | null = company?.id ?? null;
 
   const [loading, setLoading] = useState(true);
@@ -189,7 +190,7 @@ export function ReguaSection() {
   // 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado):
   // o "Enviar também por WhatsApp (automático)" só aparece para o dojô que
   // já tem o número conectado (o Kondei). send_whatsapp_auto gravado não muda.
-  const waOficial = whatsappOficialVisivel(waStatus);
+  const waOficial = whatsappOficialVisivel(waStatus, user);
 
   /**
    * `waAutoValue` existe porque a ativação pela prévia salva ANTES do

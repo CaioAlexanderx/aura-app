@@ -100,7 +100,7 @@ export default function ReativacaoScreen() {
 }
 
 function ReativacaoMeta() {
-  const { company } = useAuthStore();
+  const { company, user } = useAuthStore();
   const companyId = company?.id || "";
 
   // `?dias=90` — o corte escolhido na entrada (Clientes/WhatsApp) chega
@@ -301,7 +301,7 @@ function ReativacaoMeta() {
   // até a Meta aprovar, o disparo pago (bloqueios, "Enviar cupom", prévia,
   // seleção) e a reativação automática semanal só aparecem para a loja que
   // já tem o número conectado. Fica a lista com o "Chamar" pelo wa.me.
-  const waOficial = whatsappOficialVisivel(waStatus);
+  const waOficial = whatsappOficialVisivel(waStatus, user);
 
   // 403 = o backend só libera esta tela a Negócio/Expansão. Chegar aqui
   // com 403 quer dizer que o plano do login está desatualizado (o wrapper

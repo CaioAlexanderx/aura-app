@@ -10,7 +10,7 @@ import { discountInEffectText } from "@/components/billing/couponText";
 import { FaixaDoTrial } from "@/components/billing/FaixaDoTrial";
 import { router } from "expo-router";
 import { waAura } from "@/constants/suporteAura";
-import { WHATSAPP_OFICIAL_LIBERADO } from "@/utils/whatsappOficialLiberado";
+import { whatsappOficialLiberadoPara } from "@/utils/whatsappOficialLiberado";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
 const AURA_WHATSAPP = waAura("Olá, gostaria de saber mais sobre a consultoria da Aura");
@@ -167,7 +167,7 @@ const FEATURES_WHATSAPP_OFICIAL = new Set<string>([
 ]);
 const ADDON_WHATSAPP_OFICIAL = "Mensagens promocionais extras";
 
-function featuresDaVitrine(features: string[], liberado: boolean = WHATSAPP_OFICIAL_LIBERADO): string[] {
+function featuresDaVitrine(features: string[], liberado: boolean): string[] {
   return liberado ? features : features.filter((f) => !FEATURES_WHATSAPP_OFICIAL.has(f));
 }
 
@@ -181,7 +181,7 @@ const ADDONS_TODOS = [
   { name: "Módulo vertical extra", price: "R$ 39/mês", desc: "A partir do Negócio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) além do incluso no seu plano" },
   { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuração, treinamento, automações e integrações personalizadas para o seu negócio", cta: true },
 ];
-function addonsDaVitrine(liberado: boolean = WHATSAPP_OFICIAL_LIBERADO) {
+function addonsDaVitrine(liberado: boolean) {
   return liberado ? ADDONS_TODOS : ADDONS_TODOS.filter((a) => a.name !== ADDON_WHATSAPP_OFICIAL);
 }
 
@@ -189,7 +189,9 @@ const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionD
 
 export default function PlanosScreen() {
   const [annual, setAnnual] = useState(false);
-  const { company, token, isDemo, refreshMe } = useAuthStore();
+  const { company, token, isDemo, refreshMe, user } = useAuthStore();
+  // Trava do WhatsApp oficial: ligada ou equipe Aura (26/11/2026).
+  const waOficial = whatsappOficialLiberadoPara(user);
   const currentPlan = (company?.plan as string) || "essencial";
   const discount = 1 / 6;
 
@@ -267,7 +269,7 @@ export default function PlanosScreen() {
               {annual && <Text style={s.yearlyTotal}>Total anual: {fmtR(yr)}</Text>}
               {annual && <Text style={s.yearlySave}>Economia de {fmtR(savings(plan.monthly))}/ano</Text>}
               <View style={s.featuresList}>
-                {featuresDaVitrine(plan.features).map((f, idx) => {
+                {featuresDaVitrine(plan.features, waOficial).map((f, idx) => {
                   // "Tudo do X, e mais:" vira heading destacado.
                   const isHeading = f.startsWith("Tudo do");
                   return (
@@ -294,7 +296,7 @@ export default function PlanosScreen() {
 
       <Text style={s.sectionTitle}>Add-ons</Text>
       <View style={s.addonsRow}>
-        {addonsDaVitrine().map(a => (
+        {addonsDaVitrine(waOficial).map(a => (
           <View key={a.name} style={s.addonCard}>
             <Text style={s.addonName}>{a.name}</Text>
             <Text style={[s.addonPrice, (a as any).cta && { color: Colors.ink }]}>{a.price}</Text>
