@@ -45,8 +45,6 @@ import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
 // Meta, custa mais e exige consentimento declarado. A declaração mora na
 // aba Conexão porque é uma propriedade do NÚMERO, não de uma rotina.
 import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
-import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
-import { useCustomers } from "@/hooks/useCustomers";
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
@@ -54,6 +52,10 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useWaSaldo } from "@/hooks/useWaSaldo";
 import { useWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { AutomaticasCard } from "@/components/whatsapp/AutomaticasCard";
+import { AniversarioConfig } from "@/components/whatsapp/AniversarioConfig";
+import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
+import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
+import type { WaAutoKey } from "@/services/waConfigApi";
 import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -65,6 +67,9 @@ type AbaReal = "conversas" | "config";
 const SECOES_CONFIG = [
   { key: "conexao", label: "Conexão" },
   { key: "automaticas", label: "Automáticas" },
+  { key: "aniversario", label: "Aniversário" },
+  { key: "venda_mais", label: "Venda+" },
+  { key: "crediario", label: "Crediário" },
   { key: "cobrancas", label: "Cobranças" },
   { key: "templates", label: "Templates" },
 ] as const;
@@ -82,14 +87,10 @@ export default function WhatsAppScreen() {
   const wa = useWaVarejo(companyId, !demo);
   // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView);
-  const autoAtiva = !demo && !consolidatedView && secao === "automaticas";
+  // As automáticas (divisão, liga/desliga, escolhas) alimentam as 4 seções.
+  const autoAtiva = !demo && !consolidatedView && ["automaticas", "aniversario", "venda_mais", "crediario"].includes(secao);
+  const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
   const auto = useWaAutomaticas(companyId, autoAtiva);
-
-  // A entrada da reativação conta em cima da lista de clientes. Mesma
-  // queryKey do hook da tela de Clientes (react-query), então isto é
-  // cache compartilhado, não uma chamada nova — e no consolidado a
-  // lista já vem de todas as lojas (MULTICNPJ).
-  const clientes = useCustomers();
 
   // A maquete só aparece no modo demonstração; o hook dela já não busca
   // nada em company real (queries com enabled: !isDemo).
@@ -241,25 +242,30 @@ export default function WhatsAppScreen() {
                   O envio automático das cobranças liga na régua, em Configurações do Crediário.
                 </Text>
               </Pressable>
-              {/* Fase 0 (I0.2): era um link que só dizia ONDE ficava a
-                  reativação. Agora diz QUANTOS clientes sumiram e quanto
-                  eles já gastaram, com o corte de dias escolhido aqui —
-                  mesma régua e mesmo bloco da aba Retenção de Clientes,
-                  na variante compacta. */}
-              <ReativacaoEntrada
-                customers={clientes.customers}
-                plan={clientes.plan}
-                carregando={clientes.isLoading}
-                companyCount={clientes.consolidatedView ? clientes.companyCount : 1}
-                compacto
-                idBase="wa-varejo-ir-para-reativacao"
-              />
             </View>
           )}
 
           {secao === "automaticas" && !consolidatedView && (
             <View testID="wa-varejo-bloco-automaticas">
-              <AutomaticasCard auto={auto} />
+              <AutomaticasCard auto={auto} onAjustar={(k: WaAutoKey) => setSecao(k === "venda_mais" ? "venda_mais" : k === "aniversario" ? "aniversario" : "crediario")} />
+            </View>
+          )}
+
+          {secao === "aniversario" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-aniversario">
+              <AniversarioConfig companyId={companyId} auto={auto} lojaNome={lojaNome} />
+            </View>
+          )}
+
+          {secao === "venda_mais" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-venda-mais">
+              <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
+            </View>
+          )}
+
+          {secao === "crediario" && !consolidatedView && (
+            <View testID="wa-varejo-bloco-crediario">
+              <CrediarioConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
             </View>
           )}
 
