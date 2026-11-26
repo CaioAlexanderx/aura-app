@@ -62,7 +62,7 @@ const MODULE_GROUPS: GrupoDeToggles[] = [
       // 30/10/2026 — variação da tela Estoque (utils/estoqueConsulta.ts). As
       // duas chaves se excluem no seletor.
       { key: "estoque_consulta", label: "Estoque só consulta", hint: "Vê produtos e quantidades, sem preços, custos nem valores" },
-      { key: "clientes", label: "Clientes",       hint: "Cadastrar e ver histórico de clientes" },
+      { key: "clientes", label: "Clientes",       hint: "Cadastrar clientes, ver histórico e atender no WhatsApp" },
       // 15/09/2026 — umbrella da semi-vertical Ótica (useVisibleModules:
       // otica.access -> laboratório, receitas, config). Só aparece com o
       // módulo ligado na loja (filtro em ModuleGroupSelector).
@@ -99,7 +99,7 @@ const MODULE_GROUPS: GrupoDeToggles[] = [
     // Expansão: nos outros planos o grupo inteiro some.
     label: "Crescimento",
     modules: [
-      { key: "agentes",   label: "Agentes",       hint: "Trabalho automático dos agentes e atendimento nas redes sociais" },
+      { key: "agentes",   label: "Agentes",       hint: "Trabalho automático dos agentes" },
     ],
   },
   {
