@@ -8,8 +8,6 @@ import { useAuthStore } from "@/stores/auth";
 import { ScreenHero } from "@/components/ScreenHero";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
-import { HubView } from "@/components/screens/hub/HubView";
-import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { pluralize } from "@/utils/plural";
 import { VAZIO_ATIVIDADES } from "@/utils/mensagensDoApp";
 
@@ -19,13 +17,8 @@ import { VAZIO_ATIVIDADES } from "@/utils/mensagensDoApp";
 // é a única pergunta que a tela responde ("o que a Aura fez por mim?"), e são
 // exatamente os três KPIs que já estavam em cartão logo abaixo.
 //
-// 01/09/2026 (merge com o hub social, #826): a aba passou a ter DUAS visões
-// — Atendimento (inbox da Aurinha) e Análises. As duas usam o mesmo
-// ScreenHero de propósito: cabeçalho diferente por visão dentro da mesma aba
-// é o defeito que esta onda veio corrigir. O subtítulo de métricas fica só
-// em Análises, que é de onde os números vêm; no Atendimento o hero entra sem
-// subtítulo, porque a contagem da caixa de entrada mora dentro do HubView e
-// puxá-la pra cá exigiria mudar o contrato dele.
+// 26/11/2026: a visão Atendimento (hub social) saiu daqui e foi para a tela do
+// WhatsApp (/whatsapp, aba Conversas). Agentes ficou só com as Análises.
 
 const AGENT_META: Record<string, { icon: string; color: string }> = {
   Financeiro:   { icon: "wallet", color: Colors.green },
@@ -65,13 +58,6 @@ function ActivityRow({ item }: { item: any }) {
 
 export default function AgentesScreen() {
   const { isDemo, company, token } = useAuthStore();
-
-  // Hub social (Aurinha) — módulo próprio (hub_social) vendável como
-  // add-on; sem ele a aba mostra só as Análises (comportamento antigo).
-  const visibleMods = useVisibleModules();
-  const hubVisible = visibleMods.has("hub_social");
-  const [view, setView] = useState<"atendimento" | "analises">("atendimento");
-  const activeView = hubVisible ? view : "analises";
 
   // Fetch real activity from API
   const { data: apiActivity, isLoading } = useQuery({
@@ -144,33 +130,6 @@ export default function AgentesScreen() {
     crm: "CRM", contabil: "Contábil", marketing: "Marketing", odonto: "Odontologia",
   };
 
-  const viewTabs = hubVisible ? (
-    <View style={z.viewTabs}>
-      {(["atendimento", "analises"] as const).map((v) => (
-        <Pressable key={v} onPress={() => setView(v)}
-          style={[z.viewTab, activeView === v && z.viewTabOn]}>
-          <Text style={[z.viewTabText, activeView === v && z.viewTabTextOn]}>
-            {v === "atendimento" ? "Atendimento" : "Análises"}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  ) : null;
-
-  // Atendimento (hub social): container próprio — o HubView tem os seus
-  // ScrollViews internos (lista + thread), não pode aninhar no ScrollView da aba.
-  if (activeView === "atendimento") {
-    return (
-      <View style={z.screen}>
-        <View style={[z.content, { flex: 1 }]}>
-          <ScreenHero eyebrow="Trabalho automático" title="Agentes" live />
-          {viewTabs}
-          <HubView />
-        </View>
-      </View>
-    );
-  }
-
   return (
     <ScrollView ref={scrollRef} style={z.screen} contentContainerStyle={z.content}>
       <ScreenHero
@@ -185,7 +144,6 @@ export default function AgentesScreen() {
           </>
         }
       />
-      {viewTabs}
 
       {/* Summary KPIs */}
       <View style={z.kpiRow}>
@@ -295,11 +253,6 @@ export default function AgentesScreen() {
 
 const z = StyleSheet.create({
   screen: { flex: 1 },
-  viewTabs: { flexDirection: "row", gap: 8, marginBottom: 18 },
-  viewTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
-  viewTabOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  viewTabText: { fontSize: 13, fontWeight: "600", color: Colors.ink2 },
-  viewTabTextOn: { color: "#fff" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%", overflow: "hidden" as any },
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   kpi: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center", gap: 6 },

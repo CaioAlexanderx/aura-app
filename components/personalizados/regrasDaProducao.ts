@@ -17,6 +17,7 @@ import type { StudioOrder, StudioProductionStatus } from "@/services/studioApi";
 import type { StudioIntent } from "@/constants/studio-semantic";
 import { diasAtePrazo } from "@/components/studio/fluxoDoQuadro";
 import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
+import { faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
 
 export type Etapa = {
   key: StudioProductionStatus;
@@ -97,13 +98,14 @@ export const perguntaDoVoltar = (anterior: Pick<Etapa, "label">) => `Voltar este
 // O arraste faz o que os botões fazem, e nada mais:
 //   - mesma coluna: nada;
 //   - a coluna seguinte: o "avançar" do cartão;
-//   - coluna mais adiante: move direto (a rota aceita qualquer etapa válida, e
-//     as recusas do backend, como o sinal, aparecem do mesmo jeito);
+//   - duas ou mais colunas adiante: "pular", não faz nada (não se pula a etapa
+//     da arte; o botão também só anda uma de cada vez);
 //   - coluna de trás: o "voltar", com a MESMA pergunta de sempre (sair de
 //     "Em produção" ou de "Pronto" confirma; das outras, volta direto).
 export type DecisaoDoSolta =
   | { acao: "nada" }
   | { acao: "avancar" }
+  | { acao: "pular" }
   | { acao: "mover"; destino: StudioProductionStatus }
   | { acao: "confirmar-voltar"; destino: Etapa };
 
@@ -111,7 +113,7 @@ export function decidirSolta(atual: StudioProductionStatus, destino: string | nu
   const de = ETAPAS.findIndex((e) => e.key === atual);
   const para = ETAPAS.findIndex((e) => e.key === destino);
   if (de < 0 || para < 0 || de === para) return { acao: "nada" };
-  if (para > de) return para === de + 1 ? { acao: "avancar" } : { acao: "mover", destino: ETAPAS[para].key };
+  if (para > de) return para === de + 1 ? { acao: "avancar" } : { acao: "pular" };
   return voltarPedeConfirmacao(atual)
     ? { acao: "confirmar-voltar", destino: ETAPAS[para] }
     : { acao: "mover", destino: ETAPAS[para].key };
@@ -163,6 +165,10 @@ export function resumoDaFila(pedidos: StudioOrder[]): ResumoDaFila {
     ativos += 1;
     const dias = diasAtePrazo(o.promised_date);
     if (dias !== null && dias < 0) atrasados += 1;
+    // Pedido de orçamento: o "Falta receber" do detalhe (sinal e saldo juntos).
+    // Os outros: o saldo da encomenda do Caixa. Uma fonte por pedido, sem somar duas vezes.
+    const faltaOrcamento = faltaReceberDoOrcamento(o);
+    if (faltaOrcamento !== null) { aReceber += faltaOrcamento; continue; }
     const saldo = Number(o.balance_amount);
     if (o.balance_amount != null && Number.isFinite(saldo) && saldo > 0) aReceber += saldo;
   }
@@ -178,6 +184,19 @@ export function fraseDoResumo(r: ResumoDaFila, reais: (v: number) => string): st
   if (r.atrasados > 0) partes.push(`${r.atrasados} ${plural(r.atrasados, "atrasado", "atrasados")}`);
   if (r.aReceber > 0) partes.push(`${reais(r.aReceber)} a receber`);
   return partes.join(" · ");
+}
+
+// ── Nome no cartão ───────────────────────────────────────────────────────
+
+/**
+ * O nome do cartão. `display_name` é o número do pedido (PDV-dd6d2358), que o
+ * cartão já mostra em cima: repetir o número no lugar do nome não diz nada.
+ * Sem cliente, a venda do Caixa é "Venda no Caixa"; os outros, "Sem cadastro".
+ */
+export function nomeDoCliente(o: Pick<StudioOrder, "customer_name" | "source">): string {
+  const nome = typeof o.customer_name === "string" ? o.customer_name.trim() : "";
+  if (nome) return nome;
+  return o.source === "pdv" ? "Venda no Caixa" : "Sem cadastro";
 }
 
 // ── Origem do pedido ─────────────────────────────────────────────────────

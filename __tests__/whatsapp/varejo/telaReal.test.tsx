@@ -18,6 +18,8 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
+jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
+jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
@@ -48,6 +50,19 @@ jest.mock("@/components/screens/whatsapp/TabConversas", () => ({ TabConversas: (
 jest.mock("@/components/screens/whatsapp/TabAutomacoes", () => ({ TabAutomacoes: () => null }));
 jest.mock("@/components/screens/whatsapp/TabCampanhas", () => ({ TabCampanhas: () => null }));
 jest.mock("@/components/screens/whatsapp/TabConfig", () => ({ TabConfig: () => null }));
+
+// 26/11/2026 — a caixa de conversas (HubView) mora na aba Conversas, que só
+// existe com o módulo hub_social visível.
+var mockHub = false;
+jest.mock("@/hooks/useVisibleModules", () => ({
+  useVisibleModules: () => new Set(mockHub ? ["hub_social"] : []),
+}));
+jest.mock("@/components/screens/hub/HubView", () => ({
+  HubView: () => {
+    const R = require("react");
+    return R.createElement("HubView", { testID: "hub-view" });
+  },
+}));
 
 var mockDemo = false;
 jest.mock("@/stores/auth", () => ({
@@ -134,6 +149,7 @@ function acharPorTestId(tree: any, id: string): any {
 describe("aba WhatsApp do varejo", () => {
   beforeEach(() => {
     mockDemo = false;
+    mockHub = false;
     mockLiberado = false;
     mockOutbox = { data: [] };
   });
@@ -149,6 +165,56 @@ describe("aba WhatsApp do varejo", () => {
     expect(temTestId(tree, "wa-varejo-conexao")).toBe(true);
     expect(temTestId(tree, "wa-varejo-uso")).toBe(true);
     tree.unmount();
+  });
+
+  it("com hub_social: abre em Conversas (sem ScrollView) e Configurações traz os cards", async () => {
+    mockHub = true;
+    let tree: any;
+    await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
+    await flush();
+
+    expect(temTestId(tree, "wa-varejo-conversas")).toBe(true);
+    expect(temTestId(tree, "hub-view")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-real")).toBe(false);
+    // O HubView não pode ficar dentro de ScrollView (tem os seus internos).
+    const SV = require("react-native").ScrollView;
+    let no = tree.root.findAllByProps({ testID: "hub-view" })[0];
+    while (no) { expect(no.type).not.toBe(SV); no = no.parent; }
+
+    await act(async () => { acharPorTestId(tree, "wa-varejo-aba-config").props.onPress(); });
+    await flush();
+    expect(temTestId(tree, "hub-view")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-real")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-conexao")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-uso")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-ir-para-regua")).toBe(true);
+
+    await act(async () => { acharPorTestId(tree, "wa-varejo-aba-conversas").props.onPress(); });
+    await flush();
+    expect(temTestId(tree, "hub-view")).toBe(true);
+    tree.unmount();
+  });
+
+  it("sem hub_social: só Configurações, sem fileira de abas nem caixa de conversas", async () => {
+    let tree: any;
+    await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
+    await flush();
+
+    expect(temTestId(tree, "hub-view")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-aba-conversas")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-aba-config")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-real")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-config-secoes")).toBe(true);
+    tree.unmount();
+  });
+
+  it("Agentes não tem mais a visão Atendimento", () => {
+    const fs = jest.requireActual("fs");
+    const p = jest.requireActual("path");
+    const src = fs.readFileSync(p.join(__dirname, "..", "..", "..", "app", "(tabs)", "agentes.tsx"), "utf8");
+    expect(src).not.toContain("HubView");
+    expect(src).not.toContain("hub_social");
+    expect(src).not.toContain('"atendimento"');
   });
 
   it("trava desligada e loja sem número: a rota volta ao Painel", async () => {
@@ -190,7 +256,7 @@ describe("aba WhatsApp do varejo", () => {
     await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
     await flush();
 
-    await act(async () => { acharPorTestId(tree, "wa-varejo-aba-1").props.onPress(); });
+    await act(async () => { acharPorTestId(tree, "wa-varejo-secao-cobrancas").props.onPress(); });
     await flush();
 
     expect(temTestId(tree, "wa-varejo-fila")).toBe(true);
@@ -206,7 +272,7 @@ describe("aba WhatsApp do varejo", () => {
     await act(async () => { tree = renderer.create(<WhatsAppScreen />); });
     await flush();
 
-    await act(async () => { acharPorTestId(tree, "wa-varejo-aba-2").props.onPress(); });
+    await act(async () => { acharPorTestId(tree, "wa-varejo-secao-templates").props.onPress(); });
     await flush();
 
     expect(temTestId(tree, "wa-varejo-preset-parcela_lembrete")).toBe(true);

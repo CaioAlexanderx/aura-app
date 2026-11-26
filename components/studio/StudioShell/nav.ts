@@ -139,12 +139,8 @@ export const STUDIO_NAV: StudioNavItem[] = [
     group: 'GESTÃO',
     icon: 'file-text',
   },
-  {
-    route: '/studio/gestao/contabilidade',
-    label: 'Contabilidade',
-    group: 'GESTÃO',
-    icon: 'check',
-  },
+  // 26/11/2026 (Caio): Contabilidade saiu da sidebar em todas as frentes; a
+  // rota /studio/gestao/contabilidade continua existindo.
 ];
 
 /**

@@ -75,8 +75,9 @@ import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studi
 import { labelStudioStatus } from "@/constants/studio-status";
 import {
   ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, ehAtivo, etapaDe, etapaInicialNoCelular, fraseDoResumo,
-  decidirSolta, itemDoCartao, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
+  decidirSolta, itemDoCartao, nomeDoCliente, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
+import { CapaMiniatura } from "@/components/personalizados/CapaMiniatura";
 import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
 import { BotaoVoltarEtapa, ConfirmacaoDeVoltar } from "@/components/personalizados/BotaoVoltarEtapa";
 import { useDraggableCardRef, useDropZoneRef, useStudioKanbanDnD } from "@/components/studio/kanban/useStudioKanbanDnD";
@@ -190,6 +191,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
     const d = decidirSolta(etapaDe(pedido), destino);
     if (d.acao === "avancar") avancar(pedido);
     else if (d.acao === "mover") mover(pedido, d.destino);
+    else if (d.acao === "pular") toast.info("Avance uma etapa de cada vez.");
     else if (d.acao === "confirmar-voltar") setVoltarDe({ pedido, destino: d.destino });
   }, [naFila, avancar, mover]);
   const dnd = useStudioKanbanDnD<StudioProductionStatus>(soltar);
@@ -469,7 +471,7 @@ function Cabeca({
 function LinhaSaida({
   o, t, s, onAbrir,
 }: { o: StudioOrder; t: StudioPalette; s: ReturnType<typeof estilos>; onAbrir?: (id: string) => void }) {
-  const nome = o.customer_name || o.display_name || "Sem cadastro";
+  const nome = nomeDoCliente(o);
   const etapa = etapaDe(o);
   const cancelado = etapa === "cancelled";
   const quando = Number.isNaN(Date.parse(o.created_at)) ? "" : new Date(o.created_at).toLocaleDateString("pt-BR");
@@ -510,7 +512,7 @@ function Cartao({
   onReceberOrcamento: () => void;
   cobrando: boolean;
 }) {
-  const nome = o.customer_name || o.display_name || "Sem cadastro";
+  const nome = nomeDoCliente(o);
   const prazo = prazoDoCartao(o);
   const pix = situacaoDoPixNoCartao(o as any);
   const origem = origemDoPedido(o);
@@ -527,7 +529,12 @@ function Cartao({
 
   return (
     <View ref={cartaoRef} style={[s.cartao, destacado && s.cartaoDestacado, arrastando && s.cartaoArrastando]} testID={`producao-cartao-${o.id}`}>
-      <Cabeca o={o} nome={nome} origem={origem} s={s} onAbrir={onAbrir} />
+      <View style={s.topoDoCartao}>
+        <CapaMiniatura o={o} nome={nome} t={t} />
+        <View style={s.cresce}>
+          <Cabeca o={o} nome={nome} origem={origem} s={s} onAbrir={onAbrir} />
+        </View>
+      </View>
       <Text style={s.meta} testID={`producao-item-${o.id}`}>{itemDoCartao(o)} · {reais(o.total_amount)}</Text>
 
       <View style={s.selos}>
@@ -654,6 +661,7 @@ function estilos(t: StudioPalette) {
     chipsDosSaidos: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
     notaDosSaidos: { fontSize: 12, color: t.ink3, marginTop: 8, marginBottom: 8 },
     cabecaQueAbre: { gap: 6 },
+    topoDoCartao: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
 
     aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: t.primaryBorder, backgroundColor: t.bgSoft },
     avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },
