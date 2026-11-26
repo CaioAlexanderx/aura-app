@@ -86,6 +86,8 @@ import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
 import { NovaVendedoraModal } from "@/components/screens/pdv/NovaVendedoraModal";
 import { EntregaModal } from "@/components/screens/pdv/EntregaModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
+// C12: faixa "Cobrando a condicional" (só com a trava e ?condicional= na URL).
+import { FaixaDaCondicional } from "@/components/screens/pdv/FaixaDaCondicional";
 // 04/11/2026: convite para ligar os avisos no celular (uma vez por aparelho).
 import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
 // 17/11/2026 (p-155): botão "Atalhos", dica da busca e a legenda.
@@ -172,7 +174,7 @@ function CaixaScreenInner() {
   // p-208 (23/11/2026): a OS de ótica no Caixa — faixa "Óculos deste
   // cliente". Só com o módulo Ótica ligado e cliente na venda; fora disso a
   // tela fica como sempre. Mora no mesmo lugar do crédito da cliente.
-  const oticaNoCaixa = pdvSettingsGarantia.otica_enabled === true && !!company?.id && !!st.selectedCustomerId && !st.isDemo ? (
+  const oticaNoCaixa = pdvSettingsGarantia.otica_enabled === true && !!company?.id && !!st.selectedCustomerId && !st.isDemo && !(st.condicional && st.condicional.ativa) ? (
     <OculosDoClienteBox
       key={st.selectedCustomerId}
       companyId={company.id}
@@ -245,6 +247,20 @@ function CaixaScreenInner() {
   const faixaDaFrente = faixas[0] || null;
   // O vale-troca do cupom lê as políticas do Caixa (as mesmas da tela final).
   const configDoVale = pdvSettingsGarantia as any;
+  const cd = st.condicional;
+  const faixaDaCondicional = cd && cd.ativa ? (
+    <FaixaDaCondicional
+      estado={cd.estado}
+      numero={cd.numero}
+      cliente={cd.cliente}
+      aviso={cd.aviso}
+      onSair={cd.sair}
+      onVoltar={cd.voltarACondicional}
+      onTrocarDeLoja={cd.trocarDeLoja}
+      onTentarDeNovo={cd.tentarDeNovo}
+      compact={!wide}
+    />
+  ) : null;
   const blocoDasFaixas = faixas.length > 0 ? (
     <View testID="faixas-venda-anterior">
       {faixas.map((f, i) => (
@@ -500,6 +516,7 @@ function CaixaScreenInner() {
                 />
               )}
               {!auth.isDemo && <ConviteDeAvisos />}
+              {faixaDaCondicional}
               {blocoDasFaixas}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
@@ -647,6 +664,7 @@ function CaixaScreenInner() {
             onDispensar={st.dispensarVendaRecuperada}
           />
         )}
+        {faixaDaCondicional}
         {blocoDasFaixas}
         <View style={s.topRowMobile}>
           <MerchantLogo size={44} />

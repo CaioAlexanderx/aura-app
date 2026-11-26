@@ -13,6 +13,7 @@ import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
+import { camposDaCondicionalNaVenda, ehErroDaCondicional } from "@/utils/condicionalNoCaixa";
 import { linhaDoFrete, valorDoFrete } from "@/utils/frete";
 import { camposDaEntregaNaVenda, entregaValeParaACliente, type EntregaDaVenda } from "@/utils/entregaDaVenda";
 import { enderecoDoCliente, type Endereco } from "@/components/endereco/endereco";
@@ -130,6 +131,16 @@ export type ComandaNoCarrinho = {
   itemIds?: string[]; itemQty?: Record<string, number>;
 };
 
+/** C12: o que o Caixa da condicional entrega ao carrinho (hooks/useCondicionalNoCaixa). */
+export type ControleDaCondicional = {
+  /** A condicional que esta venda cobra; null = venda comum. */
+  naVenda: { id: string; itemIds: string[] } | null;
+  /** Recusa COND_* do servidor (409/422). */
+  aoErro: (err: any) => void;
+  /** Venda registrada. */
+  aoVender: () => void;
+};
+
 export type SaleResult = {
   id: string;
   // 01/09/2026: sequencial legivel por empresa que o backend passou a devolver
@@ -226,6 +237,10 @@ export function useCart(
     /** 09/11/2026: o servidor recusou a venda com frete por falta de
      *  endereço (422 DELIVERY_ADDRESS_REQUIRED). Recebe o cliente da venda. */
     aoFaltarEntrega?: (customerId: string | null) => void;
+    /** C12 (26/11/2026): o Caixa aberto pela condicional. Um ref lido na hora
+     *  de vender: sem condicional (o caso de sempre) é null e o POST, a guarda
+     *  da venda e os erros são exatamente os de antes. */
+    condicional?: { current: ControleDaCondicional | null };
   } = {},
 ) {
   const cartaoOn = cardCfg.enabled === true;
@@ -421,6 +436,8 @@ export function useCart(
 
   function guardarAgora(): boolean {
     if (demoRef.current || finalizandoRef.current || !vendaRef.current) return false;
+    // C12: o carrinho da condicional não é guardado (Sair = nada gravado).
+    if (opcoes.condicional && opcoes.condicional.current && opcoes.condicional.current.naVenda) return false;
     return guardarVenda(empresaRef.current, usuarioRef.current, vendaRef.current);
   }
   function apagarGuarda() {
@@ -1122,6 +1139,8 @@ export function useCart(
       comanda_item_qty: comanda && comanda.itemIds && comanda.itemIds.length > 0 && comanda.itemQty && Object.keys(comanda.itemQty).length > 0
         ? comanda.itemQty : undefined,
       referred_by_professional_id: referredProfessionalId || undefined,
+      // C12: peças da condicional que esta venda cobra. Sem condicional: nada.
+      ...camposDaCondicionalNaVenda(opcoes.condicional && opcoes.condicional.current ? opcoes.condicional.current.naVenda : null),
     };
 
     // Frete: uma linha sem produto de cadastro (utils/frete). O servidor
@@ -1276,6 +1295,7 @@ export function useCart(
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
+          if (opcoes.condicional && opcoes.condicional.current && opcoes.condicional.current.naVenda) opcoes.condicional.current.aoVender();
           tempos.aoResponder(true, res?.sale?.id || (res as any)?.id || null);
           // tq-15: venda concluída — a próxima é outra venda, com outra chave.
           setChaveDaVenda(novaChaveDaVenda());
@@ -1304,7 +1324,11 @@ export function useCart(
           // mensagem do servidor diz qual; a chave é trocada e o próximo
           // "Finalizar" registra esta como venda nova.
           if (errCode === "IDEMPOTENCY_KEY_REUSED") setChaveDaVenda(novaChaveDaVenda());
-          if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
+          const condErro = opcoes.condicional && opcoes.condicional.current;
+          if (condErro && condErro.naVenda && ehErroDaCondicional(err)) {
+            // C12: a frase do servidor aparece na faixa do Caixa, com "Voltar à condicional".
+            condErro.aoErro(err);
+          } else if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
           } else if (errCode === "DELIVERY_ADDRESS_REQUIRED") {
             // 09/11/2026: o servidor conferiu e falta o endereço (o cadastro

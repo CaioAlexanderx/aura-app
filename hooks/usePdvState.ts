@@ -112,6 +112,10 @@ import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { reservadoDoProduto, vendaInvadeReserva, camposDaReserva } from "@/utils/reservaDoPedido";
 import { comClientesDoProduto, vendaInvadeComClientes, camposDeComClientes } from "@/utils/comClientes";
 import { condicionalLiberada } from "@/utils/condicionalLiberada";
+// C12: o Caixa aberto pela condicional (só com a trava; sem ela, nada disto roda).
+import { useCondicionalNoCaixa } from "@/hooks/useCondicionalNoCaixa";
+import { condicionalDaUrl, TEXTOS_DO_CAIXA_CONDICIONAL as TCOND } from "@/utils/condicionalNoCaixa";
+import type { ControleDaCondicional } from "@/hooks/useCart";
 import type { AvisoDeCondicionalDados } from "@/components/screens/pdv/AvisoDeCondicional";
 import type { AvisoDeReservaDados } from "@/components/screens/pdv/AvisoDeReserva";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
@@ -319,7 +323,11 @@ export function usePdvState() {
   // restaura a venda guardada por cima (o useCart decide isso só na
   // montagem). Os parâmetros sobem para cá; a esteira do orçamento (mais
   // abaixo) lê os mesmos.
-  const quoteRouteParams = useLocalSearchParams<{ quote?: string; edit?: string }>();
+  const quoteRouteParams = useLocalSearchParams<{ quote?: string; edit?: string; condicional?: string; loja?: string; itens?: string }>();
+  // C12: Caixa aberto por "Cobrar no Caixa". Sem a trava os parâmetros não
+  // valem nada (condNaUrl null) e o Caixa abre como sempre.
+  const condNaUrl = comClientesLiberado ? condicionalDaUrl(quoteRouteParams) : null;
+  const condControle = useRef<ControleDaCondicional | null>(null);
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
@@ -348,7 +356,8 @@ export function usePdvState() {
     itensDaProximaVenda,
     creditoPedido, setCreditoPedido, creditoUsado, aPagar,
   } = useCart(cardCfg, {
-    recuperar: !quoteRouteParams.quote,
+    recuperar: !quoteRouteParams.quote && !condNaUrl,
+    condicional: condControle,
     // 09/11/2026: 422 DELIVERY_ADDRESS_REQUIRED — o cadastro não tinha o
     // endereço que a lista mostrava. A próxima tentativa pergunta.
     aoFaltarEntrega: (id) => { if (id) setCadastroSemEndereco(id); },
@@ -482,6 +491,24 @@ export function usePdvState() {
   // primeiro zera isto, e o outro não começa outra por cima).
   const lastSaleRef = useRef(lastSale);
   lastSaleRef.current = lastSale;
+  // C12: a condicional no Caixa. useRef/useQuery(enabled:false) quando a trava
+  // está desligada ou a URL não traz condicional: nada de rede, nada na tela.
+  const switchCompany = useAuthStore(s => s.switchCompany);
+  const cond = useCondicionalNoCaixa({
+    liberada: comClientesLiberado,
+    rota: quoteRouteParams,
+    companyId: company?.id,
+    isDemo,
+    limpar: () => newSale(),
+    addToCart,
+    selectCustomer,
+    trocarDeLoja: switchCompany,
+  });
+  condControle.current = cond.ativa ? { naVenda: cond.naVenda, aoErro: cond.aoErro, aoVender: cond.aoVender } : null;
+  const condTravada = cond.ativa;
+  /** Peça da condicional não muda no Caixa: avisa e não faz. */
+  function avisarTravada(mensagem: string = TCOND.travado) { toast.info(mensagem); }
+
   function newSale() {
     lastSaleRef.current = null;
     matconReferral.clear();
@@ -529,7 +556,8 @@ export function usePdvState() {
   // Só com pdv_settings.frete_enabled. A seção abre pelo atalho "Frete" (ou
   // sozinha quando a venda guardada volta com frete) e fecha ao tirar o
   // valor ou ao esvaziar o carrinho. O cliente da entrega é o da venda.
-  const freteEnabled = lerFreteEnabled(pdvSettings);
+  // C12: a venda da condicional é só as peças dela (o frete é uma linha sem produto).
+  const freteEnabled = lerFreteEnabled(pdvSettings) && !cond.ativa;
   const [freteAberto, setFreteAberto] = useState(false);
   useEffect(function() { if (cart.length === 0) setFreteAberto(false); }, [cart.length]);
   const freteOpen = freteEnabled && (freteAberto || frete > 0 || freteValor.length > 0);
@@ -640,6 +668,7 @@ export function usePdvState() {
   // chave sintética (mesmo idioma do orçamento acima). A OS COM sinal nunca
   // passa por aqui: o saldo dela é recebido na faixa, sem venda nova.
   function lancarOsNoCarrinho(osId: string, itens: { description: string; product_id?: string | null; quantity: number | string; unit_price: number | string }[]) {
+    if (condTravada) { avisarTravada(); return; }
     itens.forEach((it, idx) => {
       const key = it.product_id || ("os-" + osId + "-" + idx);
       const doCatalogo = it.product_id ? products.find(p => p.id === it.product_id) : undefined;
@@ -816,6 +845,8 @@ export function usePdvState() {
   async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
     const cleaned = (code || "").trim();
     if (!cleaned) return false;
+    // C12: na condicional o bipe não acrescenta nada.
+    if (condTravada) { avisarTravada(); return false; }
     marcarEntrada(origem); // p-152
     // 17/11/2026 (p-147): bipe com a tela de venda concluída na frente. A
     // venda nova começa só quando o código lança algo (produto, seletor de
@@ -949,6 +980,7 @@ export function usePdvState() {
     evt?: { x: number; y: number; accent: string; letter: string },
     origem: "grade" | "busca" = "grade",
   ) {
+    if (condTravada) { avisarTravada(); return; }
     marcarEntrada(origem); // p-152
     if (p.has_variants) { setPendingBipe(null); setPendingProduct(p); return; }
     // 17/11/2026 (Pedido, A4): peça separada em pedido pergunta antes.
@@ -969,6 +1001,7 @@ export function usePdvState() {
 
   function handleVariantSelected(variant: { id: string; label: string; price: number; stock: number }) {
     if (!pendingProduct) return;
+    if (condTravada) { setPendingProduct(null); setPendingBipe(null); avisarTravada(); return; }
     const produto = pendingProduct;
     setPendingProduct(null);
     setPendingBipe(null);
@@ -1430,7 +1463,7 @@ export function usePdvState() {
   // durante uma única venda. Como a venda ainda é rascunho (não existe no
   // backend), não há número real: mostramos um rótulo de estado. Um contador
   // local persistido seria igualmente falso e divergiria do backend.
-  const orderLabel = "Nova venda";
+  const orderLabel = cond.ativa && cond.numero ? TCOND.carrinho(cond.numero) : "Nova venda";
 
   const cartProps = {
     orderNumber:       orderLabel,
@@ -1442,25 +1475,25 @@ export function usePdvState() {
     payMethods:        PAY_METHODS,
     activePay:         payment,
     onPay:             setPayment,
-    onInc:             (id: string) => updateQty(id, 1),
-    onDec:             (id: string) => updateQty(id, -1),
-    onSetQty:          setQty,
+    onInc:             (id: string) => { if (condTravada) { avisarTravada(TCOND.travadoPeca); return; } updateQty(id, 1); },
+    onDec:             (id: string) => { if (condTravada) { avisarTravada(TCOND.travadoPeca); return; } updateQty(id, -1); },
+    onSetQty:          (id: string, qty: number) => { if (condTravada) { avisarTravada(TCOND.travadoPeca); return; } setQty(id, qty); },
     // 22/09/2026 (Matcon M4): o CartPanel calcula de quais lotes sai cada
     // item (LoteDoItem) e devolve aqui; o useCart guarda e manda como
     // `items[].lot_allocations` no POST da venda. Sem lote controlado
     // nunca é chamado, e a venda baixa FIFO como sempre.
     onLotAllocations:  setLotAllocations,
     onPriceChange:     setUnitPrice,
-    onRemove:          removeItem,
-    onClear:           () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
+    onRemove:          (id: string) => { if (condTravada) { avisarTravada(TCOND.travadoPeca); return; } removeItem(id); },
+    onClear:           () => { if (condTravada) { cond.sair(); return; } cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
     onFinalize:        handleFinalize,
     // 17/11/2026 (p-157): bipe com o cursor num campo do carrinho.
     onScan:            (code: string) => { handleScan(code); },
     // 17/11/2026 (p-147): o que espera a próxima venda, no aviso "Finalizando".
     proximaVenda:      itensDaProximaVenda,
     onGenerateQuote:   () => handleGenerateQuote(),
-    showOrcamento:     true,
-    onSaveQuote:       matconQuote.saveQuote,
+    showOrcamento:     !condTravada,
+    onSaveQuote:       condTravada ? undefined : matconQuote.saveQuote,
     savingQuote:       matconQuote.saving,
     savedQuote:        matconQuote.savedQuote,
     editingQuote:      editingQuote ? { number: editingQuote.number, onCancel: newSale } : null,
@@ -1483,9 +1516,13 @@ export function usePdvState() {
         }
       : null,
     // Pedido (A1): null com a trava desligada ou sem o módulo = rodapé de sempre.
-    pedido: pedidoAtivo ? { onNovoPedido: () => setShowPedido(true) } : null,
+    pedido: pedidoAtivo && !cond.ativa ? { onNovoPedido: () => setShowPedido(true) } : null,
+    // C12: a condicional no Caixa (null = Caixa de sempre).
+    condicional: cond.ativa
+      ? { numero: cond.numero, cliente: cond.cliente, travada: condTravada, onSair: cond.sair, textoDoBotao: TCOND.concluir, textoSair: TCOND.sair }
+      : null,
     // Comandas: null com a chave desligada = rodapé de sempre.
-    comanda: comandaEnabled
+    comanda: comandaEnabled && !cond.ativa
       ? {
           onAdd:   comandas.abrirAdicionar,
           onList:  comandas.abrirPainel,
@@ -1623,6 +1660,11 @@ export function usePdvState() {
     valeTroca,
     openTroca:  () => { setValeTroca(null); setShowTroca(true); },
     closeTroca: () => { setShowTroca(false); setValeTroca(null); },
+    // C12: a faixa "Cobrando a condicional" (ativa=false: nada na tela).
+    condicional: {
+      ativa: cond.ativa, travada: condTravada, estado: cond.estado, numero: cond.numero, cliente: cond.cliente, aviso: cond.aviso,
+      sair: cond.sair, voltarACondicional: cond.voltarACondicional, trocarDeLoja: cond.trocarDeLoja, tentarDeNovo: cond.tentarDeNovo,
+    },
     // Pedido separado de venda (A1): o Novo pedido abre pelo Guardar.
     pedidoAtivo, showPedido,
     // A4: selo no cartão e o aviso "Não vender / Vender mesmo assim".
