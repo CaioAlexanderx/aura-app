@@ -31,6 +31,11 @@ jest.mock("expo-font", () => ({ loadAsync: jest.fn(), isLoaded: () => true, useF
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: "FpktLogo" }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+const mockTirar = jest.fn();
+jest.mock("@/components/personalizados/tirarDaFila", () => ({
+  ...jest.requireActual("@/components/personalizados/tirarDaFila"),
+  tirarDaFila: (...a: any[]) => mockTirar(...a),
+}));
 // O arraste é HTML5 do DOM (web). Aqui o hook entrega o onDrop que o quadro
 // montou, e o teste solta o cartão chamando-o, como o navegador faria.
 const mockDnd: { onDrop: ((id: string, to: string) => void) | null } = { onDrop: null };
@@ -362,6 +367,62 @@ describe("render do quadro", () => {
     expect(tem(arvore, "producao-capa-x2")).toBe(true);
     const texto = JSON.stringify(arvore.toJSON());
     expect(texto).toContain("Venda no Caixa");
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: a lixeira está sempre no cartão (sem hover); confirma, tira o cartão e não mexe na venda", async () => {
+    mockTirar.mockResolvedValue({ ok: true });
+    const arvore = await montarQuadro(TRES);
+    expect(tem(arvore, "producao-tirar-a1")).toBe(true);
+    await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
+    expect(mockTirar).not.toHaveBeenCalled();
+    expect(JSON.stringify(arvore.toJSON())).toContain("Tirar da fila?");
+    expect(JSON.stringify(arvore.toJSON())).toContain("A venda e o dinheiro continuam como estão.");
+    await act(async () => { achar(arvore, "producao-tirar-confirmar")[0].props.onPress(); });
+    expect(mockTirar).toHaveBeenCalledWith("loja-1", "a1");
+    expect(tem(arvore, "producao-cartao-a1")).toBe(false);
+    expect(tem(arvore, "producao-cartao-b1")).toBe(true);
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: cancelar a pergunta não chama nada", async () => {
+    const arvore = await montarQuadro(TRES);
+    await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
+    await act(async () => { achar(arvore, "producao-tirar-cancelar")[0].props.onPress(); });
+    expect(mockTirar).not.toHaveBeenCalled();
+    expect(tem(arvore, "producao-cartao-a1")).toBe(true);
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: 404 PEDIDO_NAO_ENCONTRADO recarrega a lista", async () => {
+    mockTirar.mockRejectedValue({ status: 404, data: { error: "PEDIDO_NAO_ENCONTRADO" } });
+    const arvore = await montarQuadro(TRES);
+    expect(mockListOrders).toHaveBeenCalledTimes(1);
+    await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
+    await act(async () => { achar(arvore, "producao-tirar-confirmar")[0].props.onPress(); });
+    expect(mockListOrders).toHaveBeenCalledTimes(2);
+    arvore.unmount();
+  });
+
+  test("Tirar da fila: TEM_RECEBIMENTO avisa, mantém o cartão e oferece o cancelamento do pedido", async () => {
+    mockTirar.mockRejectedValue({ status: 409, data: { error: "TEM_RECEBIMENTO" }, message: "x" });
+    const aberto: string[] = [];
+    mockListOrders.mockResolvedValue({ orders: TRES });
+    let arvore!: renderer.ReactTestRenderer;
+    await act(async () => {
+      arvore = renderer.create(
+        <TemaDoNegocio><QuadroDeProducao companyId="loja-1" ativadoEm={null} onAbrirPedido={(id) => aberto.push(id)} /></TemaDoNegocio>,
+      );
+    });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { achar(arvore, "producao-tirar-a1")[0].props.onPress(); });
+    await act(async () => { achar(arvore, "producao-tirar-confirmar")[0].props.onPress(); });
+    expect(tem(arvore, "producao-tirar-recebimento")).toBe(true);
+    expect(JSON.stringify(arvore.toJSON())).toContain("Este pedido tem valor recebido");
+    expect(tem(arvore, "producao-cartao-a1")).toBe(true);
+    await act(async () => { achar(arvore, "producao-tirar-ir-cancelamento")[0].props.onPress(); });
+    expect(aberto).toEqual(["a1"]);
     arvore.unmount();
   });
 

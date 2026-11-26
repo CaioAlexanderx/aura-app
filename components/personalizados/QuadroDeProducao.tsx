@@ -81,6 +81,9 @@ import { CapaMiniatura } from "@/components/personalizados/CapaMiniatura";
 import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
 import { BotaoVoltarEtapa, ConfirmacaoDeVoltar } from "@/components/personalizados/BotaoVoltarEtapa";
 import { useDraggableCardRef, useDropZoneRef, useStudioKanbanDnD } from "@/components/studio/kanban/useStudioKanbanDnD";
+import { Icon } from "@/components/Icon";
+import { ConfirmacaoDeTirarDaFila } from "@/components/personalizados/ConfirmacaoDeTirarDaFila";
+import { TEXTO_DE_TIRAR_DA_FILA, ehPedidoNaoEncontrado, ehTemRecebimento, tirarDaFila } from "@/components/personalizados/tirarDaFila";
 import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
 import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
 import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
@@ -114,6 +117,8 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
   const [saida, setSaida] = useState<Saida>("delivered");
   // p-185: o pedido de orçamento que ia ser entregue com dinheiro faltando.
   const [avisoDe, setAvisoDe] = useState<StudioOrder | null>(null);
+  // C1: "Tirar da fila". `modo` é a caixa aberta; a de recebimento vem da recusa do backend.
+  const [tirarDe, setTirarDe] = useState<{ pedido: StudioOrder; modo: "pergunta" | "recebimento"; tirando: boolean } | null>(null);
   // Arraste para uma coluna de trás que pede confirmação (a mesma do botão).
   const [voltarDe, setVoltarDe] = useState<{ pedido: StudioOrder; destino: Etapa } | null>(null);
 
@@ -197,6 +202,31 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
   const dnd = useStudioKanbanDnD<StudioProductionStatus>(soltar);
   const arrasta = dnd.isWeb && !celular;
 
+  const confirmarTirar = useCallback(async () => {
+    const alvo = tirarDe;
+    if (!alvo || alvo.tirando) return;
+    setTirarDe({ ...alvo, tirando: true });
+    try {
+      await tirarDaFila(companyId, alvo.pedido.id);
+      setPedidos((antes) => antes.filter((o) => o.id !== alvo.pedido.id));
+      setTirarDe(null);
+      toast.success(TEXTO_DE_TIRAR_DA_FILA.feito);
+    } catch (e: any) {
+      if (ehTemRecebimento(e)) {
+        setTirarDe({ pedido: alvo.pedido, modo: "recebimento", tirando: false });
+        return;
+      }
+      setTirarDe(null);
+      if (ehPedidoNaoEncontrado(e)) {
+        // O pedido já não existe para esta loja: a lista estava velha.
+        toast.error("Esse pedido não está mais na Fila. Atualizei a lista.");
+        carregar();
+        return;
+      }
+      toast.error(e?.message || "Não deu para tirar da fila. Tente de novo.");
+    }
+  }, [tirarDe, companyId, carregar]);
+
   const { cobrar, cobrandoId } = useCobrarSaldo(companyId);
   const baixa = useRegistrarPagamento(companyId, { onSucesso: carregar });
   const receber = useReceberDoOrcamento(companyId, { onSucesso: carregar });
@@ -213,6 +243,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       arrasta={arrasta}
       onAvancar={avancar}
       onVoltar={mover}
+      onTirar={(p) => setTirarDe({ pedido: p, modo: "pergunta", tirando: false })}
       onAprovacao={setAprovacaoDe}
       onRecolher={(p) => setRecolherDe(p.id)}
       onAbrir={onAbrirPedido}
@@ -407,6 +438,20 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
         }}
       />
 
+      {/* C1: tirar da fila (a venda e o dinheiro não mudam). */}
+      <ConfirmacaoDeTirarDaFila
+        modo={tirarDe?.modo || null}
+        trabalhando={!!tirarDe?.tirando}
+        idDeTeste="producao-tirar"
+        onFechar={() => setTirarDe(null)}
+        onConfirmar={confirmarTirar}
+        onIrParaCancelamento={() => {
+          const p = tirarDe?.pedido;
+          setTirarDe(null);
+          if (p && onAbrirPedido) onAbrirPedido(p.id);
+        }}
+      />
+
       {/* Arte e texto das peças: ResponsiveSheet (Modal, em document.body). */}
       <FolhaDeRecolher
         companyId={companyId}
@@ -490,7 +535,7 @@ function LinhaSaida({
 }
 
 function Cartao({
-  o, etapa, t, s, destacado, dnd, arrasta, onAvancar, onVoltar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, onReceberOrcamento, cobrando,
+  o, etapa, t, s, destacado, dnd, arrasta, onAvancar, onVoltar, onTirar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, onReceberOrcamento, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
@@ -503,6 +548,8 @@ function Cartao({
   onAvancar: (o: StudioOrder) => void;
   /** Mesmo `mover` do avançar: mesma rota, mesmo desfazer no erro. */
   onVoltar: (o: StudioOrder, destino: StudioProductionStatus) => void;
+  /** C1: abre a pergunta de tirar o pedido da Fila. */
+  onTirar: (o: StudioOrder) => void;
   onAprovacao: (o: StudioOrder) => void;
   onRecolher: (o: StudioOrder) => void;
   onAbrir?: (id: string) => void;
@@ -534,6 +581,16 @@ function Cartao({
         <View style={s.cresce}>
           <Cabeca o={o} nome={nome} origem={origem} s={s} onAbrir={onAbrir} />
         </View>
+        {/* Sempre visível: no toque não há hover para revelar. */}
+        <Pressable
+          style={s.lixeira}
+          onPress={() => onTirar(o)}
+          accessibilityRole="button"
+          accessibilityLabel={`Tirar da fila: pedido de ${nome}`}
+          testID={`producao-tirar-${o.id}`}
+        >
+          <Icon name="trash" size={16} color={t.ink3} />
+        </Pressable>
       </View>
       <Text style={s.meta} testID={`producao-item-${o.id}`}>{itemDoCartao(o)} · {reais(o.total_amount)}</Text>
 
@@ -662,6 +719,8 @@ function estilos(t: StudioPalette) {
     notaDosSaidos: { fontSize: 12, color: t.ink3, marginTop: 8, marginBottom: 8 },
     cabecaQueAbre: { gap: 6 },
     topoDoCartao: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+    // 44 px de alvo de toque, com o desenho pequeno e discreto no canto.
+    lixeira: { width: 44, height: 44, marginTop: -8, marginRight: -10, alignItems: "center", justifyContent: "center" },
 
     aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: t.primaryBorder, backgroundColor: t.bgSoft },
     avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },
