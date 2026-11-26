@@ -29,7 +29,7 @@ import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
 import { ReservaNaLinha } from "./ReservaNaLinha";
 import { reservadoDoProduto } from "@/utils/reservaDoPedido";
-import { comClientesDoProduto } from "@/utils/comClientes";
+import { comClientesDoProduto, paraResolverDoProduto } from "@/utils/comClientes";
 import { SeloDaLoja } from "./FiltroDeLoja";
 
 const fmtBRL = (n: number) =>
@@ -213,7 +213,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink,
                     fontVariantNumeric: "tabular-nums",
                   } as any}>{fmtQty(p.stock)}{" "}<span style={{ fontFamily: Fonts.body, fontSize: 11, fontWeight: 400, opacity: 0.7 } as any}>{unidadeParaQuantidade(p.stock, p.unit || "un")}</span></span>
-                  <ReservaNaLinha estoque={p.stock} reservado={reservadoDoProduto(p, reservaLiberada)} comClientes={comClientesDoProduto(p, comClientesLiberado)} testID={"estoque-reservado-" + p.id} />
+                  <ReservaNaLinha estoque={p.stock} reservado={reservadoDoProduto(p, reservaLiberada)} comClientes={comClientesDoProduto(p, comClientesLiberado)} paraResolver={paraResolverDoProduto(p, comClientesLiberado)} testID={"estoque-reservado-" + p.id} />
                   {lotes && (
                     <div>
                       <button

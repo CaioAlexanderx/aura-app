@@ -7,7 +7,7 @@ import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
 import { lerNotaFiscal } from "@/utils/notaDoItem";
 import { camposDaReserva } from "@/utils/reservaDoPedido";
-import { camposDeComClientes } from "@/utils/comClientes";
+import { camposDeComClientes, camposDeParaResolver } from "@/utils/comClientes";
 
 async function deleteBatched(
   ids: string[],
@@ -129,6 +129,8 @@ export function mapApiProduct(p: any): Product {
     ...camposDaReserva(p),
     // C13 (Venda condicional): peças com clientes; ausente (trava desligada), sem chave nova.
     ...camposDeComClientes(p),
+    // C16: peças para resolver (resolver_qty); ausente, sem chave nova.
+    ...camposDeParaResolver(p),
   };
 }
 
