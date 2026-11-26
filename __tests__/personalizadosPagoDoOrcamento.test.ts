@@ -25,6 +25,10 @@ describe("pedido de orçamento aprovado", () => {
     expect(situacaoDoPagamento(p).chave).toBe("pago");
     expect(situacaoDoPixNoCartao(p)?.rotulo).toBe("Pix recebido");
   });
+  test("cancelado sem nada recebido: sem selo (falta zerada não é recebido)", () => {
+    const p = orc({ status: "cancelled", orcamento_recebido: 0, orcamento_falta_receber: 0, orcamento_pagamentos_pendentes: [] });
+    expect(situacaoDoPixNoCartao(p)).toBeNull();
+  });
   test("payment_status pago continua Pago", () => {
     expect(situacaoDoPagamento(orc({ payment_status: "paid" })).chave).toBe("pago");
   });

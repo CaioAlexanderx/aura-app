@@ -295,8 +295,10 @@ export function situacaoDoPixNoCartao(item: {
   const status = item.status ?? "";
   // Pedido de orçamento: lê o que entrou, não o status (A2, 26/11/2026).
   const orc = recebidoDoOrcamento(item);
+  // Cancelado sem recebimento: o backend zera a falta, e isso não é "recebido".
+  if (orc && status === "cancelled") return null;
   if (orc && !PAGO.includes(item.payment_status || "")) {
-    if (orc.falta === 0) return { rotulo: "Pix recebido", tom: "sucesso" };
+    if (orc.falta === 0) return orc.recebido > 0.004 ? { rotulo: "Pix recebido", tom: "sucesso" } : null;
     if (orc.recebido > 0.004) return { rotulo: "Sinal recebido", tom: "neutro" };
     return { rotulo: "A receber", tom: "atencao" };
   }
