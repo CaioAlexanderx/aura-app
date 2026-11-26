@@ -14,6 +14,7 @@
 //   7. vazio, erro com "Tentar de novo", carregando, sem resultado na busca;
 //   8. celular: cartões, só o cartão "Com clientes agora".
 // ============================================================
+jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -273,11 +274,19 @@ describe("Vendas › Condicionais: lista", () => {
     expect(textoDe(um(tree, "prazo-k1"))).toBe("sáb., 28/11");
     expect(tem(tree, "parcial-k29")).toBe(true);
     expect(textoDe(um(tree, "condicional-k29"))).toContain("1 peça com ela · 2 já voltaram");
-    // Sem botão de criar, de decidir ou de cobrar nesta fase.
+    // O botão de criar existe (C6/C7); decidir e cobrar seguem fora desta lista.
     const t = textos(tree);
-    expect(t).not.toContain("Nova condicional");
+    expect(tem(tree, "condicionais-nova")).toBe(true);
     expect(t).not.toContain("Decidir");
     expect(t).not.toContain("Cobrar no Caixa");
+  });
+
+  it("5b. o botão Nova condicional abre o wizard (cliente primeiro)", async () => {
+    const tree = await montar();
+    expect(tem(tree, "nova-condicional-modal")).toBe(false);
+    await act(async () => { um(tree, "condicionais-nova").props.onPress(); });
+    expect(tem(tree, "nova-condicional-modal")).toBe(true);
+    expect(tem(tree, "nova-passo-1")).toBe(true);
   });
 
   it("6. consolidado: /me/condicionais, chips das lojas e selo da loja", async () => {
