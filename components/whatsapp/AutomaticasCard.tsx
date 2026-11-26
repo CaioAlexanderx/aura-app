@@ -12,7 +12,7 @@
 //
 // Sem as automáticas lidas do servidor, tudo trava.
 // ============================================================
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -32,8 +32,8 @@ interface Props {
 const DESC: Record<WaAutoKey, { titulo: string; desc: string; linhas: string[]; cor: string }> = {
   aniversario: {
     titulo: "Aniversário", cor: COR_AUTO.aniversario,
-    desc: "Manda parabéns com presente no dia.",
-    linhas: ["Sai às 10h, no dia do aniversário", "Quem pediu para não receber fica de fora"],
+    desc: "Manda parabéns, com ou sem presente.",
+    linhas: ["Sai às 10h: no dia, 3 dias antes ou na semana, você escolhe", "Sem presente, só no dia", "Quem pediu para não receber fica de fora"],
   },
   venda_mais: {
     titulo: "Venda+", cor: COR_AUTO.venda_mais,
@@ -57,6 +57,9 @@ const ORDEM: WaAutoKey[] = ["aniversario", "venda_mais", "crediario_vender", "cr
 export function AutomaticasCard({ auto, onAjustar }: Props) {
   const info = auto.info;
   const alt = useAlternarAutomatica(auto);
+  // Onde foi o último toque: a frase de erro do servidor aparece NESSE cartão
+  // (ao lado do interruptor ou do + e −), nunca num rodapé distante.
+  const [ultimo, setUltimo] = useState<string | null>(null);
 
   if (auto.carregando && !info) {
     return (
@@ -123,7 +126,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
                 <View style={[s.bolinha, { backgroundColor: COR_AUTO[k] }]} />
                 <Text style={s.rowRotulo}>{ROTULO_AUTO[k]}</Text>
                 <Pressable
-                  onPress={() => auto.ajustar(k, -1)}
+                  onPress={() => { setUltimo("divisao"); auto.ajustar(k, -1); }}
                   disabled={!menos}
                   accessibilityRole="button"
                   accessibilityLabel={`Tirar 1 de ${ROTULO_AUTO[k]}`}
@@ -135,7 +138,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
                 </Pressable>
                 <Text style={s.rowN} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
                 <Pressable
-                  onPress={() => auto.ajustar(k, 1)}
+                  onPress={() => { setUltimo("divisao"); auto.ajustar(k, 1); }}
                   disabled={!mais}
                   accessibilityRole="button"
                   accessibilityLabel={`Dar mais 1 para ${ROTULO_AUTO[k]}`}
@@ -155,7 +158,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
           {livres} livres de {total}
           {livres <= 0 ? ". As " + total + " já têm dono. Para dar mais a um, tire de outro." : ""}
         </Text>
-        {!!auto.erro && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
+        {!!auto.erro && ultimo === "divisao" && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
       </View>
 
       {ORDEM.map((k) => {
@@ -173,7 +176,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
                 <Text style={s.sub}>{d.desc}</Text>
               </View>
               <Pressable
-                onPress={() => alt.alternar(k)}
+                onPress={() => { setUltimo(k); alt.alternar(k); }}
                 disabled={travado || !lida}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: ligada, disabled: travado || !lida }}
@@ -205,6 +208,9 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
               )}
             </View>
 
+            {!!auto.erro && ultimo === k && alt.perguntando !== k && (
+              <Text style={s.erro} testID={`wa-auto-erro-${k}`}>{auto.erro}</Text>
+            )}
             {alt.perguntando === k && (
               <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
             )}

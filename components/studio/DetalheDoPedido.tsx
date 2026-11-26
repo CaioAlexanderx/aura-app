@@ -58,6 +58,7 @@ import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoS
 import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
 import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
 import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
+import { formatarTelefone } from "@/utils/telefone";
 
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -460,6 +461,8 @@ export type DetalheDoPedidoProps = {
    * ao entregar com dinheiro faltando. Padrão: false (o /studio de sempre).
    */
   faltaReceber?: boolean;
+  /** Sem os arcos de fundo do Studio (o Negócio usa o fundo do shell). Padrão: false. */
+  semArcos?: boolean;
 };
 
 const TRILHA_DO_STUDIO = (numero: string): ItemDaTrilha[] => [
@@ -476,6 +479,7 @@ export function DetalheDoPedido({
   acoesDaEtapa,
   voltarEtapa = false,
   faltaReceber = false,
+  semArcos = false,
 }: DetalheDoPedidoProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -621,7 +625,7 @@ export function DetalheDoPedido({
   // StudioScreen + StudioLoading/StudioEmpty (mesmo padrão do resto do app).
   if (loading) {
     return (
-      <StudioScreen variant="reading">
+      <StudioScreen variant="reading" semArcos={semArcos}>
         <StudioLoading variant="skeleton-list" rows={5} />
       </StudioScreen>
     );
@@ -631,7 +635,7 @@ export function DetalheDoPedido({
     // FIX (bug #13 QA): erro de carregamento (com retry) é distinto de
     // "pedido não existe" — antes os dois casos mostravam o mesmo texto.
     return (
-      <StudioScreen variant="reading">
+      <StudioScreen variant="reading" semArcos={semArcos}>
         <StudioEmpty
           tone={loadError ? "warning" : "default"}
           icon={loadError ? "alert-circle" : "search"}
@@ -664,7 +668,7 @@ export function DetalheDoPedido({
   ) : null;
 
   return (
-    <StudioScreen variant="reading">
+    <StudioScreen variant="reading" semArcos={semArcos}>
       <StudioBreadcrumb items={trilha(numeroDoPedido(order))} />
       <View style={s.container}>
         {/* FIX (bug #19 QA): <Text style={s.h1}> fora do padrão — migrado
@@ -759,7 +763,7 @@ export function DetalheDoPedido({
           {order.customer_phone ? (
             <Pressable onPress={() => Linking.openURL(`https://wa.me/${(order.customer_phone || "").replace(/\D/g, "")}`)} style={s.linkRow}>
               <Icon name="message-circle" size={14} color={tk.primary} />
-              <Text style={s.link}>{order.customer_phone}</Text>
+              <Text style={s.link}>{formatarTelefone(order.customer_phone)}</Text>
             </Pressable>
           ) : null}
         </View>

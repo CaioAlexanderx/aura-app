@@ -83,7 +83,7 @@ import { BotaoVoltarEtapa, ConfirmacaoDeVoltar } from "@/components/personalizad
 import { useDraggableCardRef, useDropZoneRef, useStudioKanbanDnD } from "@/components/studio/kanban/useStudioKanbanDnD";
 import { Icon } from "@/components/Icon";
 import { ConfirmacaoDeTirarDaFila } from "@/components/personalizados/ConfirmacaoDeTirarDaFila";
-import { TEXTO_DE_TIRAR_DA_FILA, ehPedidoNaoEncontrado, ehTemRecebimento, tirarDaFila } from "@/components/personalizados/tirarDaFila";
+import { TEXTO_DE_TIRAR_DA_FILA, ehPedidoNaoEncontrado, ehTemRecebimento, recebidoDaRecusa, tirarDaFila } from "@/components/personalizados/tirarDaFila";
 import { AvisoFaltaReceber } from "@/components/personalizados/AvisoFaltaReceber";
 import { useReceberDoOrcamento } from "@/components/personalizados/useReceberDoOrcamento";
 import { FORMAS_DO_ORCAMENTO, faltaReceberDoOrcamento } from "@/components/personalizados/regrasDoReceber";
@@ -118,7 +118,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
   // p-185: o pedido de orçamento que ia ser entregue com dinheiro faltando.
   const [avisoDe, setAvisoDe] = useState<StudioOrder | null>(null);
   // C1: "Tirar da fila". `modo` é a caixa aberta; a de recebimento vem da recusa do backend.
-  const [tirarDe, setTirarDe] = useState<{ pedido: StudioOrder; modo: "pergunta" | "recebimento"; tirando: boolean } | null>(null);
+  const [tirarDe, setTirarDe] = useState<{ pedido: StudioOrder; modo: "pergunta" | "recebimento"; tirando: boolean; recebido?: number | null } | null>(null);
   // Arraste para uma coluna de trás que pede confirmação (a mesma do botão).
   const [voltarDe, setVoltarDe] = useState<{ pedido: StudioOrder; destino: Etapa } | null>(null);
 
@@ -213,7 +213,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       toast.success(TEXTO_DE_TIRAR_DA_FILA.feito);
     } catch (e: any) {
       if (ehTemRecebimento(e)) {
-        setTirarDe({ pedido: alvo.pedido, modo: "recebimento", tirando: false });
+        setTirarDe({ pedido: alvo.pedido, modo: "recebimento", tirando: false, recebido: recebidoDaRecusa(e) ?? alvo.pedido.fila_recebido });
         return;
       }
       setTirarDe(null);
@@ -243,7 +243,10 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       arrasta={arrasta}
       onAvancar={avancar}
       onVoltar={mover}
-      onTirar={(p) => setTirarDe({ pedido: p, modo: "pergunta", tirando: false })}
+      onTirar={(p) => setTirarDe(p.fila_tem_recebimento
+        // Já se sabe que há dinheiro recebido: avisa e leva ao cancelamento, sem perguntar antes.
+        ? { pedido: p, modo: "recebimento", tirando: false, recebido: p.fila_recebido }
+        : { pedido: p, modo: "pergunta", tirando: false })}
       onAprovacao={setAprovacaoDe}
       onRecolher={(p) => setRecolherDe(p.id)}
       onAbrir={onAbrirPedido}
@@ -442,6 +445,7 @@ export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAb
       <ConfirmacaoDeTirarDaFila
         modo={tirarDe?.modo || null}
         trabalhando={!!tirarDe?.tirando}
+        recebido={tirarDe?.recebido}
         idDeTeste="producao-tirar"
         onFechar={() => setTirarDe(null)}
         onConfirmar={confirmarTirar}
@@ -495,7 +499,8 @@ function Cabeca({
         <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
         {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
       </View>
-      <Text style={s.nome} numberOfLines={1}>{nome}</Text>
+      {/* Duas linhas com reticências; o nome inteiro fica no title e no aria. */}
+      <Text style={s.nome} numberOfLines={2} accessibilityLabel={nome} {...({ title: nome } as any)}>{nome}</Text>
     </>
   );
   if (!onAbrir) return dentro;
@@ -726,8 +731,9 @@ function estilos(t: StudioPalette) {
     avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },
     avisoTxt: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 420, lineHeight: 20 },
 
-    quadro: { gap: 10, paddingBottom: 16 },
-    coluna: { width: 232, backgroundColor: t.bgSoft, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
+    // flexGrow: as cinco colunas dividem a largura (cabem em 1440 px); abaixo do mínimo o quadro rola na horizontal, sem cortar.
+    quadro: { gap: 10, paddingBottom: 16, flexGrow: 1 },
+    coluna: { flex: 1, minWidth: 196, maxWidth: 300, backgroundColor: t.bgSoft, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
     colunaAlvo: { borderColor: t.primary, borderWidth: 2, backgroundColor: t.primaryGhost },
     colunaTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, paddingHorizontal: 11, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 },
     colunaTitulo: { flex: 1, fontSize: 12, fontWeight: "700", color: t.ink },

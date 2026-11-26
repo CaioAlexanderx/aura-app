@@ -183,6 +183,14 @@ describe("MedidorSaldoCard", () => {
     expect(tem(t, "wa-saldo-medidor")).toBe(false);
   });
 
+  it("trava do servidor desligada: não mostra os números como se valessem", () => {
+    const t = medidor(raw({ ativo: false }));
+    expect(tem(t, "wa-saldo-inativo")).toBe(true);
+    expect(tem(t, "wa-saldo-medidor")).toBe(false);
+    expect(textos(t)).toContain("Os limites novos ainda não estão valendo nesta loja.");
+    expect(textos(t)).not.toContain("livres");
+  });
+
   it("esgotado: botões de pacote com o aviso de que só vale depois do pagamento", async () => {
     const t = medidor(raw({ novidades: b(10, 10, "novidades"), avisos: b(100, 100, "avisos"), aurinha: b(80, 80, "aurinha") }));
     expect(textos(t)).toContain("Adicionar 100 novidades por R$ 69");
