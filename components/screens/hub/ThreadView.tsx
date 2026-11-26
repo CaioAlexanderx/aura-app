@@ -1,6 +1,7 @@
 // ============================================================
 // Hub Social — thread de uma conversa.
-// Bolhas (cliente à esquerda, loja à direita com autor AURINHA/VOCÊ),
+// Bolhas (cliente à esquerda, loja à direita) com o autor de cada fala
+// (rotuloDoAutor: cliente, equipe ou Aurinha — o eco do celular é equipe),
 // cards de sugestão pendente (Aprovar/Editar/Rejeitar — modo aprovação
 // do piloto), correção de triagem, transições de estado e composer com
 // indicador da janela de 24h da Meta.
@@ -12,10 +13,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { hubApi, type HubCategory } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, shortTime, displayName } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, shortTime, displayName, rotuloDoAutor } from "./types";
 
-export function ThreadView({ companyId, convId, onBack }: {
+export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: {
   companyId: string; convId: string; onBack?: () => void;
+  /** Aurinha desligada: a equipe atende sozinha — sem "IA atendendo" nem "Devolver à Aurinha". */
+  aurinhaLigada?: boolean;
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
@@ -83,9 +86,11 @@ export function ThreadView({ companyId, convId, onBack }: {
           <Text style={s.name} numberOfLines={1}>{displayName(conv.customer_name, conv.external_id)}</Text>
           <Text style={s.sub} numberOfLines={1}>{ch.label}{conv.handoff_reason ? ` · ${conv.handoff_reason}` : ""}</Text>
         </View>
-        <View style={[s.statusPill, { backgroundColor: st.color + "22" }]}>
-          <Text style={[s.statusPillText, { color: st.color }]}>{st.label}</Text>
-        </View>
+        {(aurinhaLigada || conv.status !== "ia") && (
+          <View testID="hub-thread-status" style={[s.statusPill, { backgroundColor: st.color + "22" }]}>
+            <Text style={[s.statusPillText, { color: st.color }]}>{st.label}</Text>
+          </View>
+        )}
       </View>
 
       {/* Ações de estado + triagem */}
@@ -95,8 +100,8 @@ export function ThreadView({ companyId, convId, onBack }: {
             <Text style={s.primaryBtnText}>Assumir conversa</Text>
           </Pressable>
         )}
-        {conv.status === "humano" && (
-          <Pressable style={s.ghostBtn} onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>
+        {conv.status === "humano" && aurinhaLigada && (
+          <Pressable testID="hub-devolver-aurinha" style={s.ghostBtn} onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>
             <Text style={s.ghostBtnText}>Devolver à Aurinha</Text>
           </Pressable>
         )}
@@ -122,10 +127,10 @@ export function ThreadView({ companyId, convId, onBack }: {
       <ScrollView style={s.msgs} contentContainerStyle={s.msgsContent}>
         {data.messages.map((m) => {
           const mine = m.direction === "outbound";
-          const author = mine ? (m.source_type === "humano" ? "VOCÊ" : "AURINHA") : null;
+          const author = rotuloDoAutor(m, conv);
           return (
-            <View key={m.id} style={[s.bubble, mine ? s.bubbleOut : s.bubbleIn]}>
-              {author && <Text style={s.bubbleAuthor}>{author}</Text>}
+            <View key={m.id} testID={`hub-msg-${m.id}`} style={[s.bubble, mine ? s.bubbleOut : s.bubbleIn]}>
+              {author && <Text testID={`hub-msg-autor-${m.id}`} style={[s.bubbleAuthor, !mine && s.bubbleAuthorIn]}>{author}</Text>}
               <Text style={s.bubbleText}>{m.content}</Text>
               <Text style={s.bubbleTime}>{shortTime(m.created_at)}{mine && m.status ? ` · ${m.status}` : ""}</Text>
             </View>
@@ -228,6 +233,7 @@ const s = StyleSheet.create({
   bubbleIn: { alignSelf: "flex-start", backgroundColor: Colors.bg4, borderBottomLeftRadius: 4 },
   bubbleOut: { alignSelf: "flex-end", backgroundColor: Colors.violet + "2e", borderWidth: 1, borderColor: Colors.violet + "44", borderBottomRightRadius: 4 },
   bubbleAuthor: { fontSize: 9.5, fontWeight: "800", color: Colors.violet3, letterSpacing: 0.5, marginBottom: 3 },
+  bubbleAuthorIn: { color: Colors.ink2, letterSpacing: 0 },
   bubbleText: { fontSize: 13.5, color: Colors.ink, lineHeight: 19 },
   bubbleTime: { fontSize: 10, color: Colors.ink3, marginTop: 4, alignSelf: "flex-end" },
   approvalCard: { alignSelf: "flex-end", maxWidth: "84%", borderWidth: 1.5, borderStyle: "dashed", borderColor: Colors.violet3 + "88", borderRadius: 13, padding: 12, backgroundColor: Colors.violet + "14", gap: 8 },

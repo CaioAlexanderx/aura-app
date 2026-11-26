@@ -6,7 +6,9 @@
 // Estados especiais, nesta ordem:
 //   - visão consolidada multi-CNPJ (company null) → escolher loja
 //   - schema_pending → migration não aplicada no ambiente (estado vazio)
-//   - Aurinha desligada → card de ativação (settings PUT)
+//   - Aurinha desligada → o inbox abre igual (a equipe lê e responde);
+//     "Ativar a Aurinha" fica como ação secundária, só para dono/admin
+//     (o PUT /hub/settings recusa membro), e abre o card de ativação.
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, ActivityIndicator } from "react-native";
@@ -21,15 +23,15 @@ import { ThreadView } from "./ThreadView";
 
 type StatusFilter = "todas" | HubStatus;
 
-function ConversationRow({ conv, selected, onPress }: {
-  conv: HubConversation; selected: boolean; onPress: () => void;
+function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
+  conv: HubConversation; selected: boolean; onPress: () => void; aurinhaLigada: boolean;
 }) {
   const ch = CHANNEL_META[conv.channel];
   const st = STATUS_META[conv.status];
   const cat = conv.category ? CATEGORY_META[conv.category] : null;
   const name = displayName(conv.customer_name, conv.external_id);
   return (
-    <Pressable onPress={onPress} style={[s.row, selected && s.rowSelected]}>
+    <Pressable testID={`hub-conv-${conv.id}`} onPress={onPress} style={[s.row, selected && s.rowSelected]}>
       <View style={[s.avatar, { backgroundColor: ch.color + "33" }]}>
         <Text style={[s.avatarText, { color: ch.color }]}>{name.charAt(0).toUpperCase()}</Text>
         <View style={[s.channelDot, { backgroundColor: ch.color }]}>
@@ -40,9 +42,11 @@ function ConversationRow({ conv, selected, onPress }: {
         <Text style={s.rowName} numberOfLines={1}>{name}</Text>
         <Text style={s.rowPreview} numberOfLines={1}>{conv.last_message_preview || "—"}</Text>
         <View style={s.rowChips}>
-          <View style={[s.miniChip, { backgroundColor: st.color + "22" }]}>
-            <Text style={[s.miniChipText, { color: st.color }]}>{st.label}</Text>
-          </View>
+          {(aurinhaLigada || conv.status !== "ia") && (
+            <View style={[s.miniChip, { backgroundColor: st.color + "22" }]}>
+              <Text style={[s.miniChipText, { color: st.color }]}>{st.label}</Text>
+            </View>
+          )}
           {cat && (
             <View style={[s.miniChip, { borderWidth: 1, borderColor: cat.color + "66" }]}>
               <Text style={[s.miniChipText, { color: cat.color }]}>{cat.label}</Text>
@@ -62,10 +66,13 @@ function ConversationRow({ conv, selected, onPress }: {
 
 export function HubView() {
   const { company } = useAuthStore();
+  const papel: string = (company as any)?.member_role || "owner";
+  const podeConfigurar = papel === "owner" || papel === "admin";
   const companyId = company?.id as string | undefined;
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todas");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [conviteAberto, setConviteAberto] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["hub-settings", companyId],
@@ -79,7 +86,8 @@ export function HubView() {
   const { data, isLoading } = useQuery({
     queryKey: ["hub-conversations", companyId, statusFilter],
     queryFn: () => hubApi.conversations(companyId!, statusFilter === "todas" ? undefined : { status: statusFilter }),
-    enabled: !!companyId && enabled,
+    // Aurinha desligada não esconde o inbox: a equipe atende sozinha.
+    enabled: !!companyId && !settings?.schema_pending,
     refetchInterval: 15000,
   });
 
@@ -105,10 +113,9 @@ export function HubView() {
     );
   }
 
-  // Aurinha desligada → onboarding
-  if (settings && !enabled) {
-    return (
-      <View style={s.onboardCard}>
+  // Convite para ligar a Aurinha (secundário, nunca no lugar do inbox).
+  const convite = settings && !enabled && podeConfigurar && conviteAberto ? (
+      <View testID="hub-convite-aurinha" style={s.onboardCard}>
         <Text style={s.onboardTitle}>Conheça a Aurinha 💜</Text>
         <Text style={s.onboardText}>
           A Aurinha responde as mensagens do Instagram da sua loja com seus produtos, preços e estoque reais —
@@ -129,8 +136,7 @@ export function HubView() {
           <Text style={s.activateBtnText}>{mSettings.isPending ? "Ativando…" : "Ativar a Aurinha"}</Text>
         </Pressable>
       </View>
-    );
-  }
+  ) : null;
 
   const conversations = data?.conversations || [];
   const needsHuman = (data?.counts || [])
@@ -140,7 +146,7 @@ export function HubView() {
   const FILTERS: { key: StatusFilter; label: string }[] = [
     { key: "todas", label: "Todas" },
     { key: "precisa_humano", label: needsHuman > 0 ? `Precisa de você · ${needsHuman}` : "Precisa de você" },
-    { key: "ia", label: "IA atendendo" },
+    ...(enabled ? [{ key: "ia" as StatusFilter, label: "IA atendendo" }] : []),
     { key: "humano", label: "Com você" },
     { key: "resolvida", label: "Resolvidas" },
   ];
@@ -155,16 +161,23 @@ export function HubView() {
             <Text style={[s.filterChipText, statusFilter === f.key && s.filterChipTextOn]}>{f.label}</Text>
           </Pressable>
         ))}
+        {settings && !enabled && podeConfigurar && (
+          <Pressable testID="hub-ativar-aurinha" onPress={() => setConviteAberto((v) => !v)}
+            style={[s.filterChip, s.ativarChip]}>
+            <Text style={[s.filterChipText, { color: Colors.violet3 }]}>Ativar a Aurinha</Text>
+          </Pressable>
+        )}
       </View>
+      {convite}
       {isLoading && <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>}
       {!isLoading && conversations.length === 0 && (
         <EmptyState icon="star" iconColor={Colors.violet3}
           title="Nenhuma conversa ainda"
-          subtitle="Quando alguém mandar mensagem no Instagram da loja, a conversa aparece aqui — e a Aurinha já começa a atender." />
+          subtitle={enabled ? "Quando alguém mandar mensagem no Instagram da loja, a conversa aparece aqui — e a Aurinha já começa a atender." : ""} />
       )}
       <ScrollView style={{ flex: 1 }}>
         {conversations.map((c) => (
-          <ConversationRow key={c.id} conv={c} selected={c.id === selectedId} onPress={() => setSelectedId(c.id)} />
+          <ConversationRow key={c.id} conv={c} selected={c.id === selectedId} onPress={() => setSelectedId(c.id)} aurinhaLigada={enabled} />
         ))}
       </ScrollView>
     </View>
@@ -176,7 +189,7 @@ export function HubView() {
         {list}
         <View style={s.threadColumn}>
           {selectedId
-            ? <ThreadView companyId={companyId} convId={selectedId} />
+            ? <ThreadView companyId={companyId} convId={selectedId} aurinhaLigada={enabled} />
             : <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />}
         </View>
       </View>
@@ -185,7 +198,7 @@ export function HubView() {
 
   // Mobile: lista OU thread
   return selectedId
-    ? <ThreadView companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} />
+    ? <ThreadView companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} />
     : list;
 }
 
@@ -200,6 +213,7 @@ const s = StyleSheet.create({
   filterChipAlert: { borderColor: Colors.amber + "88" },
   filterChipText: { fontSize: 12, fontWeight: "600", color: Colors.ink2 },
   filterChipTextOn: { color: "#fff" },
+  ativarChip: { borderColor: Colors.violet + "66", backgroundColor: "transparent" },
   row: { flexDirection: "row", gap: 10, paddingVertical: 11, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: Colors.border, alignItems: "flex-start", borderRadius: 10 },
   rowSelected: { backgroundColor: Colors.violet + "1a" },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
@@ -212,7 +226,7 @@ const s = StyleSheet.create({
   miniChip: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   miniChipText: { fontSize: 10, fontWeight: "700" },
   rowTime: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
-  onboardCard: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 20, gap: 12, backgroundColor: Colors.bg3, maxWidth: 560 },
+  onboardCard: { marginBottom: 10, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 20, gap: 12, backgroundColor: Colors.bg3, maxWidth: 560 },
   onboardTitle: { fontSize: 18, fontWeight: "800", color: Colors.ink },
   onboardText: { fontSize: 13.5, color: Colors.ink2, lineHeight: 20 },
   onboardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
