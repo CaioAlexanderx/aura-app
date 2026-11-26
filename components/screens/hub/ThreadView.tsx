@@ -8,12 +8,13 @@
 // Toque, não hover: toda ação é botão visível (regra do app p/ touch).
 // ============================================================
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Image, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { hubApi, type HubCategory } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, shortTime, displayName, rotuloDoAutor } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, displayName, rotuloDoAutor } from "./types";
+import { EnvioRapido } from "./EnvioRapido";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: {
   companyId: string; convId: string; onBack?: () => void;
@@ -69,6 +70,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
   const ch = CHANNEL_META[conv.channel];
   const st = STATUS_META[conv.status];
   const hoursLeft = windowHoursLeft(conv.last_inbound_at);
+  // WhatsApp com a conversa aberta: tudo que sai é grátis (mensagem de sessão).
+  const abertaAte = conv.channel === "whatsapp" ? conversaAbertaAte(conv.last_inbound_at) : null;
 
   return (
     <View style={s.wrap}>
@@ -92,6 +95,15 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           </View>
         )}
       </View>
+
+      {abertaAte && (
+        <View testID="hub-janela-aberta" style={s.abertaBar}>
+          <View style={s.abertaDot} />
+          <Text style={s.abertaText}>
+            <Text style={s.abertaBold}>Conversa aberta</Text> até {abertaAte} · responder não gasta mensagens
+          </Text>
+        </View>
+      )}
 
       {/* Ações de estado + triagem */}
       <View style={s.actionsRow}>
@@ -131,6 +143,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           return (
             <View key={m.id} testID={`hub-msg-${m.id}`} style={[s.bubble, mine ? s.bubbleOut : s.bubbleIn]}>
               {author && <Text testID={`hub-msg-autor-${m.id}`} style={[s.bubbleAuthor, !mine && s.bubbleAuthorIn]}>{author}</Text>}
+              {m.tipo === "produto" && m.image_url && (
+                <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url }} style={s.bubbleFoto} resizeMode="cover" />
+              )}
               <Text style={s.bubbleText}>{m.content}</Text>
               <Text style={s.bubbleTime}>{shortTime(m.created_at)}{mine && m.status ? ` · ${m.status}` : ""}</Text>
             </View>
@@ -183,6 +198,10 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           <Text style={s.feedbackText}>{feedback}</Text>
         </View>
       )}
+      {abertaAte && (
+        <EnvioRapido companyId={companyId} convId={convId} onSent={invalidate}
+          onError={(msg) => setFeedback(msg)} />
+      )}
       <View style={s.composer}>
         <TextInput
           style={s.composerInput}
@@ -199,11 +218,13 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true }: 
           <Text style={s.primaryBtnText}>{mReply.isPending ? "..." : "Enviar"}</Text>
         </Pressable>
       </View>
-      <Text style={s.windowText}>
-        {hoursLeft != null
-          ? `Janela de resposta: ${Math.floor(hoursLeft)} h restantes`
-          : "Janela de 24h fechada — aguarde o cliente escrever de novo"}
-      </Text>
+      {!abertaAte && (
+        <Text style={s.windowText}>
+          {hoursLeft != null
+            ? `Janela de resposta: ${Math.floor(hoursLeft)} h restantes`
+            : "Janela de 24h fechada — aguarde o cliente escrever de novo"}
+        </Text>
+      )}
     </View>
   );
 }
@@ -245,5 +266,10 @@ const s = StyleSheet.create({
   feedbackText: { fontSize: 12, color: Colors.amber, flex: 1 },
   composer: { flexDirection: "row", gap: 8, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 },
   composerInput: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 9, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
+  abertaBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, marginTop: 8, borderRadius: 9, backgroundColor: Colors.green + "14" },
+  abertaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.green },
+  abertaText: { fontSize: 12, color: Colors.ink2, flex: 1 },
+  abertaBold: { fontWeight: "800", color: Colors.green },
+  bubbleFoto: { width: 200, height: 200, maxWidth: "100%", borderRadius: 9, marginBottom: 6, backgroundColor: Colors.bg3 },
   windowText: { fontSize: 10.5, color: Colors.ink3, marginTop: 6 },
 });

@@ -45,6 +45,19 @@ export interface HubMessage {
   source_type: string | null;
   /** Quem falou (hub_messages, canal WhatsApp). Instagram não manda. */
   author?: HubAuthor | null;
+  /** Mensagem rica enviada pela tela: produto | orcamento | pix | link_loja. */
+  tipo?: string | null;
+  /** Foto do produto mandada (cartão de produto na thread). */
+  image_url?: string | null;
+}
+
+export type HubEnvioTipo = "produto" | "orcamento" | "pix" | "link_loja";
+
+export interface HubCatalogItem { id: string; name: string; price: number; image_url: string | null }
+
+export interface HubQuote {
+  id: string; status: string; total: string | number; expires_at: string | null;
+  customer_name: string | null; sent_at: string | null;
 }
 
 export type HubAuthor = "cliente" | "humano" | "aurinha";
@@ -102,6 +115,18 @@ export const hubApi = {
       `/companies/${companyId}/hub/conversations/${convId}/reply`,
       { method: "POST", body: { text } }
     ),
+
+  /** Mensagens de sessão (grátis, só com a conversa aberta). */
+  send: (companyId: string, convId: string, body: { type: HubEnvioTipo; product_id?: string; quote_id?: string; amount?: number }) =>
+    request<{ ok: boolean; wamid: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/send`, { method: "POST", body }
+    ),
+
+  catalogo: (companyId: string, q: string) =>
+    request<{ products: HubCatalogItem[] }>(`/companies/${companyId}/hub/catalogo?q=${encodeURIComponent(q)}`),
+
+  orcamentos: (companyId: string, convId: string) =>
+    request<{ quotes: HubQuote[] }>(`/companies/${companyId}/hub/conversations/${convId}/orcamentos`),
 
   approve: (companyId: string, outboxId: string, editedText?: string) =>
     request<{ ok: boolean }>(`/companies/${companyId}/hub/outbox/${outboxId}/approve`, {
