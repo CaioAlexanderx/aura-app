@@ -18,7 +18,7 @@ import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { EmptyState } from "@/components/EmptyState";
 import { hubApi, type HubConversation, type HubStatus } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, shortTime, nomeDoContato, conversaAbertaAte } from "./types";
+import { CHANNEL_META, CATEGORY_META, shortTime, nomeDoContato, conversaAbertaAte, quemAtende } from "./types";
 import { ThreadView } from "./ThreadView";
 import { tourTarget } from "@/utils/tourTarget";
 import { PainelCliente } from "./PainelCliente";
@@ -30,7 +30,8 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
   conv: HubConversation; selected: boolean; onPress: () => void; aurinhaLigada: boolean;
 }) {
   const ch = CHANNEL_META[conv.channel];
-  const st = STATUS_META[conv.status];
+  const meuId = (useAuthStore() as any)?.user?.id as string | undefined;
+  const comando = quemAtende(conv, meuId, aurinhaLigada, true);
   const cat = conv.category ? CATEGORY_META[conv.category] : null;
   const name = nomeDoContato(conv);
   const fechada = conv.channel === "whatsapp" && !conversaAbertaAte(conv.last_inbound_at);
@@ -53,9 +54,7 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
         </View>
         <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{conv.last_message_preview || "—"}</Tx>
         <View style={{ flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-          {conv.status !== "humano" && (aurinhaLigada || conv.status !== "ia") && (
-            <View style={tag}><Ponto cor={st.color} /><Tx style={tagTx}>{st.label}</Tx></View>
-          )}
+          {comando && <View style={tag}><Ponto cor={comando.cor} /><Tx style={tagTx}>{comando.rotulo}</Tx></View>}
           {cat && <View style={tag}><Ponto cor={cat.color} /><Tx style={tagTx}>{cat.label}</Tx></View>}
           {(conv.labels || []).map((l) => (
             <View key={l.id} style={tag}><Ponto cor={l.color} /><Tx style={tagTx}>{l.name}</Tx></View>

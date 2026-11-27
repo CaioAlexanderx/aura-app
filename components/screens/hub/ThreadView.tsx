@@ -11,9 +11,10 @@ import { useRef, useState } from "react";
 import { View, ScrollView, Pressable, TextInput, Image, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { IS_WIDE } from "@/constants/helpers";
+import { useAuthStore } from "@/stores/auth";
 import { formatarTelefone } from "@/utils/telefone";
 import { hubApi, type HubCategory } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, nomeDoContato, rotuloDoAutor } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, nomeDoContato, rotuloDoAutor, quemAtende } from "./types";
 import { EnvioRapido } from "./EnvioRapido";
 import { useMidiaConversa } from "./MidiaConversa";
 import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
@@ -33,6 +34,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   aurinhaLigada?: boolean;
 }) {
   const qc = useQueryClient();
+  const meuId = (useAuthStore() as any)?.user?.id as string | undefined;
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -109,7 +111,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   }
 
   const ch = CHANNEL_META[conv.channel];
-  const st = STATUS_META[conv.status];
+  const comando = quemAtende(conv, meuId, aurinhaLigada);
   const hoursLeft = windowHoursLeft(conv.last_inbound_at);
   const whatsapp = conv.channel === "whatsapp";
   // WhatsApp com a conversa aberta: tudo que sai é grátis (mensagem de sessão).
@@ -132,10 +134,10 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   }
   if (conv.handoff_reason) sub += ` · ${conv.handoff_reason}`;
 
-  const statusPill = (aurinhaLigada || conv.status !== "ia") ? (
+  const statusPill = comando ? (
     <View testID="hub-thread-status" style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 36, paddingHorizontal: 14 }]}>
-      <Ponto cor={st.color} />
-      <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: st.color }}>{st.label}</Tx>
+      <Ponto cor={comando.cor} />
+      <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: comando.cor }}>{comando.rotulo}</Tx>
     </View>
   ) : null;
 

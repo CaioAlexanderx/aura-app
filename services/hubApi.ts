@@ -55,6 +55,10 @@ export interface HubConvites {
 }
 
 export interface HubConversation {
+  /** Quem assumiu a conversa (usuário da loja); null = ninguém / a Aurinha. */
+  assigned_user_id?: string | null;
+  /** Primeiro nome de quem assumiu (vem do servidor; pode faltar). */
+  assigned_user_name?: string | null;
   /** Etiquetas aplicadas (migration 474). */
   labels?: HubLabel[];
   id: string;
