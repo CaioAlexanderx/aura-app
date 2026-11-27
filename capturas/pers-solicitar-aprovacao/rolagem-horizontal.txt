@@ -1,0 +1,9 @@
+gerando 1440x900: scrollWidth,innerWidth,body = 1440,1440,1440
+pronto 1440x900: scrollWidth,innerWidth,body = 1440,1440,1440
+wa.me aberto: ["https://wa.me/5511984221093?text=Oi%2C%20Ana.%20A%20arte%20do%20seu%20pedido%20ficou%20pronta.%20D%C3%A1%20uma%20olhada%20e%20me%20diz%20se%20posso%20produzir%3A%20https%3A%2F%2Fapp.getaura.com.br%2Faprovacao%2Fabc"]
+enviado 1440x900: scrollWidth,innerWidth,body = 1440,1440,1440
+gerando 390x844: scrollWidth,innerWidth,body = 390,390,390
+pronto 390x844: scrollWidth,innerWidth,body = 390,390,390
+wa.me aberto: ["https://wa.me/5511984221093?text=Oi%2C%20Ana.%20A%20arte%20do%20seu%20pedido%20ficou%20pronta.%20D%C3%A1%20uma%20olhada%20e%20me%20diz%20se%20posso%20produzir%3A%20https%3A%2F%2Fapp.getaura.com.br%2Faprovacao%2Fabc"]
+enviado 390x844: scrollWidth,innerWidth,body = 390,390,390
+pronto 375x812: scrollWidth,innerWidth,body = 375,375,375
