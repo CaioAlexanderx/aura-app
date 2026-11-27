@@ -20,7 +20,7 @@ export const EXEMPLOS: Record<string, string> = {
   "Pix da loja": "pix@lumemoda.com.br",
   "Link da loja": "lumemoda.com.br",
   "Total de parcelas": "4",
-  "Última compra": "Vestido Verde",
+  "Última compra": "o vestido verde",
   "Mês da última compra": "agosto",
   "Limite livre": "R$ 480,00",
 };

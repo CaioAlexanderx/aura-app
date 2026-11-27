@@ -12,6 +12,7 @@ import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import type { Corte } from "./waCorte";
 import { useSetas } from "./waTeclado";
 import { useWaPacotes } from "@/hooks/useWaPacotes";
+import { singularDe } from "./waRotulos";
 import {
   Avatar, Celular, Lnk, Meta, Pilula, Selo, Sw, Superficie, Titulo, V, WEB, estiloBolha, t, MONO, SANS,
 } from "./waVidro";
@@ -214,12 +215,12 @@ export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onT
   return (
     <View style={{ gap: 12 }} testID={`${idBase}-previa`}>
       <Text style={t(15, corte.cabeTodos ? V.ok : V.warn, "700")} testID={`${idBase}-cabem`}>
-        {corte.cabeTodos ? "Cabe todo mundo." : `Cabem ${corte.cabem} de ${corte.total}.`}
+        {corte.cabeTodos ? "Cabe todo mundo." : `${corte.cabem === 1 ? "Cabe" : "Cabem"} ${corte.cabem} de ${corte.total}.`}
       </Text>
       <Text style={t(15, V.ink2)}>
         {corte.cabeTodos
-          ? `Usa ${corte.precisa} das ${reserva ?? 0} novidades guardadas para ${dono}.`
-          : `${fica} ${substantivo} ficam sem a mensagem${corte.ordem ? ` (${corte.ordem})` : ""}. Ninguém recebe além do que cabe.`}
+          ? `Usa ${corte.precisa} ${(reserva ?? 0) === 1 ? "da" : "das"} ${(reserva ?? 0) === 1 ? "1 novidade guardada" : `${reserva ?? 0} novidades guardadas`} para ${dono}.`
+          : `${fica === 1 ? `1 ${singularDe(substantivo)} fica` : `${fica} ${substantivo} ficam`} sem a mensagem${corte.ordem ? ` (${corte.ordem})` : ""}. Ninguém recebe além do que cabe.`}
       </Text>
 
       {estilo === "avatares" ? (
@@ -270,7 +271,7 @@ export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onT
           ))}
         </View>
       )}
-      {corte.alemDaLista > 0 && <Text style={t(14, V.ink2)}>e mais {corte.alemDaLista} {substantivo}</Text>}
+      {corte.alemDaLista > 0 && <Text style={t(14, V.ink2)}>e mais {corte.alemDaLista === 1 ? `1 ${singularDe(substantivo)}` : `${corte.alemDaLista} ${substantivo}`}</Text>}
 
       {!corte.cabeTodos && !!companyId && <LinkPacote companyId={companyId} />}
 

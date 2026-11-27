@@ -21,6 +21,8 @@ import { podeMandarNovidades, quantoTrazer, trazerDoVendaMais } from "./waCorte"
 import { PONTOS_ROTULO, alternarPonto, lerPontos } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
 import { useSetas } from "./waTeclado";
+import { nomeDoPonto } from "./waRotulos";
+import { pluralize } from "@/utils/plural";
 import { type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -65,7 +67,10 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const modeloOferta = (modelos.modelos || []).find((m) => m.key === "cred_oferta");
   const primeira = corte?.recebem[0]?.nome.split(" ")[0] || undefined;
   const mensagemOferta = modeloOferta?.texto_em_uso
-    ? renderizar(modeloOferta.texto_em_uso, { "Nome": primeira, "Nome da loja": lojaNome || undefined }, !primeira)
+    ? renderizar(modeloOferta.texto_em_uso, {
+        "Nome": primeira, "Nome da loja": lojaNome || undefined,
+        "Limite livre": typeof corte?.recebem[0]?.limiteLivre === "number" ? `R$ ${String(Math.round(corte.recebem[0].limiteLivre)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")}` : undefined,
+      }, !primeira)
     : null;
 
   const avisosTxt = saldo
@@ -129,17 +134,17 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
             <View testID="wa-cred-amanha" style={{ gap: 12 }}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                 <Text style={t(17, V.ink, "700")}>
-                  Amanhã, às 9h, {amanha.saem === 1 ? "sai 1 aviso" : `saem ${amanha.saem} avisos`}
+                  {cobrar.ligada ? "Amanhã, às 9h," : "Se ligar, amanhã às 9h"} {amanha.saem === 1 ? "sai" : "saem"} {pluralize(amanha.saem, "aviso")}
                 </Text>
                 <Text style={t(13, V.ink3)}>Quem já pagou some da lista sozinho.</Text>
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {itens.map((p) => (
-                  <View key={`${p.nome}-${p.ponto}`} style={{ flexGrow: 1, flexBasis: 260, flexDirection: "row", gap: 12, alignItems: "center" }}>
+                  <View key={`${p.nome}-${String(p.ponto)}`} style={{ flexGrow: 1, flexBasis: 260, flexDirection: "row", gap: 12, alignItems: "center" }}>
                     <Avatar nome={p.nome || ""} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={t(15, V.ink, "700")}>{p.nome}</Text>
-                      {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}{p.ponto ? ` · ${p.ponto}` : ""}</Text>}
+                      {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}{nomeDoPonto(p.ponto) ? ` · ${nomeDoPonto(p.ponto)}` : ""}</Text>}
                     </View>
                   </View>
                 ))}
@@ -166,7 +171,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
 
       <Secao
         meta="02 · Vender"
-        titulo={corte ? `${corte.total} clientes pagam em dia e têm limite livre` : "Clientes que pagam em dia"}
+        titulo={corte && corte.total > 0 ? `${pluralize(corte.total, "cliente")} ${corte.total === 1 ? "paga" : "pagam"} em dia e ${corte.total === 1 ? "tem" : "têm"} limite livre` : "Clientes que pagam em dia"}
         sub="Uma oferta por mês lembra que o crediário está ali. Esta usa as novidades do mês guardadas para o Crediário."
         direita={
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -180,6 +185,9 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
           <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 420, minWidth: 0 }}>
+            {!!corte && corte.total === 0 ? (
+              <Text style={t(15, V.ink2)} testID="wa-cred-ninguem">Nenhum cliente com limite livre agora</Text>
+            ) : (
             <PreviaCorteView
               idBase="wa-cred" companyId={companyId} corte={corte} substantivo="clientes" dono="o Crediário" estilo="linhas"
               reserva={vender.livres} trazer={trazer} trazendo={travado}
@@ -188,8 +196,12 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                 if (prox) auto.aplicarDivisao(prox).then(() => pubVender.recarregar());
               }}
             />
+            )}
           </View>
           <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 340, maxWidth: 440, minWidth: 0, gap: 14 }}>
+            {!!mensagemOferta && (
+              <Text style={t(13, V.ink3)} testID="wa-cred-bolha-legenda">{primeira ? `Como chega para ${primeira}` : "Como chega (cliente de exemplo)"}</Text>
+            )}
             {!!mensagemOferta && (
               <View style={[estiloBolha(), { alignSelf: "stretch", maxWidth: "100%", paddingTop: 12, paddingBottom: 10 }]} testID="wa-config-bolha">
                 <Text style={t(15, V.ink, "400", { lineHeight: 22 })}>{mensagemOferta}</Text>
@@ -200,6 +212,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
             {!!pubVender.enviado && (pubVender.enviado.enfileiradas ?? 0) > 0 && (
               <Text style={t(14, V.ok, "700")} testID="wa-cred-enviado">Pronto. A oferta sai ainda hoje.</Text>
             )}
+            {!(corte && corte.total === 0) && (
             <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
               <BtnPrimario
                 onPress={() => { pubVender.enviarAgora(); }}
@@ -207,14 +220,15 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                 carregando={pubVender.enviando}
                 testID="wa-cred-enviar"
               >
-                {corte ? `Mandar para as ${corte.cabem} agora` : "Mandar agora"}
+                {corte ? (corte.cabem === 1 && primeira ? `Mandar para ${primeira} agora` : `Mandar para as ${corte.cabem} agora`) : "Mandar agora"}
               </BtnPrimario>
               <Text style={t(13, V.ink3, "400", { flexShrink: 1 })} testID="wa-cred-enviar-nota">
                 {pode.pode
-                  ? `Usa ${corte!.cabem} · ficam ${Math.max(0, (vender.livres ?? 0) - corte!.cabem)} do Crediário.`
+                  ? `Usa ${pluralize(corte!.cabem, "novidade")} · ${Math.max(0, (vender.livres ?? 0) - corte!.cabem) === 1 ? "fica" : "ficam"} ${Math.max(0, (vender.livres ?? 0) - corte!.cabem)} do Crediário.`
                   : pode.motivo}
               </Text>
             </View>
+            )}
             {!!pubVender.erro && <Text style={s.erro}>{pubVender.erro}</Text>}
           </View>
         </View>

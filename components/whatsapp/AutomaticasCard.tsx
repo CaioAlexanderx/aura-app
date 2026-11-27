@@ -122,7 +122,7 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
             </Text>
           </View>
           <Text style={t(15, V.ink2)} testID="wa-auto-livres">
-            <Text style={t(22, V.ink, "800")}>{livresTotal}</Text> livres de {total}
+            <Text style={t(22, V.ink, "800")}>{livresTotal}</Text> {livresTotal === 1 ? "livre" : "livres"} de {total}
           </Text>
         </View>
 
@@ -172,7 +172,7 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
                       } as any)}
                     >
                       <Text style={t(24, V.ink, "800", { lineHeight: 26 })} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
-                      <Text style={t(12, V.ink3)}>{info.usadas[k]} usadas</Text>
+                      <Text style={t(12, V.ink3)}>{info.usadas[k] === 1 ? "1 usada" : `${info.usadas[k]} usadas`}</Text>
                     </View>
                     <Passo44
                       simbolo="+" rotulo={`Dar mais 1 para ${ROTULO_AUTO[k]}`} disabled={!mais}
