@@ -107,7 +107,7 @@ describe("HubView com a Aurinha desligada", () => {
     expect(porId(r, "hub-devolver-aurinha")).toHaveLength(0);
     expect(porId(r, "hub-thread-status")).toHaveLength(0);
 
-    const input = r.root.findAll((n) => n.props && typeof n.props.onChangeText === "function" && n.props.placeholder)[0];
+    const input = r.root.findAll((n) => n.props && typeof n.props.onChangeText === "function" && n.props.accessibilityLabel === "Mensagem")[0];
     await act(async () => { input.props.onChangeText("Oi, aqui é a Cassie"); });
     const enviar = r.root.findAll((n) => n.props && typeof n.props.onPress === "function"
       && n.findAll((c) => c.props && c.props.children === "Enviar").length > 0, { deep: false })[0];

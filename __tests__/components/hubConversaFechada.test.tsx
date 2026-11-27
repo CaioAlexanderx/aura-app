@@ -300,7 +300,7 @@ describe("celular", () => {
     const r = await abrirThread();
     expect(textoDe(porId(r, "hub-thread-avisos")[0])).toBe("72 avisos");
     const bar = textoDe(porId(r, "hub-janela-aberta")[0]);
-    expect(bar).toContain("Conversa aberta");
+    expect(bar).toContain("Aberta até");
     expect(bar).not.toContain("responder não gasta mensagens"); // enxuto: o aviso vira "tudo grátis agora"
     const t = tudo(r);
     expect(t).toContain("Mandar para Bia");

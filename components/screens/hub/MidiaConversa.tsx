@@ -8,9 +8,11 @@
 // servidor converte para o formato da Meta.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Image } from "react-native";
+import { View, Pressable, TextInput, Image } from "react-native";
 import { useMutation } from "@tanstack/react-query";
-import { Colors } from "@/constants/colors";
+import { tourTarget } from "@/utils/tourTarget";
+import { K, Tx, Ico, Pilula, BotaoRedondo, Ponto, superficie, web } from "./waVisual";
+import { AtalhoAcao, type VarianteAtalho } from "./EnvioRapido";
 import { hubApi } from "@/services/hubApi";
 import {
   Gravador, MAX_SEGUNDOS_AUDIO, gravacaoDisponivel, blobParaBase64, escolherArquivo, prepararFoto, relogio,
@@ -93,72 +95,69 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
 
   const ocupado = mSend.isPending;
 
-  const botoes = (
-    <>
-      <Pressable testID="hub-envio-foto" onPress={escolherFoto} disabled={ocupado || estado.tipo === "gravando"}
-        style={[s.atalho, estado.tipo === "foto" && s.atalhoOn, (ocupado || estado.tipo === "gravando") && { opacity: 0.6 }]}>
-        <Text style={[s.atalhoText, estado.tipo === "foto" && s.atalhoTextOn]}>Foto</Text>
-      </Pressable>
-      {gravacaoDisponivel() && (
-        <Pressable testID="hub-envio-audio" disabled={ocupado || estado.tipo === "foto"}
-          onPress={() => (estado.tipo === "gravando" ? void mandarGravacao() : void comecarGravacao())}
-          style={[s.atalho, estado.tipo === "gravando" && s.gravando, (ocupado || estado.tipo === "foto") && { opacity: 0.6 }]}>
-          <Text style={[s.atalhoText, estado.tipo === "gravando" && s.atalhoTextOn]}>
-            {estado.tipo === "gravando" ? "Mandar áudio" : "Áudio"}
-          </Text>
-        </Pressable>
-      )}
-    </>
-  );
+  const bloqueadoFoto = ocupado || estado.tipo === "gravando";
+  const bloqueadoAudio = ocupado || estado.tipo === "foto";
+  const gravandoAgora = estado.tipo === "gravando";
 
+  // Foto: pílula na barra (desktop) ou círculo na folha (celular).
+  const foto = (v: VarianteAtalho) => v === "acao"
+    ? <AtalhoAcao testID="hub-envio-foto" icone="foto" label="Foto" on={estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={escolherFoto} />
+    : (
+      <Pilula testID="hub-envio-foto" on={estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={escolherFoto}>
+        <Ico nome="foto" cor={estado.tipo === "foto" ? K.pillOnInk : K.ink} />
+        <Tx style={{ fontSize: 14, fontWeight: "600", lineHeight: 18, color: estado.tipo === "foto" ? K.pillOnInk : K.ink }}>Foto</Tx>
+      </Pilula>
+    );
+
+  // Áudio: microfone redondo ao lado do campo (desktop) ou o primeiro círculo da folha (celular).
+  const alternarGravacao = () => (gravandoAgora ? void mandarGravacao() : void comecarGravacao());
+  const audio = (v: VarianteAtalho) => {
+    if (!gravacaoDisponivel()) return null;
+    if (v === "acao") {
+      return <AtalhoAcao testID="hub-envio-audio" icone="mic" label={gravandoAgora ? "Mandar áudio" : "Áudio"} alvo="wa.microfone" destaque disabled={bloqueadoAudio} onPress={alternarGravacao} />;
+    }
+    return (
+      <BotaoRedondo testID="hub-envio-audio" {...tourTarget("wa.microfone")} size={52} disabled={bloqueadoAudio} onPress={alternarGravacao}
+        acessLabel={gravandoAgora ? "Parar e mandar o áudio" : "Gravar áudio"}
+        style={gravandoAgora ? [{ borderColor: "rgba(255,220,220,.7)", backgroundColor: "#dc2626" }, web({ backgroundImage: "linear-gradient(135deg,#f87171,#dc2626)" })] : undefined}>
+        <Ico nome="mic" size={20} cor={gravandoAgora ? "#fff" : K.ink2} traco={1.9} />
+      </BotaoRedondo>
+    );
+  };
+
+  const painelBase: any = [superficie.seca(20), { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, padding: 12 }];
   const painel = estado.tipo === "gravando" ? (
-    <View testID="hub-gravando" style={s.painel}>
-      <View style={s.ponto} />
-      <Text style={s.gravText}>
-        <Text style={s.gravBold}>Gravando {relogio(estado.segundos)}</Text> · toque em "Mandar áudio" quando terminar
-      </Text>
+    <View testID="hub-gravando" style={painelBase}>
+      <Ponto cor="#f87171" size={9} />
+      <Tx style={{ flex: 1, fontSize: 14, color: K.ink2, minWidth: 160 }}>
+        <Tx style={{ fontWeight: "700", fontSize: 14, color: K.ink2 }}>{`Gravando ${relogio(estado.segundos)}`}</Tx>
+        {" · toque no microfone de novo para mandar"}
+      </Tx>
+      <Pilula testID="hub-gravacao-mandar" pequena on onPress={() => void mandarGravacao()}>Mandar áudio</Pilula>
       <Pressable testID="hub-gravacao-cancelar" onPress={cancelarGravacao}>
-        <Text style={s.cancelar}>Cancelar</Text>
+        <Tx style={{ fontSize: 13, fontWeight: "700", color: K.ink3 }}>Cancelar</Tx>
       </Pressable>
     </View>
   ) : estado.tipo === "foto" ? (
-    <View testID="hub-foto-previa" style={[s.painel, { alignItems: "flex-start" }]}>
-      <Image source={{ uri: estado.foto.previa }} style={s.previa} resizeMode="cover" />
+    <View testID="hub-foto-previa" style={[...painelBase, { alignItems: "flex-start" }]}>
+      <Image source={{ uri: estado.foto.previa }} style={{ width: 96, height: 96, borderRadius: 14, backgroundColor: K.trilho }} resizeMode="cover" />
       <View style={{ flex: 1, minWidth: 160, gap: 8 }}>
-        <TextInput testID="hub-foto-legenda" style={s.legenda} value={legenda} onChangeText={setLegenda}
-          placeholder="Legenda (opcional)" placeholderTextColor={Colors.ink3} />
-        <View style={s.linha}>
-          <Pressable testID="hub-foto-mandar" disabled={ocupado} style={[s.botao, ocupado && { opacity: 0.5 }]}
+        <TextInput testID="hub-foto-legenda" value={legenda} onChangeText={setLegenda}
+          placeholder="Legenda (opcional)" placeholderTextColor={K.ink3}
+          style={{ minHeight: 40, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb, fontFamily: "inherit" as any, fontSize: 14, color: K.ink }} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <Pilula testID="hub-foto-mandar" pequena on disabled={ocupado}
             onPress={() => mSend.mutate({ kind: "foto", mime: estado.foto.mime, data: estado.foto.base64, caption: legenda.trim() || undefined })}>
-            <Text style={s.botaoText}>{ocupado ? "Enviando…" : "Mandar foto"}</Text>
-          </Pressable>
+            {ocupado ? "Enviando…" : "Mandar foto"}
+          </Pilula>
           <Pressable testID="hub-foto-cancelar" onPress={() => { setEstado({ tipo: "livre" }); setLegenda(""); }}>
-            <Text style={s.cancelar}>Cancelar</Text>
+            <Tx style={{ fontSize: 13, fontWeight: "700", color: K.ink3 }}>Cancelar</Tx>
           </Pressable>
         </View>
       </View>
     </View>
   ) : ocupado ? (
-    <View style={s.painel}><Text style={s.gravText}>Enviando…</Text></View>
+    <View style={painelBase}><Tx style={{ fontSize: 14, color: K.ink2 }}>Enviando…</Tx></View>
   ) : null;
-
-  return { botoes, painel };
+  return { foto, audio, painel };
 }
-
-const s = StyleSheet.create({
-  atalho: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.bg3 },
-  atalhoOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  gravando: { backgroundColor: Colors.red, borderColor: Colors.red },
-  atalhoText: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
-  atalhoTextOn: { color: "#fff" },
-  painel: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 10, backgroundColor: Colors.bg3 },
-  ponto: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.red },
-  gravText: { flex: 1, fontSize: 12.5, color: Colors.ink2, minWidth: 160 },
-  gravBold: { fontWeight: "800", color: Colors.ink },
-  cancelar: { fontSize: 12, fontWeight: "700", color: Colors.ink3 },
-  previa: { width: 96, height: 96, borderRadius: 10, backgroundColor: Colors.bg4 },
-  legenda: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg2 },
-  linha: { flexDirection: "row", alignItems: "center", gap: 14 },
-  botao: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 9 },
-  botaoText: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
-});

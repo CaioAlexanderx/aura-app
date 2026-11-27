@@ -8,18 +8,20 @@
 // Toque, não hover: toda ação é botão visível (regra do app p/ touch).
 // ============================================================
 import { useRef, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Image, ActivityIndicator } from "react-native";
+import { View, ScrollView, Pressable, TextInput, Image, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
-import { Icon } from "@/components/Icon";
+import { formatarTelefone } from "@/utils/telefone";
 import { hubApi, type HubCategory } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, displayName, rotuloDoAutor } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, CATEGORIES, windowHoursLeft, conversaAbertaAte, shortTime, nomeDoContato, rotuloDoAutor } from "./types";
 import { EnvioRapido } from "./EnvioRapido";
 import { useMidiaConversa } from "./MidiaConversa";
 import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
 import { EtiquetasConversa } from "./EtiquetasConversa";
-import { ClienteConversa } from "./ClienteConversa";
+import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConversa";
+import { PainelCliente } from "./PainelCliente";
+import { tourTarget } from "@/utils/tourTarget";
+import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB } from "./waVisual";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -37,6 +39,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   // Celular (artboard "Celular"): lista e thread, cabeçalho enxuto e barra de envio compacta.
   const compacto = !IS_WIDE;
   const [detalhes, setDetalhes] = useState(false);
+  const [folhaEtiqueta, setFolhaEtiqueta] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["hub-thread", companyId, convId],
@@ -94,253 +97,259 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
     return url;
   };
 
+  // Cadastro ligado e crediário: alimentam o subtítulo do cabeçalho (WhatsApp).
+  const { cliente: ligado, livre } = useClienteDaConversa(companyId, convId, conv?.channel === "whatsapp");
+
   // Foto e áudio (hook antes do return antecipado: a ordem dos hooks não muda).
   const midia = useMidiaConversa({ companyId, convId, onSent: invalidate, onError: (m) => setFeedback(m) });
 
   if (isLoading || !data || !conv) {
-    return <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>;
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 300 }}><ActivityIndicator color={K.acc} /></View>;
   }
 
   const ch = CHANNEL_META[conv.channel];
   const st = STATUS_META[conv.status];
   const hoursLeft = windowHoursLeft(conv.last_inbound_at);
+  const whatsapp = conv.channel === "whatsapp";
   // WhatsApp com a conversa aberta: tudo que sai é grátis (mensagem de sessão).
-  const abertaAte = conv.channel === "whatsapp" ? conversaAbertaAte(conv.last_inbound_at) : null;
+  const abertaAte = whatsapp ? conversaAbertaAte(conv.last_inbound_at) : null;
   // WhatsApp com a conversa FECHADA: fala primeiro só com convite pronto (gasta 1 aviso).
-  const fechada = conv.channel === "whatsapp" && !abertaAte;
+  const fechada = whatsapp && !abertaAte;
   const nomeCurto = (conv.customer_name || "").trim().split(/\s+/)[0] || "o cliente";
   // Trava do saldo desligada (ativo:false): não há limite a mostrar.
   const avisos = saldo?.ativo === false ? undefined : saldo?.saldos?.avisos;
+  const nomeTela = nomeDoContato(conv);
 
-  return (
-    <View style={s.wrap}>
-      {/* Header */}
-      <View style={s.header}>
-        {onBack && (
-          <Pressable onPress={onBack} style={s.backBtn} accessibilityLabel="Voltar para a lista">
-            <Text style={s.backText}>‹</Text>
-          </Pressable>
-        )}
-        <View style={[s.avatar, { backgroundColor: ch.color + "33" }]}>
-          <Text style={[s.avatarText, { color: ch.color }]}>{displayName(conv.customer_name, conv.external_id).charAt(0).toUpperCase()}</Text>
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={s.name} numberOfLines={1}>{displayName(conv.customer_name, conv.external_id)}</Text>
-          <Text style={s.sub} numberOfLines={1}>{ch.label}{conv.handoff_reason ? ` · ${conv.handoff_reason}` : ""}</Text>
-        </View>
-        {compacto && conv.channel === "whatsapp" && avisos && (
-          <View testID="hub-thread-avisos" style={s.avisosPill}>
-            <Text style={s.avisosPillText}>{avisos.restante} avisos</Text>
-          </View>
-        )}
-        {(aurinhaLigada || conv.status !== "ia") && (
-          <View testID="hub-thread-status" style={[s.statusPill, { backgroundColor: st.color + "22" }]}>
-            <Text style={[s.statusPillText, { color: st.color }]}>{st.label}</Text>
-          </View>
-        )}
-      </View>
+  // Subtítulo do mockup: "Cliente desde mar/2025 · Crediário com R$ 320 livres".
+  let sub: string = ch.label;
+  if (whatsapp) {
+    if (ligado) {
+      sub = [ligado.since ? `Cliente desde ${mesAno(ligado.since)}` : "Cliente cadastrado", livre != null ? `Crediário com ${reais(livre)} livres` : ""].filter(Boolean).join(" · ");
+    } else {
+      sub = conv.customer_name ? (formatarTelefone(conv.external_id) || ch.label) : ch.label;
+    }
+  }
+  if (conv.handoff_reason) sub += ` · ${conv.handoff_reason}`;
 
-      {abertaAte && (
-        <View testID="hub-janela-aberta" style={s.abertaBar}>
-          <View style={s.abertaDot} />
-          <Text style={s.abertaText}>
-            <Text style={s.abertaBold}>Conversa aberta</Text> até {abertaAte}{compacto ? "" : " · responder não gasta mensagens"}
-          </Text>
-        </View>
-      )}
+  const statusPill = (aurinhaLigada || conv.status !== "ia") ? (
+    <View testID="hub-thread-status" style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 36, paddingHorizontal: 14 }]}>
+      <Ponto cor={st.color} />
+      <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: st.color }}>{st.label}</Tx>
+    </View>
+  ) : null;
 
-      {/* WhatsApp: cadastro de Clientes ("É ela") e etiquetas */}
-      {conv.channel === "whatsapp" && compacto && (
-        <Pressable testID="hub-detalhes-toggle" onPress={() => setDetalhes((v) => !v)} style={s.detalhesBtn}>
-          <Text style={s.detalhesText}>
-            {detalhes ? "Esconder cliente e etiquetas" : `Cliente e etiquetas${(conv.labels || []).length ? ` · ${(conv.labels || []).length}` : ""}`}
-          </Text>
+  const larguraBolha: any = compacto ? "82%" : (WEB ? "min(440px, 78%)" : "78%");
+
+  // ── Cabeçalho ──
+  const cabecalho = compacto ? (
+    <View style={[superficie.vidro(24, 16), { marginTop: 12, marginHorizontal: 12, paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 10, zIndex: 2 }]}>
+      {onBack && (
+        <Pressable onPress={onBack} accessibilityLabel="Voltar para a lista" accessibilityRole="button"
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+          <Ico nome="voltar" size={22} cor={K.ink} traco={2} />
         </Pressable>
       )}
-      {conv.channel === "whatsapp" && (!compacto || detalhes) && (
-        <>
-          <ClienteConversa companyId={companyId} convId={convId} onChanged={invalidate} onError={(m) => setFeedback(m)} />
-          <EtiquetasConversa companyId={companyId} convId={convId} aplicadas={conv.labels || []}
-            onChanged={invalidate} onError={(m) => setFeedback(m)} />
-        </>
-      )}
-
-      {/* Ações de estado + triagem */}
-      <View style={s.actionsRow}>
-        {(conv.status === "ia" || conv.status === "precisa_humano") && (
-          <Pressable style={s.primaryBtn} onPress={() => mAction.mutate(() => hubApi.assume(companyId, convId))}>
-            <Text style={s.primaryBtnText}>Assumir conversa</Text>
-          </Pressable>
-        )}
-        {conv.status === "humano" && aurinhaLigada && (
-          <Pressable testID="hub-devolver-aurinha" style={s.ghostBtn} onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>
-            <Text style={s.ghostBtnText}>Devolver à Aurinha</Text>
-          </Pressable>
-        )}
-        {conv.status !== "resolvida" && (
-          <Pressable style={s.ghostBtn} onPress={() => mAction.mutate(() => hubApi.resolve(companyId, convId))}>
-            <Text style={s.ghostBtnText}>Resolver</Text>
-          </Pressable>
-        )}
-        <View style={{ flex: 1 }} />
-        {(!compacto || detalhes) && CATEGORIES.map((cat) => {
-          const meta = CATEGORY_META[cat];
-          const on = conv.category === cat;
-          return (
-            <Pressable key={cat} onPress={() => mAction.mutate(() => hubApi.setCategory(companyId, convId, on ? null : cat))}
-              style={[s.catChip, { borderColor: meta.color + "66" }, on && { backgroundColor: meta.color + "22" }]}>
-              <Text style={[s.catChipText, { color: meta.color }]}>{meta.label}</Text>
-            </Pressable>
-          );
-        })}
+      <Avatar nome={nomeTela} chave={conv.external_id} size={40} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Tx numberOfLines={1} style={{ fontSize: 16, fontWeight: "700", lineHeight: 22 }}>{nomeTela}</Tx>
+        {abertaAte
+          ? <Tx testID="hub-janela-aberta" {...tourTarget("wa.janela")} numberOfLines={1} style={{ fontSize: 12, color: K.ok, lineHeight: 16 }}>{`Aberta até ${abertaAte}`}</Tx>
+          : <Tx numberOfLines={1} style={{ fontSize: 12, color: K.ink2, lineHeight: 16 }}>{sub}</Tx>}
       </View>
+      {whatsapp && avisos && (
+        <View testID="hub-thread-avisos-bloco" style={{ alignItems: "flex-end", gap: 4, paddingRight: 6 }}>
+          <Barra pct={avisos.total ? avisos.restante / avisos.total : 0} altura={5} largura={58} />
+          <Tx testID="hub-thread-avisos" style={{ fontSize: 12, color: K.ink2, lineHeight: 16 }}>{`${avisos.restante} avisos`}</Tx>
+        </View>
+      )}
+    </View>
+  ) : (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, paddingVertical: 18, paddingHorizontal: 22, borderBottomWidth: 1, borderBottomColor: K.linha }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, minWidth: 0, flexShrink: 1 }}>
+        <Avatar nome={nomeTela} chave={conv.external_id} size={46} />
+        <View style={{ minWidth: 0, flexShrink: 1 }}>
+          <Tx numberOfLines={1} style={{ fontSize: 17, fontWeight: "700", lineHeight: 24 }}>{nomeTela}</Tx>
+          <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{sub}</Tx>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        {abertaAte && (
+          <View testID="hub-janela-aberta" {...tourTarget("wa.janela")} style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 36, paddingHorizontal: 14 }]}>
+            <Ico nome="relogio" size={16} cor={K.ok} traco={2} />
+            <Tx style={{ fontSize: 13, lineHeight: 18 }}>
+              <Tx style={{ fontSize: 13, fontWeight: "700", color: K.ok, lineHeight: 18 }}>Conversa aberta</Tx>
+              {` até ${abertaAte} · responder não gasta mensagens`}
+            </Tx>
+          </View>
+        )}
+        {statusPill}
+      </View>
+    </View>
+  );
 
-      {/* Mensagens */}
-      <ScrollView style={s.msgs} contentContainerStyle={s.msgsContent}>
+  const acoes = (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 10, paddingHorizontal: compacto ? 14 : 22 }}>
+      {compacto && statusPill}
+      {(conv.status === "ia" || conv.status === "precisa_humano") && (
+        <Pilula pequena on onPress={() => mAction.mutate(() => hubApi.assume(companyId, convId))}>Assumir conversa</Pilula>
+      )}
+      {conv.status === "humano" && aurinhaLigada && (
+        <Pilula testID="hub-devolver-aurinha" pequena onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>Devolver à Aurinha</Pilula>
+      )}
+      {conv.status !== "resolvida" && (
+        <Pilula pequena onPress={() => mAction.mutate(() => hubApi.resolve(companyId, convId))}>Resolver</Pilula>
+      )}
+      <View style={{ flex: 1 }} />
+      {(!compacto || detalhes) && CATEGORIES.map((cat) => {
+        const meta = CATEGORY_META[cat];
+        const on = conv.category === cat;
+        return (
+          <Pressable key={cat} onPress={() => mAction.mutate(() => hubApi.setCategory(companyId, convId, on ? null : cat))}
+            style={[{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderColor: meta.color + "66" }, on && { backgroundColor: meta.color + "22" }]}>
+            <Tx style={{ fontSize: 12, fontWeight: "700", color: meta.color, lineHeight: 16 }}>{meta.label}</Tx>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  // ── Mensagens ──
+  const mensagens = (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: compacto ? 9 : 10, paddingVertical: compacto ? 16 : 20, paddingHorizontal: compacto ? 14 : 22, minHeight: compacto ? 0 : 360 }}>
+      {whatsapp && <FaixaEhEla companyId={companyId} convId={convId} onChanged={invalidate} onError={(m) => setFeedback(m)} />}
+      <View style={{ gap: compacto ? 9 : 10, opacity: fechada ? 0.55 : 1 }}>
         {data.messages.map((m) => {
           const mine = m.direction === "outbound";
           const author = rotuloDoAutor(m, conv);
+          const produto = m.tipo === "produto" && !!m.image_url;
           return (
-            <View key={m.id} testID={`hub-msg-${m.id}`} style={[s.bubble, mine ? s.bubbleOut : s.bubbleIn]}>
-              {author && <Text testID={`hub-msg-autor-${m.id}`} style={[s.bubbleAuthor, !mine && s.bubbleAuthorIn]}>{author}</Text>}
-              {m.tipo === "produto" && m.image_url && (
-                <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url }} style={s.bubbleFoto} resizeMode="cover" />
-              )}
-              {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={{ ...m.media, url: urlEstavel(m.id, m.media.url) }} /> : null}
-              {textoDaBolha(m) != null && <Text style={s.bubbleText}>{textoDaBolha(m)}</Text>}
-              <Text style={s.bubbleTime}>{shortTime(m.created_at)}{mine && m.status ? ` · ${m.status}` : ""}</Text>
+            <View key={m.id} style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
+              <View testID={`hub-msg-${m.id}`}
+                style={[{
+                  maxWidth: larguraBolha, paddingTop: produto ? 8 : 10, paddingHorizontal: produto ? 8 : 14, paddingBottom: 8, borderRadius: 20, borderWidth: 1,
+                  borderBottomLeftRadius: mine ? 20 : 6, borderBottomRightRadius: mine ? 6 : 20,
+                  borderColor: mine ? K.bolhaOutBorda : K.bolhaInBorda, backgroundColor: mine ? K.bolhaOutFb : K.bolhaInFb,
+                }, produto ? { width: 280 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
+                {author && (
+                  <Tx testID={`hub-msg-autor-${m.id}`} style={{ fontSize: 11, fontWeight: "700", color: mine ? K.acc : K.ink2, marginBottom: 2, lineHeight: 15, paddingHorizontal: produto ? 6 : 0 }}>{author}</Tx>
+                )}
+                {produto && (
+                  <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
+                )}
+                {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={{ ...m.media, url: urlEstavel(m.id, m.media.url) }} /> : null}
+                {textoDaBolha(m) != null && (
+                  <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
+                )}
+                <Tx style={{ fontSize: 12, color: K.ink3, textAlign: "right", marginTop: 4, lineHeight: 16, paddingHorizontal: produto ? 6 : 0 }}>
+                  {`${shortTime(m.created_at)}${mine && m.status ? ` · ${m.status}` : ""}`}
+                </Tx>
+              </View>
             </View>
           );
         })}
+      </View>
 
-        {/* Sugestões aguardando aprovação */}
-        {data.pending_approvals.map((p) => (
-          <View key={p.id} style={s.approvalCard}>
-            <Text style={s.approvalTitle}>✦ Resposta sugerida pela Aurinha — aguardando aprovação</Text>
+      {/* Sugestões aguardando aprovação */}
+      {data.pending_approvals.map((p) => (
+        <View key={p.id} style={[superficie.seca(20), { alignSelf: "flex-end", maxWidth: "84%", padding: 12, gap: 8, borderStyle: "dashed", borderWidth: 1.5, borderColor: "rgba(196,181,253,.55)" }]}>
+          <Tx style={{ fontSize: 12, fontWeight: "700", color: K.acc, lineHeight: 16 }}>✦ Resposta sugerida pela Aurinha — aguardando aprovação</Tx>
+          {editingId === p.id ? (
+            <TextInput style={{ borderWidth: 1, borderColor: K.dryBorda, borderRadius: 14, padding: 10, fontSize: 15, color: K.ink, minHeight: 70, textAlignVertical: "top", fontFamily: "inherit" as any }}
+              value={editText} onChangeText={setEditText} multiline placeholderTextColor={K.ink3} />
+          ) : (
+            <Tx style={{ fontSize: 15, lineHeight: 22 }}>{p.edited_body || p.text_body}</Tx>
+          )}
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {editingId === p.id ? (
-              <TextInput style={s.approvalInput} value={editText} onChangeText={setEditText}
-                multiline placeholderTextColor={Colors.ink3} />
+              <>
+                <Pilula pequena on onPress={() => { mAction.mutate(() => hubApi.approve(companyId, p.id, editText.trim())); setEditingId(null); }}>Enviar editada</Pilula>
+                <Pilula pequena onPress={() => setEditingId(null)}>Cancelar</Pilula>
+              </>
             ) : (
-              <Text style={s.approvalText}>{p.edited_body || p.text_body}</Text>
+              <>
+                <Pilula pequena on onPress={() => mAction.mutate(() => hubApi.approve(companyId, p.id))}>Aprovar e enviar</Pilula>
+                <Pilula pequena onPress={() => { setEditingId(p.id); setEditText(p.text_body); }}>Editar</Pilula>
+                <Pilula pequena onPress={() => mAction.mutate(() => hubApi.reject(companyId, p.id))} textoStyle={{ color: K.red }}>Rejeitar</Pilula>
+              </>
             )}
-            <View style={s.approvalActions}>
-              {editingId === p.id ? (
-                <>
-                  <Pressable style={s.primaryBtn}
-                    onPress={() => { mAction.mutate(() => hubApi.approve(companyId, p.id, editText.trim())); setEditingId(null); }}>
-                    <Text style={s.primaryBtnText}>Enviar editada</Text>
-                  </Pressable>
-                  <Pressable style={s.ghostBtn} onPress={() => setEditingId(null)}>
-                    <Text style={s.ghostBtnText}>Cancelar</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Pressable style={s.primaryBtn} onPress={() => mAction.mutate(() => hubApi.approve(companyId, p.id))}>
-                    <Text style={s.primaryBtnText}>Aprovar e enviar</Text>
-                  </Pressable>
-                  <Pressable style={s.ghostBtn} onPress={() => { setEditingId(p.id); setEditText(p.text_body); }}>
-                    <Text style={s.ghostBtnText}>Editar</Text>
-                  </Pressable>
-                  <Pressable style={s.ghostBtn} onPress={() => mAction.mutate(() => hubApi.reject(companyId, p.id))}>
-                    <Text style={[s.ghostBtnText, { color: Colors.red }]}>Rejeitar</Text>
-                  </Pressable>
-                </>
-              )}
-            </View>
           </View>
-        ))}
-      </ScrollView>
+        </View>
+      ))}
+    </ScrollView>
+  );
 
-      {/* Feedback + composer */}
+  // ── Escrever ──
+  const placeholder = conv.status === "ia"
+    ? "Digitar aqui assume a conversa…"
+    : whatsapp && (conv.customer_name || ligado) ? `Escreva para ${nomeCurto === "o cliente" ? "o cliente" : `a ${nomeCurto}`}…` : "Escreva uma mensagem…";
+  const podeEnviar = !!draft.trim() && !mReply.isPending;
+  const linhaEscrever = (
+    <View style={{ flexDirection: "row", gap: compacto ? 8 : 10, alignItems: "center" }}>
+      <View style={[superficie.seca(999), { flex: 1, minWidth: 0, minHeight: compacto ? 46 : 52, paddingHorizontal: 18, justifyContent: "center" }]}>
+        <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholder} placeholderTextColor={K.ink3}
+          onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
+          style={[{ fontSize: 15, color: K.ink, fontFamily: "inherit" as any, minWidth: 0 }, web({ outlineStyle: "none" })]} />
+      </View>
+      {!compacto && abertaAte && midia.audio("redondo")}
+      <BotaoPrincipal disabled={!podeEnviar} onPress={() => mReply.mutate(draft.trim())}>{mReply.isPending ? "..." : "Enviar"}</BotaoPrincipal>
+    </View>
+  );
+
+  const folhaEtiquetas = !compacto && folhaEtiqueta ? (
+    <EtiquetasConversa variante="folha" companyId={companyId} convId={convId} aplicadas={conv.labels || []}
+      onChanged={invalidate} onError={(m) => setFeedback(m)} />
+  ) : null;
+
+  const rodape = (
+    <View style={{ position: "relative", gap: 12, paddingTop: compacto ? 6 : 14, paddingHorizontal: compacto ? 14 : 18, paddingBottom: compacto ? 14 : 18, borderTopWidth: compacto ? 0 : 1, borderTopColor: K.linha, zIndex: 2 }}>
       {feedback && (
-        <View style={s.feedback}>
-          <Icon name="alert" size={13} color={Colors.amber} />
-          <Text style={s.feedbackText}>{feedback}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Tx style={{ fontSize: 13, color: K.warn, flex: 1, lineHeight: 18 }}>{feedback}</Tx>
         </View>
       )}
       {abertaAte && (
         <EnvioRapido companyId={companyId} convId={convId} onSent={invalidate} compacto={compacto} nome={nomeCurto}
-          onError={(msg) => setFeedback(msg)} extras={midia.botoes} painelExtra={midia.painel} />
+          onError={(msg) => setFeedback(msg)} midia={midia}
+          etiquetaOn={compacto ? detalhes : folhaEtiqueta}
+          onEtiqueta={() => (compacto ? setDetalhes((v) => !v) : setFolhaEtiqueta((v) => !v))}
+          painelEtiqueta={folhaEtiquetas}>
+          {linhaEscrever}
+        </EnvioRapido>
       )}
       {fechada && (
         <ConversaFechada companyId={companyId} convId={convId} nome={nomeCurto} podeConfigurar={podeConfigurar}
           onSent={invalidate} onError={(msg) => setFeedback(msg)} />
       )}
-      {!fechada && (
-      <View style={s.composer}>
-        <TextInput
-          style={s.composerInput}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={conv.status === "ia" ? "Digitar aqui assume a conversa…" : "Escreva sua resposta…"}
-          placeholderTextColor={Colors.ink3}
-          onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
-        />
-        <Pressable
-          style={[s.primaryBtn, (!draft.trim() || mReply.isPending) && { opacity: 0.5 }]}
-          disabled={!draft.trim() || mReply.isPending}
-          onPress={() => mReply.mutate(draft.trim())}>
-          <Text style={s.primaryBtnText}>{mReply.isPending ? "..." : "Enviar"}</Text>
-        </Pressable>
-      </View>
-      )}
+      {!fechada && !abertaAte && linhaEscrever}
       {!abertaAte && !fechada && (
-        <Text style={s.windowText}>
+        <Tx style={{ fontSize: 12, color: K.ink3, lineHeight: 16 }}>
           {hoursLeft != null
             ? `Janela de resposta: ${Math.floor(hoursLeft)} h restantes`
             : "Janela de 24h fechada — aguarde o cliente escrever de novo"}
-        </Text>
+        </Tx>
       )}
     </View>
   );
-}
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, minHeight: 480 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 300 },
-  header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  backBtn: { paddingHorizontal: 8, paddingVertical: 2 },
-  backText: { fontSize: 26, color: Colors.ink2, lineHeight: 28 },
-  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 14, fontWeight: "700" },
-  name: { fontSize: 14, fontWeight: "700", color: Colors.ink },
-  sub: { fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
-  statusPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  statusPillText: { fontSize: 11, fontWeight: "700" },
-  actionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 10 },
-  primaryBtn: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 13, paddingVertical: 7 },
-  primaryBtnText: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
-  ghostBtn: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  ghostBtnText: { color: Colors.ink2, fontSize: 12.5, fontWeight: "600" },
-  catChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
-  catChipText: { fontSize: 10.5, fontWeight: "700" },
-  msgs: { flex: 1 },
-  msgsContent: { paddingVertical: 12, gap: 8 },
-  bubble: { maxWidth: "78%", borderRadius: 13, paddingHorizontal: 13, paddingVertical: 9 },
-  bubbleIn: { alignSelf: "flex-start", backgroundColor: Colors.bg4, borderBottomLeftRadius: 4 },
-  bubbleOut: { alignSelf: "flex-end", backgroundColor: Colors.violet + "2e", borderWidth: 1, borderColor: Colors.violet + "44", borderBottomRightRadius: 4 },
-  bubbleAuthor: { fontSize: 9.5, fontWeight: "800", color: Colors.violet3, letterSpacing: 0.5, marginBottom: 3 },
-  bubbleAuthorIn: { color: Colors.ink2, letterSpacing: 0 },
-  bubbleText: { fontSize: 13.5, color: Colors.ink, lineHeight: 19 },
-  bubbleTime: { fontSize: 10, color: Colors.ink3, marginTop: 4, alignSelf: "flex-end" },
-  approvalCard: { alignSelf: "flex-end", maxWidth: "84%", borderWidth: 1.5, borderStyle: "dashed", borderColor: Colors.violet3 + "88", borderRadius: 13, padding: 12, backgroundColor: Colors.violet + "14", gap: 8 },
-  approvalTitle: { fontSize: 11, fontWeight: "800", color: Colors.violet3 },
-  approvalText: { fontSize: 13.5, color: Colors.ink, lineHeight: 19 },
-  approvalInput: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, padding: 10, fontSize: 13.5, color: Colors.ink, minHeight: 70, textAlignVertical: "top" },
-  approvalActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  feedback: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6 },
-  feedbackText: { fontSize: 12, color: Colors.amber, flex: 1 },
-  composer: { flexDirection: "row", gap: 8, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 },
-  composerInput: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 9, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
-  avisosPill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: Colors.violet + "22" },
-  avisosPillText: { fontSize: 10.5, fontWeight: "800", color: Colors.violet3 },
-  detalhesBtn: { paddingVertical: 8 },
-  detalhesText: { fontSize: 12, fontWeight: "800", color: Colors.violet3 },
-  abertaBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, marginTop: 8, borderRadius: 9, backgroundColor: Colors.green + "14" },
-  abertaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.green },
-  abertaText: { fontSize: 12, color: Colors.ink2, flex: 1 },
-  abertaBold: { fontWeight: "800", color: Colors.green },
-  bubbleFoto: { width: 200, height: 200, maxWidth: "100%", borderRadius: 9, marginBottom: 6, backgroundColor: Colors.bg3 },
-  windowText: { fontSize: 10.5, color: Colors.ink3, marginTop: 6 },
-});
+  const detalhesBloco = whatsapp && compacto ? (
+    <View style={{ paddingHorizontal: 14 }}>
+      <Pressable testID="hub-detalhes-toggle" onPress={() => setDetalhes((v) => !v)} style={{ minHeight: 40, justifyContent: "center" }}>
+        <Tx style={{ fontSize: 13, fontWeight: "700", color: K.acc, lineHeight: 18 }}>
+          {detalhes ? "Esconder cliente e etiquetas" : `Cliente e etiquetas${(conv.labels || []).length ? ` · ${(conv.labels || []).length}` : ""}`}
+        </Tx>
+      </Pressable>
+      {detalhes && <PainelCliente companyId={companyId} convId={convId} embutido />}
+    </View>
+  ) : null;
+
+  return (
+    <View style={compacto ? { flex: 1 } : [superficie.vidro(30), { flex: 1, minHeight: 560, position: "relative" }]}>
+      {!compacto && <Fio />}
+      {cabecalho}
+      {acoes}
+      {detalhesBloco}
+      {mensagens}
+      {rodape}
+    </View>
+  );
+}

@@ -16,10 +16,11 @@
 // UTILITY ou janela de 24 h).
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Linking, ActivityIndicator } from "react-native";
+import { View, Pressable, TextInput, Linking, ActivityIndicator } from "react-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Colors } from "@/constants/colors";
+import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web } from "./waVisual";
 import { hubApi, type HubConvite, type HubConvites } from "@/services/hubApi";
+import { tourTarget } from "@/utils/tourTarget";
 import { copyToClipboard } from "@/utils/clipboard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -100,11 +101,16 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
     onError: (e: any) => onError(e?.message || "Não foi possível gerar o pagamento."),
   });
 
-  if (isLoading || !data) return <View style={s.centro}><ActivityIndicator color={Colors.violet3} /></View>;
+  if (isLoading || !data) return <View style={{ alignItems: "center", paddingVertical: 16 }}><ActivityIndicator color={K.acc} /></View>;
 
   // Saldo com a trava desligada (ativo:false): não há contagem a mostrar nem limite a anunciar.
   const saldo = data.saldo && data.saldo.ativo === false ? null : data.saldo;
   const esgotado = esgotadoAgora || !!saldo?.esgotado;
+  const Nome = `${nome[0].toUpperCase()}${nome.slice(1)}`;
+
+  const avisoFim = aviso ? (
+    <Tx testID="hub-fechada-aviso" style={{ fontSize: 14, color: K.ok, lineHeight: 20 }}>{aviso}</Tx>
+  ) : null;
 
   // ── Estado 2 · avisos esgotados ──
   if (esgotado) {
@@ -112,40 +118,53 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
     const volta = mesPorExtenso(saldo?.renova_em);
     const pacote = saldo?.pacote;
     return (
-      <View testID="hub-fechada-esgotado" style={s.wrap}>
-        <Text style={s.titulo}>
-          {saldo && saldo.total ? `Os ${saldo.total} avisos de ${mes || "este mês"} acabaram.` : "Os avisos acabaram."}
-        </Text>
-        <Text style={s.texto}>
-          {volta ? `Convites voltam em 1º de ${volta}. ` : "Esses avisos não renovam sozinhos. "}
-          Nada sai além do que a loja contratou, nem por engano.
-        </Text>
-        <Text style={s.texto}>
-          {`${nome[0].toUpperCase()}${nome.slice(1)} pode te chamar quando quiser, `}<Text style={s.forte}>sem custo</Text>
-          . Mande o seu link do WhatsApp no Instagram ou deixe o QR no balcão:
-        </Text>
-        {data.meu_link && <Text testID="hub-fechada-link" style={s.link} selectable>{data.meu_link.replace(/^https?:\/\//, "")}</Text>}
-        <View style={s.linha}>
-          {data.meu_link && (
-            <Pressable testID="hub-fechada-copiar" style={s.ghost}
-              onPress={async () => { setLinkCopiado(await copyToClipboard(data.meu_link!)); }}>
-              <Text style={s.ghostText}>{linkCopiado ? "Link copiado" : "Copiar meu link"}</Text>
-            </Pressable>
-          )}
-          {pacote && (
-            <Pressable testID="hub-fechada-pacote" disabled={mPacote.isPending} style={[s.botao, mPacote.isPending && { opacity: 0.6 }]}
-              onPress={() => mPacote.mutate()}>
-              <Text style={s.botaoText}>{mPacote.isPending ? "Gerando…" : `Adicionar ${pacote.qty} avisos por ${reaisDeCentavos(pacote.preco_centavos)}`}</Text>
-            </Pressable>
-          )}
+      <View testID="hub-fechada-esgotado" {...tourTarget("wa.convite")} style={{ gap: 16 }}>
+        <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}>
+          <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(252,211,77,.35)", backgroundColor: "rgba(252,211,77,.12)" }}>
+            <Ico nome="cadeado" size={20} cor={K.warn} traco={1.9} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+            <Tx style={{ fontSize: 17, fontWeight: "700", lineHeight: 24 }}>
+              {saldo && saldo.total ? `Os ${saldo.total} avisos de ${mes || "este mês"} acabaram.` : "Os avisos acabaram."}
+            </Tx>
+            <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>
+              {volta ? `Convites voltam em 1º de ${volta}. ` : "Esses avisos não renovam sozinhos. "}
+              Nada sai além do que a loja contratou, nem por engano.
+            </Tx>
+          </View>
         </View>
-        <Text style={s.nota}>Só passam a valer depois do pagamento. A Aura nunca compra sozinha.</Text>
-        {aviso && <Text testID="hub-fechada-aviso" style={s.aviso}>{aviso}</Text>}
-        <View style={s.caixa}>
-          <Text style={s.caixaTitulo}>Com os avisos esgotados</Text>
-          <Text style={s.nota}>Cobranças do crediário passam para o botão "Cobrar pelo meu WhatsApp", de graça, um toque por cliente.</Text>
-          <Text style={s.nota}>Aniversário e Venda+ seguem: usam as novidades, que são outro saldo.</Text>
-          <Text style={s.nota}>Conversas abertas continuam sem custo.</Text>
+        <View accessibilityRole="image" accessibilityLabel={saldo ? `${saldo.total} de ${saldo.total} avisos usados` : "Avisos usados"}
+          style={{ height: 8, borderRadius: 999, backgroundColor: K.trilho }} />
+        <View style={[superficie.seca(22), { padding: 16, gap: 12 }]}>
+          <Tx style={{ fontSize: 15, lineHeight: 22 }}>
+            {`${Nome} pode te chamar quando quiser, `}<Tx style={{ fontSize: 15, fontWeight: "700", lineHeight: 22 }}>sem custo</Tx>
+            . Mande o seu link do WhatsApp no Instagram ou deixe o QR no balcão:
+          </Tx>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+            {data.meu_link && <Tx testID="hub-fechada-link" selectable style={{ fontFamily: MONO, fontSize: 14, color: K.acc, lineHeight: 20 }}>{data.meu_link.replace(/^https?:\/\//, "")}</Tx>}
+            {data.meu_link && (
+              <BotaoPrincipal testID="hub-fechada-copiar" icone="copiar"
+                onPress={async () => { setLinkCopiado(await copyToClipboard(data.meu_link!)); }}>
+                {linkCopiado ? "Link copiado" : "Copiar meu link"}
+              </BotaoPrincipal>
+            )}
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 14, rowGap: 6 }}>
+          {pacote && (
+            <Pressable testID="hub-fechada-pacote" disabled={mPacote.isPending} style={[{ minHeight: 44, justifyContent: "center", opacity: mPacote.isPending ? 0.6 : 1 }, web({ cursor: "pointer" })]}
+              onPress={() => mPacote.mutate()}>
+              <Tx style={{ fontSize: 14, fontWeight: "600", color: K.acc, lineHeight: 18 }}>{mPacote.isPending ? "Gerando…" : `Adicionar ${pacote.qty} avisos por ${reaisDeCentavos(pacote.preco_centavos)}`}</Tx>
+            </Pressable>
+          )}
+          <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Só passam a valer depois do pagamento. A Aura nunca compra sozinha.</Tx>
+        </View>
+        {avisoFim}
+        <View style={[superficie.seca(24), { paddingVertical: 16, paddingHorizontal: 20, gap: 10 }]}>
+          <Meta>Com os avisos esgotados</Meta>
+          <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>Cobranças do crediário passam para o botão "Cobrar pelo meu WhatsApp", de graça, um toque por cliente.</Tx>
+          <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>Aniversário e Venda+ seguem: usam as novidades, que são outro saldo.</Tx>
+          <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>Conversas abertas continuam sem custo.</Tx>
         </View>
       </View>
     );
@@ -155,26 +174,25 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
   if (!prontos.length) {
     const nenhumCriado = data.convites.every((c) => c.estado === "NAO_CRIADO");
     return (
-      <View testID="hub-fechada-sem-convite" style={s.wrap}>
-        <Text style={s.titulo}>A conversa com {nome} está fechada.</Text>
-        <Text style={s.texto}>
+      <View testID="hub-fechada-sem-convite" {...tourTarget("wa.convite")} style={{ gap: 12 }}>
+        <Tx style={{ fontSize: 15, fontWeight: "600" }}>A conversa com {nome} está fechada.</Tx>
+        <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>
           {!data.conectado
             ? "Conecte o WhatsApp da loja para mandar convites."
             : nenhumCriado
               ? "Para falar primeiro, a loja usa convites prontos que o WhatsApp precisa aprovar antes."
               : "Os convites estão em aprovação no WhatsApp. Quando ele aprovar, eles aparecem aqui."}
-        </Text>
+        </Tx>
         {data.conectado && nenhumCriado && podeConfigurar && (
-          <Pressable testID="hub-fechada-preparar" disabled={mPreparar.isPending} style={[s.botao, { alignSelf: "flex-start" }, mPreparar.isPending && { opacity: 0.6 }]}
-            onPress={() => mPreparar.mutate()}>
-            <Text style={s.botaoText}>{mPreparar.isPending ? "Pedindo…" : "Pedir os convites ao WhatsApp"}</Text>
-          </Pressable>
+          <BotaoPrincipal testID="hub-fechada-preparar" disabled={mPreparar.isPending} onPress={() => mPreparar.mutate()} style={{ alignSelf: "flex-start" }}>
+            {mPreparar.isPending ? "Pedindo…" : "Pedir os convites ao WhatsApp"}
+          </BotaoPrincipal>
         )}
         {data.conectado && nenhumCriado && !podeConfigurar && (
-          <Text style={s.nota}>Peça ao dono ou a um admin da loja para liberar os convites.</Text>
+          <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Peça ao dono ou a um admin da loja para liberar os convites.</Tx>
         )}
-        {aviso && <Text testID="hub-fechada-aviso" style={s.aviso}>{aviso}</Text>}
-        {data.meu_link && <Text style={s.nota}>{`${nome[0].toUpperCase()}${nome.slice(1)} também pode te chamar a qualquer momento, sem custo: ${data.meu_link.replace(/^https?:\/\//, "")}`}</Text>}
+        {avisoFim}
+        {data.meu_link && <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>{`${Nome} também pode te chamar a qualquer momento, sem custo: ${data.meu_link.replace(/^https?:\/\//, "")}`}</Tx>}
       </View>
     );
   }
@@ -184,94 +202,75 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
   const valorDe = (k: string, auto: boolean) => (auto ? data.auto[k as "nome" | "loja"] : valores[k]) || "";
   const faltando = campos.some((f) => !f.auto && !(valores[f.key] || "").trim());
   const ficam = saldo ? Math.max(saldo.restante - 1, 0) : null;
+  const slot: any = { backgroundColor: "rgba(196,181,253,.22)", fontWeight: "700", ...web({ boxShadow: "inset 0 -1.5px 0 #c4b5fd", paddingLeft: 4, paddingRight: 4, borderRadius: 6 }) };
 
   return (
-    <View testID="hub-fechada" style={s.wrap}>
-      <Text style={s.titulo}>Para falar com {nome}, escolha o convite:</Text>
-      <View style={s.chips}>
+    <View testID="hub-fechada" {...tourTarget("wa.convite")} style={{ gap: 14 }}>
+      <Tx style={{ fontSize: 15, fontWeight: "600" }}>Para falar com {nome}, escolha o convite:</Tx>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Convite" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {data.convites.map((c) => (
-          <Pressable key={c.key} testID={`hub-convite-${c.key}`} disabled={!c.pronto}
+          <Pilula key={c.key} testID={`hub-convite-${c.key}`} disabled={!c.pronto} on={escolhido === c.key && c.pronto}
             onPress={() => { setEscolhido(c.key); setAviso(null); }}
-            style={[s.chip, escolhido === c.key && c.pronto && s.chipOn, !c.pronto && { opacity: 0.45 }]}>
-            <Text style={[s.chipText, escolhido === c.key && c.pronto && { color: "#fff" }]}>
-              {c.titulo}{!c.pronto ? " · em aprovação" : ""}
-            </Text>
-          </Pressable>
+            style={!c.pronto ? { opacity: 0.45 } : undefined}>
+            {`${c.titulo}${!c.pronto ? " · em aprovação" : ""}`}
+          </Pilula>
         ))}
       </View>
 
       {convite && (
         <>
-          <View testID="hub-convite-previa" style={s.previa}>
-            <Text style={s.previaTexto}>
-              {convite.partes.map((p, i) => {
-                if (typeof p === "string") return <Text key={i}>{p}</Text>;
-                const f = campos.find((x) => x.key === p.campo);
-                const v = valorDe(p.campo, !!f?.auto);
-                return f?.auto
-                  ? <Text key={i}>{v}</Text>
-                  : <Text key={i} style={s.editavel}>{v || `[${f?.rotulo || p.campo}]`}</Text>;
-              })}
-            </Text>
-            <Text style={s.previaLegenda}>prévia · você muda só os trechos marcados</Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+            <View testID="hub-convite-previa" style={[{
+              maxWidth: "100%", paddingTop: 10, paddingHorizontal: 14, paddingBottom: 8, borderRadius: 20, borderBottomRightRadius: 6,
+              borderWidth: 1, borderColor: K.bolhaOutBorda, backgroundColor: K.bolhaOutFb,
+            }, web({ backgroundImage: K.bolhaOut })]}>
+              <Tx style={{ fontSize: 15, lineHeight: 22 }}>
+                {convite.partes.map((p, i) => {
+                  if (typeof p === "string") return <Tx key={i} style={{ fontSize: 15, lineHeight: 22 }}>{p}</Tx>;
+                  const f = campos.find((x) => x.key === p.campo);
+                  const v = valorDe(p.campo, !!f?.auto);
+                  return f?.auto
+                    ? <Tx key={i} style={{ fontSize: 15, lineHeight: 22 }}>{v}</Tx>
+                    : <Tx key={i} style={[{ fontSize: 15, lineHeight: 22 }, slot]}>{v || `[${f?.rotulo || p.campo}]`}</Tx>;
+                })}
+              </Tx>
+              <Tx style={{ fontSize: 12, color: K.ink3, textAlign: "right", marginTop: 3, lineHeight: 16 }}>prévia · você muda só os trechos marcados</Tx>
+            </View>
           </View>
-          <View style={s.campos}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {campos.filter((f) => !f.auto).map((f) => (
-              <View key={f.key} style={s.campo}>
-                <Text style={s.campoRotulo}>{f.rotulo}</Text>
-                <TextInput testID={`hub-convite-campo-${f.key}`} style={s.input} value={valores[f.key] || ""} maxLength={f.max}
+              <View key={f.key} style={{ flexGrow: 1, minWidth: 180, gap: 4 }}>
+                <Meta style={{ fontSize: 11 }}>{f.rotulo}</Meta>
+                <TextInput testID={`hub-convite-campo-${f.key}`} value={valores[f.key] || ""} maxLength={f.max}
                   onChangeText={(t) => setValores((v) => ({ ...v, [f.key]: t }))}
-                  placeholder={f.exemplo} placeholderTextColor={Colors.ink3} />
+                  placeholder={f.exemplo} placeholderTextColor={K.ink3}
+                  style={[superficie.seca(999), { minHeight: 44, paddingHorizontal: 16, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }]} />
               </View>
             ))}
           </View>
         </>
       )}
 
-      <View style={s.rodape}>
-        <Text testID="hub-fechada-custo" style={s.custo}>
-          <Text style={s.forte}>Usa 1 aviso</Text>
-          {saldo && ficam != null ? ` · ficam ${ficam} de ${saldo.total}` : ""}
-        </Text>
-        <Pressable testID="hub-fechada-mandar" disabled={!convite || faltando || mEnviar.isPending}
-          style={[s.botao, (!convite || faltando || mEnviar.isPending) && { opacity: 0.5 }]} onPress={() => mEnviar.mutate()}>
-          <Text style={s.botaoText}>{mEnviar.isPending ? "Mandando…" : "Mandar convite"}</Text>
-        </Pressable>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <View style={{ gap: 6, minWidth: 220 }}>
+          <Tx testID="hub-fechada-custo" style={{ fontSize: 14, lineHeight: 20 }}>
+            <Tx style={{ fontSize: 14, fontWeight: "700", lineHeight: 20 }}>Usa 1 aviso</Tx>
+            {saldo && ficam != null ? ` · ficam ${ficam} de ${saldo.total}` : ""}
+          </Tx>
+          {saldo && saldo.total > 0 && (
+            <View style={{ height: 8, borderRadius: 999, backgroundColor: K.trilho, overflow: "hidden" }}>
+              <View style={[{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(saldo.restante / saldo.total) * 100}%`, borderRadius: 999, backgroundColor: "#a78bfa" },
+                web({ backgroundImage: "linear-gradient(90deg,#a78bfa,#f3efff)" })]} />
+              <View style={{ position: "absolute", left: `${(Math.max(saldo.restante - 1, 0) / saldo.total) * 100}%`, top: 0, bottom: 0, width: `${Math.max(100 / saldo.total, 1.6)}%`, backgroundColor: "#fff" }} />
+            </View>
+          )}
+        </View>
+        <BotaoPrincipal testID="hub-fechada-mandar" disabled={!convite || faltando || mEnviar.isPending} onPress={() => mEnviar.mutate()}>
+          {mEnviar.isPending ? "Mandando…" : "Mandar convite"}
+        </BotaoPrincipal>
       </View>
-      <Text style={s.nota}>Quando {nome} responder, a conversa abre de novo por um dia e o resto não gasta nada.</Text>
-      {aviso && <Text testID="hub-fechada-aviso" style={s.aviso}>{aviso}</Text>}
+      <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Quando {nome} responder, a conversa abre de novo por um dia e o resto não gasta nada.</Tx>
+      {avisoFim}
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  wrap: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10, gap: 8 },
-  centro: { alignItems: "center", paddingVertical: 16 },
-  titulo: { fontSize: 13.5, fontWeight: "800", color: Colors.ink },
-  texto: { fontSize: 13, color: Colors.ink2, lineHeight: 19 },
-  forte: { fontWeight: "800", color: Colors.ink },
-  nota: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
-  aviso: { fontSize: 12.5, color: Colors.green, lineHeight: 18 },
-  link: { fontSize: 14, fontWeight: "800", color: Colors.violet3 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.bg3 },
-  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  chipText: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
-  previa: { borderWidth: 1, borderColor: Colors.violet + "55", borderRadius: 12, padding: 12, backgroundColor: Colors.violet + "10", gap: 6 },
-  previaTexto: { fontSize: 13.5, color: Colors.ink, lineHeight: 20 },
-  editavel: { color: Colors.violet3, fontWeight: "800", backgroundColor: Colors.violet + "22" },
-  previaLegenda: { fontSize: 10.5, color: Colors.ink3, letterSpacing: 0.3 },
-  campos: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  campo: { flexGrow: 1, minWidth: 160, gap: 3 },
-  campoRotulo: { fontSize: 10.5, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.3, textTransform: "uppercase" },
-  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: Colors.ink, backgroundColor: Colors.bg3 },
-  rodape: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" },
-  custo: { fontSize: 12.5, color: Colors.ink2 },
-  linha: { flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" },
-  botao: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
-  botaoText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  ghost: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  ghostText: { color: Colors.ink2, fontSize: 13, fontWeight: "700" },
-  caixa: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 10, gap: 4, backgroundColor: Colors.bg3 },
-  caixaTitulo: { fontSize: 11, fontWeight: "800", color: Colors.ink3, letterSpacing: 0.4, textTransform: "uppercase" },
-});

@@ -48,6 +48,8 @@ import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoM
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
+import { HubCabecalho } from "@/components/screens/hub/HubCabecalho";
+import { FundoWa } from "@/components/screens/hub/waVisual";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useWaSaldo } from "@/hooks/useWaSaldo";
 import { useWaAutomaticas } from "@/hooks/useWaAutomaticas";
@@ -95,6 +97,8 @@ export default function WhatsAppScreen() {
   const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
   // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
+  // Medidor do cabeçalho das Conversas: lê o mesmo saldo, independente de a tela nova estar liberada para a loja.
+  const saldoConversas = useWaSaldo(companyId, !demo && !consolidatedView && abaReal === "conversas");
   // As automáticas (divisão, liga/desliga, escolhas) alimentam as 4 seções.
   const autoAtiva = !demo && !consolidatedView && novas && ["automaticas", "aniversario", "venda_mais", "crediario"].includes(secao);
   const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
@@ -155,11 +159,12 @@ export default function WhatsAppScreen() {
   if (!demo && abaAtiva === "conversas") {
     return (
       <View style={s.screen} testID="wa-varejo-conversas">
-        <View style={[s.content, { flex: 1 }]}>
-          {hero}
-          <ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} />
+        {/* Visual do mockup aprovado (Main.dc.html): fundo escuro com brilho violeta, cabeçalho próprio e três colunas. */}
+        <FundoWa style={{ flex: 1, paddingHorizontal: IS_WIDE ? 28 : 14, paddingTop: 22, paddingBottom: IS_WIDE ? 28 : 14, gap: 20 }}>
+          <HubCabecalho lojaNome={lojaNome} abas={tabsHero} ativa="conversas" onSelect={(k) => setAbaReal(k as AbaReal)}
+            saldo={consolidatedView ? null : saldoConversas.saldo} />
           <HubView />
-        </View>
+        </FundoWa>
       </View>
     );
   }

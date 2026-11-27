@@ -11,15 +11,18 @@
 //     (o PUT /hub/settings recusa membro), e abre o card de ativação.
 // ============================================================
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch, ActivityIndicator } from "react-native";
+import { View, ScrollView, Pressable, Switch, ActivityIndicator, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
 import { EmptyState } from "@/components/EmptyState";
 import { hubApi, type HubConversation, type HubStatus } from "@/services/hubApi";
-import { CHANNEL_META, STATUS_META, CATEGORY_META, shortTime, displayName } from "./types";
+import { CHANNEL_META, STATUS_META, CATEGORY_META, shortTime, nomeDoContato, conversaAbertaAte } from "./types";
 import { ThreadView } from "./ThreadView";
+import { tourTarget } from "@/utils/tourTarget";
+import { PainelCliente } from "./PainelCliente";
+import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web } from "./waVisual";
 
 type StatusFilter = "todas" | HubStatus;
 
@@ -29,46 +32,43 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
   const ch = CHANNEL_META[conv.channel];
   const st = STATUS_META[conv.status];
   const cat = conv.category ? CATEGORY_META[conv.category] : null;
-  const name = displayName(conv.customer_name, conv.external_id);
+  const name = nomeDoContato(conv);
+  const fechada = conv.channel === "whatsapp" && !conversaAbertaAte(conv.last_inbound_at);
+  const tag = { flexDirection: "row", alignItems: "center", gap: 6, height: 24, paddingHorizontal: 10, borderRadius: 999, backgroundColor: K.tag } as const;
+  const tagTx = { fontSize: 12, fontWeight: "600", lineHeight: 16, color: K.ink2 } as const;
   return (
-    <Pressable testID={`hub-conv-${conv.id}`} onPress={onPress} style={[s.row, selected && s.rowSelected]}>
-      <View style={[s.avatar, { backgroundColor: ch.color + "33" }]}>
-        <Text style={[s.avatarText, { color: ch.color }]}>{name.charAt(0).toUpperCase()}</Text>
-        <View style={[s.channelDot, { backgroundColor: ch.color }]}>
-          <Text style={s.channelDotText}>{ch.short}</Text>
+    <Pressable testID={`hub-conv-${conv.id}`} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }}
+      style={[{ flexDirection: "row", gap: 12, alignItems: "center", padding: 12, borderRadius: 18, borderWidth: 1, borderColor: selected ? K.convSelBorda : "transparent", backgroundColor: selected ? K.convSel : "transparent" },
+        web({ cursor: "pointer" })]}>
+      <View>
+        <Avatar nome={name} chave={conv.external_id} size={42} />
+        <View style={{ position: "absolute", right: -3, bottom: -3, width: 18, height: 18, borderRadius: 6, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: K.bg, backgroundColor: ch.color }}>
+          <Tx style={{ fontSize: 8, fontWeight: "800", color: "#fff", lineHeight: 10 }}>{ch.short}</Tx>
         </View>
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={s.rowName} numberOfLines={1}>{name}</Text>
-        <Text style={s.rowPreview} numberOfLines={1}>{conv.last_message_preview || "—"}</Text>
-        <View style={s.rowChips}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+          <Tx numberOfLines={1} style={{ fontWeight: "700", flexShrink: 1, lineHeight: 22 }}>{name}</Tx>
+          <Tx style={{ fontSize: 12, color: K.ink3, lineHeight: 22 }}>{shortTime(conv.last_message_at)}</Tx>
+        </View>
+        <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{conv.last_message_preview || "—"}</Tx>
+        <View style={{ flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
           {(aurinhaLigada || conv.status !== "ia") && (
-            <View style={[s.miniChip, { backgroundColor: st.color + "22" }]}>
-              <Text style={[s.miniChipText, { color: st.color }]}>{st.label}</Text>
-            </View>
+            <View style={tag}><Ponto cor={st.color} /><Tx style={tagTx}>{st.label}</Tx></View>
           )}
-          {cat && (
-            <View style={[s.miniChip, { borderWidth: 1, borderColor: cat.color + "66" }]}>
-              <Text style={[s.miniChipText, { color: cat.color }]}>{cat.label}</Text>
-            </View>
-          )}
+          {cat && <View style={tag}><Ponto cor={cat.color} /><Tx style={tagTx}>{cat.label}</Tx></View>}
           {(conv.labels || []).map((l) => (
-            <View key={l.id} style={[s.miniChip, { backgroundColor: l.color + "22" }]}>
-              <Text style={[s.miniChipText, { color: l.color }]}>{l.name}</Text>
-            </View>
+            <View key={l.id} style={tag}><Ponto cor={l.color} /><Tx style={tagTx}>{l.name}</Tx></View>
           ))}
           {conv.pending_approvals > 0 && (
-            <View style={[s.miniChip, { backgroundColor: Colors.violet + "2e" }]}>
-              <Text style={[s.miniChipText, { color: Colors.violet3 }]}>{conv.pending_approvals} p/ aprovar</Text>
-            </View>
+            <View style={[tag, { backgroundColor: K.tagOn }]}><Tx style={[tagTx, { color: K.pillOnInk }]}>{`${conv.pending_approvals} p/ aprovar`}</Tx></View>
           )}
+          {fechada && <View style={tag}><Tx style={[tagTx, { color: K.ink3 }]}>Conversa fechada</Tx></View>}
         </View>
       </View>
-      <Text style={s.rowTime}>{shortTime(conv.last_message_at)}</Text>
     </Pressable>
   );
 }
-
 export function HubView() {
   const { company } = useAuthStore();
   const papel: string = (company as any)?.member_role || "owner";
@@ -79,6 +79,7 @@ export function HubView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [conviteAberto, setConviteAberto] = useState(false);
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
 
   const { data: settings } = useQuery({
     queryKey: ["hub-settings", companyId],
@@ -131,30 +132,33 @@ export function HubView() {
 
   // Convite para ligar a Aurinha (secundário, nunca no lugar do inbox).
   const convite = settings && !enabled && podeConfigurar && conviteAberto ? (
-      <View testID="hub-convite-aurinha" style={s.onboardCard}>
-        <Text style={s.onboardTitle}>Conheça a Aurinha 💜</Text>
-        <Text style={s.onboardText}>
+      <View testID="hub-convite-aurinha" style={[superficie.seca(24), { gap: 12, padding: 18 }]}>
+        <Tx style={{ fontSize: 18, fontWeight: "800", lineHeight: 24 }}>Conheça a Aurinha 💜</Tx>
+        <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 21 }}>
           A Aurinha responde as mensagens do Instagram da sua loja com seus produtos, preços e estoque reais —
           24 horas por dia. Reclamações, trocas e pedidos de desconto ela passa para você, com o contexto pronto.
-        </Text>
-        <View style={s.onboardRow}>
-          <Text style={s.onboardLabel}>Modo aprovação (recomendado no começo)</Text>
+        </Tx>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <Tx style={{ fontSize: 14, fontWeight: "600", flex: 1 }}>Modo aprovação (recomendado no começo)</Tx>
           <Switch value={settings.approval_mode}
             onValueChange={(v) => mSettings.mutate({ approval_mode: v })}
-            trackColor={{ true: Colors.violet, false: Colors.bg4 }} />
+            trackColor={{ true: "#7c3aed", false: K.trilho }} />
         </View>
-        <Text style={s.onboardHint}>
+        <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>
           Com o modo aprovação ligado, a Aurinha só sugere — cada resposta espera o seu toque antes de ir para o cliente.
-        </Text>
-        <Pressable style={[s.activateBtn, mSettings.isPending && { opacity: 0.6 }]}
-          disabled={mSettings.isPending}
-          onPress={() => mSettings.mutate({ enabled: true })}>
-          <Text style={s.activateBtnText}>{mSettings.isPending ? "Ativando…" : "Ativar a Aurinha"}</Text>
-        </Pressable>
+        </Tx>
+        <Pilula on disabled={mSettings.isPending} onPress={() => mSettings.mutate({ enabled: true })} style={{ alignSelf: "flex-start" }}>
+          {mSettings.isPending ? "Ativando…" : "Ativar a Aurinha"}
+        </Pilula>
       </View>
   ) : null;
 
-  const conversations = data?.conversations || [];
+  const todas = data?.conversations || [];
+  // Busca na lista já carregada: nome, telefone ou prévia da última mensagem.
+  const termo = busca.trim().toLowerCase();
+  const conversations = termo
+    ? todas.filter((c) => `${nomeDoContato(c)} ${c.external_id} ${c.last_message_preview || ""}`.toLowerCase().includes(termo))
+    : todas;
   const needsHuman = (data?.counts || [])
     .filter((c) => c.status === "precisa_humano")
     .reduce((acc, c) => acc + c.n, 0);
@@ -168,43 +172,50 @@ export function HubView() {
   ];
 
   const list = (
-    <View style={IS_WIDE ? s.listColumn : { flex: 1 }}>
-      <View style={s.filters}>
+    <View {...tourTarget("wa.lista")} style={IS_WIDE ? { flexGrow: 1, flexShrink: 1, flexBasis: 300, maxWidth: 340, minWidth: 0, gap: 12 } : { flex: 1, gap: 12 }}>
+      <View style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 16 }]}>
+        <Ico nome="busca" size={18} cor={K.ink3} />
+        <TextInput testID="hub-busca" accessibilityLabel="Buscar conversa" value={busca} onChangeText={setBusca}
+          placeholder="Buscar nome, telefone ou produto" placeholderTextColor={K.ink3} autoCapitalize="none"
+          style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }, web({ outlineStyle: "none" })]} />
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {FILTERS.map((f) => (
-          <Pressable key={f.key} onPress={() => setStatusFilter(f.key)}
-            style={[s.filterChip, statusFilter === f.key && s.filterChipOn,
-              f.key === "precisa_humano" && needsHuman > 0 && statusFilter !== f.key && s.filterChipAlert]}>
-            <Text style={[s.filterChipText, statusFilter === f.key && s.filterChipTextOn]}>{f.label}</Text>
-          </Pressable>
+          <Pilula key={f.key} pequena on={statusFilter === f.key} onPress={() => setStatusFilter(f.key)}
+            style={f.key === "precisa_humano" && needsHuman > 0 && statusFilter !== f.key ? { borderColor: "rgba(252,211,77,.55)" } : undefined}>
+            {f.label}
+          </Pilula>
         ))}
         {settings && !enabled && podeConfigurar && (
-          <Pressable testID="hub-ativar-aurinha" onPress={() => setConviteAberto((v) => !v)}
-            style={[s.filterChip, s.ativarChip]}>
-            <Text style={[s.filterChipText, { color: Colors.violet3 }]}>Ativar a Aurinha</Text>
-          </Pressable>
+          <Pilula testID="hub-ativar-aurinha" pequena onPress={() => setConviteAberto((v) => !v)} style={{ borderColor: "rgba(196,181,253,.45)" }}>
+            Ativar a Aurinha
+          </Pilula>
         )}
       </View>
       {(etiquetas?.labels || []).length > 0 && (
-        <View testID="hub-filtro-etiquetas" style={s.filters}>
+        <View testID="hub-filtro-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
           {(etiquetas?.labels || []).map((l) => {
             const on = etiquetaFiltro === l.id;
             return (
-              <Pressable key={l.id} testID={`hub-filtro-etiqueta-${l.id}`} onPress={() => setEtiquetaFiltro(on ? null : l.id)}
-                style={[s.filterChip, { borderColor: l.color }, on && { backgroundColor: l.color }]}>
-                <Text style={[s.filterChipText, { color: on ? "#fff" : l.color }]}>{l.name}</Text>
-              </Pressable>
+              <Pilula key={l.id} testID={`hub-filtro-etiqueta-${l.id}`} pequena on={on} onPress={() => setEtiquetaFiltro(on ? null : l.id)}>
+                <Ponto cor={l.color} />
+                <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: on ? K.pillOnInk : K.ink }}>{l.name}</Tx>
+              </Pilula>
             );
           })}
         </View>
       )}
       {convite}
-      {isLoading && <View style={s.center}><ActivityIndicator color={Colors.violet3} /></View>}
-      {!isLoading && conversations.length === 0 && (
+      {isLoading && <View style={{ alignItems: "center", paddingVertical: 30 }}><ActivityIndicator color={K.acc} /></View>}
+      {!isLoading && todas.length === 0 && (
         <EmptyState icon="star" iconColor={Colors.violet3}
           title="Nenhuma conversa ainda"
           subtitle={enabled ? "Quando alguém mandar mensagem no Instagram da loja, a conversa aparece aqui — e a Aurinha já começa a atender." : ""} />
       )}
-      <ScrollView style={{ flex: 1 }}>
+      {!isLoading && todas.length > 0 && conversations.length === 0 && (
+        <Tx style={{ fontSize: 14, color: K.ink2, paddingHorizontal: 6 }}>Nenhuma conversa encontrada para essa busca.</Tx>
+      )}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 4 }}>
         {conversations.map((c) => (
           <ConversationRow key={c.id} conv={c} selected={c.id === selectedId} onPress={() => setSelectedId(c.id)} aurinhaLigada={enabled} />
         ))}
@@ -212,15 +223,26 @@ export function HubView() {
     </View>
   );
 
+  const selecionada = todas.find((c) => c.id === selectedId);
+
   if (IS_WIDE) {
     return (
-      <View style={s.wideWrap}>
+      <View testID="hub-conversas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 20, alignItems: "stretch", minHeight: 640, flex: 1 }}>
         {list}
-        <View style={s.threadColumn}>
+        <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 560, minWidth: 0, minHeight: 560 }}>
           {selectedId
             ? <ThreadView key={selectedId} companyId={companyId} convId={selectedId} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
-            : <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />}
+            : (
+              <View style={[superficie.vidro(30), { flex: 1, minHeight: 560, justifyContent: "center" }]}>
+                <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />
+              </View>
+            )}
         </View>
+        {selectedId && (!selecionada || selecionada.channel === "whatsapp") && (
+          <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 260, maxWidth: 300, minWidth: 0, alignSelf: "flex-start" }}>
+            <PainelCliente key={selectedId} companyId={companyId} convId={selectedId} />
+          </View>
+        )}
       </View>
     );
   }
@@ -230,37 +252,3 @@ export function HubView() {
     ? <ThreadView key={selectedId} companyId={companyId} convId={selectedId} onBack={() => setSelectedId(null)} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
     : list;
 }
-
-const s = StyleSheet.create({
-  wideWrap: { flexDirection: "row", gap: 16, minHeight: 560 },
-  listColumn: { width: 330, borderRightWidth: 1, borderRightColor: Colors.border, paddingRight: 12 },
-  threadColumn: { flex: 1, minWidth: 0 },
-  center: { alignItems: "center", paddingVertical: 30 },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingBottom: 10 },
-  filterChip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: Colors.bg3 },
-  filterChipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  filterChipAlert: { borderColor: Colors.amber + "88" },
-  filterChipText: { fontSize: 12, fontWeight: "600", color: Colors.ink2 },
-  filterChipTextOn: { color: "#fff" },
-  ativarChip: { borderColor: Colors.violet + "66", backgroundColor: "transparent" },
-  row: { flexDirection: "row", gap: 10, paddingVertical: 11, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: Colors.border, alignItems: "flex-start", borderRadius: 10 },
-  rowSelected: { backgroundColor: Colors.violet + "1a" },
-  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 14, fontWeight: "700" },
-  channelDot: { position: "absolute", right: -3, bottom: -3, width: 16, height: 16, borderRadius: 5, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.bg2 },
-  channelDotText: { fontSize: 7, fontWeight: "800", color: "#fff" },
-  rowName: { fontSize: 13.5, fontWeight: "700", color: Colors.ink },
-  rowPreview: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
-  rowChips: { flexDirection: "row", gap: 4, marginTop: 5, flexWrap: "wrap" },
-  miniChip: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  miniChipText: { fontSize: 10, fontWeight: "700" },
-  rowTime: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
-  onboardCard: { marginBottom: 10, borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 20, gap: 12, backgroundColor: Colors.bg3, maxWidth: 560 },
-  onboardTitle: { fontSize: 18, fontWeight: "800", color: Colors.ink },
-  onboardText: { fontSize: 13.5, color: Colors.ink2, lineHeight: 20 },
-  onboardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  onboardLabel: { fontSize: 13, fontWeight: "600", color: Colors.ink, flex: 1 },
-  onboardHint: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
-  activateBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 12, alignItems: "center", marginTop: 4 },
-  activateBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-});
