@@ -76,15 +76,24 @@ type AbaReal = "conversas" | "automaticas" | "venda_mais" | "config";
 // empresa sandbox (whatsappOficialLiberadoPara): a loja real conectada
 // continua vendo Conexão, Cobranças e Templates.
 // Automáticas e Venda+ são abas do topo (artboard GuiaCentral), não seções.
-const SECOES_CONFIG = [
-  { key: "conexao", label: "Conexão", nova: false },
-  { key: "aniversario", label: "Aniversário", nova: true },
-  { key: "crediario", label: "Crediário", nova: true },
-  { key: "cobrancas", label: "Cobranças", nova: false },
-  { key: "templates", label: "Templates", nova: false },
+// ── Seções de Configurações (ponto único: a virada rebaseia aqui) ──
+// Telas novas (equipe/sandbox): Configurações = Conexão + Mensagens. "Mensagens" junta os antigos
+// "Templates" e "Cobranças". Aniversário e Crediário NÃO são seções: só se abrem pelas Automáticas
+// ("Ajustar"), com o voltar "← Automáticas". O Venda+ é aba do topo (Conversas · Automáticas · Venda+ ·
+// Configurações · Guias); o "Ajustar" dele nas Automáticas leva a essa aba.
+// Lojas reais, até a liberação: Conexão, Cobranças e Templates, como antes.
+const SECOES_NOVAS = [
+  { key: "conexao", label: "Conexão" },
+  { key: "mensagens", label: "Mensagens" },
 ] as const;
-type SecaoKey = (typeof SECOES_CONFIG)[number]["key"];
-
+const SECOES_ANTIGAS = [
+  { key: "conexao", label: "Conexão" },
+  { key: "cobrancas", label: "Cobranças" },
+  { key: "templates", label: "Templates" },
+] as const;
+type SecaoKey = "conexao" | "mensagens" | "cobrancas" | "templates";
+/** Páginas que só abrem de dentro das Automáticas ("Ajustar"). O Venda+ é uma aba própria (artboard Main). */
+type SubAuto = "aniversario" | "crediario";
 // Cabeçalho de cada tela nova (textos literais dos artboards aprovados).
 const CABECALHO: Record<string, { titulo: string; sub: string; voltar?: boolean }> = {
   automaticas: { titulo: "Mensagens que trabalham sozinhas", sub: "Mensagem, presente e dia já vêm prontos. Um toque liga." },
@@ -101,6 +110,7 @@ export default function WhatsAppScreen() {
   const [emConversa, setEmConversa] = useState(false);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
+  const [subAuto, setSubAuto] = useState<SubAuto | null>(null);
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user, consolidatedView } = useAuthStore();
   // Rota direta (endereço, sino, e-mail): a tela abre com o que o JWT/último
@@ -125,7 +135,8 @@ export default function WhatsAppScreen() {
   const guiaAberto = useWaGuias((s) => s.aberto);
   // Telas novas: só equipe Aura ou empresa sandbox, até a liberação.
   const novas = whatsappOficialLiberadoPara(user, undefined, empresaSandbox(company, consolidatedView === true));
-  const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
+  const secoes: readonly { key: SecaoKey; label: string }[] = novas ? SECOES_NOVAS : SECOES_ANTIGAS;
+  const secao: SecaoKey = secoes.some((sc) => sc.key === secaoSel) ? secaoSel : "conexao";
 
   // Atendimento (hub social) — módulo próprio vendável como add-on. Sem ele
   // não existe a aba Conversas.
@@ -138,7 +149,7 @@ export default function WhatsAppScreen() {
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
   // As automáticas (divisão, liga/desliga, escolhas) alimentam as telas Automáticas, Venda+, Aniversário e Crediário.
   const autoAtiva = !demo && !consolidatedView && novas
-    && (guiaAberto === 2 || abaAtiva === "automaticas" || abaAtiva === "venda_mais" || (abaAtiva === "config" && (secao === "aniversario" || secao === "crediario")));
+    && (guiaAberto === 2 || abaAtiva === "automaticas" || abaAtiva === "venda_mais");
   const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
   const auto = useWaAutomaticas(companyId, autoAtiva);
 
@@ -190,13 +201,13 @@ export default function WhatsAppScreen() {
 
   const hero = <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />;
 
-  const irPara = (k: AbaReal) => { setAbaReal(k); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
+  const irPara = (k: AbaReal) => { setAbaReal(k); setSubAuto(null); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
+  // Ponto de troca do "Conectar WhatsApp" das Conversas: hoje leva a Configurações → Conexão; o Guia 1 troca por aqui.
+  const abrirConexao = () => { setSecao("conexao"); irPara("config"); };
 
-  // Aba destacada: Aniversário e Crediário moram sob "Automáticas" (o voltar diz "← Automáticas").
-  const abaDestaque: AbaReal = abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? "automaticas" : abaAtiva;
-  const chaveCab = abaAtiva === "automaticas" ? "automaticas" : abaAtiva === "venda_mais" ? "venda_mais"
-    : abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? secao : null;
-
+  // A aba destacada é sempre a aberta; Aniversário e Crediário são páginas de dentro de "Automáticas".
+  const abaDestaque: AbaReal = abaAtiva;
+  const chaveCab = abaAtiva === "automaticas" ? (subAuto || "automaticas") : abaAtiva === "venda_mais" ? "venda_mais" : null;
   // Cabeçalho das telas novas (artboards Main e GuiaCentral): título à esquerda; abas
   // (pílulas translúcidas) e o botão "Guias" à direita, na mesma linha. No celular, uma
   // linha só, rolável, com o Guias só em ícone.
@@ -206,16 +217,19 @@ export default function WhatsAppScreen() {
       titulo={chaveCab ? CABECALHO[chaveCab].titulo : abaAtiva === "conversas" ? "Conversas" : "Configurações"}
       sub={chaveCab ? CABECALHO[chaveCab].sub : undefined}
       voltar={chaveCab ? !!CABECALHO[chaveCab].voltar : false}
-      onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => irPara("automaticas")}
+      onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => setSubAuto(null)}
       onGuias={() => useWaGuias.getState().abrirMenu()}
       extra={abaAtiva === "conversas" && !consolidatedView ? <MedidorHub saldo={saldo.saldo} /> : undefined}
     />
   );
 
   // Guias (27/11/2026): só a tela nova (equipe Aura e sandbox). O guia troca a aba antes de procurar o alvo.
+  // Mesmo caminho do uso normal: Automáticas → Ajustar abre Aniversário/Crediário (subAuto); a subaba antiga de Configurações não existe mais.
   const guiaIrPara = (d: DestinoAba) => {
     if (d.secao) setSecao(d.secao as SecaoKey);
     setAbaReal(d.aba);
+    setSubAuto(d.aba === "automaticas" ? (d.sub || null) : null);
+    if (d.sub) scrollRef.current?.scrollTo?.({ y: 0, animated: true });
   };
   const guias = novas && !demo ? (
     <WaGuiasHost
@@ -238,7 +252,7 @@ export default function WhatsAppScreen() {
         <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
           {novas && <Spots />}
           {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
-          <HubView onConversaAberta={setEmConversa} />
+          <HubView onConversaAberta={setEmConversa} numeroConectado={wa.status ? !!wa.status.connected : undefined} aoConectarNumero={abrirConexao} />
         </View>
         {guias}
       </View>
@@ -291,22 +305,32 @@ export default function WhatsAppScreen() {
         </View>
       ) : abaAtiva === "automaticas" ? (
         <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real" {...({ role: "tabpanel", "aria-labelledby": `wa-tab-${abaDestaque}` } as any)}>
-          {medidor}
-          {!consolidatedView && (
+          {!subAuto && medidor}
+          {!consolidatedView && !subAuto && (
             <View testID="wa-varejo-bloco-automaticas">
               <AutomaticasCard
                 auto={auto}
                 companyId={companyId}
                 onAjustar={(k: WaAutoKey) => {
+                  // O Venda+ é aba própria; Aniversário e Crediário abrem aqui dentro.
                   if (k === "venda_mais") { irPara("venda_mais"); return; }
-                  setSecao(k === "aniversario" ? "aniversario" : "crediario");
-                  irPara("config");
+                  setSubAuto(k === "aniversario" ? "aniversario" : "crediario");
+                  scrollRef.current?.scrollTo?.({ y: 0, animated: true });
                 }}
               />
             </View>
           )}
-        </View>
-      ) : abaAtiva === "venda_mais" ? (
+          {!consolidatedView && subAuto === "aniversario" && (
+            <View testID="wa-varejo-bloco-aniversario">
+              <AniversarioConfig companyId={companyId} auto={auto} lojaNome={lojaNome} />
+            </View>
+          )}
+          {!consolidatedView && subAuto === "crediario" && (
+            <View testID="wa-varejo-bloco-crediario">
+              <CrediarioConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
+            </View>
+          )}
+        </View>      ) : abaAtiva === "venda_mais" ? (
         <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real" {...({ role: "tabpanel", "aria-labelledby": `wa-tab-${abaDestaque}` } as any)}>
           {!consolidatedView && (
             <View testID="wa-varejo-bloco-venda-mais">
@@ -322,7 +346,7 @@ export default function WhatsAppScreen() {
             <ListaAbas
               rotulo="Configurações" testIDLista="wa-varejo-config-secoes" ativa={secao}
               onSelect={(k) => setSecao(k as SecaoKey)}
-              abas={SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => ({ key: sc.key, label: sc.label, testID: `wa-varejo-secao-${sc.key}` }))}
+              abas={secoes.map((sc) => ({ key: sc.key, label: sc.label, testID: `wa-varejo-secao-${sc.key}` }))}
             />
           </View>
 
@@ -337,15 +361,17 @@ export default function WhatsAppScreen() {
               {novas ? (
                 // GuiaExecucao, guia 1: a conexão e os saldos lado a lado.
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
-                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>
+                  {/* Duas colunas que quebram para uma só no celular: flexShrink 1 + minWidth 0 (nada passa da tela; 390 e 375 sem rolagem lateral). */}
+                  <View testID="wa-varejo-conexao-col" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0, maxWidth: "100%" }}>
                     <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} vidro />
                   </View>
-                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
+                  <View testID="wa-varejo-saldos-col" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0, maxWidth: "100%" }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
                 </View>
               ) : (
                 <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
               )}
-              <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
+              {/* "Uso do mês" não está no artboard e repete os saldos: sai da tela nova (atrás da trava); lojas reais seguem como estão até a virada (#1414). */}
+              {!novas && <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />}
               <ConsentimentoMarketingCard
                 companyId={companyId}
                 status={wa.status}
@@ -365,15 +391,25 @@ export default function WhatsAppScreen() {
             </View>
           )}
 
-          {secao === "aniversario" && !consolidatedView && (
-            <View testID="wa-varejo-bloco-aniversario">
-              <AniversarioConfig companyId={companyId} auto={auto} lojaNome={lojaNome} />
-            </View>
-          )}
-
-          {secao === "crediario" && !consolidatedView && (
-            <View testID="wa-varejo-bloco-crediario">
-              <CrediarioConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
+          {secao === "mensagens" && (
+            <View style={{ gap: 24 }} testID="wa-varejo-bloco-mensagens">
+              <TemplatesCard
+                companyId={companyId}
+                templates={wa.templates}
+                status={wa.status}
+                loading={wa.templatesLoading}
+                notConnected={wa.templatesNotConnected}
+                error={wa.templatesError}
+                onReload={() => { wa.reloadTemplates(); wa.reloadStatus(); }}
+                nomeNovo
+              />
+              <FilaCard
+                items={filtrarCrediario(wa.outbox)}
+                loading={wa.outboxLoading}
+                notConnected={wa.outboxNotConnected}
+                error={wa.outboxError}
+                onReload={wa.reloadOutbox}
+              />
             </View>
           )}
 

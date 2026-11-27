@@ -24,6 +24,7 @@ import { AutomaticasCard } from "@/components/whatsapp/AutomaticasCard";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import { EditorMensagem } from "@/components/whatsapp/EditorMensagem";
 import { useWaKeyframes } from "@/components/whatsapp/waVisual";
+import { mascaraDasBordas, xParaCentralizar } from "@/components/whatsapp/waAbas";
 import { DIVISAO_PADRAO, lerAutomaticas } from "@/components/whatsapp/waDivisao";
 import { waCorte } from "@/components/whatsapp/waCorte";
 
@@ -223,5 +224,27 @@ describe("foco visível e Esc", () => {
     const raiz = q('[data-testid="wa-editor"]');
     tecla(raiz.querySelector('[data-testid="wa-editor-campo-Nome"]') as Element, "Escape");
     expect(onFechar).toHaveBeenCalled();
+  });
+});
+
+describe("fila de abas do celular", () => {
+  it("o esmaecido só aparece no lado em que há mais conteúdo", () => {
+    expect(mascaraDasBordas(0, 300, 300)).toBeNull(); // tudo cabe
+    expect(mascaraDasBordas(0, 300, 520)).toBe("linear-gradient(90deg,#000 calc(100% - 28px),transparent 100%)"); // só à direita
+    expect(mascaraDasBordas(220, 300, 520)).toBe("linear-gradient(90deg,transparent 0,#000 28px)"); // no fim: só à esquerda
+    expect(mascaraDasBordas(100, 300, 520)).toBe("linear-gradient(90deg,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%)");
+    expect(mascaraDasBordas(0, 0, 0)).toBeNull(); // antes de medir
+  });
+  it("a aba ativa vai para o centro, limitada às pontas", () => {
+    expect(xParaCentralizar(300, 100, 240, 520)).toBe(230); // 300 - (240-100)/2
+    expect(xParaCentralizar(0, 90, 240, 520)).toBe(0); // primeira: não passa da ponta
+    expect(xParaCentralizar(440, 80, 240, 520)).toBe(280); // última: 520 - 240
+    expect(xParaCentralizar(10, 50, 300, 300)).toBe(0); // tudo cabe
+  });
+  it("no celular a fila renderiza com a lista de abas e o Guias fora dela", async () => {
+    await montar(<AbasWa tabs={TABS} ativa="venda_mais" onSelect={() => {}} estreito />);
+    expect(qa('[role="tab"]').length).toBe(4);
+    expect(q('[data-testid="wa-varejo-abas-fila"]')).toBeTruthy();
+    expect(q('[role="tablist"]').contains(q('[data-testid="wa-varejo-guias"]'))).toBe(false);
   });
 });

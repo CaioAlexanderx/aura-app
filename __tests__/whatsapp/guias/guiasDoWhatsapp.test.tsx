@@ -511,3 +511,27 @@ describe("guia 3: toque em Produto solta o escurecimento", () => {
     expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Mande sem sair da conversa");
   });
 });
+
+describe("guia 2: Crediário abre pelo caminho novo (Automáticas → Ajustar)", () => {
+  it("'Escolha quando cobrar' e 'Editar' vão para a página de Crediário dentro de Automáticas, nunca para Configurações", () => {
+    const passos = guia2().passos;
+    const cobranca = passos.find((p) => p.id === "g2-cobranca")!;
+    const editar = passos.find((p) => p.id === "g2-editar")!;
+    expect(cobranca.aba).toEqual({ aba: "automaticas", sub: "crediario" });
+    expect(editar.aba).toEqual({ aba: "automaticas", sub: "crediario" });
+    // nenhum passo do guia 2 usa a subaba antiga de Configurações
+    passos.forEach((p) => { expect(p.aba?.aba).not.toBe("config"); });
+    // os passos de Automáticas voltam para a página principal (sem sub)
+    ["g2-saldos", "g2-venda", "g2-pronto"].forEach((id) => expect(passos.find((p) => p.id === id)!.aba).toEqual({ aba: "automaticas", sub: null }));
+  });
+
+  it("o motor pede esse destino à tela antes de procurar o alvo", () => {
+    jest.useFakeTimers();
+    alvo("wa.crediario.linha");
+    const ctx = ctxBase();
+    const so = { ...guia2(), passos: guia2().passos.filter((p) => p.id === "g2-cobranca") };
+    monta(<GuiaTour guia={so} ctx={ctx} onFim={jest.fn()} />);
+    act(() => { jest.advanceTimersByTime(700); });
+    expect(ctx.irPara).toHaveBeenCalledWith({ aba: "automaticas", sub: "crediario" });
+  });
+});

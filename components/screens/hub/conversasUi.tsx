@@ -9,7 +9,7 @@
 // redondo, botão principal com ícone, e um `K` curto com os nomes que o código
 // da aba usa, derivados dos tokens compartilhados.
 // ============================================================
-import { createElement, type ReactNode } from "react";
+import { createElement, useEffect, type ReactNode } from "react";
 import { View, Text, Pressable, type TextProps, type ViewStyle, type StyleProp } from "react-native";
 import {
   ANIM_FIO, ANIM_POP, ANIM_RISE, ESCURO, GRAD_BTN, MONO, SANS, SERIF, V, WEB, estiloSuperficie, modoLeve,
@@ -17,6 +17,25 @@ import {
 import { Meta, Pilula as PilulaWa, t } from "@/components/whatsapp/waVidro";
 
 export { MONO, SANS, SERIF, WEB, Meta };
+
+/**
+ * Foco visível de 2 px #c4b5fd (linguagem de vidro) nas áreas marcadas com data-wa-foco.
+ * Injeta o CSS uma vez; marque o container com `dataSet={{ waFoco: "1" }}` (propriedade `FOCO`).
+ */
+export const FOCO: any = WEB ? { dataSet: { waFoco: "1" } } : {};
+export function useFocoVisivel(): void {
+  useEffect(() => {
+    if (!WEB || typeof document === "undefined") return;
+    try {
+      if (!document.getElementById("wa-foco-css")) {
+        const s = document.createElement("style");
+        s.id = "wa-foco-css";
+        s.textContent = "[data-wa-foco]:focus-visible,[data-wa-foco] :focus-visible{outline:2px solid #c4b5fd!important;outline-offset:2px!important}";
+        document.head.appendChild(s);
+      }
+    } catch { /* sem foco desenhado: vale o do navegador */ }
+  }, []);
+}
 
 /** Jest: o react-test-renderer não monta portais; a gaveta do celular fica no fluxo só aí. */
 export const EM_TESTE = typeof process !== "undefined" && !!(process as any).env?.JEST_WORKER_ID;
@@ -59,15 +78,19 @@ export function Tx({ style, ...rest }: TextProps) {
 }
 
 // ── Pílula: o `Pilula` compartilhado, com os nomes de prop da aba ─────
-export function Pilula({ on, pequena, onPress, children, testID, disabled, style, textoStyle, acessLabel, dataSet }: {
+export function Pilula({ on, pequena, onPress, children, testID, disabled, style, textoStyle, acessLabel, dataSet, role, semTab, dados }: {
   on?: boolean; pequena?: boolean; onPress?: () => void; children: ReactNode; testID?: string; disabled?: boolean;
   style?: StyleProp<ViewStyle>; textoStyle?: any; acessLabel?: string; dataSet?: any;
+  /** radio = opção de um radiogroup (aria-checked); fora do grupo, botão. */
+  role?: "button" | "radio"; semTab?: boolean; dados?: Record<string, string>;
 }) {
   const filho = typeof children === "string" && textoStyle
     ? <Text style={[t(pequena ? 13 : 14, on ? V.onTxt : V.ink, "600"), textoStyle]}>{children}</Text>
     : children;
   return (
-    <PilulaWa testID={testID} ligada={on} peq={pequena} onPress={onPress} disabled={disabled} label={acessLabel} style={style} tour={dataSet?.tour}>
+    <PilulaWa testID={testID} ligada={on} peq={pequena} onPress={onPress} disabled={disabled} label={acessLabel} style={style} tour={dataSet?.tour}
+      role={role} semTab={semTab} dados={dados}
+      estado={role === "radio" ? { checked: !!on, selected: !!on, disabled: !!disabled } : undefined}>
       {filho}
     </PilulaWa>
   );
@@ -148,6 +171,16 @@ export function BotaoPrincipal({ children, onPress, testID, disabled, icone = "s
 
 export function Ponto({ cor, size = 7 }: { cor: string; size?: number }) {
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: cor }} />;
+}
+
+/** Etiqueta da conversa (pílula do artboard: ponto da cor e nome). */
+export function EtiquetaChip({ nome, cor, testID }: { nome: string; cor: string; testID?: string }) {
+  return (
+    <View testID={testID} style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingHorizontal: 12, borderRadius: 999, backgroundColor: K.tagOn }}>
+      <Ponto cor={cor} size={7} />
+      <Text style={t(13, V.ink, "600", { lineHeight: 18 })} numberOfLines={1}>{nome}</Text>
+    </View>
+  );
 }
 
 const TONS: [string, string][] = [

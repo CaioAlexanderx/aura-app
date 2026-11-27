@@ -15,7 +15,7 @@ export const CHANNEL_META: Record<HubChannel, { label: string; color: string; sh
 };
 
 export const STATUS_META: Record<HubStatus, { label: string; color: string }> = {
-  ia:             { label: "IA atendendo",    color: Colors.violet3 },
+  ia:             { label: "Com a Aurinha",   color: Colors.violet3 },
   precisa_humano: { label: "Precisa de você", color: Colors.amber },
   humano:         { label: "Você no comando", color: Colors.green },
   resolvida:      { label: "Resolvida",       color: Colors.ink3 },

@@ -90,6 +90,13 @@ export interface HubCartao {
   codigo?: string | null;
   imagem?: string | null;
   descricao?: string | null;
+  // ── produto com fotos e tamanhos (tipo "produto" com `fotos`) ──
+  nome?: string | null;
+  cor?: string | null;
+  preco?: number | null;
+  /** Fotos mandadas na bolha (URLs). */
+  fotos?: string[] | null;
+  tamanhos?: { tamanho: string; disponivel?: boolean; ultimo?: boolean }[] | null;
 }
 
 export interface HubMessage {
@@ -106,6 +113,8 @@ export interface HubMessage {
   author?: HubAuthor | null;
   /** Mensagem rica enviada pela tela: produto | orcamento | pix | link_loja. */
   tipo?: string | null;
+  /** metadata crua da mensagem: `sugestao` e `produto_grade` (resposta da cliente), `opcoes` e `formato` (pergunta_tamanho). */
+  metadata?: Record<string, any> | null;
   /** Foto do produto mandada (cartão de produto na thread). */
   image_url?: string | null;
   /** Foto ou áudio guardado (URL assinada de 1 h). null = não foi guardado. */

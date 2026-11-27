@@ -181,12 +181,16 @@ export function BtnTracejado({ children, testID, disabled = true, onPress }: { c
   );
 }
 /** Pílula (.pill): `ligada` pinta a escolhida; `peq` é a .pill.sm. */
-export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour, label, nav, nativeID }: {
+export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour, label, nav, nativeID, semTab, dados }: {
   children?: React.ReactNode; ligada?: boolean; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; peq?: boolean; testID?: string;
   role?: "button" | "checkbox" | "radio" | "tab"; estado?: any; style?: any; tour?: string; label?: string;
   /** Teclado no computador: tabIndex móvel, setas, foco (veja waTeclado). */
   nav?: { tabIndex?: number; onKeyDown?: (e: any) => void; onFocus?: () => void; innerRef?: (el: any) => void };
   nativeID?: string;
+  /** Tabindex móvel (radiogroup): fora do Tab, mas ainda focável pelas setas. */
+  semTab?: boolean;
+  /** data-* extras (ex.: { opcao: "1" } marca a opção de um painel para as setas). */
+  dados?: Record<string, string>;
 }) {
   return (
     <Pressable
@@ -199,6 +203,8 @@ export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq,
       accessibilityRole={role as any}
       accessibilityLabel={label}
       {...(tour ? tourTarget(tour) : {})}
+      {...(dados ? ({ dataSet: { ...(tour ? { tour } : {}), ...dados } } as any) : {})}
+      {...(semTab ? ({ focusable: false, tabIndex: -1 } as any) : {})}
       accessibilityState={estado || { selected: !!ligada, disabled: !!(desabilitado || disabled) }}
       testID={testID}
       style={[{

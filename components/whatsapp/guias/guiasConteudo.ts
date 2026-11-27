@@ -16,7 +16,11 @@ import type { SaldoInfo } from "../waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
 export type AbaGuia = "conversas" | "automaticas" | "venda_mais" | "config";
-export interface DestinoAba { aba: AbaGuia; secao?: "conexao" | "aniversario" | "crediario" }
+/**
+ * Onde a tela precisa estar antes de procurar o alvo. `sub` é a página de dentro de "Automáticas"
+ * (Aniversário e Crediário abrem por "Ajustar" no cartão, não por subaba de Configurações).
+ */
+export interface DestinoAba { aba: AbaGuia; secao?: "conexao"; sub?: "aniversario" | "crediario" | null }
 
 /** O que o guia precisa saber da tela (a tela do WhatsApp monta e entrega). */
 export interface GuiaCtx {
@@ -114,7 +118,7 @@ export function guia2(): Guia {
     n: 2, meta: "Guia 2 · automáticas", titulo: "Ligar as mensagens automáticas",
     passos: [
       {
-        id: "g2-saldos", alvo: "wa.saldos", aba: { aba: "automaticas" }, espera: 4000,
+        id: "g2-saldos", alvo: "wa.saldos", aba: { aba: "automaticas", sub: null }, espera: 4000,
         titulo: "Três saldos, cada um no seu limite",
         corpo: "Avisos cobram e lembram. Novidades vendem. Conversas da Aurinha respondem sozinhas. Quando um acaba, só ele para.",
       },
@@ -130,24 +134,24 @@ export function guia2(): Guia {
         completo: aniversarioLigado,
       },
       {
-        id: "g2-cobranca", alvo: "wa.crediario.linha", aba: { aba: "config", secao: "crediario" }, espera: 5000, exec: "cobranca", interativo: true,
+        id: "g2-cobranca", alvo: "wa.crediario.linha", aba: { aba: "automaticas", sub: "crediario" }, espera: 5000, exec: "cobranca", interativo: true,
         titulo: "Escolha quando cobrar",
         corpo: "Toque nos pontos da linha: antes do vencimento, no dia ou depois. Quem já pagou sai da lista sozinho.",
         completo: cobrancaLigada,
       },
       {
-        id: "g2-venda", alvo: "wa.auto.venda_mais", aba: { aba: "automaticas" }, espera: 4000, exec: "venda", interativo: true,
+        id: "g2-venda", alvo: "wa.auto.venda_mais", aba: { aba: "automaticas", sub: null }, espera: 4000, exec: "venda", interativo: true,
         titulo: "Venda+ todo dia 1º",
         corpo: "A Aura chama de volta quem parou de comprar, começando por quem mais comprava.",
         completo: (c) => c.auto.info?.autos.venda_mais?.ligada === true,
       },
       {
-        id: "g2-editar", alvo: "wa.editar", aba: { aba: "config", secao: "crediario" }, espera: 5000,
+        id: "g2-editar", alvo: "wa.editar", aba: { aba: "automaticas", sub: "crediario" }, espera: 5000,
         titulo: "Quer escrever do seu jeito?",
         corpo: "Em Editar você muda o texto. A Aura confere as regras do WhatsApp e corrige com um toque.",
       },
       {
-        id: "g2-pronto", alvo: "wa.auto.cartoes", aba: { aba: "automaticas" }, espera: 4000, exec: "pronto",
+        id: "g2-pronto", alvo: "wa.auto.cartoes", aba: { aba: "automaticas", sub: null }, espera: 4000, exec: "pronto",
         titulo: "Pronto",
         corpo: "",
         cta: "Ver como usar a conversa",
