@@ -252,6 +252,27 @@ describe("conversa aberta", () => {
     expect(porId(r, "hub-grade-tam-M")[0].props.accessibilityState).toEqual({ disabled: false });
   });
 
+  it("sugestão tipo mandar_pix (Pedido desligado): rótulo do servidor, manda só o Pix, sem chamar a reserva", async () => {
+    mockAuth = { ...mockAuth, user: { id: "u1", is_staff: true } }; // mesmo com a regra do app ligada, o servidor manda
+    const r = await abrirComSugestao({ ...SUG, tipo: "mandar_pix", rotulo: "Mandar o Pix", reserva: false });
+    expect(tudo(r)).toContain("quer o M. Mandar o Pix de R$ 189,90?");
+    expect(tudo(r)).toContain("Mandar o Pix");
+    await act(async () => { await porId(r, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(mockHub.send).toHaveBeenCalledWith(COMPANY, "conv-1", { type: "pix", amount: 189.9 });
+    expect(mockGrade.reservarEMandarPix).not.toHaveBeenCalled();
+  });
+
+  it("sugestão tipo reservar_e_mandar_pix com reserva:true: rótulo do servidor e chama a reserva pela mensagem", async () => {
+    const r = await abrirComSugestao({ ...SUG, tipo: "reservar_e_mandar_pix", rotulo: "Reservar e mandar o Pix", reserva: true });
+    expect(tudo(r)).toContain("Reservar uma e mandar o Pix de R$ 189,90?");
+    mockGrade.reservarEMandarPix.mockResolvedValue({ ok: true, order_id: "o1", total: 189.9 });
+    await act(async () => { await porId(r, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(mockGrade.reservarEMandarPix).toHaveBeenCalledWith(COMPANY, "conv-1", "m4");
+    expect(mockHub.send).not.toHaveBeenCalled();
+  });
+
   it("cabeçalho da conversa mostra a etiqueta \"Quer o M\" ao lado do nome", async () => {
     const c: any = { ...conv(horasAtras(2)), labels: [{ id: "l1", name: "Quer o M", color: "#7c3aed" }] };
     mockHub.conversations.mockResolvedValue({ conversations: [c], counts: [] });

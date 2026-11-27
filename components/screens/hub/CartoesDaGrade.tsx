@@ -78,8 +78,8 @@ export function SugestaoDeReserva({ nome, sugestao, reservaLiberada, ocupado, on
   let acao = onReservar;
   if (sugestao.estado === "feita") texto = `Reservada: o ${sugestao.tamanho} e o Pix de ${valor} já foram para ${nome === "o cliente" ? "o cliente" : nome}.`;
   else if (sugestao.estado === "sem_estoque") texto = `${ela} quer o ${sugestao.tamanho}, mas esse tamanho acabou entre o envio e o toque. Mande outro tamanho.`;
-  else if (reservaLiberada) { texto = `${ela} quer o ${sugestao.tamanho}. Reservar uma e mandar o Pix de ${valor}?`; botao = "Reservar e mandar o Pix"; }
-  else { texto = `${ela} quer o ${sugestao.tamanho}. Mandar o Pix de ${valor}?`; botao = "Mandar o Pix"; acao = onMandarPix; }
+  else if (reservaLiberada) { texto = `${ela} quer o ${sugestao.tamanho}. Reservar uma e mandar o Pix de ${valor}?`; botao = sugestao.rotulo || "Reservar e mandar o Pix"; }
+  else { texto = `${ela} quer o ${sugestao.tamanho}. Mandar o Pix de ${valor}?`; botao = sugestao.rotulo || "Mandar o Pix"; acao = onMandarPix; }
   return (
     <View testID="hub-sugestao-reserva" {...({ dataSet: an.dataSet } as any)}
       style={[superficie.seca(20), { alignSelf: "stretch", paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }, an.style]}>

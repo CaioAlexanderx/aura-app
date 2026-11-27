@@ -64,8 +64,11 @@ export const hubProdutoGradeApi = {
 
 /** Sugestão gravada pelo servidor em `metadata.sugestao` da mensagem da cliente. */
 export interface SugestaoReserva {
-  tipo: "reservar_e_mandar_pix";
+  /** `mandar_pix`: só o Pix (Pedido desligado); `reservar_e_mandar_pix`: reserva pelo pedido do balcão. */
+  tipo: "reservar_e_mandar_pix" | "mandar_pix";
   rotulo?: string;
+  /** O servidor decide: false = não reserva, só manda o Pix. Ausente (servidor antigo): vale a regra do app. */
+  reserva?: boolean;
   product_id: string; variant_id: string; tamanho: string; quantidade: number; preco: number;
   nome?: string; cor?: string | null;
   estado: "pendente" | "sem_estoque" | "feita";
@@ -83,3 +86,10 @@ export function mensagemDaReserva(e: any, nome: string): string {
 }
 
 export const ehReservaNaoLiberada = (e: any): boolean => e?.status === 403 && String(e?.data?.code || e?.code || "") === "PEDIDO_NAO_LIBERADO";
+
+/** A sugestão reserva? O servidor é a fonte (`reserva` ou `tipo`); sem isso, a regra do app (trava do Pedido). */
+export function sugestaoReserva(sg: Pick<SugestaoReserva, "tipo" | "reserva">, regraDoApp: boolean): boolean {
+  if (typeof sg.reserva === "boolean") return sg.reserva;
+  if (sg.tipo === "mandar_pix") return false;
+  return regraDoApp;
+}

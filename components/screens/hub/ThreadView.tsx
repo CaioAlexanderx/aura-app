@@ -23,7 +23,7 @@ import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConver
 import { PainelCliente } from "./PainelCliente";
 import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
 import { CartaoProdutoGrade, PerguntaDeTamanho, RespostaDeBotao, SugestaoDeReserva, TIPO_PERGUNTA } from "./CartoesDaGrade";
-import { hubProdutoGradeApi, mensagemDaReserva, ehReservaNaoLiberada, type SugestaoReserva } from "@/services/hubProdutoGradeApi";
+import { hubProdutoGradeApi, mensagemDaReserva, ehReservaNaoLiberada, sugestaoReserva, type SugestaoReserva } from "@/services/hubProdutoGradeApi";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { tourTarget } from "@/utils/tourTarget";
 import { K, Tx, Meta, Ico, Avatar, EtiquetaChip, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
@@ -290,8 +290,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                 </View>
               </View>
             </View>
-            {sugestao && sugestao.tipo === "reservar_e_mandar_pix" && (
-              <SugestaoDeReserva nome={nomeCurto} sugestao={sugestao} reservaLiberada={reservaLiberada && !semReserva} ocupado={mAction.isPending}
+            {sugestao && (sugestao.tipo === "reservar_e_mandar_pix" || sugestao.tipo === "mandar_pix") && (
+              <SugestaoDeReserva nome={nomeCurto} sugestao={sugestao} reservaLiberada={sugestaoReserva(sugestao, reservaLiberada) && !semReserva} ocupado={mAction.isPending}
                 onReservar={() => reservar(m.id, nomeCurto)} onMandarPix={() => mandarSoPix(sugestao)} />
             )}
             </View>
