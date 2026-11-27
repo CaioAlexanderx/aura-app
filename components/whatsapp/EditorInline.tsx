@@ -24,6 +24,8 @@ interface Props {
   onChange: (texto: string) => void;
   onSel: (inicio: number, fim: number) => void;
   testID?: string;
+  /** Caixa de uma ou duas linhas (Pedir aprovação da arte): pílula de 24 px, texto de 15 px. */
+  compacto?: boolean;
 }
 
 const ESTILO_PILULA =
@@ -46,7 +48,9 @@ export function serializar(no: Node): string {
   return out;
 }
 
-function montar(raiz: HTMLElement, texto: string, destaque?: string | null) {
+const ESTILO_PILULA_COMPACTA = `height:24px;margin:0 2px;padding:0 8px;font-size:13px;`;
+
+function montar(raiz: HTMLElement, texto: string, destaque?: string | null, compacto?: boolean) {
   raiz.textContent = "";
   const texto2nos = (trecho: string, bad: boolean) => {
     const partes = trecho.split("\n");
@@ -68,7 +72,7 @@ function montar(raiz: HTMLElement, texto: string, destaque?: string | null) {
       const sp = document.createElement("span");
       sp.setAttribute("contenteditable", "false");
       sp.setAttribute("data-campo", g.v);
-      sp.setAttribute("style", ESTILO_PILULA + `color:${V.tokTxt};background:${V.tokBg};border:1px solid ${V.tokLine};`);
+      sp.setAttribute("style", ESTILO_PILULA + (compacto ? ESTILO_PILULA_COMPACTA : "") + `color:${V.tokTxt};background:${V.tokBg};border:1px solid ${V.tokLine};`);
       sp.textContent = g.v;
       raiz.appendChild(sp);
       return;
@@ -124,7 +128,7 @@ function colocarCursor(raiz: HTMLElement, pos: number) {
   sel.addRange(r);
 }
 
-export function EditorInline({ valor, cursor, travado, destaque, onChange, onSel, testID }: Props) {
+export function EditorInline({ valor, cursor, travado, destaque, onChange, onSel, testID, compacto }: Props) {
   const ref = useRef<HTMLElement | null>(null);
   const ultimoDestaque = useRef<string | null | undefined>(undefined);
 
@@ -135,7 +139,7 @@ export function EditorInline({ valor, cursor, travado, destaque, onChange, onSel
     const igual = serializar(el) === valor;
     if (igual && ultimoDestaque.current === destaque) return;
     const tinhaFoco = document.activeElement === el;
-    montar(el, valor, destaque);
+    montar(el, valor, destaque, compacto);
     ultimoDestaque.current = destaque;
     if (!igual || tinhaFoco) {
       el.focus?.();
@@ -160,7 +164,7 @@ export function EditorInline({ valor, cursor, travado, destaque, onChange, onSel
   return React.createElement("div", {
     ref: (el: HTMLElement | null) => {
       ref.current = el;
-      if (el && !el.firstChild && valor) { montar(el, valor, destaque); ultimoDestaque.current = destaque; }
+      if (el && !el.firstChild && valor) { montar(el, valor, destaque, compacto); ultimoDestaque.current = destaque; }
     },
     role: "textbox",
     "aria-multiline": "true",
@@ -180,7 +184,10 @@ export function EditorInline({ valor, cursor, travado, destaque, onChange, onSel
       document.execCommand?.("insertText", false, txt);
     },
     style: {
-      minHeight: 170, padding: "18px 20px", borderRadius: 22, fontSize: 17, lineHeight: "34px", outline: "none",
+      ...(compacto
+        ? { minHeight: 96, padding: "10px 14px", borderRadius: 12, fontSize: 15, lineHeight: "26px" }
+        : { minHeight: 170, padding: "18px 20px", borderRadius: 22, fontSize: 17, lineHeight: "34px" }),
+      outline: "none",
       color: V.ink, background: V.campoBg, border: `1px solid ${V.campoLine}`, whiteSpace: "pre-wrap", wordBreak: "break-word",
       fontFamily: '"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif', opacity: travado ? 0.6 : 1,
     },

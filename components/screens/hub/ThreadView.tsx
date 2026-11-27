@@ -33,7 +33,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   companyId: string; convId: string; onBack?: () => void;
   /** Dono ou admin: pode pedir à Meta os modelos de convite que faltam. */
   podeConfigurar?: boolean;
-  /** Aurinha desligada: a equipe atende sozinha — sem "IA atendendo" nem "Devolver à Aurinha". */
+  /** Aurinha desligada: a equipe atende sozinha — sem "Com a Aurinha" nem "Devolver à Aurinha". */
   aurinhaLigada?: boolean;
 }) {
   const qc = useQueryClient();
@@ -352,7 +352,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   );
 
   const folhaEtiquetas = !compacto && folhaEtiqueta ? (
-    <EtiquetasConversa variante="folha" companyId={companyId} convId={convId} aplicadas={conv.labels || []}
+    <EtiquetasConversa variante="folha" companyId={companyId} convId={convId} aplicadas={conv.labels || []} onFechar={() => setFolhaEtiqueta(false)}
       onChanged={invalidate} onError={(m) => setFeedback(m)} />
   ) : null;
 
@@ -399,7 +399,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   ) : null;
 
   return (
-    <View style={compacto ? { flex: 1 } : [superficie.vidro(30), { flex: 1, minHeight: 560, position: "relative" }]}>
+    <View testID="hub-thread-regiao" accessibilityLabel="Conversa" {...({ role: "region", tabIndex: -1, dataSet: { waFoco: "1" } } as any)}
+      style={compacto ? { flex: 1 } : [superficie.vidro(30), { flex: 1, minHeight: 560, position: "relative" }]}>
       {!compacto && <Fio />}
       {cabecalho}
       {acoes}

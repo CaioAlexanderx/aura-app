@@ -10,15 +10,18 @@
 //            (pílulas grandes). Na folha os testIDs levam o prefixo
 //            "hub-folha-" para não repetir os do painel.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Pressable, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hubApi, type HubLabel } from "@/services/hubApi";
 import { K, Tx, Meta, Pilula, Ponto, superficie, SANS } from "./conversasUi";
+import { aoTeclarNoPainel, focarPrimeiro } from "./teclado";
 
 export const CORES_ETIQUETA = ["#7c3aed", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#ef4444"];
 
-export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onError, variante = "painel" }: {
+export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onError, variante = "painel", onFechar }: {
+  /** Folha: Esc fecha e o foco volta ao botão Etiqueta. */
+  onFechar?: () => void;
   companyId: string; convId: string;
   aplicadas: HubLabel[];
   onChanged: () => void;
@@ -27,6 +30,10 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
 }) {
   const qc = useQueryClient();
   const folha = variante === "folha";
+  const ref = useRef<any>(null);
+  // As etiquetas chegam do servidor: tenta a cada render até achar a primeira opção.
+  const focou = useRef(false);
+  useEffect(() => { if (folha && !focou.current && ref.current?.querySelector?.('[data-opcao="1"]')) { focarPrimeiro(ref.current); focou.current = true; } });
   const id = (x: string) => (folha ? x.replace("hub-", "hub-folha-") : x);
   const [criando, setCriando] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -74,7 +81,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
           const on = aplicadaIds.has(l.id);
           return (
             <View key={l.id} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Pilula testID={id(`hub-etiqueta-${l.id}`)} pequena={!folha} on={on} disabled={mToggle.isPending} onPress={() => mToggle.mutate(l)}>
+              <Pilula testID={id(`hub-etiqueta-${l.id}`)} pequena={!folha} on={on} disabled={mToggle.isPending} onPress={() => mToggle.mutate(l)} dados={folha ? { opcao: "1" } : undefined}>
                 <Ponto cor={l.color} />
                 <Tx style={{ fontSize: folha ? 14 : 13, fontWeight: "600", lineHeight: 18, color: on ? K.pillOnInk : K.ink }}>{l.name}</Tx>
               </Pilula>
@@ -130,7 +137,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
 
   if (folha) {
     return (
-      <View testID="hub-folha-etiquetas" accessibilityLabel="Etiquetas"
+      <View ref={ref} testID="hub-folha-etiquetas" accessibilityLabel="Etiquetas" {...({ role: "dialog", dataSet: { waFoco: "1" }, onKeyDown: (e: any) => aoTeclarNoPainel(e, onFechar, "hub-envio-etiqueta") } as any)}
         style={[superficie.solida(24), { padding: 16, gap: 10, position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: 420, zIndex: 3 }]}>
         {content}
       </View>

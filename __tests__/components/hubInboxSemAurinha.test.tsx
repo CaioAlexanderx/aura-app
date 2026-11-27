@@ -4,7 +4,7 @@
 //
 // 1. enabled=false: a lista de conversas carrega e a thread abre e
 //    responde; o convite "Ativar a Aurinha" é secundário e só aparece para
-//    dono/admin; nada de "IA atendendo" nem "Devolver à Aurinha".
+//    dono/admin; nada de "Com a Aurinha" nem "Devolver à Aurinha".
 // 2. Autor pelo `author` do backend: cliente → nome ou telefone do contato,
 //    humano (inclui o eco do celular, sem source_type) → EQUIPE,
 //    aurinha → AURINHA. Sem `author` (Instagram), o critério antigo.
@@ -94,8 +94,8 @@ describe("HubView com a Aurinha desligada", () => {
     expect(mockHub.conversations).toHaveBeenCalledWith(COMPANY, undefined);
     expect(porId(r, "hub-conv-conv-1")).toHaveLength(1);
     expect(porId(r, "hub-convite-aurinha")).toHaveLength(0);
-    // a conversa não aparece como "IA atendendo" e o filtro some
-    expect(temTexto(r, "IA atendendo")).toBe(false);
+    // a conversa não aparece como "Com a Aurinha" e o filtro some
+    expect(temTexto(r, "Com a Aurinha")).toBe(false);
   });
 
   it("abre a thread e responde", async () => {
@@ -134,10 +134,10 @@ describe("HubView com a Aurinha desligada", () => {
     expect(porId(r, "hub-ativar-aurinha")).toHaveLength(0);
   });
 
-  it("com a Aurinha ligada nada muda: filtro 'IA atendendo' e sem convite", async () => {
+  it("com a Aurinha ligada nada muda: filtro 'Com a Aurinha' e sem convite", async () => {
     mockHub.settings.mockResolvedValue({ enabled: true, approval_mode: true, model: null, extra_instructions: null });
     const r = await montar();
-    expect(temTexto(r, "IA atendendo")).toBe(true);
+    expect(temTexto(r, "Com a Aurinha")).toBe(true);
     expect(porId(r, "hub-ativar-aurinha")).toHaveLength(0);
   });
 });

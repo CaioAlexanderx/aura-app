@@ -33,7 +33,7 @@ export function PainelCliente({ companyId, convId, embutido = false }: { company
   };
 
   return (
-    <View testID="hub-painel-cliente" accessibilityLabel="Sobre o cliente"
+    <View testID="hub-painel-cliente" accessibilityLabel="Sobre o cliente" {...({ dataSet: { waFoco: "1" } } as any)}
       style={embutido
         ? { gap: 18, paddingVertical: 10 }
         : [superficie.solida(30), { padding: 22, gap: 18, alignSelf: "flex-start", width: "100%" }]}>
