@@ -391,7 +391,7 @@ function BrandGlyph({ collapsed }: { collapsed: boolean }) {
 // `pl` = plano EXIGIDO pelo modulo quando ele esta acima do plano da
 // empresa (null quando liberado). Ver planoExigidoSeBloqueado.
 // ============================================================
-function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark, tour }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string | null; isDark: boolean; tour?: string }) {
+function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark, tour, badge }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string | null; isDark: boolean; tour?: string; badge?: string }) {
   if (Platform.OS !== "web") {
     // Native fallback
     return (
@@ -470,6 +470,10 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark, tour }: { l
           letterSpacing: "-0.1px",
           color: a ? C.ink : "inherit",
         } as any}>{l}</span>
+      )}
+      {!collapsed && !!badge && (
+        // pílula "novo" do artboard GuiaAnuncio (item WhatsApp, atrás da trava da tela nova: o próprio item só aparece para quem passa por ela)
+        <span data-testid="nav-badge-novo" style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(167,139,250,.3)", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 } as any}>{badge}</span>
       )}
       {!collapsed && soon && (
         <span style={{ background: C.bg4, borderRadius: 4, padding: "1px 5px", fontSize: 8, color: C.ink3, fontWeight: 600, letterSpacing: "0.3px" } as any}>Em breve</span>
@@ -752,7 +756,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               )}
               {collapsed && <div style={{ height: 1, background: C.border, margin: "8px 4px" } as any} />}
               {s.i.map(i => (
-                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={planoExigidoSeBloqueado(i.mod, planoAtual)} isDark={isDark} tour={i.r === "/whatsapp" ? "nav.whatsapp" : undefined} />
+                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={planoExigidoSeBloqueado(i.mod, planoAtual)} isDark={isDark} tour={i.r === "/whatsapp" ? "nav.whatsapp" : undefined} badge={i.r === "/whatsapp" ? "novo" : undefined} />
               ))}
             </div>
           ))}

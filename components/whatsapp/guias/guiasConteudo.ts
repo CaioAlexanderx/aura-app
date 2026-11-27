@@ -36,7 +36,7 @@ export interface GuiaCtx {
   irPara: (d: DestinoAba) => void;
 }
 
-export type ExecKind = "antes" | "conectar" | "aguardar" | "conectado" | "aniversario" | "cobranca" | "venda" | "pronto" | "produto";
+export type ExecKind = "antes" | "aguardar" | "conectado" | "aniversario" | "cobranca" | "venda" | "pronto" | "produto";
 
 export interface PassoGuia {
   id: string;
@@ -54,6 +54,8 @@ export interface PassoGuia {
   completo?: (c: GuiaCtx) => boolean;
   /** Procura o alvo por mais tempo (a tela acabou de trocar de aba). */
   espera?: number;
+  /** O balão não pode cobrir o menu lateral (fica ao lado do alvo, encolhendo se preciso). */
+  evitaMenu?: boolean;
   /** Só roda com uma conversa aberta: sem o alvo, o guia fica pendente (artboard GuiaExecucao) em vez de pular. */
   exigeConversa?: boolean;
 }
@@ -80,6 +82,7 @@ export function guia1(celular: boolean): Guia {
       }],
     };
   }
+  // GuiaExecucao, guia 1: UM balão com as duas conferências e o botão verde, depois "esperando", depois "ligado".
   return {
     n: 1, meta: "Guia 1 · conectar", titulo: "Conectar o número da loja",
     passos: [
@@ -87,18 +90,10 @@ export function guia1(celular: boolean): Guia {
         id: "g1-antes", alvo: "wa.conexao", aba: { aba: "config", secao: "conexao" }, espera: 4000, exec: "antes",
         titulo: "Antes de começar",
         corpo: "Tenha à mão o celular com o WhatsApp da loja e o acesso ao Facebook da loja. O número continua funcionando no celular, como hoje.",
-        cta: "Estou com tudo",
         pula: (c) => c.conectado,
       },
       {
-        id: "g1-conectar", alvo: "wa.conectar", exec: "conectar", interativo: true,
-        titulo: "Toque em Conectar",
-        corpo: "Abre uma janela do Facebook: é por ela que o WhatsApp confirma que o número é da loja. Se a janela não abrir, libere janelas da Aura no navegador.",
-        cta: "Conectar agora",
-        pula: (c) => c.conectado,
-      },
-      {
-        id: "g1-celular-confirma", centro: true, exec: "aguardar",
+        id: "g1-aguardando", alvo: "wa.conectar", exec: "aguardar", interativo: true,
         titulo: "Siga o que aparece no celular",
         corpo: "Na janela, escolha o WhatsApp Business que a loja já usa. O celular pede uma confirmação: faça por lá e volte para esta tela.",
         pula: (c) => c.conectado,
@@ -143,7 +138,7 @@ export function guia2(): Guia {
       {
         id: "g2-venda", alvo: "wa.auto.venda_mais", aba: { aba: "automaticas" }, espera: 4000, exec: "venda", interativo: true,
         titulo: "Venda+ todo dia 1º",
-        corpo: "Todo dia 1º a Aura chama de volta quem parou de comprar, começando por quem mais comprava. As outras esperam o mês seguinte.",
+        corpo: "A Aura chama de volta quem parou de comprar, começando por quem mais comprava.",
         completo: (c) => c.auto.info?.autos.venda_mais?.ligada === true,
       },
       {
@@ -176,7 +171,7 @@ export function guia3(): Guia {
         corpo: "Depois que a cliente escreve, você tem um dia para responder à vontade sem usar saldo. O relógio mostra até quando.",
       },
       {
-        id: "g3-acoes", alvo: "wa.acoes", exec: "produto", interativo: true,
+        id: "g3-acoes", alvo: "wa.acoes", exec: "produto", interativo: true, evitaMenu: true,
         titulo: "Mande sem sair da conversa",
         corpo: "Produto, orçamento, Pix, link da loja, foto e etiqueta: um toque abre, outro manda.",
       },
@@ -206,7 +201,7 @@ export function guiaDe(n: 1 | 2 | 3, celular: boolean): Guia {
 
 /** O que o menu mostra de cada guia (texto do artboard GuiaCentral). */
 export const MENU_GUIAS: { n: 1 | 2 | 3; titulo: string; sub: (celular: boolean) => string }[] = [
-  { n: 1, titulo: "Conectar o número da loja", sub: (cel) => cel ? "No computador · uns 3 minutos · precisa do celular da loja" : "4 passos · uns 3 minutos · precisa do celular da loja" },
+  { n: 1, titulo: "Conectar o número da loja", sub: (cel) => cel ? "No computador · uns 3 minutos · precisa do celular da loja" : "3 passos · uns 3 minutos · precisa do celular da loja" },
   { n: 2, titulo: "Ligar as mensagens automáticas", sub: () => "7 passos · 1 minuto · aniversário, crediário e Venda+" },
   { n: 3, titulo: "Como usar a conversa", sub: () => "6 passos · 1 minuto" },
 ];

@@ -14,7 +14,8 @@
 import React, { useState } from "react";
 import { useWaPublico } from "@/hooks/useWaAutomatica";
 import { waAutoBlockers } from "../waGuards";
-import { PONTOS_ROTULO, alternarPonto, lerPontos, rotuloDoPresente } from "../waAutomaticaConfig";
+import { PONTOS_ROTULO, alternarPonto, lerPontos, nomeDoMes, rotuloDoPresente } from "../waAutomaticaConfig";
+import { pluralize } from "@/utils/plural";
 import { tourSelector } from "@/utils/tourTarget";
 import type { GuiaCtx, PassoGuia } from "./guiasConteudo";
 
@@ -23,6 +24,8 @@ export interface ExecProps {
   ctx: GuiaCtx;
   /** Vai ao passo seguinte (ou fecha, no último). */
   proximo: () => void;
+  /** Fecha o guia sem marcar como feito ("Faço depois"). */
+  pular: () => void;
   /** Termina este guia e abre o guia n. */
   encadear: (n: 1 | 2 | 3) => void;
   /** O produto foi mandado depois que o passo abriu. */
@@ -76,35 +79,24 @@ export function tocaNaTela(chave: string): boolean {
 }
 
 // ── Guia 1 ───────────────────────────────────────────────────────────
-function Antes({ proximo, passo }: ExecProps) {
+function Antes({ proximo, pular, ctx }: ExecProps) {
   const [cel, setCel] = useState(false);
   const [fb, setFb] = useState(false);
+  const [falhou, setFalhou] = useState(false);
+  const bloqueio = ctx.status?.token_expired === true ? "A autorização da Meta expirou: use Reconectar na tela." : null;
   return (
     <>
       <div>
         <Check on={cel} onClick={() => setCel(!cel)} testID="guia-chk-cel">Estou com o celular do WhatsApp da loja</Check>
         <Check on={fb} onClick={() => setFb(!fb)} testID="guia-chk-fb">Sei entrar no Facebook da loja</Check>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <BotaoPrincipal seta onClick={proximo} disabled={!(cel && fb)} testID="guia-acao">{passo.cta || "Próximo"}</BotaoPrincipal>
-      </div>
-    </>
-  );
-}
-
-function Conectar({ passo, ctx, proximo }: ExecProps) {
-  const [falhou, setFalhou] = useState(false);
-  const bloqueio = ctx.status?.token_expired === true ? "A autorização da Meta expirou: use Reconectar na tela." : null;
-  return (
-    <>
       {!!bloqueio && <Aviso cor="#fcd34d">{bloqueio}</Aviso>}
       {falhou && <Aviso cor="#fcd34d" testID="guia-conectar-falhou">O botão ainda está carregando. Espere um instante e toque de novo.</Aviso>}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <BotaoPrincipal wa testID="guia-acao" onClick={() => {
-          // o gesto do toque passa direto para o botão real: a janela do Facebook abre como se tivesse sido tocado ali
-          if (tocaNaTela("wa.conectar")) { setFalhou(false); proximo(); } else setFalhou(true);
-        }}>{passo.cta || "Conectar"}</BotaoPrincipal>
-      </div>
+      {/* o botão verde acende com as duas conferências e chama o botão REAL da tela (o Embedded Signup que já existe) */}
+      <BotaoPrincipal wa disabled={!(cel && fb)} testID="guia-acao" onClick={() => {
+        if (tocaNaTela("wa.conectar")) { setFalhou(false); proximo(); } else setFalhou(true);
+      }}>Conectar com o WhatsApp</BotaoPrincipal>
+      <button type="button" className="wag-lnk" style={{ alignSelf: "flex-start", paddingLeft: 0 }} onClick={pular} data-testid="guia-faco-depois">Faço depois</button>
     </>
   );
 }
@@ -142,6 +134,36 @@ function Conectado({ ctx, passo, encadear }: ExecProps) {
 }
 
 // ── Guia 2 ───────────────────────────────────────────────────────────
+// ── Prévias com o número REAL (a mesma conta da tela: prévia e público das automáticas) ──
+export interface CorteMin { total: number; cabem: number }
+const minus = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+/** "Em dezembro são 7 aniversariantes; cabem 4 nas novidades do Aniversário, começando por quem mais compra. Presente: 10% de desconto." */
+export function previaAniversario(corte: CorteMin | null, mes: string | null | undefined, presente: string | null): string | null {
+  if (!corte) return null;
+  const n = corte.total;
+  const quem = `${n === 1 ? "é" : "são"} ${pluralize(n, "aniversariante")}`;
+  return `Em ${minus(nomeDoMes(mes))} ${quem}; ${corte.cabem === 1 ? "cabe" : "cabem"} ${corte.cabem} nas novidades do Aniversário, começando por quem mais compra.${presente ? ` Presente: ${presente}.` : ""}`;
+}
+/** "34 clientes não compram há mais de 30 dias. Todo dia 1º, as 4 que mais compravam recebem R$ 20 de desconto. As outras esperam o mês seguinte." */
+export function previaVendaMais(corte: CorteMin | null, presente: string | null): string | null {
+  if (!corte) return null;
+  const n = corte.total, x = corte.cabem;
+  const quem = x === 1 ? "a 1 que mais comprava recebe" : `as ${x} que mais compravam recebem`;
+  const resto = n - x;
+  const fim = resto > 0 ? ` ${resto === 1 ? "A outra espera" : "As outras esperam"} o mês seguinte.` : "";
+  return `${n === 1 ? "1 cliente não compra" : `${n} clientes não compram`} há mais de 30 dias. Todo dia 1º, ${quem} ${presente || "a mensagem"}.${fim}`;
+}
+/** "Amanhã saem 3 avisos. 3 por parcela; ficam 72 de 100 avisos este mês." */
+export function previaCobranca(p: { saem: number | null; porParcela: number; restantes: number | null; total: number | null }): string | null {
+  if (p.saem == null) return null;
+  const a = p.saem === 1 ? "Amanhã sai 1 aviso." : `Amanhã saem ${p.saem} avisos.`;
+  const b = `${p.porParcela} por parcela`;
+  const c = p.restantes != null && p.total != null
+    ? `; ${p.restantes === 1 ? "fica" : "ficam"} ${p.restantes} de ${p.total} avisos este mês.` : ".";
+  return `${a} ${b}${c}`;
+}
+
 const NOVIDADE = {
   aniversario: { titulo: "Aniversário", ligado: "Aniversário ligado", botao: "Ligar o aniversário", dono: "Aniversário" },
   venda_mais: { titulo: "Venda+", ligado: "Venda+ ligado", botao: "Ligar o Venda+", dono: "Venda+" },
@@ -177,14 +199,14 @@ function Novidade({ ctx, proximo, chave }: ExecProps & { chave: "aniversario" | 
     );
   }
   const pode = !ligando && !ctx.auto.salvando && bloqueios.length === 0 && (!precisaAceite || aceite);
-  const previa = !corte ? null : chave === "aniversario"
-    ? `${corte.total === 1 ? "1 aniversariante" : `${corte.total} aniversariantes`}; cabem ${corte.cabem} nas novidades do Aniversário${corte.ordem ? `, ${corte.ordem}` : ""}.`
-    : `${corte.total === 1 ? "1 cliente não compra" : `${corte.total} clientes não compram`} há mais de 30 dias; cabem ${corte.cabem} nas novidades do Venda+${corte.ordem ? `, ${corte.ordem}` : ""}.`;
+  const previa = chave === "aniversario"
+    ? previaAniversario(corte, info.mes, presente)
+    : previaVendaMais(corte, presente);
   return (
     <>
       {!!previa && (
         <Aviso testID={chave === "aniversario" ? "guia-aniv-previa" : "guia-venda-previa"}>
-          {previa}{presente ? ` Presente: ${presente}.` : ""}
+          {previa}
         </Aviso>
       )}
       {precisaAceite && (
@@ -230,8 +252,7 @@ function Cobranca({ ctx, proximo }: ExecProps) {
   const [ligando, setLigando] = useState(false);
   const pub = useWaPublico(ctx.companyId, "crediario_cobrar", undefined, null, !!cobrar, JSON.stringify(cobrar?.config || {}));
   const bloqueios = bloqueiosDoLiga(ctx);
-  const saem = pub.publico?.amanha?.saem;
-  const avisos = ctx.saldo?.avisos.restante;
+  const saem = typeof pub.publico?.amanha?.saem === "number" ? pub.publico!.amanha!.saem! : null;
   const algum = !!pontos && PONTOS_ROTULO.some((p) => pontos[p.k]);
 
   if (!info || !cobrar) {
@@ -264,10 +285,13 @@ function Cobranca({ ctx, proximo }: ExecProps) {
           );
         })}
       </div>
-      <Aviso testID="guia-cobr-previa">
-        {typeof saem === "number" ? `Amanhã, às 9h, ${saem === 1 ? "sai 1 aviso" : `saem ${saem} avisos`}. ` : ""}
-        {typeof avisos === "number" ? `Cada aviso usa 1 dos ${avisos} avisos que restam do mês.` : "Cada aviso usa 1 dos avisos do mês."}
-      </Aviso>
+      {(() => {
+        const t = previaCobranca({
+          saem, porParcela: pontos ? PONTOS_ROTULO.filter((p) => pontos[p.k]).length : 0,
+          restantes: ctx.saldo ? ctx.saldo.avisos.restante : null, total: ctx.saldo ? ctx.saldo.avisos.total : null,
+        });
+        return t ? <Aviso testID="guia-cobr-previa">{t}</Aviso> : null;
+      })()}
       {bloqueios.length > 0 && <Aviso cor="#fcd34d" testID="guia-auto-bloqueio">{bloqueios[0]}</Aviso>}
       {!!ctx.auto.erro && <Aviso cor="#fca5a5">{ctx.auto.erro}</Aviso>}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -307,7 +331,6 @@ function Produto({ produtoFeito, proximo }: ExecProps) {
 export function ExecBloco(p: ExecProps) {
   switch (p.passo.exec) {
     case "antes": return <Antes {...p} />;
-    case "conectar": return <Conectar {...p} />;
     case "aguardar": return <Aguardar {...p} />;
     case "conectado": return <Conectado {...p} />;
     case "aniversario": return <Novidade {...p} chave="aniversario" />;

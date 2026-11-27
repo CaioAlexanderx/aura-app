@@ -166,7 +166,7 @@ function limita(v: number, a: number, b: number): number { return Math.max(a, Ma
  * celular (ou quando não cabe ao lado) vai abaixo ou acima, o lado com mais
  * espaço. Se o alvo é enorme e nada cabe, o balão fica dentro, no canto de baixo.
  */
-export function posicionaBalao(furo: Retangulo | null, vw: number, vh: number, altura: number, larguraBase: number): PosicaoBalao {
+export function posicionaBalao(furo: Retangulo | null, vw: number, vh: number, altura: number, larguraBase: number, opcoes?: { minLeft?: number }): PosicaoBalao {
   const largura = Math.min(larguraBase, vw - FOLGA * 2);
   if (!furo) {
     return { lado: "centro", left: Math.round((vw - largura) / 2), top: Math.round(Math.max(FOLGA, (vh - altura) / 2)), largura, seta: 0 };
@@ -185,7 +185,9 @@ export function posicionaBalao(furo: Retangulo | null, vw: number, vh: number, a
     const top = lado === "bottom" ? furo.y + furo.h + DIST : furo.y - DIST - altura;
     return { lado, left: Math.round(left), top: Math.round(top), largura, seta: Math.round(limita(cx - left - 8, 24, largura - 40)) };
   };
-  const horizontal = (lado: "right" | "left"): PosicaoBalao => {
+  const minLeft = opcoes?.minLeft;
+  const horizontal = (lado: "right" | "left", larg: number = largura): PosicaoBalao => {
+    const largura = larg;
     const left = lado === "right" ? furo.x + furo.w + DIST : furo.x - DIST - largura;
     const top = limita(cy - 42, FOLGA, Math.max(FOLGA, vh - altura - FOLGA));
     return { lado, left: Math.round(left), top: Math.round(top), largura, seta: Math.round(limita(cy - top - 8, 22, Math.max(22, altura - 38))) };
@@ -193,7 +195,12 @@ export function posicionaBalao(furo: Retangulo | null, vw: number, vh: number, a
 
   if (!estreito) {
     if (espacoD >= larguraLado) return horizontal("right");
-    if (espacoE >= larguraLado) return horizontal("left");
+    if (espacoE >= larguraLado && (minLeft == null || furo.x - DIST - largura >= minLeft)) return horizontal("left");
+    // com `minLeft` (não cobrir o menu lateral) o balão encolhe para caber ao lado, até 280 px
+    if (minLeft != null) {
+      const cabe = furo.x - DIST - minLeft;
+      if (cabe >= 280) return horizontal("left", Math.min(largura, Math.floor(cabe)));
+    }
   }
   if (espacoB >= altura + DIST) return vertical("bottom");
   if (espacoT >= altura + DIST) return vertical("top");

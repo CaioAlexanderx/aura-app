@@ -52,21 +52,21 @@ function alvo(chave: string, w = 120, h = 40) {
 afterEach(() => { montados.splice(0).forEach((m) => { try { act(() => { m.root.unmount(); }); } catch { /* ok */ } }); document.body.innerHTML = ""; try { localStorage.clear(); } catch { /* ok */ } jest.useRealTimers(); });
 
 describe("o texto e o alvo de cada balão", () => {
-  it("guia 1 tem 4 passos; guia 2, 7 (Venda+ e Pronto do GuiaExecucao); guia 3, 6", () => {
-    expect(guia1(false).passos).toHaveLength(4);
+  it("guia 1 tem 3 passos; guia 2, 7 (Venda+ e Pronto do GuiaExecucao); guia 3, 6", () => {
+    expect(guia1(false).passos).toHaveLength(3);
     expect(guia2().passos).toHaveLength(7);
     expect(guia3().passos).toHaveLength(6);
   });
   it("alvos na ordem do artboard", () => {
-    expect(guia1(false).passos.map((p) => p.alvo ?? "(centro)")).toEqual(["wa.conexao", "wa.conectar", "(centro)", "wa.saldos"]);
+    expect(guia1(false).passos.map((p) => p.alvo ?? "(centro)")).toEqual(["wa.conexao", "wa.conectar", "wa.saldos"]);
     expect(guia2().passos.map((p) => p.alvo)).toEqual(["wa.saldos", "wa.divisao", "wa.auto.aniversario", "wa.crediario.linha", "wa.auto.venda_mais", "wa.editar", "wa.auto.cartoes"]);
     expect(guia3().passos.map((p) => p.alvo)).toEqual(["wa.lista", "wa.janela", "wa.acoes", "wa.microfone", "wa.ligar_cadastro", "wa.convite"]);
   });
   it("textos finais (amostra literal do artboard)", () => {
-    expect(guia1(false).passos[1].corpo).toBe("Abre uma janela do Facebook: é por ela que o WhatsApp confirma que o número é da loja. Se a janela não abrir, libere janelas da Aura no navegador.");
+    expect(guia1(false).passos[1].corpo).toBe("Na janela, escolha o WhatsApp Business que a loja já usa. O celular pede uma confirmação: faça por lá e volte para esta tela.");
     expect(guia2().passos[1].titulo).toBe("As 10 novidades já vêm divididas");
     expect(guia3().passos[5].corpo).toContain("gasta 1 aviso");
-    expect(guia1(false).passos[3].cta).toBe("Ligar as automáticas");
+    expect(guia1(false).passos[2].cta).toBe("Ligar as automáticas");
   });
   it("no celular o guia 1 vira um passo só", () => {
     const g = guia1(true);
@@ -236,36 +236,44 @@ describe("o motor dos guias", () => {
     t.desmonta();
   });
 
-  it("guia 1: o botão só destrava com as duas conferências; conectar clica o botão REAL; o passo seguinte espera o status", () => {
+  it("guia 1: lista e botão verde no MESMO balão; acende com as duas conferências; clica o botão REAL; o passo seguinte espera o status", () => {
     jest.useFakeTimers();
     alvo("wa.conexao");
     const real = alvo("wa.conectar");
     const clicou = jest.fn();
     real.addEventListener("click", clicou);
-    const ctx = ctxBase();
-    const t = monta(<GuiaTour guia={guia1(false)} ctx={ctx} onFim={jest.fn()} />);
+    const t = monta(<GuiaTour guia={guia1(false)} ctx={ctxBase()} onFim={jest.fn()} />);
     passa(700);
     const acao = () => document.querySelector("[data-testid='guia-acao']") as HTMLButtonElement;
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 3");
+    expect(acao().textContent).toBe("Conectar com o WhatsApp");
+    expect(document.querySelector("[data-testid='guia-faco-depois']")?.textContent).toBe("Faço depois");
     expect(acao().disabled).toBe(true);
     act(() => { (document.querySelector("[data-testid='guia-chk-cel']") as HTMLElement).click(); });
     expect(acao().disabled).toBe(true);
     act(() => { (document.querySelector("[data-testid='guia-chk-fb']") as HTMLElement).click(); });
     expect(acao().disabled).toBe(false);
     act(() => { acao().click(); });
-    passa(700);
-    expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Toque em Conectar");
-    act(() => { acao().click(); });
     expect(clicou).toHaveBeenCalledTimes(1);
-    passa(300);
+    passa(700);
     expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Siga o que aparece no celular");
     expect(document.querySelector("[data-testid='guia-aguardando']")).not.toBeNull();
-    // o estado muda (status conectado): o passo avança sozinho
     alvo("wa.saldos");
     t.atualiza(<GuiaTour guia={guia1(false)} ctx={ctxBase({ conectado: true, telefone: "(11) 98765-0000" })} onFim={jest.fn()} />);
     passa(1500);
     passa(700);
     expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Número conectado");
     t.desmonta();
+  });
+
+  it("'Faço depois' fecha sem marcar o guia como feito", () => {
+    jest.useFakeTimers();
+    alvo("wa.conexao");
+    const onFim = jest.fn();
+    monta(<GuiaTour guia={guia1(false)} ctx={ctxBase()} onFim={onFim} />);
+    passa(700);
+    act(() => { (document.querySelector("[data-testid='guia-faco-depois']") as HTMLElement).click(); });
+    expect(onFim).toHaveBeenCalledWith({ feito: false });
   });
 
   it("botão real desabilitado: o balão não finge que conectou", () => {
@@ -278,8 +286,6 @@ describe("o motor dos guias", () => {
     const t = monta(<GuiaTour guia={guia1(false)} ctx={ctxBase()} onFim={jest.fn()} />);
     passa(700);
     act(() => { (document.querySelector("[data-testid='guia-chk-cel']") as HTMLElement).click(); (document.querySelector("[data-testid='guia-chk-fb']") as HTMLElement).click(); });
-    act(() => { (document.querySelector("[data-testid='guia-acao']") as HTMLElement).click(); });
-    passa(700);
     act(() => { (document.querySelector("[data-testid='guia-acao']") as HTMLElement).click(); });
     expect(clicou).not.toHaveBeenCalled();
     expect(document.querySelector("[data-testid='guia-conectar-falhou']")).not.toBeNull();
@@ -453,5 +459,38 @@ describe("Venda+, Pronto, buraco que desliza e guia 3 pendente", () => {
     monta(<GuiaTour guia={guia3()} ctx={ctxBase()} onFim={jest.fn()} inicioId="g3-janela" />);
     passa(700);
     expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("2 de 6");
+  });
+});
+
+describe("prévias com o número real", () => {
+  const { previaAniversario, previaVendaMais, previaCobranca } = require("@/components/whatsapp/guias/GuiaExec");
+  it("aniversário", () => {
+    expect(previaAniversario({ total: 7, cabem: 4 }, "2026-12", "10% de desconto")).toBe("Em dezembro são 7 aniversariantes; cabem 4 nas novidades do Aniversário, começando por quem mais compra. Presente: 10% de desconto.");
+    expect(previaAniversario({ total: 1, cabem: 1 }, "2026-12", null)).toBe("Em dezembro é 1 aniversariante; cabe 1 nas novidades do Aniversário, começando por quem mais compra.");
+    expect(previaAniversario(null, "2026-12", null)).toBeNull();
+  });
+  it("Venda+", () => {
+    expect(previaVendaMais({ total: 34, cabem: 4 }, "R$ 20 de desconto")).toBe("34 clientes não compram há mais de 30 dias. Todo dia 1º, as 4 que mais compravam recebem R$ 20 de desconto. As outras esperam o mês seguinte.");
+    expect(previaVendaMais({ total: 1, cabem: 1 }, null)).toBe("1 cliente não compra há mais de 30 dias. Todo dia 1º, a 1 que mais comprava recebe a mensagem.");
+    expect(previaVendaMais({ total: 5, cabem: 4 }, null)).toContain("A outra espera o mês seguinte.");
+    expect(previaVendaMais(null, null)).toBeNull();
+  });
+  it("cobrança", () => {
+    expect(previaCobranca({ saem: 3, porParcela: 3, restantes: 72, total: 100 })).toBe("Amanhã saem 3 avisos. 3 por parcela; ficam 72 de 100 avisos este mês.");
+    expect(previaCobranca({ saem: 1, porParcela: 1, restantes: 1, total: 100 })).toBe("Amanhã sai 1 aviso. 1 por parcela; fica 1 de 100 avisos este mês.");
+    expect(previaCobranca({ saem: 2, porParcela: 2, restantes: null, total: null })).toBe("Amanhã saem 2 avisos. 2 por parcela.");
+    expect(previaCobranca({ saem: null, porParcela: 2, restantes: 1, total: 100 })).toBeNull();
+  });
+});
+
+describe("balão do guia 3 ao lado da barra, sem cobrir o menu", () => {
+  it("fica à esquerda do alvo, encolhido, a partir da borda do menu", () => {
+    const { posicionaBalao: pos } = require("@/components/whatsapp/guias/guiaVisual");
+    const furo = { x: 610, y: 690, w: 520, h: 70 };
+    const p = pos(furo, 1440, 900, 300, 400, { minLeft: 296 });
+    expect(p.lado).toBe("left");
+    expect(p.left).toBeGreaterThanOrEqual(296);
+    expect(p.left + p.largura).toBeLessThanOrEqual(610 - 18 + 1);
+    expect(p.largura).toBeGreaterThanOrEqual(280);
   });
 });

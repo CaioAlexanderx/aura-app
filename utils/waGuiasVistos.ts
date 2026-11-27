@@ -6,6 +6,9 @@
 // chave por id do usuário; não há rota no servidor para isso ainda. Sem
 // storage (janela privada, bloqueio), tudo cai para "não visto" e a tela
 // funciona do mesmo jeito, só repete o anúncio.
+//
+// A sincronização por usuário no servidor (visto em qualquer aparelho) vem no
+// mesmo cartão da virada do SpotlightTour, junto com a mudança dos guias para ele.
 // ============================================================
 
 export type ChaveVisto = "g1" | "g2" | "g3" | "anuncio" | "menu";

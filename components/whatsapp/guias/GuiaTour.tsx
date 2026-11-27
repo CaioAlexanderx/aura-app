@@ -1,6 +1,10 @@
 // ============================================================
 // GuiaTour — o motor dos três guias do WhatsApp
 //
+// PROVISÓRIO: depois da virada, o SpotlightTour ganha as opções de executar a
+// ação no balão e de deslizar o furo entre alvos, e os guias passam a rodar
+// nele (este motor some). Não mexer no SpotlightTour antes disso.
+//
 // Usa a mecânica do SpotlightTour que já existe (findTourTarget, espera pelo
 // alvo, auto-scroll, portal no body, tourTarget) com o visual dos artboards
 // (GuiaPassos / GuiaExecucao): vidro, balão com seta e fio, spotlight com halo
@@ -257,9 +261,17 @@ export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
   const furo: Retangulo | null = rect && !solto
     ? { x: rect.x - RESPIRO, y: rect.y - RESPIRO, w: rect.w + RESPIRO * 2, h: rect.h + RESPIRO * 2 }
     : null;
-  const pos = solto
+  // Passo que não pode cobrir o menu lateral: o balão fica ao lado do alvo, à direita da borda do menu.
+  let minLeft: number | undefined;
+  if (passo.evitaMenu && vw > 600) {
+    const nav = findTourTarget([tourSelector("nav.whatsapp")]);
+    if (nav) minLeft = Math.ceil(nav.getBoundingClientRect().right) + 16;
+  }
+  // Depois do toque no alvo (solto) o balão continua ancorado a ele, sem cobrir o painel que abriu; só no celular, onde a
+  // gaveta ocupa a parte de baixo, ele sobe para o topo.
+  const pos = solto && vw <= 600
     ? { lado: "dentro" as const, left: 16, top: 16, largura: Math.min(LARGURA_BALAO, vw - 32), seta: 0 }
-    : posicionaBalao(rect ? { x: rect.x - RESPIRO, y: rect.y - RESPIRO, w: rect.w + RESPIRO * 2, h: rect.h + RESPIRO * 2 } : null, vw, vh, alturaBalao, LARGURA_BALAO);
+    : posicionaBalao(rect ? { x: rect.x - RESPIRO, y: rect.y - RESPIRO, w: rect.w + RESPIRO * 2, h: rect.h + RESPIRO * 2 } : null, vw, vh, alturaBalao, LARGURA_BALAO, { minLeft });
   const produtoFeito = ctx.produtosEnviados > produtosNaEntrada.current;
   const execComBotao = !!passo.exec;
   const total = passos.length;
@@ -332,7 +344,7 @@ export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
         )}
 
         {execComBotao && !semConversa && (
-          <ExecBloco passo={passo} ctx={ctx} proximo={proximo} encadear={encadear} produtoFeito={produtoFeito} />
+          <ExecBloco passo={passo} ctx={ctx} proximo={proximo} pular={pular} encadear={encadear} produtoFeito={produtoFeito} />
         )}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
