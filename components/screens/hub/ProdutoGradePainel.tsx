@@ -110,8 +110,8 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
           ? <Image source={{ uri: capa }} style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: K.trilho }} />
           : <View style={[{ width: 56, height: 56, borderRadius: 16, backgroundColor: "#b9ab95" }, web({ backgroundImage: "linear-gradient(150deg,#efe6d6,#b9ab95)" })]} />}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Tx numberOfLines={1} style={{ fontSize: 18, fontWeight: "700", lineHeight: 24 }}>{grade.produto.nome}</Tx>
-          <Tx numberOfLines={1} style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>{[fmt(Number(cor?.preco ?? grade.produto.preco)), sub].filter(Boolean).join(" · ")}</Tx>
+          <Tx numberOfLines={2} style={{ fontSize: 18, fontWeight: "700", lineHeight: 24 }}>{grade.produto.nome}</Tx>
+          <Tx numberOfLines={2} style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>{[fmt(Number(cor?.preco ?? grade.produto.preco)), sub].filter(Boolean).join(" · ")}</Tx>
         </View>
         <Lnk testID="hub-grade-trocar" onPress={onTrocar}>Trocar</Lnk>
       </View>

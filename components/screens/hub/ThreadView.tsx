@@ -26,7 +26,7 @@ import { CartaoProdutoGrade, PerguntaDeTamanho, RespostaDeBotao, SugestaoDeReser
 import { hubProdutoGradeApi, mensagemDaReserva, ehReservaNaoLiberada, type SugestaoReserva } from "@/services/hubProdutoGradeApi";
 import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
+import { K, Tx, Meta, Ico, Avatar, EtiquetaChip, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -194,6 +194,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         {abertaAte
           ? <Tx testID="hub-janela-aberta" {...tourTarget("wa.janela")} numberOfLines={1} style={{ fontSize: 12, color: K.ok, lineHeight: 16 }}>{`Aberta até ${abertaAte}`}</Tx>
           : <Tx numberOfLines={1} style={{ fontSize: 12, color: K.ink2, lineHeight: 16 }}>{sub}</Tx>}
+        {(conv.labels || []).length > 0 && (
+          <View testID="hub-thread-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+            {(conv.labels || []).map((l) => <EtiquetaChip key={l.id} testID={`hub-thread-etiqueta-${l.id}`} nome={l.name} cor={l.color} />)}
+          </View>
+        )}
       </View>
       {whatsapp && avisos && (
         <View testID="hub-thread-avisos-bloco" style={{ alignItems: "flex-end", gap: 4, paddingRight: 6 }}>
@@ -210,6 +215,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           <Tx numberOfLines={1} style={{ fontSize: 17, fontWeight: "700", lineHeight: 24 }}>{nomeTela}</Tx>
           <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{sub}</Tx>
         </View>
+        {(conv.labels || []).length > 0 && (
+          <View testID="hub-thread-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, flexShrink: 1 }}>
+            {(conv.labels || []).map((l) => <EtiquetaChip key={l.id} testID={`hub-thread-etiqueta-${l.id}`} nome={l.name} cor={l.color} />)}
+          </View>
+        )}
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%" }}>
         {abertaAte && (

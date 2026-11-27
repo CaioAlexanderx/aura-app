@@ -150,6 +150,16 @@ export function Ponto({ cor, size = 7 }: { cor: string; size?: number }) {
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: cor }} />;
 }
 
+/** Etiqueta da conversa (pílula do artboard: ponto da cor e nome). */
+export function EtiquetaChip({ nome, cor, testID }: { nome: string; cor: string; testID?: string }) {
+  return (
+    <View testID={testID} style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 28, paddingHorizontal: 12, borderRadius: 999, backgroundColor: K.tagOn }}>
+      <Ponto cor={cor} size={7} />
+      <Text style={t(13, V.ink, "600", { lineHeight: 18 })} numberOfLines={1}>{nome}</Text>
+    </View>
+  );
+}
+
 const TONS: [string, string][] = [
   ["#e9e3ff", "#a78bfa"], ["#fde68a", "#f59e0b"], ["#a7f3d0", "#10b981"], ["#fbcfe8", "#ec4899"], ["#bfdbfe", "#3b82f6"],
 ];

@@ -252,6 +252,15 @@ describe("conversa aberta", () => {
     expect(porId(r, "hub-grade-tam-M")[0].props.accessibilityState).toEqual({ disabled: false });
   });
 
+  it("cabeçalho da conversa mostra a etiqueta \"Quer o M\" ao lado do nome", async () => {
+    const c: any = { ...conv(horasAtras(2)), labels: [{ id: "l1", name: "Quer o M", color: "#7c3aed" }] };
+    mockHub.conversations.mockResolvedValue({ conversations: [c], counts: [] });
+    mockHub.messages.mockResolvedValue({ conversation: c, pending_approvals: [], messages: MSGS });
+    const r = await abrirThread();
+    expect(porId(r, "hub-thread-etiqueta-l1")).toHaveLength(1);
+    expect(textoDe(porId(r, "hub-thread-etiquetas")[0])).toContain("Quer o M");
+  });
+
   it("thread: uma bolha só (produto com opcoes) mostra fotos, legenda e botões", async () => {
     mockHub.conversations.mockResolvedValue({ conversations: [conv(horasAtras(2))], counts: [] });
     mockHub.messages.mockResolvedValue({ conversation: conv(horasAtras(2)), pending_approvals: [], messages: [
