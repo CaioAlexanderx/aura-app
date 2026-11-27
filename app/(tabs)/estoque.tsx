@@ -1446,6 +1446,7 @@ export default function EstoqueScreen() {
           origem={lojasTransferencia?.origem || { id: "", nome: "" }}
           destinos={lojasTransferencia?.destinos || []}
           produtos={products.filter((p) => bulkSelected.has(p.id) && p.unit !== "srv")}
+          comClientesLiberado={comClientesLiberado}
           onFechar={() => setTransferirAberto(false)}
           onEstoqueMudou={() => {
             qc.invalidateQueries({ queryKey: ["products", company?.id] });

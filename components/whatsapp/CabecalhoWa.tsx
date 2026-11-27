@@ -11,27 +11,59 @@ import React, { useRef } from "react";
 import { View, Text, ScrollView } from "react-native";
 import type { ScreenTabItem } from "@/components/ScreenHero";
 import { IconeAjuda, Meta, Pilula, Titulo, Voltar, V, t } from "./waVidro";
+import { useSetas } from "./waTeclado";
+/**
+ * Lista de abas (padrão ARIA tablist): uma só parada de Tab (a aba ativa), ← → (e ↑ ↓) movem e ativam,
+ * Home e End vão às pontas, Enter e Espaço ativam. Serve às abas do topo e às subabas de Configurações.
+ */
+export function ListaAbas({ abas, ativa, onSelect, rotulo, testIDLista, antes, depois, aoLayoutAtiva }: {
+  abas: { key: string; label: string; testID?: string }[];
+  ativa: string;
+  onSelect: (k: string) => void;
+  rotulo: string;
+  testIDLista?: string;
+  /** Itens depois das abas, na mesma linha (o botão Guias). */
+  depois?: React.ReactNode;
+  antes?: React.ReactNode;
+  /** x da aba ativa dentro da lista (para rolar a linha do celular até ela). */
+  aoLayoutAtiva?: (x: number) => void;
+}) {
+  const i = abas.findIndex((x) => x.key === ativa);
+  const { propsDoItem } = useSetas({
+    qtd: abas.length, ativo: i, ativarAoMover: true, ativarComEnterEEspaco: true, vertical: false,
+    aoMover: (k) => onSelect(abas[k].key),
+  });
+  return (
+    <>
+      {antes}
+      <View accessibilityRole="tablist" aria-label={rotulo} testID={testIDLista} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        {abas.map((tb, k) => {
+          const pil = (
+            <Pilula
+              key={tb.key} role="tab" ligada={tb.key === ativa} onPress={() => onSelect(tb.key)} testID={tb.testID}
+              nativeID={`wa-tab-${tb.key}`} estado={{ selected: tb.key === ativa }} nav={propsDoItem(k)}
+            >
+              <Text style={t(14, tb.key === ativa ? V.onTxt : V.ink, "600")}>{tb.label}</Text>
+            </Pilula>
+          );
+          return tb.key === ativa && aoLayoutAtiva
+            ? <View key={tb.key} onLayout={(e) => aoLayoutAtiva(e.nativeEvent.layout.x)}>{pil}</View>
+            : pil;
+        })}
+      </View>
+      {depois}
+    </>
+  );
+}
+
 /** As abas do topo: pílulas translúcidas (a ativa NÃO é sólida) e o botão Guias (só ícone no celular). */
 export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabItem[]; ativa: string; onSelect: (k: string) => void; estreito?: boolean }) {
   const rolagem = useRef<any>(null);
   // No celular a linha rola: ao abrir, leva a aba ativa inteira para dentro da tela.
-  const levaAteAAtiva = (x: number, largura: number) => {
+  const levaAteAAtiva = (x: number) => {
     try { rolagem.current?.scrollTo?.({ x: Math.max(0, x - 12), animated: false }); } catch { /* sem rolagem */ }
-    void largura;
   };
-  const pilulas = tabs.map((tb) => {
-    const p = (
-      <Pilula
-        key={tb.key} ligada={tb.key === ativa} onPress={() => onSelect(tb.key)} testID={tb.testID}
-        estado={{ selected: tb.key === ativa }}
-      >
-        <Text style={t(14, tb.key === ativa ? V.onTxt : V.ink, "600")}>{tb.label}</Text>
-      </Pilula>
-    );
-    return estreito && tb.key === ativa
-      ? <View key={tb.key} onLayout={(e) => levaAteAAtiva(e.nativeEvent.layout.x, e.nativeEvent.layout.width)}>{p}</View>
-      : p;
-  });
+  const abas = tabs.map((tb) => ({ key: tb.key, label: tb.label, testID: tb.testID }));
   // Os guias entram no próximo PR: aqui só o botão e o alvo do tour.
   const guias = (
     <Pilula onPress={() => {}} testID="wa-varejo-guias" tour="wa.guias" label="Guias">
@@ -43,15 +75,19 @@ export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabIte
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0, width: "100%" }}>
         <ScrollView ref={rolagem} horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, minWidth: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 12 }}>
-          {pilulas}
+          <ListaAbas abas={abas} ativa={ativa} onSelect={onSelect} rotulo="Seções do WhatsApp" aoLayoutAtiva={levaAteAAtiva} />
         </ScrollView>
         {guias}
       </View>
     );
   }
-  return <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 6, flexShrink: 0 }}>{pilulas}{guias}</View>;
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 6, flexShrink: 0 }}>
+      <ListaAbas abas={abas} ativa={ativa} onSelect={onSelect} rotulo="Seções do WhatsApp" />
+      {guias}
+    </View>
+  );
 }
-
 interface Props {
   largo: boolean;
   lojaNome: string;
