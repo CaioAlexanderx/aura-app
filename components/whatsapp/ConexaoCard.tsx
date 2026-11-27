@@ -18,7 +18,8 @@ import { WaSignupMode, WaStatus } from "@/services/waApi";
 import { useWaEmbeddedSignup } from "./useWaEmbeddedSignup";
 import { fmtPhoneBR } from "./waGuards";
 import { tourTarget } from "@/utils/tourTarget";
-import { Meta, V, estiloSuperficie, t } from "./waVidro";
+import { BtnPrimario, Meta, V, t } from "./waVidro";
+import { estiloSuperficie } from "./waVisual";
 
 interface Props {
   /** Visual do artboard GuiaExecucao (só equipe/sandbox até a liberação). */
@@ -93,11 +94,13 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
 
       {mode === "conectado" && (
         <View testID="wa-varejo-conectado">
-          <Text style={s.sub}>
-            O WhatsApp {fmtPhoneBR(status?.phone_display)} está conectado e é ele que aparece para o
-            cliente. As conversas iniciadas por template são cobradas pela Meta na conta da loja.
-          </Text>
-          {status?.coexistence === true && (
+          {!vidro && (
+            <Text style={s.sub}>
+              O WhatsApp {fmtPhoneBR(status?.phone_display)} está conectado e é ele que aparece para o
+              cliente. As conversas iniciadas por template são cobradas pela Meta na conta da loja.
+            </Text>
+          )}
+          {!vidro && status?.coexistence === true && (
             <View style={s.badge} testID="wa-varejo-coexistence-badge">
               <Icon name="qr_code" size={12} color={Colors.violet3} />
               <Text style={s.badgeTxt}>Também no celular</Text>
@@ -107,8 +110,7 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
             <View style={s.warnBox} testID="wa-varejo-nao-registrado">
               <Icon name="alert" size={13} color={Colors.amber} />
               <Text style={s.warnTxt}>
-                O registro do número na Meta não foi concluído — reconecte antes de ligar o envio
-                automático, senão as mensagens falham na hora do disparo.
+                {vidro ? "O registro do número no WhatsApp não foi concluído. Reconecte antes de ligar o envio automático, senão as mensagens falham na hora do disparo." : "O registro do número na Meta não foi concluído — reconecte antes de ligar o envio automático, senão as mensagens falham na hora do disparo."}
               </Text>
             </View>
           )}
@@ -140,37 +142,53 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
 
       {(mode === "conectar" || mode === "reconectar") && (
         <View testID="wa-varejo-conexao-disponivel">
-          <Text style={s.sub}>
-            {mode === "reconectar"
-              ? "A autorização da Meta expirou. Reconecte o mesmo número para voltar a enviar — nada precisa ser cadastrado de novo."
-              : "Conecte o número da loja numa janela oficial do Facebook. O número continua sendo seu: a Aura só passa a enviar por ele as mensagens que você autorizar."}
-          </Text>
-          <Text style={s.hint}>
-            Tenha em mãos o acesso ao Facebook da loja. Cada conversa iniciada por template é cobrada
-            pela Meta.
-          </Text>
+          {vidro ? (
+            mode === "reconectar" && (
+              <Text style={s.sub}>A autorização do WhatsApp expirou. Reconecte o mesmo número para voltar a enviar: nada precisa ser cadastrado de novo.</Text>
+            )
+          ) : (
+            <>
+              <Text style={s.sub}>
+                {mode === "reconectar"
+                  ? "A autorização da Meta expirou. Reconecte o mesmo número para voltar a enviar — nada precisa ser cadastrado de novo."
+                  : "Conecte o número da loja numa janela oficial do Facebook. O número continua sendo seu: a Aura só passa a enviar por ele as mensagens que você autorizar."}
+              </Text>
+              <Text style={s.hint}>
+                Tenha em mãos o acesso ao Facebook da loja. Cada conversa iniciada por template é cobrada
+                pela Meta.
+              </Text>
+            </>
+          )}
 
           <View style={s.modeGroup} testID="wa-varejo-modo-numero">
             <ModeOption
               selected={signupMode === "coexistence"}
-              title="Já uso este número no app WhatsApp Business do celular (recomendado — continua funcionando no celular)"
+              title={vidro ? "Uso este número no WhatsApp do celular (recomendado)" : "Já uso este número no app WhatsApp Business do celular (recomendado — continua funcionando no celular)"}
               onPress={() => setSignupMode("coexistence")}
               testID="wa-varejo-modo-coexistence"
             />
             <ModeOption
               selected={signupMode === "padrao"}
-              title="Vou usar um número novo, só para o sistema"
+              title={vidro ? "Vou usar um número novo" : "Vou usar um número novo, só para o sistema"}
               onPress={() => setSignupMode("padrao")}
               testID="wa-varejo-modo-padrao"
             />
           </View>
           {signupMode === "coexistence" && (
             <Text style={s.modeHint} testID="wa-varejo-modo-hint">
-              Durante a conexão, o celular vai pedir para escanear um QR code — é assim que o WhatsApp
-              Business do celular passa a funcionar junto com o sistema, sem trocar de número.
+              {vidro
+                ? "Durante a conexão, o celular vai pedir uma confirmação: faça por lá. O número continua funcionando no celular, como hoje."
+                : "Durante a conexão, o celular vai pedir para escanear um QR code — é assim que o WhatsApp Business do celular passa a funcionar junto com o sistema, sem trocar de número."}
             </Text>
           )}
 
+          {vidro ? (
+            <View style={{ marginTop: 14 }}>
+              <BtnPrimario onPress={startSignup} disabled={!!btnDisabled} carregando={busy} testID="wa-varejo-conectar" semSeta tour="wa.conectar">
+                {busy ? "Conectando…" : btnDisabled ? "Carregando…" : mode === "reconectar" ? "Reconectar WhatsApp" : "Conectar WhatsApp"}
+              </BtnPrimario>
+            </View>
+          ) : (
           <Pressable
             onPress={startSignup}
             disabled={btnDisabled}
@@ -184,6 +202,7 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
               {busy ? "Conectando…" : btnDisabled ? "Carregando…" : vidro && mode === "conectar" ? "Conectar WhatsApp" : connectLabel}
             </Text>
           </Pressable>
+          )}
           {!!sdkError && <Text style={s.errTxt} testID="wa-varejo-sdk-erro">{sdkError}</Text>}
         </View>
       )}
@@ -206,7 +225,8 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
         sheetStyle={{ backgroundColor: Colors.bg3, padding: 20 }}
       >
         <View style={{ gap: 10 }} testID="wa-varejo-confirmar-desconectar">
-          <Text style={s.dialogTitle}>Desconectar o WhatsApp da loja?</Text>
+          <Text style={s.dialogTitle}>{vidro ? "Trocar o número?" : "Desconectar o WhatsApp da loja?"}</Text>
+          {vidro && <Text style={s.sub} testID="wa-varejo-trocar-aviso">A loja fica sem WhatsApp até conectar o novo.</Text>}
           <Text style={s.sub}>
             O envio automático para de sair na hora e as mensagens que ainda estão na fila não serão
             enviadas. O número continua sendo da loja e pode ser conectado de novo depois. A
@@ -217,7 +237,7 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
               <Text style={s.ghostTxt}>Cancelar</Text>
             </Pressable>
             <Pressable onPress={doDisconnect} disabled={busy} style={[s.dangerBtn, busy && s.btnDisabled]} accessibilityRole="button">
-              <Text style={s.dangerTxt}>{busy ? "Desconectando…" : "Desconectar"}</Text>
+              <Text style={s.dangerTxt}>{busy ? "Desconectando…" : vidro ? "Trocar o número" : "Desconectar"}</Text>
             </Pressable>
           </View>
         </View>
@@ -226,10 +246,10 @@ export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
   );
 }
 
-const vidroCard: any = { ...estiloSuperficie("dry", 24), padding: 20 };
+const vidroCard: any = {};
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  card: { ...estiloSuperficie("dry", 24), padding: 20 },
   headRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 14, fontWeight: "800", color: Colors.ink },
   sub: { fontSize: 12.5, color: Colors.ink2, marginTop: 8, lineHeight: 18, maxWidth: 620 },

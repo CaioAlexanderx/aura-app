@@ -9,18 +9,17 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { Avatar, Meta, Superficie, BtnPrimario, V, WEB, t } from "./waVidro";
+import { animVai, Avatar, Meta, Superficie, BtnPrimario, V, WEB, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
-import { BolhaExemplo, Interruptor, Pilulas } from "./configUi";
+import { BolhaExemplo, Interruptor, LinkPacote, Pilulas } from "./configUi";
 import { podeMandarNovidades } from "./waCorte";
 import {
   OPCOES_PRESENTE, OPCOES_SEGMENTO, chaveDoPresente, lerSegmento, modeloDaVenda, presenteDaChave,
   rotuloDoPresente, type PresenteChave, type SegmentoVenda,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
-import { ModelosEditaveis } from "./ModelosEditaveis";
 import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -32,6 +31,11 @@ interface Props {
   lojaNome: string;
 }
 
+/** "1 pediu" / "2 pediram". */
+function plural(n: number, um: string, varios: string): string {
+  return `${n} ${n === 1 ? um : varios}`;
+}
+
 export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Props) {
   const info = auto.info;
   const lida = info?.autos.venda_mais;
@@ -41,6 +45,9 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const alt = useAlternarAutomatica(auto);
 
   const pub = useWaPublico(companyId, "venda_mais", segmento || undefined, lida?.livres ?? null, !!lida && !!segmento, JSON.stringify(cfg));
+  // O outro grupo também mostra a contagem ("18 clientes" / "23 clientes").
+  const outroSeg: SegmentoVenda = segmento === "sumiu" ? "sumindo" : "sumiu";
+  const pubOutro = useWaPublico(companyId, "venda_mais", outroSeg, lida?.livres ?? null, !!lida && !!segmento, JSON.stringify(cfg));
   const modelos = useWaModelos(companyId, "venda_mais", !!lida);
 
   if (!info || !lida) {
@@ -60,9 +67,15 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const comPresente = presenteChave != null && presenteChave !== "nenhum";
   const modelo = segmento ? (modelos.modelos || []).find((m) => m.key === modeloDaVenda(segmento, comPresente)) : null;
   const primeira = corte?.recebem[0]?.nome.split(" ")[0] || undefined;
+  // O presente vale 15 dias a partir do envio.
+  const hoje = new Date();
+  const validade = (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 15); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; })();
   const mensagem = modelo?.texto_em_uso
     ? renderizar(modelo.texto_em_uso, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
+        "Validade": validade,
+        "Última compra": corte?.recebem[0]?.ultimaCompra,
+        "Mês da última compra": corte?.recebem[0]?.mesUltimaCompra,
       }, !primeira)
     : null;
 
@@ -73,6 +86,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const totalVenda = info.divisao.venda_mais ?? 0;
   const usadasVenda = info.usadas.venda_mais ?? 0;
   const livresVenda = lida.livres ?? 0;
+  const contagem = (n: number | null | undefined) => (typeof n === "number" ? `${n} ${n === 1 ? "cliente" : "clientes"}. ` : "");
   const DESC_SEG: Record<string, string> = { sumindo: "A melhor hora de chamar.", sumiu: "Precisa de um presente maior." };
 
   return (
@@ -98,7 +112,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                 <Meta>{o.meta}</Meta>
                 <Text style={t(24, V.ink, "800", { letterSpacing: -0.7, lineHeight: 28 })}>{o.rotulo}</Text>
                 <Text style={t(14, V.ink2)}>
-                  {on && corte ? `${corte.total} clientes. ` : ""}{DESC_SEG[o.valor] || ""}
+                  {contagem(o.valor === segmento ? corte?.total : pubOutro.corte?.total)}{DESC_SEG[o.valor] || ""}
                 </Text>
               </Pressable>
             );
@@ -122,11 +136,13 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
               <View style={{ flexDirection: "row", gap: 4 }}>
                 {Array.from({ length: Math.max(0, totalVenda) }).map((_, i) => {
                   const usada = i < usadasVenda;
+                  // depois de mandar, as cápsulas que viraram mensagem saem (vai)
+                  const foi = !!pub.enviado && (pub.enviado.enfileiradas ?? 0) > 0 && !usada && i - usadasVenda < (pub.enviado.enfileiradas ?? 0);
                   return (
                     <View
                       key={i}
                       style={[{ width: 12, height: 26, borderRadius: 999, backgroundColor: usada ? V.track : "#f9a8d4" } as any,
-                        WEB && !usada ? ({ backgroundImage: "linear-gradient(180deg,#fde7f3,#f9a8d4)", boxShadow: "0 0 9px rgba(249,168,212,.55)" } as any) : null]}
+                        WEB && !usada ? ({ backgroundImage: "linear-gradient(180deg,#fde7f3,#f9a8d4)", boxShadow: "0 0 9px rgba(249,168,212,.55)" } as any) : null, foi ? animVai(i - usadasVenda) : null]}
                     />
                   );
                 })}
@@ -137,7 +153,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
 
           {!!fora && (
             <Text style={t(14, V.ink2)} testID="wa-venda-fora">
-              {fora.recebeu_ha_menos_de_7_dias ?? 0} receberam novidade há menos de 7 dias · {fora.pediu_para_nao_receber ?? 0} pediram
+              {plural(fora.recebeu_ha_menos_de_7_dias ?? 0, "recebeu", "receberam")} novidade há menos de 7 dias · {plural(fora.pediu_para_nao_receber ?? 0, "pediu", "pediram")}{" "}
               para não receber · {fora.sem_telefone ?? 0} sem telefone
             </Text>
           )}
@@ -167,6 +183,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                   </View>
                 ))}
               </View>
+              {corte.total > corte.cabem && !!companyId && <LinkPacote companyId={companyId} />}
               {corte.total > corte.cabem && (
                 <Text style={t(14, V.ink2)} testID="wa-venda-resto">
                   Vão as {corte.cabem} que mais compravam. As outras {corte.total - corte.cabem} ficam guardadas para o mês
@@ -183,16 +200,6 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
           </Text>
         </View>
 
-        <View style={{ gap: 10 }}>
-          <Text style={t(17, V.ink, "700")}>Quer escrever do seu jeito?</Text>
-          <Text style={t(13, V.ink3)}>
-            A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui.
-          </Text>
-          <ModelosEditaveis
-            companyId={companyId} automatica="venda_mais" lojaNome={lojaNome} modelosDoPai={modelos}
-            chaves={segmento ? [modeloDaVenda(segmento, comPresente)] : []}
-          />
-        </View>
       </Superficie>
 
       <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
@@ -238,18 +245,18 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
               <Text style={t(13, V.ink2)}>mesmo grupo e presente, até acabar o que é do Venda+</Text>
             </View>
             <Interruptor
-              ligado={ligadaAuto} desabilitado={travado} rotulo="Todo dia 1º, sozinho"
-              testID="wa-venda-auto" onToggle={() => salvar({ automatico: !ligadaAuto })}
-            />
-          </View>
-          <View style={s.linha}>
-            <View style={{ flex: 1 }}>
-              <Text style={t(15, V.ink, "700")}>Venda+ {lida.ligada ? "ligado" : "desligado"}</Text>
-            </View>
-            <Interruptor
-              ligado={lida.ligada} desabilitado={travado}
-              rotulo={(lida.ligada ? "Desligar" : "Ligar") + " o Venda+"}
-              testID="wa-venda-liga" onToggle={() => alt.alternar("venda_mais")}
+              ligado={lida.ligada && ligadaAuto} desabilitado={travado} rotulo="Mandar sozinho todo dia 1º"
+              testID="wa-venda-auto"
+              onToggle={async () => {
+                // Um interruptor só: ligar = Venda+ ligado e todo dia 1º; desligar = os dois.
+                if (lida.ligada && ligadaAuto) {
+                  await salvar({ automatico: false });
+                  if (lida.ligada) await alt.alternar("venda_mais");
+                  return;
+                }
+                if (!ligadaAuto) await salvar({ automatico: true });
+                if (!lida.ligada) await alt.alternar("venda_mais");
+              }}
             />
           </View>
           {alt.perguntando === "venda_mais" && (

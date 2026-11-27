@@ -11,7 +11,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { tourTarget } from "@/utils/tourTarget";
-import { Avatar, BtnPrimario, Superficie, V, WEB, ESCURO, estiloBolha, t } from "./waVidro";
+import { ANIM_TRACA, Avatar, BtnPrimario, Superficie, V, WEB, ESCURO, estiloBolha, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
@@ -89,7 +89,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
           <View
             pointerEvents="none"
             style={[{ position: "absolute", left: 55, right: 55, top: 10, height: 2, backgroundColor: V.track } as any,
-              WEB ? ({ backgroundImage: `linear-gradient(90deg,#a78bfa 0%,#a78bfa ${preenchido}%,${V.track} ${preenchido}%)` } as any) : null]}
+              WEB ? ({ backgroundImage: `linear-gradient(90deg,#a78bfa 0%,#a78bfa ${preenchido}%,${V.track} ${preenchido}%)`, ...ANIM_TRACA } as any) : null]}
           />
           {PONTOS_ROTULO.map(({ k, rotulo }) => {
             const on = !!pontos?.[k];
@@ -174,7 +174,7 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
           <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 420, minWidth: 0 }}>
             <PreviaCorteView
-              idBase="wa-cred" corte={corte} substantivo="clientes" dono="o Crediário" estilo="linhas"
+              idBase="wa-cred" companyId={companyId} corte={corte} substantivo="clientes" dono="o Crediário" estilo="linhas"
               reserva={vender.livres} trazer={trazer} trazendo={travado}
               onTrazer={() => {
                 const prox = trazerDoVendaMais(info.divisao, info.usadas, "crediario", trazer);

@@ -15,8 +15,9 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
-import { Lnk, Meta, Passo44, Superficie, Sw, V, t } from "./waVidro";
+import { animCai, Lnk, Meta, Passo44, Superficie, Sw, V, t } from "./waVidro";
 
+import { LinkPacote } from "./configUi";
 import { nomeDoMes } from "./waAutomaticaConfig";
 import { Icon } from "@/components/Icon";
 import type { WaAutoKey } from "@/services/waConfigApi";
@@ -28,6 +29,8 @@ import {
 
 interface Props {
   auto: UseWaAutomaticas;
+  /** Para o link de adicionar novidades quando a divisão está cheia. */
+  companyId?: string | null;
   /** Abre a configuração da automática (Aniversário, Venda+, Crediário). */
   onAjustar?: (key: WaAutoKey) => void;
 }
@@ -57,7 +60,7 @@ const DESC: Record<WaAutoKey, { titulo: string; desc: string; linhas: string[]; 
 
 const ORDEM: WaAutoKey[] = ["aniversario", "venda_mais", "crediario_vender", "crediario_cobrar"];
 
-export function AutomaticasCard({ auto, onAjustar }: Props) {
+export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
   const info = auto.info;
   const alt = useAlternarAutomatica(auto);
   // Onde foi o último toque: a frase de erro do servidor aparece NESSE cartão
@@ -88,6 +91,9 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
   }
   const total = info.total;
   const livres = semDono(info.divisao, total);
+  // "livres" do mockup = novidades que ainda não foram usadas (igual ao topo), não as sem dono.
+  const usadasTotal = AUTO_KEYS.reduce((acc, k) => acc + (info.usadas[k] || 0), 0);
+  const livresTotal = Math.max(0, total - usadasTotal);
   const travado = auto.salvando;
 
   // Um quadradinho por novidade: da cor do dono, apagado se já foi usada, vazio se sem dono.
@@ -106,7 +112,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
       <Superficie variante="glass" raio={30} padding={{ h: 30, v: 26 }} gap={20} testID="wa-auto-divisao" tour="wa.divisao">
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
           <View style={{ gap: 4, flexShrink: 1, flexGrow: 1, flexBasis: 300 }}>
-            <Meta>{nomeDoMes(null)} · {total} novidades no seu plano</Meta>
+            <Meta>{nomeDoMes(info.mes)} · {total} novidades no seu plano</Meta>
             <Text style={t(28, V.ink, "800", { letterSpacing: -0.9, lineHeight: 32 })}>
               Cada novidade tem um dono<Text style={{ color: V.acc2 }}>.</Text>
             </Text>
@@ -116,19 +122,19 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
             </Text>
           </View>
           <Text style={t(15, V.ink2)} testID="wa-auto-livres">
-            <Text style={t(22, V.ink, "800")}>{livres}</Text> livres de {total}
+            <Text style={t(22, V.ink, "800")}>{livresTotal}</Text> livres de {total}
           </Text>
         </View>
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }} accessibilityLabel={`Das ${total} novidades: ` + AUTO_KEYS.map((k) => `${ROTULO_AUTO[k]} ${info.divisao[k]}`).join(", ")}>
-          {caps.map((c) => (
+          {caps.map((c, i) => (
             <View
               key={c.key}
               style={[{ width: 22, height: 40, borderRadius: 999 } as any,
                 c.livre
                   ? { backgroundColor: V.capFree, borderWidth: 1.5, borderStyle: "dashed", borderColor: V.capFreeLine }
                   : { backgroundColor: c.cor },
-                c.usada && { opacity: 0.32 }]}
+                c.usada && { opacity: 0.32 }, animCai(i)]}
             />
           ))}
         </View>
@@ -169,6 +175,7 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
             <Text style={t(14, V.warn, "700")}>As {total} já têm dono.</Text> Para dar mais a um, tire de outro.
           </Text>
         )}
+        {livres <= 0 && !!companyId && <LinkPacote companyId={companyId} />}
         {!!auto.erro && ultimo === "divisao" && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
       </Superficie>
 

@@ -14,9 +14,9 @@
 // (paleta da página de regras do mockup).
 // ============================================================
 import React from "react";
-import { View, Text, Pressable, ActivityIndicator, Platform } from "react-native";
-import { ANIM_BRILHO, ANIM_FIO, ANIM_POP, ANIM_RISE, ESCURO, GRAD_BTN, LITE, GRAD_TITULO, MONO, SANS, V, WEB, estiloBolha, estiloSuperficie, useWaFontes, useWaKeyframes, type VarianteSuperficie } from "./waVisual";
-export { ESCURO, EDITOR_INLINE, MONO, SANS, V, WEB, estiloBolha, estiloSuperficie, useWaFontes, useWaKeyframes } from "./waVisual";
+import { View, Text, Pressable, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
+import { animCai, animVai, ANIM_TRACA, ANIM_BRILHO, ANIM_FIO, ANIM_POUSA, ANIM_POP, ANIM_RISE, ESCURO, GRAD_BTN, modoLeve, GRAD_TITULO, MONO, SANS, V, WEB, estiloBolha, estiloSuperficie, useWaFontes, useWaKeyframes, useWaQuedas, type VarianteSuperficie } from "./waVisual";
+export { animCai, animVai, ANIM_TRACA, ESCURO, EDITOR_INLINE, MONO, SANS, V, WEB, estiloBolha, estiloSuperficie, useWaFontes, useWaKeyframes, useWaQuedas, modoLeve } from "./waVisual";
 import { Icon } from "@/components/Icon";
 import { tourTarget } from "@/utils/tourTarget";
 
@@ -37,7 +37,7 @@ export function Superficie({ variante = "glass", raio = 28, padding = 22, gap = 
   const pad = typeof padding === "number" ? { padding } : { paddingHorizontal: padding.h, paddingVertical: padding.v };
   return (
     <View style={[estiloSuperficie(variante, raio), pad, { gap, minWidth: 0 }, variante === "dry" ? null : ANIM_RISE, style]} testID={testID} {...(WEB ? ({ dataSet: { waAnim: "1", ...(tour ? { tour } : {}) } } as any) : {})}>
-      {variante === "glass" && WEB && !LITE && (
+      {variante === "glass" && WEB && !modoLeve() && (
         // fio de luz no alto do vidro
         <View
           pointerEvents="none"
@@ -124,10 +124,12 @@ export function Voltar({ rotulo, onPress, testID }: { rotulo: string; onPress: (
 
 // ── Botões ───────────────────────────────────────────────────────────
 /** Botão principal: gradiente violeta, anel claro e a bolinha com a seta. */
-export function BtnPrimario({ children, onPress, desabilitado, disabled, carregando, testID, semSeta }: {
-  children?: React.ReactNode; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; carregando?: boolean; testID?: string; semSeta?: boolean;
+export function BtnPrimario({ children, onPress, desabilitado, disabled, carregando, testID, semSeta, tour }: {
+  children?: React.ReactNode; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; carregando?: boolean; testID?: string; semSeta?: boolean; tour?: string;
 }) {
   const off = !!(desabilitado || disabled);
+  const { width } = useWindowDimensions();
+  const umaLinha = WEB && width >= 700; // no celular o rótulo pode quebrar
   return (
     <Pressable
       onPress={onPress}
@@ -135,17 +137,25 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
       accessibilityRole="button"
       accessibilityState={{ disabled: off }}
       testID={testID}
+      {...(tour ? tourTarget(tour) : {})}
       style={[{
         flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 12, minHeight: 50,
         paddingLeft: 22, paddingRight: semSeta ? 22 : 8, borderRadius: 999, backgroundColor: "#7c3aed",
         opacity: off ? 0.45 : 1,
       } as any, WEB ? {
+        isolation: "isolate",
         backgroundImage: GRAD_BTN,
         boxShadow: "0 0 0 1.5px rgba(236,228,255,.8), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.25), 0 12px 28px rgba(60,20,140,.5)",
       } as any : null]}
     >
+      {WEB && !off && (
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", left: -30, right: -30, top: -18, bottom: -18, borderRadius: 999, zIndex: -1, backgroundImage: "radial-gradient(closest-side,rgba(196,181,253,.45),rgba(139,92,246,0))", ...ANIM_POUSA } as any}
+        />
+      )}
       {carregando && <ActivityIndicator size="small" color="#fff" />}
-      <Text style={t(15, "#fff", "700")}>{children}</Text>
+      <Text numberOfLines={umaLinha ? 1 : undefined} style={t(15, "#fff", "700", umaLinha ? { flexShrink: 0 } : { flexShrink: 1 })}>{children}</Text>
       {!semSeta && (
         <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(9,9,11,.28)" }}>
           <Icon name="arrow_right" size={16} color="#fff" />
@@ -303,5 +313,17 @@ export function Avatar({ nome, cor, tamanho = 40 }: { nome: string; cor?: string
     <View style={{ width: tamanho, height: tamanho, borderRadius: tamanho / 2, alignItems: "center", justifyContent: "center", backgroundColor: c }}>
       <Text style={t(13, V.avTxt, "700", { lineHeight: 16 })}>{ini}</Text>
     </View>
+  );
+}
+
+/** O ícone do botão Guias (ponto de interrogação no círculo, do artboard GuiaCentral): SVG inline no web. */
+export function IconeAjuda({ tamanho = 17, cor }: { tamanho?: number; cor?: string }) {
+  const c = cor || V.ink;
+  if (!WEB) return <Text style={t(tamanho, c, "700", { lineHeight: tamanho + 2 })}>?</Text>;
+  return React.createElement(
+    "svg",
+    { width: tamanho, height: tamanho, viewBox: "0 0 24 24", fill: "none", stroke: c, strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    React.createElement("circle", { cx: 12, cy: 12, r: 9 }),
+    React.createElement("path", { d: "M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.4M12 17h.01" }),
   );
 }

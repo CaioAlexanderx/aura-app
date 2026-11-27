@@ -6,9 +6,9 @@
 // a mensagem como a cliente vê · ligar/desligar.
 // Cada toque grava no servidor e a tela relê (nada otimista).
 // ============================================================
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Superficie, BtnPrimario, V, t } from "./waVidro";
+import { Superficie, BtnPrimario, Lnk, V, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
@@ -29,6 +29,13 @@ interface Props {
   lojaNome: string;
 }
 
+function diaMes(d: Date): string {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
   const info = auto.info;
   const lida = info?.autos.aniversario;
@@ -37,6 +44,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
   const quando = lerQuando(cfg.quando);
   const presenteChave = chaveDoPresente(cfg.presente);
   const alt = useAlternarAutomatica(auto);
+  const [escrevendo, setEscrevendo] = useState(false);
 
   const pub = useWaPublico(companyId, "aniversario", undefined, lida?.livres ?? null, !!lida, JSON.stringify(cfg));
   const modelos = useWaModelos(companyId, "aniversario", !!lida);
@@ -56,18 +64,33 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
   const comPresente = presenteChave != null && presenteChave !== "nenhum";
   const modelo = tom && quando ? (modelos.modelos || []).find((m) => m.key === modeloDoAniversario(tom, comPresente, quando)) : null;
   const primeira = pub.corte?.recebem[0]?.nome.split(" ")[0] || undefined;
+  // O cupom nasce no dia do aniversário e vale 15 dias; o código é PARABENS-<NOME>.
+  const hoje = new Date();
+  const validade = diaMes(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 15));
+  const codigo = `PARABENS-${semAcento(primeira || "") || "CLIENTE"}`;
   const mensagem = modelo?.texto_em_uso
     ? renderizar(modelo.texto_em_uso, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined,
         "Presente": rotuloDoPresente(cfg.presente) || undefined,
+        "Validade": validade, "Código": codigo,
       }, !primeira)
     : null;
 
   const trazer = quantoTrazer(pub.corte, info.divisao, info.usadas, "aniversario");
   const ligada = lida.ligada;
 
+  if (escrevendo) {
+    return (
+      <ModelosEditaveis
+        companyId={companyId} automatica="aniversario" lojaNome={lojaNome} modelosDoPai={modelos}
+        chaves={tom && quando ? [modeloDoAniversario(tom, comPresente, quando)] : []}
+        editorDireto onFecharEditor={() => setEscrevendo(false)}
+      />
+    );
+  }
+
   const primeiroNome = primeira;
-  const presente = comPresente && cfg.presente ? { de: primeiroNome || "cliente", rotulo: rotuloDoPresente(cfg.presente) || "" } : null;
+  const presente = comPresente && cfg.presente ? { de: primeiroNome || "cliente", rotulo: rotuloDoPresente(cfg.presente) || "", codigo, validade } : null;
 
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 28, alignItems: "flex-start" }} testID="wa-aniv-tela">
@@ -77,6 +100,11 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
             idBase="wa-aniv-tom" opcoes={OPCOES_TOM} valor={tom} desabilitado={travado}
             onPick={(v) => salvar({ tom: v })}
           />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 4 }}>
+            <Text style={t(13, V.ink3)}>Quer escrever do seu jeito?</Text>
+            <Lnk onPress={() => setEscrevendo(true)} testID="wa-aniv-escrever" style={{ minHeight: 32 }}>Escrever a minha</Lnk>
+            <Text style={[t(13, V.ink3), { flexBasis: "100%" }]}>A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui.</Text>
+          </View>
         </Passo>
 
         <Passo n="02" titulo="O presente" sub="O cupom nasce sozinho no dia: um por cliente, vale 15 dias, na loja e no site.">
@@ -102,7 +130,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
           direita={pub.corte ? `${pub.corte.total} aniversariantes com WhatsApp · 1 mensagem cada` : undefined}
         >
           <PreviaCorteView
-            idBase="wa-aniv" corte={pub.corte} substantivo="aniversariantes" dono="o Aniversário" estilo="avatares"
+            idBase="wa-aniv" companyId={companyId} corte={pub.corte} substantivo="aniversariantes" dono="o Aniversário" estilo="avatares"
             reserva={lida.livres} trazer={trazer} trazendo={travado}
             onTrazer={() => {
               const prox = trazerDoVendaMais(info.divisao, info.usadas, "aniversario", trazer);
@@ -111,20 +139,12 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
           />
         </CaixaPrevia>
 
-        <Passo
-          titulo="Quer escrever do seu jeito?"
-          sub="A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui."
-        >
-          <ModelosEditaveis
-            companyId={companyId} automatica="aniversario" lojaNome={lojaNome} modelosDoPai={modelos}
-            chaves={tom && quando ? [modeloDoAniversario(tom, comPresente, quando)] : []}
-          />
-        </Passo>
+
       </Superficie>
 
       <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
         <BolhaExemplo
-          titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem}
+          titulo={primeira ? `Como a ${primeira} vê · ${diaMes(hoje)}, 10h` : "Como chega (cliente de exemplo)"} mensagem={mensagem}
           loja={lojaNome} presente={presente}
         />
 

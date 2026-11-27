@@ -57,7 +57,7 @@ import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
-import { Meta, Pilula, Spots, Titulo, Voltar, V, t, useWaFontes, useWaKeyframes } from "@/components/whatsapp/waVidro";
+import { IconeAjuda, Meta, Pilula, Spots, Titulo, Voltar, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -91,6 +91,7 @@ const CABECALHO: Record<string, { titulo: string; sub: string; voltar?: boolean 
 export default function WhatsAppScreen() {
   useWaFontes();
   useWaKeyframes();
+  useWaQuedas();
   const [tab, setTab] = useState(0);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
@@ -170,7 +171,7 @@ export default function WhatsAppScreen() {
   const abasTopo = (ativaKey: string, onSelect: (k: string) => void) => (
     <View style={s.abasLinha}>
       <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
-        <ScreenTabs tabs={tabsHero} active={ativaKey} onSelect={onSelect} />
+        <ScreenTabs tabs={tabsHero} active={ativaKey} onSelect={onSelect} quebraNoCelular />
       </View>
       {novas && !demo && (
         <Pilula
@@ -178,7 +179,7 @@ export default function WhatsAppScreen() {
           testID="wa-varejo-guias"
           tour="wa.guias"
         >
-          <Icon name="alert" size={15} color={V.ink} />
+          <IconeAjuda tamanho={17} />
           <Text style={t(14, V.ink, "600")}>Guias</Text>
         </Pilula>
       )}
@@ -262,6 +263,7 @@ export default function WhatsAppScreen() {
             <View testID="wa-varejo-bloco-automaticas">
               <AutomaticasCard
                 auto={auto}
+                companyId={companyId}
                 onAjustar={(k: WaAutoKey) => {
                   if (k === "venda_mais") { irPara("venda_mais"); return; }
                   setSecao(k === "aniversario" ? "aniversario" : "crediario");

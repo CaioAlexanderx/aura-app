@@ -20,6 +20,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
+import { estiloSuperficie } from "./waVisual";
 import { Icon } from "@/components/Icon";
 import { waApi, WaMarketingPack, WaStatus } from "@/services/waApi";
 import {
@@ -271,7 +272,7 @@ export function UsoCard({ status, companyId, onChanged }: Props) {
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  card: { ...estiloSuperficie("dry", 24), padding: 20 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 },
   headTitle: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 14, fontWeight: "800", color: Colors.ink },

@@ -285,7 +285,9 @@ describe("VendaMaisConfig", () => {
   it("bolha com nome real: campo sem valor sai como [Campo], nunca exemplo de outra pessoa", () => {
     mockModelos.current = modelosHook([{ key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Sua última compra: {Última compra}. Use até {Validade}." }]);
     const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
-    expect(textos(t)).toContain("Oi, Ana. Sua última compra: [Última compra]. Use até [Validade].");
+    // A validade é calculada (envio + 15 dias); o que a Aura não sabe daquela cliente continua [Campo].
+    expect(textos(t)).toMatch(/Oi, Ana\. Sua última compra: \[Última compra\]\. Use até \d{2}\/\d{2}\./);
+    expect(textos(t)).not.toContain("[Validade]");
     expect(textos(t)).not.toContain("Vestido Verde");
     expect(textos(t)).toContain("Como a Ana vê");
   });

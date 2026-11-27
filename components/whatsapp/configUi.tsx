@@ -10,8 +10,9 @@
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import type { Corte } from "./waCorte";
+import { useWaPacotes } from "@/hooks/useWaPacotes";
 import {
-  Avatar, Celular, Meta, Pilula, Sw, Superficie, Titulo, V, WEB, estiloBolha, t, MONO, SANS,
+  Avatar, Celular, Lnk, Meta, Pilula, Selo, Sw, Superficie, Titulo, V, WEB, estiloBolha, t, MONO, SANS,
 } from "./waVidro";
 
 /** Linha numerada (.sec): número grande vazado, título 20px, escolhas, nota. */
@@ -126,7 +127,7 @@ export function Interruptor({
 export function BolhaExemplo({ titulo, mensagem, rodape, loja, presente }: {
   titulo: string; mensagem: string | null | undefined; rodape?: boolean; loja?: string;
   /** Aniversário: o presente que vai junto (rótulo já legível). */
-  presente?: { de: string; rotulo: string } | null;
+  presente?: { de: string; rotulo: string; codigo?: string; validade?: string } | null;
 }) {
   // Sem exemplo, não inventa texto.
   if (!mensagem) return null;
@@ -147,14 +148,38 @@ export function BolhaExemplo({ titulo, mensagem, rodape, loja, presente }: {
         >
           <Meta style={{ color: "#e9e3ff" }}>Presente da {presente.de}</Meta>
           <Text style={t(22, V.ink, "800", { letterSpacing: -0.4 })}>{presente.rotulo}</Text>
-          <Text style={t(12, V.ink3)}>vale 15 dias · na loja e no site</Text>
+          {!!presente.codigo && <Text style={{ fontFamily: MONO, fontSize: 13, color: V.acc } as any}>{presente.codigo}</Text>}
+          <Text style={t(12, V.ink3)}>{presente.validade ? `vale até ${presente.validade}` : "vale 15 dias"} · na loja e no site</Text>
         </View>
       )}
     </Celular>
   );
 }
 
+/** "Adicionar 100 novidades por R$ 69": pede o link de pagamento do pacote (nada é cobrado sozinho). */
+export function LinkPacote({ companyId }: { companyId?: string | null }) {
+  const pac = useWaPacotes(companyId, false);
+  if (!companyId) return null;
+  return (
+    <View style={{ gap: 4 }} testID="wa-pacote-novidades-bloco">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {pac.comprando === "novidades" && <ActivityIndicator size="small" color={V.acc} />}
+        <Lnk onPress={() => pac.comprar("novidades")} desabilitado={pac.comprando !== null} testID="wa-pacote-novidades">
+          Adicionar 100 novidades por R$ 69
+        </Lnk>
+      </View>
+      {!!pac.erro && <Text style={t(13, V.bad, "600")} testID="wa-pacote-novidades-erro">{pac.erro}</Text>}
+      {pac.abaBloqueada && <Text style={t(13, V.ink3)}>Se o pagamento não abriu, toque de novo.</Text>}
+      {!!pac.manual && (
+        <Text style={t(13, V.ink3)}>Pedido registrado. A Aura vai te chamar para combinar o pagamento e soma o pacote depois que for confirmado.</Text>
+      )}
+    </View>
+  );
+}
+
 interface PreviaProps {
+  /** Com a loja, aparece o link para adicionar novidades quando não cabe todo mundo. */
+  companyId?: string | null;
   corte: Corte | null;
   /** "aniversariantes", "clientes"... */
   substantivo: string;
@@ -170,7 +195,7 @@ interface PreviaProps {
   estilo?: "avatares" | "linhas";
 }
 
-export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onTrazer, trazendo, idBase, estilo = "linhas" }: PreviaProps) {
+export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onTrazer, trazendo, idBase, estilo = "linhas", companyId }: PreviaProps) {
   if (!corte) {
     return (
       <Text style={t(14, V.warn, "600")} testID={`${idBase}-previa-indisponivel`}>
@@ -219,6 +244,9 @@ export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onT
                 <Text style={t(15, V.ink, "700")}>{p.nome}</Text>
                 {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}</Text>}
               </View>
+              {typeof p.limiteLivre === "number" && (
+                <Selo texto={`R$ ${String(Math.round(p.limiteLivre)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} livres`} tom="ok" testID={`${idBase}-limite`} />
+              )}
             </View>
           ))}
           {corte.ficam.map((p) => (
@@ -236,6 +264,8 @@ export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onT
         </View>
       )}
       {corte.alemDaLista > 0 && <Text style={t(14, V.ink2)}>e mais {corte.alemDaLista} {substantivo}</Text>}
+
+      {!corte.cabeTodos && !!companyId && <LinkPacote companyId={companyId} />}
 
       {trazer > 0 && !!onTrazer && (
         <Pilula ligada onPress={onTrazer} desabilitado={trazendo} testID={`${idBase}-trazer`} style={{ alignSelf: "flex-start" }}>

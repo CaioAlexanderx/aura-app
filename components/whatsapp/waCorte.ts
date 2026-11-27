@@ -16,6 +16,11 @@ import { TEXTO_NUMERO_EM_ATENCAO, waNumeroEmAtencao, type SaldoInfo } from "./wa
 export interface PessoaPrevia {
   nome: string;
   detalhe: string;
+  /** Crediário: limite livre em R$ (limite - em aberto), quando o servidor manda. Sem dado, nada se inventa. */
+  limiteLivre?: number;
+  /** Venda+: o que a cliente comprou por último, quando o servidor manda. */
+  ultimaCompra?: string;
+  mesUltimaCompra?: string;
 }
 
 export interface Corte {
@@ -39,10 +44,19 @@ function natural(v: unknown): number | null {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null;
 }
 
+/** limite_livre do servidor, ou limite - em_aberto quando os dois vierem. */
+function limiteDe(p: any): { limiteLivre?: number } {
+  const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : null);
+  const direto = num(p?.limite_livre);
+  if (direto != null) return { limiteLivre: direto };
+  const lim = num(p?.limite), ab = num(p?.em_aberto);
+  return lim != null && ab != null ? { limiteLivre: Math.max(0, lim - ab) } : {};
+}
+
 function pessoas(l: WaPublicoRaw["vao"]): PessoaPrevia[] {
   return (Array.isArray(l) ? l : [])
     .filter((p) => p && typeof p.nome === "string" && p.nome)
-    .map((p) => ({ nome: String(p.nome), detalhe: typeof p.detalhe === "string" ? p.detalhe : "" }));
+    .map((p) => ({ nome: String(p.nome), detalhe: typeof p.detalhe === "string" ? p.detalhe : "", ...limiteDe(p), ...(typeof (p as any).ultima_compra === "string" && (p as any).ultima_compra ? { ultimaCompra: (p as any).ultima_compra } : {}), ...(typeof (p as any).mes_ultima_compra === "string" && (p as any).mes_ultima_compra ? { mesUltimaCompra: (p as any).mes_ultima_compra } : {}) }));
 }
 
 /**
