@@ -452,3 +452,38 @@ it("topo: Voltar às conferências e Ir para o Estoque", async () => {
   await tocar(tree, "dif-ir-estoque");
   expect(mockPush).toHaveBeenLastCalledWith("/estoque");
 });
+
+describe("aviso de inconsistência e contagem antiga (pós-C14)", () => {
+  const AVISO = "O estoque do sistema está menor que as peças com clientes: confira o cadastro antes de ajustar.";
+  const COM_AVISO = {
+    resumo: { faltam: 0, sobram: 1, batem: 1, nao_contados: 0, valor_faltam: null, valor_sobram: null, itens_sem_custo: 0, com_aviso: 1 },
+    itens: [
+      { item_id: "x1", product_id: "p7", variant_id: null, nome: "Calça Reta", variante: null, codigo: null, contado: 0, estoque_no_bipe: 1, estoque_atual: -2, com_clientes: 3, inconsistente: true, aviso: AVISO, diferenca: 2, estoque_depois: 3, custo: null, valor: null, grupo: "sobram" },
+      { item_id: "x2", product_id: "p3", variant_id: null, nome: "Regata", variante: null, codigo: null, contado: 5, estoque_no_bipe: 5, estoque_atual: 5, diferenca: 0, custo: null, valor: null, grupo: "batem" },
+    ],
+    nao_contados: [],
+  };
+
+  it("mostra o aviso, deixa o item de fora e não pede para desmarcar", async () => {
+    mockDiferencas.mockResolvedValue(COM_AVISO);
+    const tree = await montar();
+    expect(textoDe(tree, "dif-aviso-p:p7")).toContain("menor que as peças com clientes");
+    expect(textoDe(tree, "dif-aviso-p:p7")).toContain("Sistema com 1, com clientes 3.");
+    expect(existe(tree, "dif-fora-p:p7")).toBe(true);
+    expect(porTestID(tree, "dif-ajustar-p:p7")).toHaveLength(0);
+  });
+
+  it("ao ajustar, o item com aviso vai em ignorar_item_ids", async () => {
+    mockDiferencas.mockResolvedValue({ ...COM_AVISO, itens: [COM_AVISO.itens[0], { ...COM_AVISO.itens[1], contado: 4, diferenca: -1, grupo: "faltam" }] });
+    mockAplicar.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", pode_desfazer: true }, ajustados: 1, ignorados: [] });
+    const tree = await montar();
+    await tocar(tree, "dif-ajustar");
+    await act(async () => { um(tree, "confirm").props.onConfirm(); });
+    expect(mockAplicar.mock.calls[0][2].ignorar_item_ids).toEqual(["x1"]);
+  });
+
+  it("regressão: sem aviso nenhum texto novo", async () => {
+    const tree = await montar();
+    expect(porTestID(tree, "dif-aviso-p:p1")).toHaveLength(0);
+  });
+});
