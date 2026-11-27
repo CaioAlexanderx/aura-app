@@ -23,8 +23,9 @@ export function CartaoProdutoGrade({ cartao }: { cartao?: HubCartao | null }) {
       {fotos.length > 0 && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
           {fotos.map((u, i) => (
-            <Image key={`${u}-${i}`} testID={`hub-cartao-grade-foto-${i}`} source={{ uri: u }} resizeMode="cover"
-              style={{ width: fotos.length === 1 ? "100%" : "49%", aspectRatio: 1, borderRadius: 12, backgroundColor: K.trilho }} />
+            <View key={`${u}-${i}`} style={{ width: fotos.length === 1 ? "100%" : "49%", aspectRatio: 1, borderRadius: 12, overflow: "hidden", backgroundColor: K.trilho }}>
+              <Image testID={`hub-cartao-grade-foto-${i}`} source={{ uri: u }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
+            </View>
           ))}
         </View>
       )}

@@ -147,7 +147,7 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
                     width: LARGURA_FOTO, aspectRatio: 3 / 4, borderRadius: 16, borderWidth: 2, overflow: "hidden", backgroundColor: K.trilho,
                     borderColor: on ? "#c4b5fd" : "transparent",
                   }, web({ cursor: "pointer" })]}>
-                  <Image source={{ uri: f.url }} resizeMode="cover" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+                  <Image source={{ uri: f.url }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
                   <View style={{
                     position: "absolute", right: 6, top: 6, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1.5,
                     backgroundColor: on ? "#a78bfa" : "rgba(4,2,15,.55)", borderColor: on ? "#e9e3ff" : "rgba(255,255,255,.7)",
