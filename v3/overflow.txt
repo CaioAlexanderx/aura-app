@@ -1,0 +1,8 @@
+1-automaticas-cheia-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+1-automaticas-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+2-aniversario-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+3-crediario-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+4-vendamais-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+4-vendamais-enviado-dark 390[SW=375 IW=390] 375[SW=360 IW=375]
+7-conexao-ligado-dark 390[SW=390 IW=390] 375[SW=375 IW=375]
+7-conexao-nao-dark 390[SW=390 IW=390] 375[SW=375 IW=375]
