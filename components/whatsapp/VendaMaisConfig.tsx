@@ -82,7 +82,8 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const mesDe = (p: { mesUltimaCompra?: string; ultimaCompra?: string }) => mesPorExtenso(p.mesUltimaCompra) || mesPorExtenso(p.ultimaCompra);
   const completa = (p: { ultimaPeca?: string; mesUltimaCompra?: string; ultimaCompra?: string }) => (!exigePeca || !!p.ultimaPeca) && (!exigeMes || !!mesDe(p));
   const semPecaLocal = corteBruto ? [...corteBruto.recebem, ...corteBruto.ficam].filter((p) => !completa(p)).length : 0;
-  const foraSemPeca = (Number(fora?.sem_peca_ultima_compra) || 0) + semPecaLocal;
+  // Se o servidor já mandou o contador (`fora.sem_a_peca_da_ultima_compra`), vale o dele; senão, o que a tela detecta (sem contar a mesma cliente duas vezes).
+  const foraSemPeca = typeof fora?.sem_a_peca_da_ultima_compra === "number" ? fora.sem_a_peca_da_ultima_compra : semPecaLocal;
   const corte = corteBruto
     ? (() => {
         const ok = corteBruto.recebem.filter(completa);

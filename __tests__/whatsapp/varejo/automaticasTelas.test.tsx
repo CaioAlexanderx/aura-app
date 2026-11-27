@@ -426,12 +426,19 @@ describe("QA real: Venda+", () => {
     expect(x).toContain("Como chega (cliente de exemplo)"); // sem ninguém completa, o exemplo, marcado como exemplo
     expect(achar(t, "wa-venda-enviar").props.disabled).toBe(true);
   });
-  it("o motivo do servidor (sem_peca_ultima_compra) também entra na conta", () => {
-    mockPub.current = pubHook(publico({ elegiveis: 2, cabem: 1, vao: [{ nome: "Bia Torres", detalhe: "", ultima_peca: "a blusa", ultima_compra: "2026-08-12" }], guardados: [], ficam_guardados: 1, falta_para_todos: 1, fora: { recebeu_ha_menos_de_7_dias: 0, pediu_para_nao_receber: 0, sem_telefone: 0, sem_peca_ultima_compra: 3 } }));
+  it("o contador do servidor (fora.sem_a_peca_da_ultima_compra) vale; não conta a mesma cliente duas vezes", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 2, cabem: 1, vao: [{ nome: "Bia Torres", detalhe: "", ultima_peca: "a blusa", ultima_compra: "2026-08-12" }], guardados: [], ficam_guardados: 1, falta_para_todos: 1, fora: { recebeu_ha_menos_de_7_dias: 0, pediu_para_nao_receber: 0, sem_telefone: 0, sem_a_peca_da_ultima_compra: 3 } }));
     mockModelos.current = modelosHook([vendaModelo]);
     const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
     expect(x).toContain("3 sem a peça da última compra");
     expect(x).toContain("Oi, Bia.");
+    // o servidor mandou o contador (3) e uma cliente da lista também está sem a peça: continua 3, não 4
+    mockPub.current = pubHook(publico({ elegiveis: 3, cabem: 2, vao: [{ nome: "Bia Torres", detalhe: "", ultima_peca: "a blusa", ultima_compra: "2026-08-12" }, { nome: "Armand Silva", detalhe: "", ultima_compra: "2026-08-12" }], guardados: [], ficam_guardados: 0, falta_para_todos: 0, fora: { recebeu_ha_menos_de_7_dias: 0, pediu_para_nao_receber: 0, sem_telefone: 0, sem_a_peca_da_ultima_compra: 3 } }));
+    const y = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(y).toContain("3 sem a peça da última compra");
+    expect(y).not.toContain("4 sem a peça da última compra");
+    // um contador antigo/inexistente não é lido
+    expect(y).not.toContain("sem_peca_ultima_compra");
   });
   it("o texto do que fica guardado respeita o singular e o zero", () => {
     mockModelos.current = modelosHook([{ ...vendaModelo, texto_em_uso: "Oi, {Nome}." }]);
