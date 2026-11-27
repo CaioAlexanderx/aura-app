@@ -103,26 +103,24 @@ interface Props {
 }
 
 export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar, onSelect, onVoltar, extra }: Props) {
+  // As abas ficam sempre na linha do topo, à direita, em TODAS as telas; o título vem embaixo e
+  // quebra à vontade. Trocar de aba não mexe nas abas de lugar.
   return (
-    <View
-      style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 16 } as any, !largo && { flexDirection: "column", alignItems: "stretch" }]}
-      testID="wa-varejo-cabecalho"
-    >
-      {!largo && <AbasWa tabs={tabs} ativa={ativa} estreito onSelect={onSelect} />}
-      <View style={{ gap: 10, flexShrink: 1, minWidth: 0 }}>
+    <View style={{ gap: 18 }} testID="wa-varejo-cabecalho">
+      {largo ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 10 }} testID="wa-varejo-abas-topo">
+          <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />
+          {extra}
+        </View>
+      ) : (
+        <AbasWa tabs={tabs} ativa={ativa} estreito onSelect={onSelect} />
+      )}
+      <View style={{ gap: 10, minWidth: 0 }}>
         {!!voltar && <Voltar rotulo="Automáticas" onPress={onVoltar} testID="wa-varejo-voltar-automaticas" />}
         <Meta>{`WhatsApp da ${lojaNome || "loja"}`}</Meta>
         <Titulo tamanho={largo ? 52 : 36}>{titulo}</Titulo>
         {!!sub && <Text style={t(18, V.ink2, "400", { lineHeight: 26 })}>{sub}</Text>}
       </View>
-      {largo && (extra
-        ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
-            <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />
-            {extra}
-          </View>
-        )
-        : <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />)}
     </View>
   );
 }
