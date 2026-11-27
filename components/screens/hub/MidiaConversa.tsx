@@ -185,16 +185,16 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
     <View style={painelBase}><Tx style={{ fontSize: 14, color: K.ink2 }}>Enviando…</Tx></View>
   ) : null;
   const folha = (flutua: boolean) => !grade ? null : (
-    <Folha label="Mandar foto" testID="hub-foto-grade" flutua={flutua} gap={10}>
+    <Folha label="Mandar foto" testID="hub-foto-grade" flutua={flutua} gap={10} onFechar={() => setGrade(false)} gatilho="hub-envio-foto">
       <Meta style={{ paddingHorizontal: 6, paddingTop: 4 }}>Fotos dos produtos</Meta>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {fotosDosProdutos.map((p) => (
-          <Pressable key={p.id} testID={`hub-foto-produto-${p.id}`} accessibilityLabel={p.name} onPress={() => void mandarFotoDoProduto(p.image_url!)}
+          <Pressable key={p.id} testID={`hub-foto-produto-${p.id}`} accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} accessibilityLabel={p.name} onPress={() => void mandarFotoDoProduto(p.image_url!)}
             style={[{ width: "23%", aspectRatio: 1, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,.14)", backgroundColor: K.trilho }, web({ cursor: "pointer" })]}>
             <Image source={{ uri: p.image_url! }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
           </Pressable>
         ))}
-        <Pressable testID="hub-foto-computador" accessibilityLabel="Escolher do computador" onPress={() => void escolherFoto()}
+        <Pressable testID="hub-foto-computador" accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} accessibilityLabel="Escolher do computador" onPress={() => void escolherFoto()}
           style={[{ width: "23%", aspectRatio: 1, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(255,255,255,.3)", alignItems: "center", justifyContent: "center" }, web({ cursor: "pointer" })]}>
           <Ico nome="mais" size={24} cor={K.ink2} traco={1.8} />
         </Pressable>

@@ -186,6 +186,8 @@ export default function WhatsAppScreen() {
   const hero = <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />;
 
   const irPara = (k: AbaReal) => { setAbaReal(k); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
+  // Ponto de troca do "Conectar WhatsApp" das Conversas: hoje leva a Configurações → Conexão; o Guia 1 troca por aqui.
+  const abrirConexao = () => { setSecao("conexao"); irPara("config"); };
 
   // Aba destacada: Aniversário e Crediário moram sob "Automáticas" (o voltar diz "← Automáticas").
   const abaDestaque: AbaReal = abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? "automaticas" : abaAtiva;
@@ -216,7 +218,7 @@ export default function WhatsAppScreen() {
         <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
           {novas && <Spots />}
           {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
-          <HubView onConversaAberta={setEmConversa} />
+          <HubView onConversaAberta={setEmConversa} numeroConectado={wa.status ? !!wa.status.connected : undefined} aoConectarNumero={abrirConexao} />
         </View>
       </View>
     );

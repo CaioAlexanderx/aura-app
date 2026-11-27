@@ -14,7 +14,7 @@
 // Painel aberto no próprio lugar (sem modal de tela cheia); a folha do celular
 // usa WebPortal porque o z-index:0 do RNW prende position:fixed dentro do shell.
 // ============================================================
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { View, Pressable, TextInput, Image, ScrollView, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
 import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
 import { useOrcamentoNovo } from "./useOrcamentoNovo";
+import { aoTeclarNoPainel, focarPrimeiro } from "./teclado";
 
 /**
  * "189,90" e "1.189,90" (pt-BR) e também "10.50" (ponto como decimal, vindo de
@@ -72,10 +73,32 @@ export function AtalhoAcao({ icone, label, onPress, testID, on, destaque, disabl
 }
 
 /** Folha de vidro sólido do mockup: flutua acima da barra no desktop; no celular fica no fluxo. */
-export function Folha({ label, testID, flutua, children, gap = 6, padding = 14 }: { label: string; testID?: string; flutua: boolean; children: ReactNode; gap?: number; padding?: number }) {
+export function Folha({ label, testID, flutua, children, gap = 6, padding = 14, onFechar, gatilho }: {
+  label: string; testID?: string; flutua: boolean; children: ReactNode; gap?: number; padding?: number;
+  /** Esc fecha o painel. */
+  onFechar?: () => void;
+  /** testID do botão que abriu: o foco volta para ele ao fechar. */
+  gatilho?: string;
+}) {
   const an = anima("abre", 0.38);
+  const ref = useRef<any>(null);
+  // Aberto o painel, o foco entra nele (campo de busca ou primeira opção). As opções de alguns painéis
+  // (Pix com orçamento, produtos) chegam depois do servidor: tenta a cada render até achar a primeira.
+  // Nos primeiros 3 s, se o foco saiu do painel (o campo some quando as opções chegam), volta para a primeira opção.
+  const abriuEm = useRef(Date.now());
+  useEffect(() => {
+    try {
+      const raiz = ref.current;
+      if (!raiz?.querySelector || typeof document === "undefined") return;
+      if (Date.now() - abriuEm.current > 3000) return;
+      const ativo: any = document.activeElement;
+      if (raiz.contains?.(ativo) && (ativo?.getAttribute?.("data-opcao") || ativo?.tagName === "INPUT")) return; // já está numa opção ou digitando
+      const alvo = raiz.querySelector('[data-opcao="1"]') || raiz.querySelector("input");
+      if (alvo && document.activeElement !== alvo) alvo.focus?.();
+    } catch { /* sem DOM */ }
+  });
   return (
-    <View testID={testID} accessibilityLabel={label} {...({ dataSet: an.dataSet } as any)}
+    <View ref={ref} testID={testID} accessibilityLabel={label} {...({ role: "dialog", onKeyDown: (e: any) => aoTeclarNoPainel(e, onFechar, gatilho) } as any)} {...({ dataSet: { ...an.dataSet, waFoco: "1" } } as any)}
       style={[superficie.solida(24), { padding, gap },
         flutua ? { position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: 420, zIndex: 3, transformOrigin: "bottom left" } : null, an.style]}>
       {children}
@@ -158,14 +181,14 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   const paineis = (
     <>
       {painel === "produto" && (
-        <Folha label="Mandar produto" testID="hub-envio-painel-produto" flutua={!compacto}>
+        <Folha label="Mandar produto" testID="hub-envio-painel-produto" flutua={!compacto} onFechar={() => setPainel(null)} gatilho={compacto ? "hub-envio-barra" : "hub-envio-produto"}>
           <Meta style={{ paddingHorizontal: 6, paddingTop: 4, paddingBottom: 6 }}>Toque para mandar</Meta>
           <TextInput testID="hub-envio-busca" style={campoBusca} value={busca} onChangeText={setBusca}
             placeholder="Buscar produto pelo nome" placeholderTextColor={K.ink3} />
           {buscando && !catalogo && <ActivityIndicator color={K.acc} />}
           <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
             {(catalogo?.products || []).map((p) => (
-              <Pressable key={p.id} testID={`hub-produto-${p.id}`} style={[linhaProduto, web({ cursor: "pointer" })]}
+              <Pressable key={p.id} testID={`hub-produto-${p.id}`} accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} style={[linhaProduto, web({ cursor: "pointer" })]}
                 onPress={() => mSend.mutate({ type: "produto", product_id: p.id })}>
                 {p.image_url
                   ? <Image source={{ uri: p.image_url }} style={{ width: 54, height: 54, borderRadius: 14, backgroundColor: K.trilho }} />
@@ -184,12 +207,12 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
       )}
 
       {painel === "orcamento" && (
-        <Folha label="Mandar orçamento" testID="hub-envio-painel-orcamento" flutua={!compacto} gap={8}>
+        <Folha label="Mandar orçamento" testID="hub-envio-painel-orcamento" flutua={!compacto} gap={8} onFechar={() => setPainel(null)} gatilho={compacto ? "hub-envio-barra" : "hub-envio-orcamento"}>
           <Meta style={{ paddingHorizontal: 6, paddingVertical: 4 }}>{`Orçamentos d${primeiro === "o cliente" ? "o cliente" : `a ${primeiro}`}`}</Meta>
           <View style={{ gap: 6 }}>
             {carregandoOrc && <ActivityIndicator color={K.acc} />}
             {(orcs?.quotes || []).map((q) => (
-              <Pressable key={q.id} testID={`hub-orcamento-${q.id}`} style={[linhaProduto, { padding: 10 }, web({ cursor: "pointer" })]}
+              <Pressable key={q.id} testID={`hub-orcamento-${q.id}`} accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} style={[linhaProduto, { padding: 10 }, web({ cursor: "pointer" })]}
                 onPress={() => mSend.mutate({ type: "orcamento", quote_id: q.id })}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Tx style={{ fontWeight: "700" }}>{fmt(Number(q.total))}</Tx>
@@ -205,7 +228,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
               </Tx>
             )}
             {orcamentoNovo && (
-              <Pressable testID="hub-orcamento-novo" onPress={() => router.push(orcamentoNovo as any)} style={{ minHeight: 44, justifyContent: "center", paddingLeft: 10 }}>
+              <Pressable testID="hub-orcamento-novo" accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} onPress={() => router.push(orcamentoNovo as any)} style={{ minHeight: 44, justifyContent: "center", paddingLeft: 10 }}>
                 <Tx style={{ fontSize: 14, fontWeight: "600", color: K.acc, lineHeight: 18 }}>Fazer um orçamento novo</Tx>
               </Pressable>
             )}
@@ -223,26 +246,26 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
           : [];
         const mostrarCampo = outroValor || opcoes.length === 0;
         return (
-          <Folha label="Mandar Pix" testID="hub-envio-painel-pix" flutua={!compacto} gap={10} padding={16}>
+          <Folha label="Mandar Pix" testID="hub-envio-painel-pix" flutua={!compacto} gap={10} padding={16} onFechar={() => setPainel(null)} gatilho={compacto ? "hub-envio-barra" : "hub-envio-pix"}>
             <Meta>{`Quanto ${primeiro === "o cliente" ? "o cliente" : `a ${primeiro}`} vai pagar?`}</Meta>
             {opcoes.length > 0 && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {opcoes.map((o) => (
-                  <Pilula key={o.rotulo} testID={`hub-pix-opcao-${o.rotulo.includes("50") ? "sinal" : "inteiro"}`} disabled={mSend.isPending}
+                  <Pilula key={o.rotulo} testID={`hub-pix-opcao-${o.rotulo.includes("50") ? "sinal" : "inteiro"}`} disabled={mSend.isPending} dados={{ opcao: "1" }}
                     style={{ flexDirection: "column", alignItems: "flex-start", gap: 0, minHeight: 58, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20 }}
                     onPress={() => mSend.mutate({ type: "pix", amount: o.valor })}>
                     <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 22 }}>{fmt(o.valor)}</Tx>
                     <Tx style={{ fontSize: 12, fontWeight: "500", color: K.ink2, lineHeight: 16 }}>{o.rotulo}</Tx>
                   </Pilula>
                 ))}
-                <Pilula testID="hub-pix-outro" on={outroValor} style={{ minHeight: 58, borderRadius: 20 }} onPress={() => setOutroValor((v) => !v)}>Outro valor</Pilula>
+                <Pilula testID="hub-pix-outro" dados={{ opcao: "1" }} on={outroValor} style={{ minHeight: 58, borderRadius: 20 }} onPress={() => setOutroValor((v) => !v)}>Outro valor</Pilula>
               </View>
             )}
             {mostrarCampo && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
                 <TextInput testID="hub-pix-valor" style={[campoBusca, { minHeight: 52, borderRadius: 20, minWidth: 180 }]} value={valor} onChangeText={setValor}
                   keyboardType="decimal-pad" placeholder="Valor em reais (opcional)" placeholderTextColor={K.ink3} />
-                <Pilula testID="hub-pix-mandar" on style={{ minHeight: 52, borderRadius: 20, paddingHorizontal: 18 }}
+                <Pilula testID="hub-pix-mandar" dados={{ opcao: "1" }} on style={{ minHeight: 52, borderRadius: 20, paddingHorizontal: 18 }}
                   disabled={mSend.isPending || (valor.trim() !== "" && !valorOk)}
                   onPress={() => mSend.mutate(valorOk ? { type: "pix", amount: valorNum } : { type: "pix" })}>
                   {valorOk ? `Mandar Pix de ${fmt(valorNum)}` : "Mandar chave Pix"}
