@@ -30,7 +30,7 @@ import { G, WEB, Z, movimentoReduzido, posicionaBalao, useGuiaCss, type Retangul
 const RESPIRO = 6;
 const LARGURA_BALAO = 400;
 const FURO_BASE = 100;
-const ESPERA_PADRAO = 2500;
+const ESPERA_PADRAO = 1200; // alvo que não está na tela (ex.: plano sem Aurinha, gaveta fechada no celular): pula depressa
 const POLL_MS = 120;
 const MEDE_MS = 250;
 
