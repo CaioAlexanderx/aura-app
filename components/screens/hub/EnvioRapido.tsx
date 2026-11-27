@@ -24,6 +24,7 @@ import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
 import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
 import { useOrcamentoNovo } from "./useOrcamentoNovo";
+import { ProdutoGradePainel } from "./ProdutoGradePainel";
 import { aoTeclarNoPainel, focarPrimeiro } from "./teclado";
 
 /**
@@ -73,12 +74,13 @@ export function AtalhoAcao({ icone, label, onPress, testID, on, destaque, disabl
 }
 
 /** Folha de vidro sólido do mockup: flutua acima da barra no desktop; no celular fica no fluxo. */
-export function Folha({ label, testID, flutua, children, gap = 6, padding = 14, onFechar, gatilho }: {
+export function Folha({ label, testID, flutua, children, gap = 6, padding = 14, onFechar, gatilho, largura = 420, raio = 24 }: {
   label: string; testID?: string; flutua: boolean; children: ReactNode; gap?: number; padding?: number;
   /** Esc fecha o painel. */
   onFechar?: () => void;
   /** testID do botão que abriu: o foco volta para ele ao fechar. */
   gatilho?: string;
+  largura?: number; raio?: number;
 }) {
   const an = anima("abre", 0.38);
   const ref = useRef<any>(null);
@@ -99,8 +101,8 @@ export function Folha({ label, testID, flutua, children, gap = 6, padding = 14, 
   });
   return (
     <View ref={ref} testID={testID} accessibilityLabel={label} {...({ role: "dialog", onKeyDown: (e: any) => aoTeclarNoPainel(e, onFechar, gatilho) } as any)} {...({ dataSet: { ...an.dataSet, waFoco: "1" } } as any)}
-      style={[superficie.solida(24), { padding, gap },
-        flutua ? { position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: 420, zIndex: 3, transformOrigin: "bottom left" } : null, an.style]}>
+      style={[superficie.solida(raio), { padding, gap },
+        flutua ? { position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: largura, zIndex: 3, transformOrigin: "bottom left" } : null, an.style]}>
       {children}
     </View>
   );
@@ -128,13 +130,15 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   const [outroValor, setOutroValor] = useState(false);
   const orcamentoNovo = useOrcamentoNovo();
   const [busca, setBusca] = useState("");
+  /** Produto escolhido na busca: abre o painel de fotos e tamanhos. */
+  const [escolhido, setEscolhido] = useState<string | null>(null);
   const [valor, setValor] = useState("");
   const primeiro = nome || "o cliente";
 
   const mSend = useMutation({
     mutationFn: (body: Parameters<typeof hubApi.send>[2]) => hubApi.send(companyId, convId, body),
     onSuccess: async (_r, body) => {
-      setPainel(null); setBusca(""); setValor(""); setOutroValor(false);
+      setPainel(null); setBusca(""); setValor(""); setOutroValor(false); setEscolhido(null);
       // Mandar o Pix aplica a etiqueta "Esperando Pix" (cria na loja se ainda não existir). A "Pago" automática fica para depois.
       if (body.type === "pix") {
         try {
@@ -164,6 +168,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   const escolher = (key: HubEnvioTipo) => {
     if (mSend.isPending) return;
     setFolhaAberta(false);
+    setEscolhido(null);
     if (key === "link_loja") { mSend.mutate({ type: "link_loja" }); return; }
     setPainel((p) => (p === key ? null : (key as Painel)));
   };
@@ -180,7 +185,18 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
 
   const paineis = (
     <>
-      {painel === "produto" && (
+      {painel === "produto" && escolhido && (
+        <Folha label="Mandar produto" testID="hub-envio-painel-produto" flutua={!compacto} gap={16} padding={22} largura={560} raio={30}
+          onFechar={() => setPainel(null)} gatilho={compacto ? "hub-envio-barra" : "hub-envio-produto"}>
+          <ProdutoGradePainel companyId={companyId} convId={convId} productId={escolhido}
+            onTrocar={() => setEscolhido(null)}
+            onSent={() => { setPainel(null); setEscolhido(null); setBusca(""); onSent(); }}
+            onError={onError}
+            onSemGrade={() => mSend.mutate({ type: "produto", product_id: escolhido })} compacto={compacto} />
+        </Folha>
+      )}
+
+      {painel === "produto" && !escolhido && (
         <Folha label="Mandar produto" testID="hub-envio-painel-produto" flutua={!compacto} onFechar={() => setPainel(null)} gatilho={compacto ? "hub-envio-barra" : "hub-envio-produto"}>
           <Meta style={{ paddingHorizontal: 6, paddingTop: 4, paddingBottom: 6 }}>Toque para mandar</Meta>
           <TextInput testID="hub-envio-busca" style={campoBusca} value={busca} onChangeText={setBusca}
@@ -189,7 +205,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
           <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
             {(catalogo?.products || []).map((p) => (
               <Pressable key={p.id} testID={`hub-produto-${p.id}`} accessibilityRole="button" {...({ dataSet: { opcao: "1" } } as any)} style={[linhaProduto, web({ cursor: "pointer" })]}
-                onPress={() => mSend.mutate({ type: "produto", product_id: p.id })}>
+                onPress={() => setEscolhido(p.id)}>
                 {p.image_url
                   ? <Image source={{ uri: p.image_url }} style={{ width: 54, height: 54, borderRadius: 14, backgroundColor: K.trilho }} />
                   : <View style={{ width: 54, height: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: K.trilho }}><Tx style={{ fontSize: 9, color: K.ink3, lineHeight: 12 }}>sem foto</Tx></View>}

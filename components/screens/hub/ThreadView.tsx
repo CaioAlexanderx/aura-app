@@ -22,8 +22,11 @@ import { EtiquetasConversa } from "./EtiquetasConversa";
 import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConversa";
 import { PainelCliente } from "./PainelCliente";
 import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
+import { CartaoProdutoGrade, PerguntaDeTamanho, RespostaDeBotao, SugestaoDeReserva, TIPO_PERGUNTA } from "./CartoesDaGrade";
+import { hubProdutoGradeApi, mensagemDaReserva, ehReservaNaoLiberada, sugestaoReserva, type SugestaoReserva } from "@/services/hubProdutoGradeApi";
+import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
+import { K, Tx, Meta, Ico, Avatar, EtiquetaChip, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -54,6 +57,24 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["hub-thread", companyId, convId] });
     qc.invalidateQueries({ queryKey: ["hub-conversations", companyId] });
+  };
+
+  // A reserva usa o Pedido do balcão (trava PEDIDO_LIBERADO). Sem ela: "Mandar o Pix" com o preço do tamanho.
+  const reservaLiberada = pedidoLiberado((useAuthStore() as any)?.user);
+  const [semReserva, setSemReserva] = useState(false);
+  const mandarSoPix = (sg: SugestaoReserva) => {
+    hubApi.send(companyId, convId, { type: "pix", amount: Number(sg.preco) })
+      .then(() => invalidate())
+      .catch((e: any) => setFeedback(e?.message || "Não foi possível mandar o Pix."));
+  };
+  const reservar = (messageId: string, nome: string) => {
+    hubProdutoGradeApi.reservarEMandarPix(companyId, convId, messageId)
+      .then(() => invalidate())
+      .catch((e: any) => {
+        if (ehReservaNaoLiberada(e)) { setSemReserva(true); return; }
+        setFeedback(mensagemDaReserva(e, nome));
+        if (e?.status === 409) invalidate();
+      });
   };
 
   const mAction = useMutation({
@@ -173,6 +194,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         {abertaAte
           ? <Tx testID="hub-janela-aberta" {...tourTarget("wa.janela")} numberOfLines={1} style={{ fontSize: 12, color: K.ok, lineHeight: 16 }}>{`Aberta até ${abertaAte}`}</Tx>
           : <Tx numberOfLines={1} style={{ fontSize: 12, color: K.ink2, lineHeight: 16 }}>{sub}</Tx>}
+        {(conv.labels || []).length > 0 && (
+          <View testID="hub-thread-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+            {(conv.labels || []).map((l) => <EtiquetaChip key={l.id} testID={`hub-thread-etiqueta-${l.id}`} nome={l.name} cor={l.color} />)}
+          </View>
+        )}
       </View>
       {whatsapp && avisos && (
         <View testID="hub-thread-avisos-bloco" style={{ alignItems: "flex-end", gap: 4, paddingRight: 6 }}>
@@ -189,6 +215,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           <Tx numberOfLines={1} style={{ fontSize: 17, fontWeight: "700", lineHeight: 24 }}>{nomeTela}</Tx>
           <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{sub}</Tx>
         </View>
+        {(conv.labels || []).length > 0 && (
+          <View testID="hub-thread-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, flexShrink: 1 }}>
+            {(conv.labels || []).map((l) => <EtiquetaChip key={l.id} testID={`hub-thread-etiqueta-${l.id}`} nome={l.name} cor={l.color} />)}
+          </View>
+        )}
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%" }}>
         {abertaAte && (
@@ -220,17 +251,23 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         {data.messages.map((m) => {
           const mine = m.direction === "outbound";
           const author = rotuloDoAutor(m, conv);
-          const produto = m.tipo === "produto" && !!m.image_url;
+          const produto = m.tipo === "produto" && !!m.image_url && !m.cartao?.fotos?.length;
           const cartao = !!m.tipo && CARTAO_TIPOS.includes(m.tipo);
+          const grade = m.tipo === "produto" && !!m.cartao?.fotos?.length;
+          // Duas linhas (pergunta_tamanho) ou uma só: o produto com fotos que já traz as opções dos botões.
+          const pergunta = (m.tipo === TIPO_PERGUNTA || grade) && Array.isArray(m.metadata?.opcoes) && m.metadata!.opcoes.length > 0;
+          const respostaGrade = m.direction === "inbound" ? m.metadata?.produto_grade : null;
+          const sugestao = (m.direction === "inbound" ? m.metadata?.sugestao : null) as SugestaoReserva | null;
           const audio = m.media?.kind === "audio";
           return (
-            <View key={m.id} style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
+            <View key={m.id} style={{ gap: compacto ? 9 : 10 }}>
+            <View style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
               <View testID={`hub-msg-${m.id}`}
                 style={[{
                   maxWidth: larguraBolha, paddingTop: produto ? 8 : 10, paddingHorizontal: produto ? 8 : 14, paddingBottom: 8, borderRadius: 20, borderWidth: 1,
                   borderBottomLeftRadius: mine ? 20 : 6, borderBottomRightRadius: mine ? 6 : 20,
                   borderColor: mine ? K.bolhaOutBorda : K.bolhaInBorda, backgroundColor: mine ? K.bolhaOutFb : K.bolhaInFb,
-                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
+                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, grade || pergunta ? { width: 360, paddingTop: 6, paddingHorizontal: 6 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
                 {produto && (
                   <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
                 )}
@@ -238,7 +275,10 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                 {m.tipo === "orcamento" && <CartaoOrcamento content={m.content} cartao={m.cartao} />}
                 {m.tipo === "pix" && <CartaoPix content={m.content} cartao={m.cartao} />}
                 {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} cartao={m.cartao} />}
-                {!cartao && textoDaBolha(m) != null && (
+                {grade && <CartaoProdutoGrade cartao={m.cartao} />}
+                {pergunta && <PerguntaDeTamanho opcoes={m.metadata!.opcoes} />}
+                {respostaGrade && <RespostaDeBotao tamanho={respostaGrade.tamanho} lista={/^escolheu na lista/i.test(m.content || "")} />}
+                {!cartao && !grade && !pergunta && !respostaGrade && textoDaBolha(m) != null && (
                   <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
                 )}
                 {/* Rodapé da bolha: "Lorena · 10:14 · lida". */}
@@ -249,6 +289,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                   </Tx>
                 </View>
               </View>
+            </View>
+            {sugestao && (sugestao.tipo === "reservar_e_mandar_pix" || sugestao.tipo === "mandar_pix") && (
+              <SugestaoDeReserva nome={nomeCurto} sugestao={sugestao} reservaLiberada={sugestaoReserva(sugestao, reservaLiberada) && !semReserva} ocupado={mAction.isPending}
+                onReservar={() => reservar(m.id, nomeCurto)} onMandarPix={() => mandarSoPix(sugestao)} />
+            )}
             </View>
           );
         })}
@@ -287,6 +332,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   const placeholder = conv.status === "ia"
     ? "Digitar aqui assume a conversa…"
     : whatsapp && (conv.customer_name || ligado) ? `Escreva para ${nomeCurto === "o cliente" ? "o cliente" : `a ${nomeCurto}`}…` : "Escreva uma mensagem…";
+  // Celular: o campo é estreito e o placeholder não reticencia; cabe só "Mensagem…".
+  const placeholderCampo = compacto ? "Mensagem…" : placeholder;
   const podeEnviar = !!draft.trim() && !mReply.isPending;
   // Celular: "+" redondo à esquerda do campo reabre a gaveta (como o de anexar do WhatsApp).
   const linhaEscrever = (abrirGaveta?: () => void) => (
@@ -297,7 +344,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         </BotaoRedondo>
       )}
       <View style={[superficie.seca(999), { flex: 1, minWidth: 0, minHeight: compacto ? 46 : 52, paddingHorizontal: 18, justifyContent: "center" }]}>
-        <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholder} placeholderTextColor={K.ink3}
+        <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholderCampo} placeholderTextColor={K.ink3}
           onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
           style={[{ fontSize: 15, color: K.ink, fontFamily: SANS, minWidth: 0 }, web({ outlineStyle: "none" })]} />
       </View>

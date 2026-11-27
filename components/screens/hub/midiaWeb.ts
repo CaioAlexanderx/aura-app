@@ -108,11 +108,12 @@ export function blobParaBase64(blob: Blob): Promise<string> {
 }
 
 /** Abre o seletor de arquivos do navegador. null = cancelou. */
-export function escolherArquivo(accept: string): Promise<File | null> {
+export function escolherArquivo(accept: string, camera = false): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = accept;
+    if (camera) input.setAttribute("capture", "environment"); // celular abre a câmera; computador, o seletor de sempre
     input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
     // "cancel" existe nos navegadores novos; sem ele a promessa só resolve ao escolher.
     input.addEventListener("cancel", () => resolve(null));
