@@ -56,12 +56,6 @@ const PRESETS: PresetSpec[] = [
 /** Os dois de MARKETING (Fases 7/8) — outra categoria, outro preço. */
 const PRESETS_MARKETING: PresetSpec[] = [
   {
-    preset: "reativacao_cupom",
-    titulo: "Cupom de reativação",
-    descricao: "Enviado a quem não compra há um tempo, com um cupom e prazo curto para voltar.",
-    botao: "Criar template de reativação",
-  },
-  {
     preset: "aniversario_cupom",
     titulo: "Cupom de aniversário",
     descricao: "Enviado no dia do aniversário do cliente, com o cupom de presente da loja.",

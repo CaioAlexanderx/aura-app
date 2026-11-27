@@ -25,7 +25,7 @@
 // ============================================================
 import { useState, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
-import { router, Redirect } from "expo-router";
+import { router, Redirect, useLocalSearchParams } from "expo-router";
 import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -38,13 +38,8 @@ import { TabCampanhas } from "@/components/screens/whatsapp/TabCampanhas";
 import { TabConfig } from "@/components/screens/whatsapp/TabConfig";
 import { TABS } from "@/components/screens/whatsapp/types";
 import { ConexaoCard } from "@/components/whatsapp/ConexaoCard";
-import { UsoCard } from "@/components/whatsapp/UsoCard";
 import { FilaCard, filtrarCrediario } from "@/components/whatsapp/FilaCard";
 import { TemplatesCard } from "@/components/whatsapp/TemplatesCard";
-// Fases 7/8: marketing (aniversário e reativação) é outra categoria na
-// Meta, custa mais e exige consentimento declarado. A declaração mora na
-// aba Conexão porque é uma propriedade do NÚMERO, não de uma rotina.
-import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoMarketingCard";
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
@@ -96,7 +91,10 @@ export default function WhatsAppScreen() {
   useWaQuedas();
   const [tab, setTab] = useState(0);
   const [emConversa, setEmConversa] = useState(false);
-  const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
+  // `?aba=venda_mais` (a antiga /clientes/reativacao redireciona para cá).
+  const { aba: abaParam } = useLocalSearchParams<{ aba?: string | string[] }>();
+  const abaInicial = (Array.isArray(abaParam) ? abaParam[0] : abaParam) === "venda_mais" ? "venda_mais" : "conversas";
+  const [abaReal, setAbaReal] = useState<AbaReal>(abaInicial);
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user, consolidatedView } = useAuthStore();
@@ -328,23 +326,6 @@ export default function WhatsAppScreen() {
               ) : (
                 <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
               )}
-              <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
-              <ConsentimentoMarketingCard
-                companyId={companyId}
-                status={wa.status}
-                onChanged={wa.reloadStatus}
-              />
-              <Pressable
-                onPress={() => router.push("/crediario/settings")}
-                accessibilityRole="button"
-                style={s.linkCard}
-                testID="wa-varejo-ir-para-regua"
-              >
-                <Icon name="arrow_right" size={14} color={Colors.violet3} />
-                <Text style={s.linkTxt}>
-                  O envio automático das cobranças liga na régua, em Configurações do Crediário.
-                </Text>
-              </Pressable>
             </View>
           )}
 

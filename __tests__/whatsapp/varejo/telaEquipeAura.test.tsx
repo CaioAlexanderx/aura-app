@@ -24,6 +24,7 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useLocalSearchParams: () => ({}),
   Redirect: ({ href }: any) => {
     const R = require("react");
     return R.createElement("Redirect", { testID: "redirect", href });
@@ -126,23 +127,23 @@ async function montar() {
   return tree;
 }
 
-describe("tela do WhatsApp oficial com a trava desligada", () => {
+describe("tela do WhatsApp oficial depois da virada (trava ligada)", () => {
   beforeEach(() => {
     instalarFbFake();
     mockConnect.mockClear();
     mockUser = null;
   });
 
-  it("a trava segue desligada para as lojas", () => {
-    expect(WHATSAPP_OFICIAL_LIBERADO).toBe(false);
+  it("a trava está ligada para as lojas (virada de 27/11/2026)", () => {
+    expect(WHATSAPP_OFICIAL_LIBERADO).toBe(true);
   });
 
-  it("lojista sem número conectado: volta ao Painel, sem botão de conectar", async () => {
+  it("lojista sem número conectado: a tela abre com o botão de conectar, sem voltar ao Painel", async () => {
     mockUser = { id: "u-1", email: "dona@loja.com.br", is_staff: false };
     const tree = await montar();
-    expect(temTestId(tree, "redirect")).toBe(true);
-    expect(temTestId(tree, "wa-varejo-real")).toBe(false);
-    expect(temTestId(tree, "wa-varejo-conectar")).toBe(false);
+    expect(temTestId(tree, "redirect")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-real")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-conectar")).toBe(true);
     tree.unmount();
   });
 

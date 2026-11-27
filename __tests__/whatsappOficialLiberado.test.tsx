@@ -25,6 +25,20 @@ jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { info: jest.fn(), success: jest.fn(), error: jest.fn() } }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 
+// 27/11/2026 — a constante real foi ligada na virada. Este arquivo segura o
+// MECANISMO da trava (desligada: só equipe, sandbox ou loja conectada), então
+// ele a simula desligada; a constante real é conferida em viradaLojaComum.
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  const m: any = {
+    ...real,
+    whatsappOficialLiberadoPara: (u: any, l: boolean = false, sb: boolean = false) => real.whatsappOficialLiberadoPara(u, l, sb),
+    whatsappOficialVisivel: (st: any, u: any, l: boolean = false, sb: boolean = false) => real.whatsappOficialVisivel(st, u, l, sb),
+  };
+  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => false, enumerable: true });
+  return m;
+});
+
 var mockUser: any = null;
 jest.mock("@/stores/auth", () => ({
   useAuthStore: Object.assign(
@@ -85,8 +99,6 @@ import {
 } from "@/utils/whatsappOficialLiberado";
 import PlanosScreen from "@/app/(tabs)/planos";
 import AgendamentoScreen from "@/app/(tabs)/agendamento";
-import { AniversarioAutoCard } from "@/components/whatsapp/AniversarioAutoCard";
-import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
 import { useWhatsappOficialVisivel } from "@/hooks/useWhatsappOficialVisivel";
 
 async function flush() {
@@ -198,26 +210,6 @@ describe("Agendamento", () => {
   });
 });
 
-describe("aniversário no Painel: a exceção da loja conectada", () => {
-  test("loja sem número: o cartão do envio automático some", async () => {
-    mockStatus = { connected: false, queue: {}, schema_pending: false };
-    let tree: any;
-    await act(async () => { tree = renderer.create(<AniversarioAutoCard companyId="loja-1" />); });
-    await flush();
-    expect(temTestId(tree, "aniversario-wa-auto")).toBe(false);
-    tree.unmount();
-  });
-
-  test("loja já conectada: o cartão fica como hoje", async () => {
-    mockStatus = { connected: true, phone_display: "5511912345678", queue: {}, schema_pending: false };
-    let tree: any;
-    await act(async () => { tree = renderer.create(<AniversarioAutoCard companyId="loja-1" />); });
-    await flush();
-    expect(temTestId(tree, "aniversario-wa-auto")).toBe(true);
-    tree.unmount();
-  });
-});
-
 describe("useWhatsappOficialVisivel (aba WhatsApp das Mensalidades do dojô)", () => {
   function Sonda() {
     const v = useWhatsappOficialVisivel();
@@ -255,20 +247,6 @@ describe("useWhatsappOficialVisivel (aba WhatsApp das Mensalidades do dojô)", (
     } finally {
       mockUser = null;
     }
-  });
-});
-
-describe("entrada da Reativação no Negócio", () => {
-  test("com a trava desligada, o caminho é o do wa.me (sem cupom pago)", async () => {
-    let tree: any;
-    await act(async () => {
-      tree = renderer.create(<ReativacaoEntrada customers={[]} plan="negocio" idBase="porta" />);
-    });
-    const txt = textoDe(tree.toJSON());
-    expect(txt).toContain("Chamar quem sumiu");
-    expect(txt).not.toContain("Ver e mandar cupom");
-    expect(txt).not.toContain("Mensagem de marketing");
-    tree.unmount();
   });
 });
 

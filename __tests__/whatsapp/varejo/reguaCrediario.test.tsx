@@ -1,31 +1,21 @@
 // ============================================================
-// A régua do crediário liga o WhatsApp oficial (Fase 6j).
+// Régua do crediário depois da virada do WhatsApp (27/11/2026).
 //
-// A Valen tem 1938 parcelas em aberto. Um clique errado aqui é uma
-// fatura da Meta, não um bug de UI. Estes testes seguram:
-//
-// 1. o interruptor fica TRAVADO enquanto faltar plano/addon, conexão ou
-//    os dois templates aprovados — inclusive quando o backend é antigo e
-//    simplesmente não devolve `templates_ready` (ausente bloqueia igual
-//    a false);
-// 2. LIGAR não salva nada antes da prévia: o lojista vê quantos clientes
-//    receberiam hoje e só então existe o botão Ativar;
-// 3. DESLIGAR é livre e imediato, sem prévia — quem está gastando tem
-//    que poder parar mesmo com o /status fora do ar;
-// 4. o 403/409 do backend chega em português, nunca como código.
+// O liga do envio automático saiu das Configurações do Crediário: o
+// "cobrar" vive em WhatsApp > Configurações > Crediário. A régua (etapas,
+// dias, Pix) continua aqui. Estes testes seguram:
+//   1. não existe mais o interruptor, o bloco nem a prévia do WhatsApp oficial;
+//   2. a tela aponta para o WhatsApp;
+//   3. o whatsapp_auto gravado segue sendo ecoado no PUT (nada muda no dado).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+const mockPush = jest.fn();
+jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a), back: jest.fn() } }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
-
-// O <Modal> do react-native-web monta por portal do ReactDOM, e o
-// react-test-renderer não tem onde pendurar um portal. Aqui o
-// ResponsiveSheet vira passa-adiante: invisível não renderiza, visível
-// renderiza na própria árvore — que é tudo o que estes testes olham.
 jest.mock("@/components/ResponsiveSheet", () => ({
   ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
 }));
@@ -41,11 +31,10 @@ jest.mock("@/stores/auth", () => ({
 }));
 
 var mockRules: any = {
-  company_id: "loja-1", enabled: true, whatsapp_connected: false, pix_key: "loja@exemplo.com",
-  whatsapp_auto: false,
+  company_id: "loja-1", enabled: true, pix_key: "loja@exemplo.com",
+  whatsapp_auto: true,
   rules: [
     { id: "lembrete", name: "Lembrete", days_relative: -3, template: "oi", channel: "whatsapp", enabled: true },
-    { id: "bloqueio", name: "Aviso de bloqueio", days_relative: 15, template: "x", channel: "system", enabled: false },
   ],
 };
 var mockUpdateRules = jest.fn((_id: string, body: any) => Promise.resolve({ ...mockRules, ...body }));
@@ -58,232 +47,52 @@ jest.mock("@/services/creditApi", () => ({
   },
 }));
 
-var mockStatus: any = null;
-var mockPreview: any = { date: "2026-09-14", would_send: 4, skipped: { OPT_OUT: 1 }, items: [] };
-var mockGetPreview = jest.fn((_id: string, _o: any) => Promise.resolve(mockPreview));
-jest.mock("@/services/waApi", () => {
-  const actual = jest.requireActual("@/services/waApi");
-  return {
-    ...actual,
-    waApi: {
-      getStatus: () => Promise.resolve(mockStatus),
-      getPreview: (id: string, o: any) => mockGetPreview(id, o),
-    },
-  };
-});
-
-// 18/11/2026 — trava do WhatsApp oficial (utils/whatsappOficialLiberado).
-// Os casos acima são de loja conectada (a exceção da trava) ou ligam a
-// trava explicitamente; o caso da trava desligada fica no fim.
-var mockLiberado = false;
-jest.mock("@/utils/whatsappOficialLiberado", () => {
-  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
-  const m: any = {
-    ...real,
-    whatsappOficialVisivel: (s: any, u: any) => real.whatsappOficialVisivel(s, u, mockLiberado),
-    whatsappOficialLiberadoPara: (u: any) => real.whatsappOficialLiberadoPara(u, mockLiberado),
-  };
-  // defineProperty, e não `get` no literal: o spread do babel lê o getter na hora.
-  Object.defineProperty(m, "WHATSAPP_OFICIAL_LIBERADO", { get: () => mockLiberado, enumerable: true });
-  return m;
-});
-
 import CrediarioSettingsScreen from "@/app/(tabs)/crediario/settings";
-
-const STATUS_LIBERADO = {
-  connected: true,
-  phone_display: "5511912345678",
-  waba_id: "w1",
-  queue: {},
-  schema_pending: false,
-  addon_active: true,
-  template_ready: true,
-  templates_ready: { parcela_lembrete: true, parcela_atraso: true },
-  paused_reason: null,
-  usage: { today_sent: 1, month_sent: 12, daily_cap: 300 },
-};
 
 async function flush() {
   await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 30));
+    for (let i = 0; i < 6; i++) await Promise.resolve();
   });
 }
-
-function montar() {
+async function montar() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return renderer.create(
-    <QueryClientProvider client={qc}>
-      <CrediarioSettingsScreen />
-    </QueryClientProvider>
-  );
+  let tree: any;
+  await act(async () => {
+    tree = renderer.create(
+      <QueryClientProvider client={qc}><CrediarioSettingsScreen /></QueryClientProvider>
+    );
+  });
+  await flush();
+  return tree;
 }
+const tem = (tree: any, id: string) => tree.root.findAllByProps({ testID: id }).length > 0;
 
-function temTestId(tree: any, id: string): boolean {
-  return tree.root.findAllByProps({ testID: id }).length > 0;
-}
+describe("régua do crediário sem o liga do WhatsApp oficial", () => {
+  beforeEach(() => { mockPush.mockClear(); mockUpdateRules.mockClear(); });
 
-function acharPorTestId(tree: any, id: string): any {
-  return tree.root.findAllByProps({ testID: id })[0];
-}
-
-describe("interruptor do WhatsApp oficial na régua do crediário", () => {
-  beforeEach(() => {
-    mockRules = { ...mockRules, whatsapp_auto: false };
-    mockPreview = { date: "2026-09-14", would_send: 4, skipped: { OPT_OUT: 1 }, items: [] };
-    mockUpdateRules.mockClear();
-    mockGetPreview.mockClear();
-    mockLiberado = false;
-  });
-
-  it("sem os templates aprovados: travado e com o motivo na tela", async () => {
-    mockStatus = { ...STATUS_LIBERADO, templates_ready: { parcela_lembrete: true } };
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-switch-travado")).toBe(true);
-    expect(temTestId(tree, "crediario-wa-switch")).toBe(false);
-    expect(temTestId(tree, "crediario-wa-motivos")).toBe(true);
-    expect(JSON.stringify(tree.toJSON())).toContain("ainda não foram aprovados pela Meta");
-    // E oferece o caminho para resolver, em vez de só reclamar.
-    expect(temTestId(tree, "crediario-wa-configurar")).toBe(true);
+  it("não tem interruptor, bloco nem motivos do WhatsApp oficial", async () => {
+    const tree = await montar();
+    for (const id of ["crediario-wa-bloco", "crediario-wa-switch", "crediario-wa-switch-travado", "crediario-wa-motivos", "crediario-wa-configurar"]) {
+      expect(tem(tree, id)).toBe(false);
+    }
     tree.unmount();
   });
 
-  it("backend antigo (sem templates_ready) bloqueia igual — omissão nunca libera", async () => {
-    mockStatus = { ...STATUS_LIBERADO };
-    delete (mockStatus as any).templates_ready;
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-switch-travado")).toBe(true);
+  it("aponta para o WhatsApp, onde o cobrar vive", async () => {
+    const tree = await montar();
+    expect(tem(tree, "crediario-wa-ir-para-whatsapp")).toBe(true);
+    const link = tree.root.findAllByProps({ testID: "crediario-wa-ir-para-whatsapp" })[0];
+    await act(async () => { link.props.onPress(); });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/whatsapp");
     tree.unmount();
   });
 
-  it("fora do plano: travado com o texto comercial", async () => {
-    mockStatus = { ...STATUS_LIBERADO, addon_active: false };
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-switch-travado")).toBe(true);
-    // Fase 8b: o texto comercial mudou — o WhatsApp oficial vem no
-    // Negócio, então o caminho é migrar de plano, não contratar addon.
-    expect(JSON.stringify(tree.toJSON())).toContain("plano Negócio e do Aura Dojô");
+  it("o chip da etapa segue dizendo 'automático' quando o whatsapp_auto está gravado", async () => {
+    const tree = await montar();
+    expect(tem(tree, "crediario-canal-lembrete")).toBe(true);
+    expect(JSON.stringify(tree.toJSON())).toContain("automático");
     tree.unmount();
-  });
-
-  it("status fora do ar (trava ligada): travado, sem liberar por omissão", async () => {
-    mockLiberado = true;
-    mockStatus = null;
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-    expect(temTestId(tree, "crediario-wa-switch-travado")).toBe(true);
-    tree.unmount();
-  });
-
-  it("tudo aprovado: LIGAR abre a prévia e não salva nada antes dela", async () => {
-    mockStatus = STATUS_LIBERADO;
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-switch")).toBe(true);
-    expect(temTestId(tree, "crediario-wa-previa")).toBe(false);
-
-    await act(async () => { acharPorTestId(tree, "crediario-wa-switch").props.onValueChange(true); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-previa")).toBe(true);
-    expect(mockGetPreview).toHaveBeenCalled();
-    // A prévia é a do crediário, não a da mensalidade do dojô.
-    expect(mockGetPreview.mock.calls[0][1]).toEqual({ source: "crediario" });
-    expect(mockUpdateRules).not.toHaveBeenCalled();
-
-    // Só depois do Ativar o PUT sai — e sai com whatsapp_auto true.
-    await act(async () => { acharPorTestId(tree, "crediario-wa-previa-ativar").props.onPress(); });
-    await flush();
-
-    expect(mockUpdateRules).toHaveBeenCalledTimes(1);
-    expect(mockUpdateRules.mock.calls[0][1].whatsapp_auto).toBe(true);
-    tree.unmount();
-  });
-
-  it("desligar é imediato e não passa pela prévia", async () => {
-    mockStatus = STATUS_LIBERADO;
-    mockRules = { ...mockRules, whatsapp_auto: true };
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    await act(async () => { acharPorTestId(tree, "crediario-wa-switch").props.onValueChange(false); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-previa")).toBe(false);
-    expect(mockGetPreview).not.toHaveBeenCalled();
-    expect(mockUpdateRules).toHaveBeenCalledTimes(1);
-    expect(mockUpdateRules.mock.calls[0][1].whatsapp_auto).toBe(false);
-    tree.unmount();
-  });
-
-  it("403 do gate vira português e o interruptor volta para desligado", async () => {
-    mockStatus = STATUS_LIBERADO;
-    mockUpdateRules.mockImplementationOnce(() => Promise.reject(
-      Object.assign(new Error("x"), { status: 403, data: { code: "ADDON_REQUIRED" } })
-    ));
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-
-    await act(async () => { acharPorTestId(tree, "crediario-wa-switch").props.onValueChange(true); });
-    await flush();
-    await act(async () => { acharPorTestId(tree, "crediario-wa-previa-ativar").props.onPress(); });
-    await flush();
-
-    expect(temTestId(tree, "crediario-wa-erro")).toBe(true);
-    const txt = JSON.stringify(tree.toJSON());
-    expect(txt).toContain("plano Negócio e do Aura Dojô");
-    expect(txt).not.toContain("ADDON_REQUIRED");
-    tree.unmount();
-  });
-
-  it("chip por etapa diz se a cobrança sai sozinha ou pelo wa.me", async () => {
-    mockStatus = STATUS_LIBERADO;
-    mockRules = { ...mockRules, whatsapp_auto: false };
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-    expect(JSON.stringify(tree.toJSON())).toContain("manual (wa.me)");
-    // A etapa de canal 'system' (aviso de bloqueio) não ganha chip.
-    expect(temTestId(tree, "crediario-canal-bloqueio")).toBe(false);
-    expect(temTestId(tree, "crediario-canal-lembrete")).toBe(true);
-    tree.unmount();
-
-    mockRules = { ...mockRules, whatsapp_auto: true };
-    let tree2: any;
-    await act(async () => { tree2 = montar(); });
-    await flush();
-    expect(JSON.stringify(tree2.toJSON())).toContain("automático");
-    tree2.unmount();
-  });
-
-  it("trava desligada e loja sem o número: o bloco some e a régua fala do wa.me", async () => {
-    mockStatus = { ...STATUS_LIBERADO, connected: false };
-    mockRules = { ...mockRules, whatsapp_auto: true };
-    let tree: any;
-    await act(async () => { tree = montar(); });
-    await flush();
-    expect(temTestId(tree, "crediario-wa-bloco")).toBe(false);
-    const txt = JSON.stringify(tree.toJSON());
-    expect(txt).not.toContain("WhatsApp oficial");
-    expect(txt).toContain("manual (wa.me)");
-    expect(txt).not.toContain("saem sozinhas pelo número oficial");
-    tree.unmount();
-    mockRules = { ...mockRules, whatsapp_auto: false };
   });
 });

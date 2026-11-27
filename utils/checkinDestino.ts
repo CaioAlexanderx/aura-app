@@ -20,7 +20,7 @@
 //   comeco = fiado        → Novo lançamento do crediário (plano libera)
 //   comeco = nota_fiscal  → aba Certificado A1 das Notas fiscais
 //   comeco = loja_online  → Canal Digital (plano libera)
-//   comeco = sumidos      → Reativação ("Chamar quem sumiu" no Essencial)
+//   comeco = sumidos      → Venda+ do WhatsApp (antes, a Reativação)
 //   comeco = outra, Pular → Painel
 //
 // Sem "comeco", mas com as outras duas respostas: a regra do estoque, a
@@ -46,7 +46,7 @@ export const ROTA_NOVO_FIADO = "/crediario?novo=1";
 /** Abre a aba "Certificado A1" das Notas fiscais (app/(tabs)/nfe.tsx lê `tab`). */
 export const ROTA_CERTIFICADO = "/nfe?tab=certificado";
 export const ROTA_CANAL = "/canal";
-export const ROTA_REATIVACAO = "/clientes/reativacao";
+export const ROTA_REATIVACAO = "/whatsapp?aba=venda_mais"; // 27/11/2026: o Venda+ substitui a Reativação
 
 export type DestinoCheckin = {
   /** Rota do app que abre depois do Continuar. */
@@ -170,7 +170,7 @@ export function destinoDoCheckin(respostas: CheckinRespostas, ctx: ContextoDoDes
     case "loja_online":
       return ctx.modulos.has("canal") ? { rota: ROTA_CANAL, motivo: "canal_digital" } : PAINEL;
     case "sumidos":
-      return ctx.modulos.has("clientes.reativacao") ? { rota: ROTA_REATIVACAO, motivo: "reativacao" } : PAINEL;
+      return ctx.modulos.has("whatsapp") ? { rota: ROTA_REATIVACAO, motivo: "reativacao" } : PAINEL;
     case "outra":
       return PAINEL;
     default:

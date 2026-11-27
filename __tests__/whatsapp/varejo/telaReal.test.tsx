@@ -23,6 +23,7 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useLocalSearchParams: () => ({}),
   Redirect: ({ href }: any) => {
     const R = require("react");
     return R.createElement("Redirect", { testID: "redirect", href });
@@ -199,7 +200,8 @@ describe("aba WhatsApp do varejo", () => {
     expect(temTestId(tree, "wa-varejo-maquete")).toBe(false);
     // Aba Conexão é a primeira: cartão de conexão + uso do mês.
     expect(temTestId(tree, "wa-varejo-conexao")).toBe(true);
-    expect(temTestId(tree, "wa-varejo-uso")).toBe(true);
+    // O cartão "Uso do mês" saiu na virada (27/11/2026).
+    expect(temTestId(tree, "wa-varejo-uso")).toBe(false);
     tree.unmount();
   });
 
@@ -222,8 +224,8 @@ describe("aba WhatsApp do varejo", () => {
     expect(temTestId(tree, "hub-view")).toBe(false);
     expect(temTestId(tree, "wa-varejo-real")).toBe(true);
     expect(temTestId(tree, "wa-varejo-conexao")).toBe(true);
-    expect(temTestId(tree, "wa-varejo-uso")).toBe(true);
-    expect(temTestId(tree, "wa-varejo-ir-para-regua")).toBe(true);
+    expect(temTestId(tree, "wa-varejo-uso")).toBe(false);
+    expect(temTestId(tree, "wa-varejo-ir-para-regua")).toBe(false);
 
     await act(async () => { acharPorTestId(tree, "wa-varejo-aba-conversas").props.onPress(); });
     await flush();

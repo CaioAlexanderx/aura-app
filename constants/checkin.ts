@@ -51,7 +51,7 @@ export const PERGUNTAS_CHECKIN: PerguntaCheckin[] = [
       { valor: "fiado", rotulo: "Controlar fiado", mod: "crediario" },
       { valor: "nota_fiscal", rotulo: "Emitir nota fiscal", mod: "nfe" },
       { valor: "loja_online", rotulo: "Vender pela internet", mod: "canal" },
-      { valor: "sumidos", rotulo: "Chamar clientes que sumiram", mod: "clientes.reativacao" },
+      { valor: "sumidos", rotulo: "Chamar clientes que sumiram", mod: "whatsapp" },
       { valor: "outra", rotulo: "Outra coisa" },
     ],
   },

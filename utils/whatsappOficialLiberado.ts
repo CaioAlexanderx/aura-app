@@ -27,12 +27,12 @@
 // O que NÃO passa por aqui: o WhatsApp manual pelo wa.me (cobrança manual,
 // parabéns manual, Chamar sumidos, cupom, suporte) segue igual.
 //
-// COMO LIGAR: trocar a constante para true e publicar o app.
+// 27/11/2026 — VIRADA: constante em true; a tela nova vale para todas as lojas.
 // ============================================================
 
 import { ehEquipeAura } from "@/utils/equipeAura";
 
-export const WHATSAPP_OFICIAL_LIBERADO = false;
+export const WHATSAPP_OFICIAL_LIBERADO = true;
 
 /**
  * A trava para quem não tem o status da conexão à mão (menu, Planos,

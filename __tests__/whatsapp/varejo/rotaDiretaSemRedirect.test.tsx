@@ -61,6 +61,17 @@ jest.mock("@/services/waApi", () => {
   };
 });
 
+// 27/11/2026 — a constante real foi ligada na virada; este arquivo segura o guard
+// com a trava desligada (o mecanismo continua no código).
+jest.mock("@/utils/whatsappOficialLiberado", () => {
+  const real = jest.requireActual("@/utils/whatsappOficialLiberado");
+  return {
+    ...real,
+    whatsappOficialLiberadoPara: (u: any, l: boolean = false, sb: boolean = false) => real.whatsappOficialLiberadoPara(u, l, sb),
+    whatsappOficialVisivel: (st: any, u: any, l: boolean = false, sb: boolean = false) => real.whatsappOficialVisivel(st, u, l, sb),
+  };
+});
+
 import WhatsAppScreen from "@/app/(tabs)/whatsapp";
 
 const temTestId = (tree: any, id: string) => tree.root.findAllByProps({ testID: id }).length > 0;

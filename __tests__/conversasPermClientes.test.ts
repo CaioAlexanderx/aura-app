@@ -18,7 +18,9 @@ describe("hub_social por permissão", () => {
     expect(computeVisibleModules("negocio", { hub_social: true }, membro({ clientes: true })).has("hub_social")).toBe(true);
   });
   test("empresa sem hub_social: Clientes sozinho não mostra", () => {
-    expect(computeVisibleModules("negocio", null, membro({ clientes: true })).has("hub_social")).toBe(false);
+    // 27/11/2026: hub_social vale desde o Essencial; só o override desliga.
+    expect(computeVisibleModules("essencial", null, membro({ clientes: true })).has("hub_social")).toBe(true);
+    expect(computeVisibleModules("negocio", { hub_social: false }, membro({ clientes: true })).has("hub_social")).toBe(false);
     expect(computeVisibleModules("expansao", { hub_social: false }, membro({ clientes: true })).has("hub_social")).toBe(false);
   });
   test("membro só com Agentes continua com hub_social", () => {

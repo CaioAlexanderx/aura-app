@@ -14,7 +14,6 @@ import { CustomerRow } from "@/components/screens/clientes/CustomerRow";
 import { contextoDaBase } from "@/components/screens/clientes/segmentos";
 import { RankingTab } from "@/components/screens/clientes/RankingTab";
 import { RetentionTab } from "@/components/screens/clientes/RetentionTab";
-import { ReativacaoEntrada } from "@/components/screens/clientes/ReativacaoEntrada";
 import { fmt } from "@/components/screens/clientes/types";
 // 29/08/2026: cabecalho e abas compartilhados com /vendas (padrao do /estoque).
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
@@ -370,7 +369,7 @@ export default function ClientesScreen() {
           onSelect={(k) => handleTabSelect(Number(k))}
         />
 
-        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
+        {tab === 0 && isEssencial && !planBlocked && !isLoading && !isError && customers.length > 0 && (
           <View style={s.importRow}>
             <ImportExportBar onExport={handleExport} itemCount={customers.length} />
             {!consolidatedView && (
@@ -388,31 +387,9 @@ export default function ClientesScreen() {
           </View>
         )}
 
-        {/* Fase 0 (I0.2) — a porta da reativação mora na aba LISTA, que é a
-            que abre por padrão. Ela já esteve só na aba Retenção, e foi
-            exatamente por estar escondida numa aba secundária (que ainda
-            por cima é Negócio+) que o cliente de trial não achou a
-            reativação. Aqui ela aparece em todos os planos; no Essencial
-            o botão leva a /planos.
-
-            Variante COMPACTA de propósito: acima dela já vêm o cabeçalho
-            editorial, o cartão de retenção, as abas e a linha de
-            importar/exportar. Com o bloco completo a primeira linha de
-            cliente cai abaixo da dobra em 911px de altura — e uma porta
-            que empurra a lista para fora da tela troca um problema por
-            outro. Medições em docs/mockups/fase0-entrada-reativacao.html.
-
-            Base vazia não mostra bloco: "0 clientes · R$ 0,00" numa loja
-            nova não é informação, é desânimo. */}
-        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
-          <ReativacaoEntrada
-            customers={customers}
-            plan={plan}
-            companyCount={consolidatedView ? companyCount : 1}
-            compacto
-            idBase="clientes-ir-para-reativacao"
-          />
-        )}
+        {/* 27/11/2026 — a porta da Reativação saiu de Clientes (todos os planos):
+            a reativação vive no Venda+ do WhatsApp. O "Chamar no WhatsApp"
+            (wa.me) de cada cliente continua. */}
 
         {bulkMode && (
           <View style={s.bulkBar}>
@@ -543,20 +520,6 @@ export default function ClientesScreen() {
 
         {tab === 2 && (
           <>
-            {/* A mesma porta, na aba onde já se fala de quem sumiu — aqui
-                na versão COMPLETA, porque nesta aba não há lista
-                competindo pela dobra. Fica ACIMA do gate de plano de
-                propósito: o produto pago é o disparo, não a contagem, e
-                quem está no Essencial vê justamente o número que é o
-                argumento do upgrade. Só o botão muda de destino. */}
-            {!isLoading && !isError && customers.length > 0 && (
-              <ReativacaoEntrada
-                customers={customers}
-                plan={plan}
-                companyCount={consolidatedView ? companyCount : 1}
-                idBase="clientes-retencao-ir-para-reativacao"
-              />
-            )}
             {retencaoBloqueada ? (
               <UpgradeCard
                 title="Retenção e clientes em risco"

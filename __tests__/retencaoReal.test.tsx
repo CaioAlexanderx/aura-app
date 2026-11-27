@@ -72,7 +72,6 @@ jest.mock("@/services/meAggregates", () => ({
 }));
 
 jest.mock("@/components/BirthdayCouponModal", () => ({ BirthdayCouponModal: () => null }));
-jest.mock("@/components/whatsapp/AniversarioAutoCard", () => ({ AniversarioAutoCard: () => null }));
 jest.mock("@/services/messaging", () => ({
   normalizeBrPhone: (p: string) => (String(p || "").replace(/\D/g, "").length >= 10 ? p : null),
 }));
