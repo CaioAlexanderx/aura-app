@@ -137,7 +137,9 @@ function togglesVisiveis(peloPlano: Set<string>, frentes: Record<string, boolean
       modules: group.modules
         .filter(m => !m.onlyWhen || frentes[m.onlyWhen] === true)
         .filter(m => {
-          const telas = PERM_TO_MODULES[m.key];
+          // 27/11/2026: hub_social (Conversas) vale desde o Essencial, então o
+          // interruptor "Agentes" depende só da tela Agentes (Expansão).
+          const telas = m.key === "agentes" ? ["agentes"] : PERM_TO_MODULES[m.key];
           return !telas || telas.some(t => peloPlano.has(t));
         })
         .map(m => (m.hintSe && peloPlano.has(m.hintSe.mod) ? { ...m, hint: m.hintSe.hint } : m)),
