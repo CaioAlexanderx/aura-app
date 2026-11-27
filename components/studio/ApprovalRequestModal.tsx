@@ -39,9 +39,12 @@ import { nomeDaLojaDe } from "@/utils/nomeDaLoja";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
 import { ehCelular, respiroInferior } from "@/components/studio/modalNoCelular";
+import { EditorInline } from "@/components/whatsapp/EditorInline";
+import { EDITOR_INLINE } from "@/components/whatsapp/waVidro";
+import { MONO, SANS, useWaFontes } from "@/components/whatsapp/waVisual";
 import {
-  type Anexo, ehPdf, ehVideo, itensDaPrevia, linkDoWhatsApp, mensagemPadrao, primeiroNomeDe,
-  progressoDaGeracao, reais, rotuloDoItem, seloDoAnexo, telefoneValido, textoComLink,
+  type Anexo, CAMPO_LINK, ehPdf, ehVideo, itensDaPrevia, linkDoWhatsApp, mensagemInicial, primeiroNomeDe,
+  progressoDaGeracao, reais, rotuloDoItem, seloDoAnexo, telefoneValido, textoComLink, textoParaOServidor,
 } from "@/components/studio/aprovacaoDaArte/regras";
 
 type Props = {
@@ -58,6 +61,8 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const t = useStudioTokens();
   const { width } = useWindowDimensions();
   const celular = ehCelular(width);
+  // DM Sans e DM Mono, como no mockup (o mesmo carregamento do WhatsApp).
+  useWaFontes();
   const s = useMemo(() => buildStyles(t, celular, width), [t, celular, width]);
   const { company, companyLogo } = useAuthStore() as any;
   const nomeDaLoja = nomeDaLojaDe(company) || "";
@@ -85,8 +90,9 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const [telefone, setTelefone] = useState(maskPhone(order.customer_phone || ""));
   const [mensagemEditada, setMensagemEditada] = useState<string | null>(null);
   const primeiro = primeiroNomeDe(nome);
-  const mensagem = mensagemEditada ?? mensagemPadrao(nome);
-  const ela = primeiro ? "a " + primeiro : "a cliente";
+  const mensagem = mensagemEditada ?? mensagemInicial(nome);
+  // Sem artigo, para não presumir gênero.
+  const ela = primeiro || "a cliente";
 
   // ── O vídeo (ou outro arquivo) ─────────────────────────────
   const [fase, setFase] = useState<Fase>("gerando");
@@ -190,9 +196,10 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   /** O link nasce uma vez por arquivo: copiar e mandar reaproveitam o mesmo. */
   async function garantirLink(): Promise<StudioApprovalCreated | null> {
     if (!company?.id || !anexo) return null;
-    const chave = anexo.url + "|" + (anexo.renderId || "");
+    const chave = [anexo.url, anexo.renderId || "", telefone.trim(), mensagem].join("|");
     if (criado && criado.chave === chave) return criado.dados;
-    const corpo = { mockup_url: anexo.url, customer_phone: telefone.trim() || undefined };
+    // O servidor guarda o texto final: troca o marcador {link} pelo link do pedido.
+    const corpo = { mockup_url: anexo.url, customer_phone: telefone.trim() || undefined, custom_message: textoParaOServidor(mensagem) };
     const r = anexo.renderId
       ? await studioVisualApi.requestApprovalWithRender(company.id, order.id, { ...corpo, render_id: anexo.renderId })
       : await studioApi.requestApproval(company.id, order.id, corpo);
@@ -264,7 +271,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const previa = (
     <View style={s.previaCol}>
       <View style={s.previaTopo}>
-        <Text style={s.meta}>Como {ela} vê</Text>
+        <Text style={s.meta}>Como chega para {ela}</Text>
         {celular && pronto && anexo ? <Text style={s.seloPeq}>{anexo.origem === "arquivo" ? "✓ Arquivo pronto" : anexo.isVideo ? "✓ Vídeo pronto" : "✓ Imagem pronta"}</Text> : null}
       </View>
       <View style={s.previaCartao} testID="aprovacao-previa">
@@ -370,7 +377,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   );
   const campoTelefone = (
     <View style={s.campo}>
-      <Text style={s.rotulo}>{celular ? `WhatsApp ${primeiro ? "da " + primeiro : "da cliente"}` : "WhatsApp"}</Text>
+      <Text style={s.rotulo}>{celular ? `WhatsApp ${primeiro ? "de " + primeiro : "da cliente"}` : "WhatsApp"}</Text>
       <TextInput
         style={s.input}
         value={telefone}
@@ -387,17 +394,28 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const campoMensagem = (
     <View style={s.campo}>
       <Text style={s.rotulo}>Mensagem</Text>
-      <View style={[s.input, s.mensagemCaixa]}>
-        <TextInput
-          style={s.mensagemTxt}
-          value={mensagem}
-          onChangeText={setMensagemEditada}
-          multiline
-          accessibilityLabel="Mensagem"
+      {EDITOR_INLINE ? (
+        <EditorInline
+          compacto
+          valor={mensagem}
+          cursor={mensagem.length}
+          onChange={setMensagemEditada}
+          onSel={() => {}}
           testID="aprovacao-mensagem"
         />
-        <View style={s.ficha}><Text style={s.fichaTxt}>link da aprovação</Text></View>
-      </View>
+      ) : (
+        <View style={[s.input, s.mensagemCaixa]}>
+          <TextInput
+            style={s.mensagemTxt}
+            value={mensagem.split(`{${CAMPO_LINK}}`).join("").trim()}
+            onChangeText={(v) => setMensagemEditada(`${v.trim()} {${CAMPO_LINK}}`)}
+            multiline
+            accessibilityLabel="Mensagem"
+            testID="aprovacao-mensagem"
+          />
+          <View style={s.ficha}><Text style={s.fichaTxt}>{CAMPO_LINK}</Text></View>
+        </View>
+      )}
       {celular ? null : <Text style={s.nota}>O link vale 7 dias. Quando {ela} aprovar ou pedir ajuste, você recebe no sino.</Text>}
     </View>
   );
@@ -406,7 +424,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     <>
       <View style={{ flex: 1, minWidth: 0 }} testID="aprovacao-enviado">
         <Text style={s.enviadoTitulo}>Mandado para {ela}.</Text>
-        <Text style={s.enviadoTxt}>O pedido continua em "Aguardando arte" até ela responder; aprovado, ele passa sozinho para "Aprovado".</Text>
+        <Text style={s.enviadoTxt}>{`O pedido continua em "Aguardando arte" até ${ela} responder; aprovado, ele passa sozinho para "Aprovado".`}</Text>
       </View>
       <Pressable style={[s.botao, celular && { alignSelf: "stretch" }]} onPress={onSent} accessibilityRole="button" testID="aprovacao-fechar-enviado">
         <Text style={s.botaoTxt}>Fechar</Text>
@@ -492,10 +510,9 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   );
 }
 
-const MONO = Platform.OS === "web" ? '"DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace' : undefined;
 const web = (o: Record<string, any>): any => (Platform.OS === "web" ? o : {});
 
-const buildStyles = (t: StudioPalette, celular: boolean, largura: number) => StyleSheet.create({
+const buildStyles = (t: StudioPalette, celular: boolean, largura: number) => comFontes({
   // Pano escuro sobre a página (no mockup, a Produção aparece borrada atrás).
   fundo: {
     flex: 1,
@@ -629,5 +646,15 @@ const buildStyles = (t: StudioPalette, celular: boolean, largura: number) => Sty
   enviadoTitulo: { fontSize: 15, fontWeight: "800", color: t.mint },
   enviadoTxt: { fontSize: 14, color: t.ink2, lineHeight: 20 },
 });
+
+/** DM Sans em todo texto, DM Mono nos rótulos `meta` (o mockup usa as duas). */
+function comFontes<T extends Record<string, any>>(estilos: T): T {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(estilos)) {
+    const e = estilos[k];
+    out[k] = e && e.fontSize && !e.fontFamily ? { ...e, fontFamily: SANS } : e;
+  }
+  return StyleSheet.create(out) as T;
+}
 
 export default ApprovalRequestModal;

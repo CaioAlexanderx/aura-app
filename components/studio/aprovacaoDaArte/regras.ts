@@ -23,10 +23,31 @@ export function mensagemPadrao(nome: string | null | undefined): string {
   return `Oi${n ? ", " + n : ""}. A arte do seu pedido ficou pronta. Dá uma olhada e me diz se posso produzir:`;
 }
 
-/** O texto que vai ao WhatsApp: a mensagem e, na linha de baixo, o link. */
+/** O campo que a Aura preenche com o link da aprovação (a pílula dentro do texto). */
+export const CAMPO_LINK = "link da aprovação";
+const MARCA_DO_CAMPO = `{${CAMPO_LINK}}`;
+
+/** A mensagem de partida: o texto e, no fim, a pílula do link. */
+export function mensagemInicial(nome: string | null | undefined): string {
+  return `${mensagemPadrao(nome)} ${MARCA_DO_CAMPO}`;
+}
+
+/**
+ * O texto que vai ao WhatsApp: a pílula vira o link. Se a lojista apagou a
+ * pílula, o link entra na linha de baixo, para a cliente nunca receber a
+ * mensagem sem ele.
+ */
 export function textoComLink(mensagem: string, link: string): string {
   const m = String(mensagem || "").trim();
+  if (m.includes(MARCA_DO_CAMPO)) return m.split(MARCA_DO_CAMPO).join(link);
   return m ? `${m}\n${link}` : link;
+}
+
+/** O que vai ao servidor em custom_message: a pílula vira o marcador {link}. */
+export function textoParaOServidor(mensagem: string): string {
+  const m = String(mensagem || "").trim();
+  if (m.includes(MARCA_DO_CAMPO)) return m.split(MARCA_DO_CAMPO).join("{link}");
+  return m ? `${m}\n{link}` : "{link}";
 }
 
 /** Só dígitos do telefone. */

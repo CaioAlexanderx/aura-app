@@ -49,7 +49,7 @@ import fs from "fs";
 import path from "path";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
 import {
-  itensDaPrevia, linkDoWhatsApp, mensagemPadrao, progressoDaGeracao, reais, rotuloDoItem,
+  itensDaPrevia, linkDoWhatsApp, mensagemInicial, mensagemPadrao, textoParaOServidor, progressoDaGeracao, reais, rotuloDoItem,
   seloDoAnexo, telefoneValido, textoComLink,
 } from "@/components/studio/aprovacaoDaArte/regras";
 
@@ -96,6 +96,10 @@ describe("regras", () => {
     expect(mensagemPadrao("")).toBe("Oi. A arte do seu pedido ficou pronta. Dá uma olhada e me diz se posso produzir:");
     expect(textoComLink("Oi, Ana.", "https://x/y")).toBe("Oi, Ana.\nhttps://x/y");
     expect(textoComLink("  ", "https://x/y")).toBe("https://x/y");
+    expect(textoComLink("Veja: {link da aprovação} ok", "https://x/y")).toBe("Veja: https://x/y ok");
+    expect(mensagemInicial("Ana")).toBe("Oi, Ana. A arte do seu pedido ficou pronta. Dá uma olhada e me diz se posso produzir: {link da aprovação}");
+    expect(textoParaOServidor(mensagemInicial("Ana"))).toBe("Oi, Ana. A arte do seu pedido ficou pronta. Dá uma olhada e me diz se posso produzir: {link}");
+    expect(textoParaOServidor("sem pílula")).toBe("sem pílula\n{link}");
   });
   it("telefone e link do WhatsApp com DDI 55", () => {
     expect(telefoneValido("(11) 98422-1093")).toBe(true);
@@ -129,7 +133,7 @@ describe("a tela, em 1440", () => {
     const r = await abrir();
     const txt = textos(r);
     expect(txt).toContain("Pedir aprovação da arte");
-    expect(txt).toContain("Como a Ana vê");
+    expect(txt).toContain("Como chega para Ana");
     expect(txt).toContain("Lume Moda");
     expect(txt).toContain("1 × Camiseta Básica Branca");
     expect(txt).toContain("R$ 49,90");
@@ -150,7 +154,7 @@ describe("a tela, em 1440", () => {
     expect(txt).toContain("✓ Vídeo pronto · 7 s");
     expect(txt).toContain("Gravar de novo");
     expect(txt).toContain("Usar outro arquivo");
-    expect(txt).toContain("O link vale 7 dias. Quando a Ana aprovar ou pedir ajuste, você recebe no sino.");
+    expect(txt).toContain("O link vale 7 dias. Quando Ana aprovar ou pedir ajuste, você recebe no sino.");
     expect(txt).toContain("link da aprovação");
     expect(txt).toContain("Copiar o link");
     expect(txt).toContain("Mandar pelo WhatsApp");
@@ -166,15 +170,15 @@ describe("a tela, em 1440", () => {
     (global as any).window.open = aberto;
     const r = await abrir();
     await act(async () => { await porId(r, "aprovacao-mandar")[0].props.onPress(); });
-    expect(mockRequestRender).toHaveBeenCalledWith("c1", "o1", expect.objectContaining({ mockup_url: "https://r2/x.mp4", render_id: "rid1" }));
+    expect(mockRequestRender).toHaveBeenCalledWith("c1", "o1", expect.objectContaining({ mockup_url: "https://r2/x.mp4", render_id: "rid1", custom_message: "Oi, Ana. A arte do seu pedido ficou pronta. Dá uma olhada e me diz se posso produzir: {link}" }));
     expect(mockRequest).not.toHaveBeenCalled();
     const url = aberto.mock.calls[0][0] as string;
     expect(url).toContain("https://wa.me/5511984221093?text=");
     expect(decodeURIComponent(url)).toContain("Oi, Ana. A arte do seu pedido ficou pronta.");
     expect(decodeURIComponent(url)).toContain("https://app/aprovacao/tok");
     const txt = textos(r);
-    expect(txt).toContain("Mandado para a Ana.");
-    expect(txt).toContain('O pedido continua em "Aguardando arte" até ela responder; aprovado, ele passa sozinho para "Aprovado".');
+    expect(txt).toContain("Mandado para Ana.");
+    expect(txt).toContain('O pedido continua em "Aguardando arte" até Ana responder; aprovado, ele passa sozinho para "Aprovado".');
     expect(txt).toContain("Fechar");
     expect(txt).not.toContain("Mandar pelo WhatsApp");
   });
@@ -194,9 +198,9 @@ describe("a tela, em 390", () => {
     mockGerar.mockResolvedValue({ url: "https://r2/x.mp4", renderId: "rid1", contentHash: "h", itemName: "Camiseta", view: "turntable", isVideo: true });
     const r = await abrir(390);
     const txt = textos(r);
-    expect(txt.indexOf("Como a Ana vê")).toBeLessThan(txt.indexOf("Gravar de novo"));
+    expect(txt.indexOf("Como chega para Ana")).toBeLessThan(txt.indexOf("Gravar de novo"));
     expect(txt.indexOf("Gravar de novo")).toBeLessThan(txt.indexOf("Mensagem"));
-    expect(txt).toContain("WhatsApp da Ana");
+    expect(txt).toContain("WhatsApp de Ana");
     expect(txt).toContain("✓ Vídeo pronto");
     expect(txt).not.toContain("Aprovar produção");
     expect(porId(r, "aprovacao-nome")).toHaveLength(0);
