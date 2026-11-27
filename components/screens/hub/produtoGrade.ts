@@ -41,8 +41,15 @@ export function rotuloEnviar(qtdFotos: number): string {
 }
 
 /** A anotação embaixo do tamanho: sem a quantidade; "último" quando sobra 1. */
-export function notaDoTamanho(t: Pick<GradeTamanho, "ultimo">): "tem" | "último" {
+export function notaDoTamanho(t: { ultimo?: boolean; disponivel?: boolean }): "tem" | "último" | "sem peça" {
+  if (t.disponivel === false) return "sem peça";
   return t.ultimo ? "último" : "tem";
+}
+
+/** Grade inteira da cor para o painel; servidor sem `todos_tamanhos`: só os com peça. */
+export function tamanhosDoPainel(c: GradeCor | undefined): { tamanho: string; disponivel: boolean; ultimo: boolean; chave: string }[] {
+  if (c?.todos_tamanhos && c.todos_tamanhos.length) return c.todos_tamanhos.map((z) => ({ tamanho: z.tamanho, disponivel: z.disponivel !== false, ultimo: !!z.ultimo, chave: z.tamanho }));
+  return (c?.tamanhos || []).map((z) => ({ tamanho: z.tamanho, disponivel: true, ultimo: z.ultimo, chave: z.variant_id || z.tamanho }));
 }
 
 /** "P, M (último) e G" */
@@ -70,9 +77,9 @@ export function hexValido(hex: string | null | undefined): string | null {
 }
 
 /** Legenda da bolha enviada, a partir do cartão da thread: [negrito, apoio]. */
-export function legendaDoCartao(c: { nome?: string | null; cor?: string | null; preco?: number | null; tamanhos?: { tamanho: string; ultimo?: boolean }[] | null }): [string, string] {
+export function legendaDoCartao(c: { nome?: string | null; cor?: string | null; preco?: number | null; tamanhos?: { tamanho: string; disponivel?: boolean; ultimo?: boolean }[] | null }): [string, string] {
   const l1 = [c.nome, c.cor, c.preco != null ? fmt(Number(c.preco)) : null].filter(Boolean).join(" · ");
-  const nomes = (c.tamanhos || []).map((z) => z.tamanho + (z.ultimo ? " (último)" : ""));
+  const nomes = (c.tamanhos || []).filter((z) => z.disponivel !== false).map((z) => z.tamanho + (z.ultimo ? " (último)" : ""));
   const lista = nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : nomes.join("");
   return [l1, lista ? `Tem ${lista}.` : ""];
 }

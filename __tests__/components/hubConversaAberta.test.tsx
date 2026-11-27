@@ -235,6 +235,40 @@ describe("conversa aberta", () => {
     return abrirThread();
   }
 
+  it("painel: todos_tamanhos risca o sem peça; sem o campo, só os com peça", async () => {
+    mockGrade.grade.mockResolvedValue({ ...GRADE, cores: [{ ...GRADE.cores[0], todos_tamanhos: [
+      { tamanho: "P", disponivel: true, ultimo: false }, { tamanho: "M", disponivel: true, ultimo: true },
+      { tamanho: "G", disponivel: true, ultimo: false }, { tamanho: "GG", disponivel: false, ultimo: false }] }, GRADE.cores[1]] });
+    preparar(horasAtras(2));
+    const r = await abrirThread();
+    await act(async () => { porId(r, "hub-envio-produto")[0].props.onPress(); });
+    await flush();
+    await act(async () => { await porId(r, "hub-produto-p1")[0].props.onPress(); });
+    await flush();
+    const gg = porId(r, "hub-grade-tam-GG");
+    expect(gg).toHaveLength(1);
+    expect(gg[0].props.accessibilityState).toEqual({ disabled: true });
+    expect(tudo(r)).toContain("sem peça");
+    expect(porId(r, "hub-grade-tam-M")[0].props.accessibilityState).toEqual({ disabled: false });
+  });
+
+  it("thread: uma bolha só (produto com opcoes) mostra fotos, legenda e botões", async () => {
+    mockHub.conversations.mockResolvedValue({ conversations: [conv(horasAtras(2))], counts: [] });
+    mockHub.messages.mockResolvedValue({ conversation: conv(horasAtras(2)), pending_approvals: [], messages: [
+      ...MSGS,
+      { id: "m3", direction: "outbound", content: "Saia", author: "humano", source_type: "humano", created_at: "2026-11-26T12:02:00Z", tipo: "produto",
+        metadata: { pergunta: true, formato: "botoes", opcoes: ["P", "M"] },
+        cartao: { nome: "Saia midi plissada", cor: "Caramelo", preco: 189.9, fotos: ["https://r2/f1.jpg"],
+          tamanhos: [{ tamanho: "P", disponivel: true }, { tamanho: "M", disponivel: true, ultimo: true }, { tamanho: "GG", disponivel: false }] } },
+    ] });
+    const r = await abrirThread();
+    expect(porId(r, "hub-cartao-grade")).toHaveLength(1);
+    expect(porId(r, "hub-pergunta-botao-M")).toHaveLength(1);
+    const t = tudo(r);
+    expect(t).toContain("Tem P e M (último).");
+    expect(t).not.toContain("GG");
+  });
+
   it("thread: bolha com fotos, 'Qual tamanho?' com botões e a resposta; sem a trava do Pedido a sugestão vira só Pix", async () => {
     const r = await abrirComSugestao(SUG);
     expect(porId(r, "hub-cartao-grade")).toHaveLength(1);

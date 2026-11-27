@@ -96,7 +96,7 @@ export interface HubCartao {
   preco?: number | null;
   /** Fotos mandadas na bolha (URLs). */
   fotos?: string[] | null;
-  tamanhos?: { tamanho: string; ultimo?: boolean }[] | null;
+  tamanhos?: { tamanho: string; disponivel?: boolean; ultimo?: boolean }[] | null;
 }
 
 export interface HubMessage {

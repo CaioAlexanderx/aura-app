@@ -18,7 +18,7 @@ import { Lnk, Sw } from "@/components/whatsapp/waVidro";
 import { K, Tx, Meta, Pilula, BotaoPrincipal, superficie, anima, web, WEB } from "./conversasUi";
 import { escolherArquivo, prepararFoto } from "./midiaWeb";
 import {
-  contadorFotos, coresDoPainel, fotosDaCor, hexValido, marcadasIniciais, notaDoTamanho, rotuloEnviar, subtituloDoProduto, temCor,
+  contadorFotos, coresDoPainel, fotosDaCor, hexValido, marcadasIniciais, notaDoTamanho, rotuloEnviar, subtituloDoProduto, tamanhosDoPainel, temCor,
 } from "./produtoGrade";
 
 const LARGURA_FOTO: any = WEB ? "calc((100% - 24px) / 4)" : "23%";
@@ -97,7 +97,8 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
 
   const capa = fotos[0]?.url || null;
   const sub = subtituloDoProduto(grade);
-  const tamanhos = cor?.tamanhos || [];
+  const tamanhos = tamanhosDoPainel(cor);
+  const comPeca = tamanhos.filter((z) => z.disponivel).length;
   const semFoto = fotos.length === 0;
   const an = anima("pop", 0.4);
 
@@ -173,16 +174,16 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
         <Meta>Tamanhos com peça</Meta>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {tamanhos.map((z) => (
-            <View key={z.variant_id || z.tamanho} testID={`hub-grade-tam-${z.tamanho}`}
+            <View key={z.chave} testID={`hub-grade-tam-${z.tamanho}`} accessibilityState={{ disabled: !z.disponivel }}
               style={{
                 minWidth: 58, minHeight: 54, borderRadius: 16, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb,
-                alignItems: "center", justifyContent: "center", paddingHorizontal: 8,
+                alignItems: "center", justifyContent: "center", paddingHorizontal: 8, opacity: z.disponivel ? 1 : 0.35,
               }}>
-              <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 20 }}>{z.tamanho}</Tx>
-              <Tx style={{ fontSize: 11, fontWeight: "600", color: K.ink3, lineHeight: 14 }}>{notaDoTamanho(z)}</Tx>
+              <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 20, textDecorationLine: z.disponivel ? "none" : "line-through" }}>{z.tamanho}</Tx>
+              <Tx style={{ fontSize: 11, fontWeight: "600", color: K.ink3, lineHeight: 14, textDecorationLine: z.disponivel ? "none" : "line-through" }}>{notaDoTamanho(z)}</Tx>
             </View>
           ))}
-          {tamanhos.length === 0 && <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Sem peça livre nesta cor.</Tx>}
+          {comPeca === 0 && <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Sem peça livre nesta cor.</Tx>}
         </View>
         <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>A cliente vê só os que têm peça, sem a quantidade. "Último" quando sobra um.</Tx>
       </View>

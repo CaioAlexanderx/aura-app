@@ -244,7 +244,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           const produto = m.tipo === "produto" && !!m.image_url && !m.cartao?.fotos?.length;
           const cartao = !!m.tipo && CARTAO_TIPOS.includes(m.tipo);
           const grade = m.tipo === "produto" && !!m.cartao?.fotos?.length;
-          const pergunta = m.tipo === TIPO_PERGUNTA && Array.isArray(m.metadata?.opcoes);
+          // Duas linhas (pergunta_tamanho) ou uma só: o produto com fotos que já traz as opções dos botões.
+          const pergunta = (m.tipo === TIPO_PERGUNTA || grade) && Array.isArray(m.metadata?.opcoes) && m.metadata!.opcoes.length > 0;
           const respostaGrade = m.direction === "inbound" ? m.metadata?.produto_grade : null;
           const sugestao = (m.direction === "inbound" ? m.metadata?.sugestao : null) as SugestaoReserva | null;
           const audio = m.media?.kind === "audio";

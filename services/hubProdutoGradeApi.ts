@@ -14,6 +14,8 @@ import { request } from "@/services/api";
 
 export interface GradeFoto { url: string; thumb_url?: string | null }
 export interface GradeTamanho { tamanho: string; variant_id: string; preco: number; ultimo: boolean }
+/** Grade inteira da cor: `disponivel: false` = sem peça (risca e não deixa escolher). */
+export interface GradeTamanhoDaGrade { tamanho: string; disponivel: boolean; ultimo: boolean }
 export interface GradeCor {
   /** Hex sem # (ou slug do nome). É o `cor` do envio. */
   chave: string;
@@ -26,6 +28,8 @@ export interface GradeCor {
   disponivel: boolean;
   /** Só os tamanhos com peça livre. */
   tamanhos: GradeTamanho[];
+  /** Grade inteira em ordem (com os sem peça). Servidor antigo não manda: o painel cai para `tamanhos`. */
+  todos_tamanhos?: GradeTamanhoDaGrade[];
 }
 export interface HubProdutoGrade {
   produto: { id: string; nome: string; preco: number; compartilhado?: boolean };
