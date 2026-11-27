@@ -230,7 +230,9 @@ export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
     if (!pronto || !passo?.interativo || passo.exec !== "produto" || !WEB || typeof window === "undefined") return;
     const h = (e: MouseEvent) => {
       const el = alvoRef.current;
-      if (el && e.target instanceof Node && el.contains(e.target)) setSolto(true);
+      if (!(e.target instanceof Element)) return;
+      // o toque no alvo OU em qualquer atalho de envio da conversa (Produto, Orçamento, Pix...) abre o painel: o escurecimento sai
+      if ((el && el.contains(e.target)) || e.target.closest('[data-testid^="hub-envio-"]')) setSolto(true);
     };
     window.addEventListener("click", h, true);
     return () => window.removeEventListener("click", h, true);

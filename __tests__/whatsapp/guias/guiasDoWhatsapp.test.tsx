@@ -494,3 +494,20 @@ describe("balão do guia 3 ao lado da barra, sem cobrir o menu", () => {
     expect(p.largura).toBeGreaterThanOrEqual(280);
   });
 });
+
+describe("guia 3: toque em Produto solta o escurecimento", () => {
+  it("o toque num atalho de envio (não só no alvo) tira o buraco e mantém o balão", () => {
+    jest.useFakeTimers();
+    alvo("wa.acoes");
+    const atalho = document.createElement("button");
+    atalho.setAttribute("data-testid", "hub-envio-produto");
+    document.body.appendChild(atalho);
+    const so = { ...guia3(), passos: guia3().passos.filter((p) => p.id === "g3-acoes") };
+    monta(<GuiaTour guia={so} ctx={ctxBase()} onFim={jest.fn()} />);
+    act(() => { jest.advanceTimersByTime(700); });
+    expect(document.querySelector(".wag-furo-d")).not.toBeNull();
+    act(() => { atalho.click(); });
+    expect(document.querySelector(".wag-furo-d")).toBeNull();
+    expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Mande sem sair da conversa");
+  });
+});
