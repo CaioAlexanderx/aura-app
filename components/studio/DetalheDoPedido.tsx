@@ -47,6 +47,7 @@ import { arteDoLado } from "@/components/studio/storefront/valoresDoMotor";
 import { rotuloDaChave, valorDaChave, chaveLateralVisivel, ladoComConteudo } from "@/components/studio/customizationConfig";
 import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { propsDoModalDeAprovacao, useAprovacaoNova } from "@/components/studio/aprovacaoDaArte/trava";
 import { temBlocoDePagamento, situacaoDoPagamento, reais, numeroDoPedido, comprovanteEhPdf } from "@/components/studio/pagamentoDoPedido";
 import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
 import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
@@ -485,6 +486,7 @@ export function DetalheDoPedido({
   const params = useLocalSearchParams();
   const oid = String(params?.id || "");
   const { company } = useAuthStore();
+  const aprovacaoNova = useAprovacaoNova();
   const tk = useStudioTokens();
   const { isDark } = useStudioTheme();
   const s = useMemo(() => buildStyles(tk), [tk]);
@@ -857,8 +859,7 @@ export function DetalheDoPedido({
 
       <Modal
         visible={aprovacaoAberta}
-        transparent
-        animationType="fade"
+        {...propsDoModalDeAprovacao(aprovacaoNova)}
         onRequestClose={() => setAprovacaoAberta(false)}
       >
         {aprovacaoAberta && (

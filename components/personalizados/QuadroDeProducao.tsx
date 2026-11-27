@@ -67,6 +67,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { useAprovacaoNova } from "@/components/studio/aprovacaoDaArte/trava";
 import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
@@ -103,7 +104,8 @@ type Saida = "delivered" | "cancelled";
 
 export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null, onAbrirPedido }: Props) {
   const t = useStudioTokens();
-  const s = useMemo(() => estilos(t), [t]);
+  const aprovacaoNova = useAprovacaoNova();
+  const s = useMemo(() => estilos(t, aprovacaoNova), [t, aprovacaoNova]);
   const { width } = useWindowDimensions();
   const celular = width < LARGURA_DO_CELULAR;
 
@@ -708,7 +710,7 @@ function Cartao({
   );
 }
 
-function estilos(t: StudioPalette) {
+function estilos(t: StudioPalette, aprovacaoNova: boolean = false) {
   return StyleSheet.create({
     tela: { flex: 1, minHeight: 420 },
     barra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 14, flexWrap: "wrap" },
@@ -775,9 +777,10 @@ function estilos(t: StudioPalette) {
 
     // O contêiner do WebPortal é um <div> fixo, sem flex: o overlay se
     // estica por conta própria.
-    // Transparente: a folha do pedido de aprovação traz o próprio pano escuro
-    // e a Produção aparece atrás, como no mockup (27/11/2026).
-    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "transparent" },
+    // Com o modal novo da aprovação, transparente: a folha traz o próprio pano
+    // escuro e a Produção aparece atrás (mockup, 27/11/2026). Com o modal
+    // atual, o fundo de sempre (ele não tem pano próprio).
+    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: aprovacaoNova ? "transparent" : t.bg },
   });
 }
 

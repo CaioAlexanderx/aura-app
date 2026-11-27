@@ -47,7 +47,7 @@ jest.mock("react-native", () => {
 
 import fs from "fs";
 import path from "path";
-import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { ApprovalRequestModalNovo as ApprovalRequestModal } from "@/components/studio/ApprovalRequestModalNovo";
 import {
   itensDaPrevia, linkDoWhatsApp, mensagemInicial, mensagemPadrao, textoParaOServidor, progressoDaGeracao, reais, rotuloDoItem,
   seloDoAnexo, telefoneValido, textoComLink,
@@ -208,9 +208,35 @@ describe("a tela, em 390", () => {
   });
 });
 
+describe("a tela, em 390: gerando e enviado seguem o desktop", () => {
+  it("gerando: barra, botão travado em 'Preparando o vídeo…'", async () => {
+    mockGerar.mockReturnValue(new Promise(() => {}));
+    const r = await abrir(390);
+    const txt = textos(r);
+    expect(porId(r, "aprovacao-progresso")).toHaveLength(1);
+    expect(txt).toContain("A Aura está gravando a peça girando com a arte do pedido. Leva alguns segundos.");
+    expect(porId(r, "aprovacao-mandar")[0].props.disabled).toBe(true);
+    expect(txt).toContain("Preparando o vídeo…");
+    expect(txt).not.toContain("Mandar pelo WhatsApp");
+  });
+
+  it("enviado: 'Mandado para Ana.' e Fechar no rodapé fixo", async () => {
+    mockGerar.mockResolvedValue({ url: "https://r2/x.mp4", renderId: "rid1", contentHash: "h", itemName: "Camiseta", view: "turntable", isVideo: true });
+    (global as any).window = (global as any).window || {};
+    (global as any).window.open = jest.fn();
+    const r = await abrir(390);
+    await act(async () => { await porId(r, "aprovacao-mandar")[0].props.onPress(); });
+    const txt = textos(r);
+    expect(txt).toContain("Mandado para Ana.");
+    expect(txt).toContain('O pedido continua em "Aguardando arte" até Ana responder; aprovado, ele passa sozinho para "Aprovado".');
+    expect(porId(r, "aprovacao-fechar-enviado")).toHaveLength(1);
+    expect(txt).not.toContain("Mandar pelo WhatsApp");
+  });
+});
+
 describe("arquivos", () => {
   it("o servidor não muda: a rota e o vínculo do render continuam os mesmos", () => {
-    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "studio", "ApprovalRequestModal.tsx"), "utf8");
+    const fonte = fs.readFileSync(path.join(__dirname, "..", "components", "studio", "ApprovalRequestModalNovo.tsx"), "utf8");
     expect(fonte).toContain("requestApprovalWithRender");
     expect(fonte).toContain("studioApi.requestApproval");
     expect(fonte).toContain("gerarRenderDoPedido");
