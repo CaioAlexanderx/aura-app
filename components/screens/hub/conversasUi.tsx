@@ -64,6 +64,16 @@ export const superficie = {
   vidro: (r = 30): ViewStyle => estiloSuperficie("glass", r),
   seca: (r = 999): ViewStyle => estiloSuperficie("dry", r),
   solida: (r = 30): ViewStyle => estiloSuperficie("solid", r),
+  /**
+   * Placa da conversa: o vidro do artboard Main, branco 13% -> 4% direto sobre o fundo escuro (sem base roxa por baixo).
+   * No modo leve (sem desfoque) a superficie vira o equivalente opaco desse vidro sobre #04020f, nao o roxo de V.solid.
+   */
+  placa: (r = 30): ViewStyle => {
+    const v: any = estiloSuperficie("glass", r);
+    if (!ESCURO) return v;
+    if (modoLeve()) return { ...v, backgroundColor: "#16141f", ...(WEB ? { backgroundImage: "linear-gradient(160deg,#25232e,#0e0c19)" } : {}) };
+    return { ...v, backgroundColor: "transparent" };
+  },
 };
 
 /** Animação de entrada do artboard (rise, pop, fio); `abre` usa o pop. Some no modo leve e com movimento reduzido. */
