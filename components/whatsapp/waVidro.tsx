@@ -60,7 +60,7 @@ export function Spots() {
       pointerEvents="none"
       style={{
         position: "absolute", borderRadius: 9999,
-        backgroundImage: `radial-gradient(closest-side,${V.spot},rgba(124,58,237,0))`, ...st,
+        backgroundImage: `radial-gradient(closest-side,${V.spot} 0%,rgba(139,92,246,.30) 22%,rgba(139,92,246,.19) 42%,rgba(130,80,240,.10) 62%,rgba(124,58,237,.04) 82%,rgba(124,58,237,0) 100%)`, ...st,
       } as any}
     />
   );
@@ -181,12 +181,19 @@ export function BtnTracejado({ children, testID, disabled = true, onPress }: { c
   );
 }
 /** Pílula (.pill): `ligada` pinta a escolhida; `peq` é a .pill.sm. */
-export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour, label }: {
+export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour, label, nav, nativeID }: {
   children?: React.ReactNode; ligada?: boolean; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; peq?: boolean; testID?: string;
-  role?: "button" | "checkbox" | "radio"; estado?: any; style?: any; tour?: string; label?: string;
+  role?: "button" | "checkbox" | "radio" | "tab"; estado?: any; style?: any; tour?: string; label?: string;
+  /** Teclado no computador: tabIndex móvel, setas, foco (veja waTeclado). */
+  nav?: { tabIndex?: number; onKeyDown?: (e: any) => void; onFocus?: () => void; innerRef?: (el: any) => void };
+  nativeID?: string;
 }) {
   return (
     <Pressable
+      ref={nav?.innerRef as any}
+      {...((nav ? { tabIndex: nav.tabIndex, onKeyDown: nav.onKeyDown, onFocus: nav.onFocus } : {}) as any)}
+      nativeID={nativeID}
+      {...((role === "tab" ? { "aria-selected": !!(estado ? estado.selected : ligada) } : role === "radio" || role === "checkbox" ? { "aria-checked": !!(estado ? (estado.checked ?? estado.selected) : ligada) } : {}) as any)}
       onPress={onPress}
       disabled={desabilitado || disabled}
       accessibilityRole={role as any}
@@ -259,7 +266,7 @@ export function Passo44({ rotulo, simbolo, onPress, disabled, testID }: {
   return (
     <Pressable
       onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={rotulo}
-      accessibilityState={{ disabled: !!disabled }} testID={testID}
+      accessibilityState={{ disabled: !!disabled }} testID={testID} {...({ tabIndex: -1 } as any)}
       style={{
         width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 1,
         borderColor: V.line, backgroundColor: V.fill, opacity: disabled ? 0.3 : 1,

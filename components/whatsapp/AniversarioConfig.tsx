@@ -97,7 +97,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
       <Superficie variante="glass" raio={30} padding={{ h: 30, v: 8 }} gap={0} style={{ flexGrow: 999, flexShrink: 1, flexBasis: 620, paddingBottom: 26 }}>
         <Passo n="01" titulo="O jeito de falar" primeiro>
           <Pilulas<TomAniversario>
-            idBase="wa-aniv-tom" opcoes={OPCOES_TOM} valor={tom} desabilitado={travado}
+            rotulo="Jeito de falar" idBase="wa-aniv-tom" opcoes={OPCOES_TOM} valor={tom} desabilitado={travado}
             onPick={(v) => salvar({ tom: v })}
           />
           <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 4 }}>
@@ -109,14 +109,14 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
 
         <Passo n="02" titulo="O presente" sub="O cupom nasce sozinho no dia: um por cliente, vale 15 dias, na loja e no site.">
           <Pilulas<PresenteChave>
-            idBase="wa-aniv-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
+            rotulo="Presente" idBase="wa-aniv-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
             onPick={(v) => salvar(patchDePresente(v, quando))}
           />
         </Passo>
 
         <Passo n="03" titulo="Quando sai" sub="Uma mensagem só por aniversário, sempre às 10h. Quem pediu para não receber fica de fora sozinho. Sem presente, só sai no dia.">
           <Pilulas<QuandoAniversario>
-            idBase="wa-aniv-quando" opcoes={OPCOES_QUANDO} valor={quando} comCheck
+            rotulo="Quando sai" idBase="wa-aniv-quando" opcoes={OPCOES_QUANDO} valor={quando} comCheck
             desabilitado={travado || !quando}
             onPick={(v) => { if (quandoPermitido(v, comPresente)) salvar({ quando: v }); }}
           />

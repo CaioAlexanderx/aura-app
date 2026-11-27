@@ -20,6 +20,7 @@ import { ModelosEditaveis } from "./ModelosEditaveis";
 import { podeMandarNovidades, quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import { PONTOS_ROTULO, alternarPonto, lerPontos } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
+import { useSetas } from "./waTeclado";
 import { type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -37,6 +38,9 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const vender = info?.autos.crediario_vender;
   const pontos = lerPontos(cobrar?.config?.pontos);
   const alt = useAlternarAutomatica(auto);
+  // Pontos da régua: vários podem estar marcados (grupo de caixas). Uma só parada de Tab;
+  // as setas movem o foco e o Espaço marca.
+  const setasPontos = useSetas({ qtd: PONTOS_ROTULO.length, ativo: 0, ativarAoMover: false });
 
   const pubCobrar = useWaPublico(companyId, "crediario_cobrar", undefined, null, !!cobrar, JSON.stringify(cobrar?.config || {}));
   const pubVender = useWaPublico(companyId, "crediario_vender", undefined, vender?.livres ?? null, !!vender, JSON.stringify(vender?.config || {}));
@@ -85,18 +89,21 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
           </View>
         }
       >
-        <View {...tourTarget("wa.crediario.linha")} style={{ position: "relative", flexDirection: "row", justifyContent: "space-between", gap: 8, paddingBottom: 4 }}>
+        <View accessibilityRole="group" aria-label="Quando avisar" {...tourTarget("wa.crediario.linha")} style={{ position: "relative", flexDirection: "row", justifyContent: "space-between", gap: 8, paddingBottom: 4 }}>
           <View
             pointerEvents="none"
             style={[{ position: "absolute", left: 55, right: 55, top: 10, height: 2, backgroundColor: V.track } as any,
               WEB ? ({ backgroundImage: `linear-gradient(90deg,#a78bfa 0%,#a78bfa ${preenchido}%,${V.track} ${preenchido}%)`, ...ANIM_TRACA } as any) : null]}
           />
-          {PONTOS_ROTULO.map(({ k, rotulo }) => {
+          {PONTOS_ROTULO.map(({ k, rotulo }, idx) => {
             const on = !!pontos?.[k];
             const off = travado || !pontos;
+            const nav = setasPontos.propsDoItem(idx);
             return (
               <Pressable
                 key={k}
+                ref={nav.innerRef as any}
+                {...({ tabIndex: nav.tabIndex, onKeyDown: nav.onKeyDown, onFocus: nav.onFocus, "aria-checked": on } as any)}
                 onPress={() => pontos && auto.salvarConfig("crediario_cobrar", { pontos: alternarPonto(pontos, k) })}
                 disabled={off}
                 accessibilityRole="checkbox"

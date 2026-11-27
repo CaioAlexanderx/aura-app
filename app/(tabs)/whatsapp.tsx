@@ -24,7 +24,7 @@
 // lugar de ligar evita a tela dizer "ligado" e a régua dizer "desligado".
 // ============================================================
 import { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator, Platform } from "react-native";
 import { router, Redirect } from "expo-router";
 import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
 import { Colors } from "@/constants/colors";
@@ -58,8 +58,8 @@ import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import { MedidorSaldoCard, SaldosApagados } from "@/components/whatsapp/MedidorSaldoCard";
-import { Pilula, Spots, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
-import { CabecalhoWa } from "@/components/whatsapp/CabecalhoWa";
+import { ESCURO, Pilula, Spots, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
+import { CabecalhoWa, ListaAbas } from "@/components/whatsapp/CabecalhoWa";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -211,7 +211,7 @@ export default function WhatsAppScreen() {
   // No consolidado multi-CNPJ o próprio HubView mostra "Escolha uma loja".
   if (!demo && abaAtiva === "conversas") {
     return (
-      <View style={s.screen} testID="wa-varejo-conversas">
+      <View style={[s.screen, novas && fundoTela]} testID="wa-varejo-conversas" {...({ dataSet: { waRoot: "1" } } as any)}>
         {/* Celular, dentro de uma conversa: sem título e abas; a conversa ocupa a tela, só com o cabeçalho de vidro (artboard Celular). */}
         <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
           {novas && <Spots />}
@@ -241,7 +241,7 @@ export default function WhatsAppScreen() {
   );
 
   return (
-    <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, novas && !demo && { maxWidth: 1360 }]}>
+    <ScrollView ref={scrollRef} style={[s.screen, novas && !demo && fundoTela]} {...({ dataSet: { waRoot: "1" } } as any)} contentContainerStyle={[s.content, novas && !demo && { maxWidth: 1360 }]}>
       {novas && !demo && <Spots />}
       {novas && !demo ? cabecalhoNovo() : (
         <>
@@ -267,7 +267,7 @@ export default function WhatsAppScreen() {
           <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>
         </View>
       ) : abaAtiva === "automaticas" ? (
-        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
+        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real" {...({ role: "tabpanel", "aria-labelledby": `wa-tab-${abaDestaque}` } as any)}>
           {medidor}
           {!consolidatedView && (
             <View testID="wa-varejo-bloco-automaticas">
@@ -284,7 +284,7 @@ export default function WhatsAppScreen() {
           )}
         </View>
       ) : abaAtiva === "venda_mais" ? (
-        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
+        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real" {...({ role: "tabpanel", "aria-labelledby": `wa-tab-${abaDestaque}` } as any)}>
           {!consolidatedView && (
             <View testID="wa-varejo-bloco-venda-mais">
               <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
@@ -292,21 +292,15 @@ export default function WhatsAppScreen() {
           )}
         </View>
       ) : (
-        <View style={{ gap: novas ? 24 : 14, zIndex: 1 }} testID="wa-varejo-real">
+        <View style={{ gap: novas ? 24 : 14, zIndex: 1 }} testID="wa-varejo-real" {...({ role: "tabpanel", "aria-labelledby": `wa-tab-${abaDestaque}` } as any)}>
           {/* Seções de Configurações: uma de cada vez, cada uma num bloco
               próprio (SECOES_CONFIG). */}
-          <View style={s.secoes} testID="wa-varejo-config-secoes">
-            {SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => (
-              <Pilula
-                key={sc.key}
-                onPress={() => setSecao(sc.key)}
-                ligada={secao === sc.key}
-                estado={{ selected: secao === sc.key }}
-                testID={`wa-varejo-secao-${sc.key}`}
-              >
-                <Text style={t(14, secao === sc.key ? V.onTxt : V.ink, "600")}>{sc.label}</Text>
-              </Pilula>
-            ))}
+          <View style={s.secoes}>
+            <ListaAbas
+              rotulo="Configurações" testIDLista="wa-varejo-config-secoes" ativa={secao}
+              onSelect={(k) => setSecao(k as SecaoKey)}
+              abas={SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => ({ key: sc.key, label: sc.label, testID: `wa-varejo-secao-${sc.key}` }))}
+            />
           </View>
 
           {wa.statusLoading && !wa.status && (
@@ -386,6 +380,12 @@ export default function WhatsAppScreen() {
     </ScrollView>
   );
 }
+// Fundo da tela (linguagem de vidro): no escuro, o --bg do artboard (#04020f), sem o fundo do shell; no claro, #e6e4f0.
+const fundoTela: any = {
+  backgroundColor: V.bgTela,
+  ...(Platform.OS === "web" && !ESCURO ? { backgroundImage: "linear-gradient(180deg,#f4f2fc,#ded9ef)" } : {}),
+};
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
