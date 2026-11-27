@@ -147,6 +147,24 @@ describe("navegação da tela do WhatsApp", () => {
     t.unmount();
   });
 
+  it("com a trava, a subaba Conexão NÃO renderiza o UsoCard (Uso do mês); a Conexão e os saldos continuam", async () => {
+    const t = await montar();
+    await toque(t, "wa-varejo-aba-config");
+    expect(tem(t, "wa-varejo-bloco-conexao")).toBe(true);
+    expect(tem(t, "wa-varejo-conexao")).toBe(true);
+    expect(tem(t, "wa-varejo-uso")).toBe(false);
+    expect(lido(t)).not.toContain("Uso do mês");
+    t.unmount();
+  });
+
+  it("a sobrancelha usa o nome cadastrado da empresa, sem acrescentar ponto", async () => {
+    const t = await montar();
+    await toque(t, "wa-varejo-aba-config");
+    expect(lido(t)).toContain("WhatsApp da Aura.");   // o nome da empresa do mock é "Aura." (o ponto é do cadastro)
+    expect(lido(t)).not.toContain("WhatsApp da Aura..");
+    t.unmount();
+  });
+
   it("Configurações: as duas colunas (Conexão e saldos) encolhem e quebram em uma só no celular (sem passar da tela)", async () => {
     const t = await montar();
     await toque(t, "wa-varejo-aba-config");

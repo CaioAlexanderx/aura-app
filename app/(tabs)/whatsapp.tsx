@@ -344,7 +344,8 @@ export default function WhatsAppScreen() {
               ) : (
                 <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
               )}
-              <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
+              {/* "Uso do mês" não está no artboard e repete os saldos: sai da tela nova (atrás da trava); lojas reais seguem como estão até a virada (#1414). */}
+              {!novas && <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />}
               <ConsentimentoMarketingCard
                 companyId={companyId}
                 status={wa.status}
