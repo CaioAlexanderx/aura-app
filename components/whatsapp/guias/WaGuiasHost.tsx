@@ -29,6 +29,9 @@ export function WaGuiasHost({ ctx, userId }: Props) {
   const abrirMenu = useWaGuias((s) => s.abrirMenu);
   const abrirGuia = useWaGuias((s) => s.abrirGuia);
   const fechar = useWaGuias((s) => s.fechar);
+  const retomarEm = useWaGuias((s) => s.retomarEm);
+  const g3Pendente = useWaGuias((s) => s.g3Pendente);
+  const marcarG3Pendente = useWaGuias((s) => s.marcarG3Pendente);
   const tentouAuto = useRef(false);
 
   useEffect(() => { carregar(userId); }, [carregar, userId]);
@@ -55,10 +58,24 @@ export function WaGuiasHost({ ctx, userId }: Props) {
 
   const aoFecharMenu = useCallback(() => { fechar(); devolveFocoAoBotao(); }, [fechar]);
 
+  // Guia 3 pendente (nenhuma conversa aberta): continua do passo em que parou quando a primeira abrir.
+  useEffect(() => {
+    if (!WEB || !g3Pendente || aberto !== null) return;
+    const id = setInterval(() => {
+      if (useWaGuias.getState().aberto) return;
+      if (findTourTarget([tourSelector("wa.janela")]) || findTourTarget([tourSelector("wa.convite")])) {
+        useWaGuias.getState().marcarG3Pendente(false);
+        useWaGuias.getState().abrirGuia(3, "g3-janela");
+      }
+    }, 1200);
+    return () => clearInterval(id);
+  }, [g3Pendente, aberto]);
+
   const aoTerminar = useCallback((n: 1 | 2 | 3, f: FimDoGuia) => {
+    if (f.pendente) { marcarG3Pendente(true); fechar(); return; }
     if (f.feito) marcar(("g" + n) as "g1" | "g2" | "g3");
     if (f.depois) abrirGuia(f.depois); else { fechar(); devolveFocoAoBotao(); }
-  }, [marcar, abrirGuia, fechar]);
+  }, [marcar, abrirGuia, fechar, marcarG3Pendente]);
 
   if (!WEB) return null;
   const full: GuiaCtx = { ...ctx, produtosEnviados };
@@ -73,7 +90,7 @@ export function WaGuiasHost({ ctx, userId }: Props) {
   }
   if (aberto === 1 || aberto === 2 || aberto === 3) {
     const n = aberto;
-    return <GuiaTour key={n} guia={guiaDe(n, ctx.celular)} ctx={full} onFim={(f) => aoTerminar(n, f)} />;
+    return <GuiaTour key={n + ":" + (retomarEm || "")} guia={guiaDe(n, ctx.celular)} ctx={full} inicioId={retomarEm} onFim={(f) => aoTerminar(n, f)} />;
   }
   return null;
 }

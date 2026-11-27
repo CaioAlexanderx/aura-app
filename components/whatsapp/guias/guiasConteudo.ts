@@ -36,7 +36,7 @@ export interface GuiaCtx {
   irPara: (d: DestinoAba) => void;
 }
 
-export type ExecKind = "antes" | "conectar" | "aguardar" | "conectado" | "aniversario" | "cobranca" | "produto";
+export type ExecKind = "antes" | "conectar" | "aguardar" | "conectado" | "aniversario" | "cobranca" | "venda" | "pronto" | "produto";
 
 export interface PassoGuia {
   id: string;
@@ -54,6 +54,8 @@ export interface PassoGuia {
   completo?: (c: GuiaCtx) => boolean;
   /** Procura o alvo por mais tempo (a tela acabou de trocar de aba). */
   espera?: number;
+  /** Só roda com uma conversa aberta: sem o alvo, o guia fica pendente (artboard GuiaExecucao) em vez de pular. */
+  exigeConversa?: boolean;
 }
 
 export interface Guia {
@@ -139,10 +141,21 @@ export function guia2(): Guia {
         completo: cobrancaLigada,
       },
       {
-        id: "g2-editar", alvo: "wa.editar", espera: 4000,
+        id: "g2-venda", alvo: "wa.auto.venda_mais", aba: { aba: "automaticas" }, espera: 4000, exec: "venda", interativo: true,
+        titulo: "Venda+ todo dia 1º",
+        corpo: "Todo dia 1º a Aura chama de volta quem parou de comprar, começando por quem mais comprava. As outras esperam o mês seguinte.",
+        completo: (c) => c.auto.info?.autos.venda_mais?.ligada === true,
+      },
+      {
+        id: "g2-editar", alvo: "wa.editar", aba: { aba: "config", secao: "crediario" }, espera: 5000,
         titulo: "Quer escrever do seu jeito?",
         corpo: "Em Editar você muda o texto. A Aura confere as regras do WhatsApp e corrige com um toque.",
-        cta: "Entendi",
+      },
+      {
+        id: "g2-pronto", alvo: "wa.auto.cartoes", aba: { aba: "automaticas" }, espera: 4000, exec: "pronto",
+        titulo: "Pronto",
+        corpo: "",
+        cta: "Ver como usar a conversa",
       },
     ],
   };
@@ -158,7 +171,7 @@ export function guia3(): Guia {
         corpo: "Busque por nome, telefone ou produto. As etiquetas separam quem pediu orçamento, quem está pagando e quem compra no crediário.",
       },
       {
-        id: "g3-janela", alvo: "wa.janela",
+        id: "g3-janela", alvo: "wa.janela", exigeConversa: true,
         titulo: "Conversa aberta não gasta",
         corpo: "Depois que a cliente escreve, você tem um dia para responder à vontade sem usar saldo. O relógio mostra até quando.",
       },
@@ -194,6 +207,6 @@ export function guiaDe(n: 1 | 2 | 3, celular: boolean): Guia {
 /** O que o menu mostra de cada guia (texto do artboard GuiaCentral). */
 export const MENU_GUIAS: { n: 1 | 2 | 3; titulo: string; sub: (celular: boolean) => string }[] = [
   { n: 1, titulo: "Conectar o número da loja", sub: (cel) => cel ? "No computador · uns 3 minutos · precisa do celular da loja" : "4 passos · uns 3 minutos · precisa do celular da loja" },
-  { n: 2, titulo: "Ligar as mensagens automáticas", sub: () => "5 passos · 1 minuto · aniversário, crediário e Venda+" },
+  { n: 2, titulo: "Ligar as mensagens automáticas", sub: () => "7 passos · 1 minuto · aniversário, crediário e Venda+" },
   { n: 3, titulo: "Como usar a conversa", sub: () => "6 passos · 1 minuto" },
 ];

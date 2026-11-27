@@ -23,8 +23,8 @@ export interface ExecProps {
   ctx: GuiaCtx;
   /** Vai ao passo seguinte (ou fecha, no último). */
   proximo: () => void;
-  /** Termina este guia e abre o 2. */
-  encadear: () => void;
+  /** Termina este guia e abre o guia n. */
+  encadear: (n: 1 | 2 | 3) => void;
   /** O produto foi mandado depois que o passo abriu. */
   produtoFeito: boolean;
 }
@@ -135,21 +135,28 @@ function Conectado({ ctx, passo, encadear }: ExecProps) {
         <b style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-.02em" }} data-testid="guia-numero-ligado">{ctx.telefone ? `${ctx.telefone} ligado` : "WhatsApp ligado"}</b>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <BotaoPrincipal seta onClick={encadear} testID="guia-acao">{passo.cta || "Ligar as automáticas"}</BotaoPrincipal>
+        <BotaoPrincipal seta onClick={() => encadear(2)} testID="guia-acao">{passo.cta || "Ligar as automáticas"}</BotaoPrincipal>
       </div>
     </>
   );
 }
 
 // ── Guia 2 ───────────────────────────────────────────────────────────
-function Aniversario({ ctx, proximo }: ExecProps) {
+const NOVIDADE = {
+  aniversario: { titulo: "Aniversário", ligado: "Aniversário ligado", botao: "Ligar o aniversário", dono: "Aniversário" },
+  venda_mais: { titulo: "Venda+", ligado: "Venda+ ligado", botao: "Ligar o Venda+", dono: "Venda+" },
+} as const;
+
+function Novidade({ ctx, proximo, chave }: ExecProps & { chave: "aniversario" | "venda_mais" }) {
+  const t = NOVIDADE[chave];
   const info = ctx.auto.info;
-  const cfg = info?.autos.aniversario;
+  const cfg = info?.autos[chave];
   const ligada = cfg?.ligada === true;
   const precisaAceite = !!info && !info.aceiteEm;
   const [aceite, setAceite] = useState(false);
   const [ligando, setLigando] = useState(false);
-  const pub = useWaPublico(ctx.companyId, "aniversario", undefined, cfg?.livres ?? null, !!cfg && !ligada, JSON.stringify(cfg?.config || {}));
+  const segmento = chave === "venda_mais" ? (typeof (cfg?.config as any)?.segmento === "string" ? (cfg!.config as any).segmento : "sumindo") : undefined;
+  const pub = useWaPublico(ctx.companyId, chave, segmento, cfg?.livres ?? null, !!cfg && !ligada, JSON.stringify(cfg?.config || {}));
   const bloqueios = bloqueiosDoLiga(ctx);
   const presente = rotuloDoPresente((cfg?.config as any)?.presente);
   const corte = pub.corte;
@@ -162,7 +169,7 @@ function Aniversario({ ctx, proximo }: ExecProps) {
       <>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <span className="wag-okc" aria-hidden="true">✓</span>
-          <b style={{ fontSize: 16, fontWeight: 800 }} data-testid="guia-aniv-ligado">Aniversário ligado</b>
+          <b style={{ fontSize: 16, fontWeight: 800 }} data-testid={chave === "aniversario" ? "guia-aniv-ligado" : "guia-venda-ligado"}>{t.ligado}</b>
         </div>
         <Aviso>Desligar é a qualquer hora, no próprio cartão.</Aviso>
         <div><BotaoPrincipal seta onClick={proximo} testID="guia-proximo-exec">Próximo</BotaoPrincipal></div>
@@ -170,12 +177,14 @@ function Aniversario({ ctx, proximo }: ExecProps) {
     );
   }
   const pode = !ligando && !ctx.auto.salvando && bloqueios.length === 0 && (!precisaAceite || aceite);
+  const previa = !corte ? null : chave === "aniversario"
+    ? `${corte.total === 1 ? "1 aniversariante" : `${corte.total} aniversariantes`}; cabem ${corte.cabem} nas novidades do Aniversário${corte.ordem ? `, ${corte.ordem}` : ""}.`
+    : `${corte.total === 1 ? "1 cliente não compra" : `${corte.total} clientes não compram`} há mais de 30 dias; cabem ${corte.cabem} nas novidades do Venda+${corte.ordem ? `, ${corte.ordem}` : ""}.`;
   return (
     <>
-      {!!corte && (
-        <Aviso testID="guia-aniv-previa">
-          {`${corte.total === 1 ? "1 aniversariante" : `${corte.total} aniversariantes`}; cabem ${corte.cabem} nas novidades do Aniversário${corte.ordem ? `, ${corte.ordem}` : ""}.`}
-          {presente ? ` Presente: ${presente}.` : ""}
+      {!!previa && (
+        <Aviso testID={chave === "aniversario" ? "guia-aniv-previa" : "guia-venda-previa"}>
+          {previa}{presente ? ` Presente: ${presente}.` : ""}
         </Aviso>
       )}
       {precisaAceite && (
@@ -186,9 +195,28 @@ function Aniversario({ ctx, proximo }: ExecProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <BotaoPrincipal disabled={!pode} testID="guia-acao" onClick={async () => {
           setLigando(true);
-          try { await ctx.auto.ligar("aniversario", true, precisaAceite ? true : undefined); } finally { setLigando(false); }
-        }}>Ligar o aniversário</BotaoPrincipal>
+          try { await ctx.auto.ligar(chave, true, precisaAceite ? true : undefined); } finally { setLigando(false); }
+        }}>{t.botao}</BotaoPrincipal>
         <button type="button" className="wag-lnk" onClick={proximo} data-testid="guia-agora-nao">Agora não</button>
+      </div>
+    </>
+  );
+}
+
+function Pronto({ ctx, passo, encadear, proximo }: ExecProps) {
+  const autos = ctx.auto.info?.autos || {};
+  const liga: string[] = [];
+  if (autos.aniversario?.ligada) liga.push("Aniversário");
+  if (autos.crediario_cobrar?.ligada) liga.push("cobrança do crediário");
+  if (autos.venda_mais?.ligada) liga.push("Venda+");
+  const resumo = liga.length ? `Ligado: ${liga.join(", ")}.` : "Nada foi ligado. Os cartões ficam aqui para quando quiser.";
+  return (
+    <>
+      <p className="wag-p" data-testid="guia-resumo">{resumo} Desligar é a qualquer hora, no próprio cartão.</p>
+      <div>
+        {ctx.hubVisible
+          ? <BotaoPrincipal seta onClick={() => encadear(3)} testID="guia-acao">{passo.cta || "Ver como usar a conversa"}</BotaoPrincipal>
+          : <BotaoPrincipal seta onClick={proximo} testID="guia-acao">Entendi</BotaoPrincipal>}
       </div>
     </>
   );
@@ -282,7 +310,9 @@ export function ExecBloco(p: ExecProps) {
     case "conectar": return <Conectar {...p} />;
     case "aguardar": return <Aguardar {...p} />;
     case "conectado": return <Conectado {...p} />;
-    case "aniversario": return <Aniversario {...p} />;
+    case "aniversario": return <Novidade {...p} chave="aniversario" />;
+    case "venda": return <Novidade {...p} chave="venda_mais" />;
+    case "pronto": return <Pronto {...p} />;
     case "cobranca": return <Cobranca {...p} />;
     case "produto": return <Produto {...p} />;
     default: return null;

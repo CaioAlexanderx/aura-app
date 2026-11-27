@@ -62,6 +62,8 @@ export const CSS_GUIAS = `
 .wag-tip[data-pos="bottom"] .wag-seta{top:-8px;border-left:1px solid ${G.borda};border-top:1px solid ${G.borda}}
 .wag-tip[data-pos="top"] .wag-seta{bottom:-8px;border-right:1px solid ${G.borda};border-bottom:1px solid ${G.borda}}
 .wag-furo{position:fixed;pointer-events:none;box-shadow:0 0 0 9999px ${G.dim}, ${G.furo};animation:wag-acha .55s .1s cubic-bezier(.2,.8,.2,1) backwards}
+.wag-furo-d{position:fixed;left:0;top:0;pointer-events:none;box-sizing:border-box;border-style:solid;border-color:#c4b5fd;transform-origin:0 0;box-shadow:0 0 0 6000px ${G.dim};transition:transform .45s cubic-bezier(.2,.8,.2,1);animation:wag-pousa .3s linear backwards}
+.wag-halo{position:fixed;pointer-events:none;box-shadow:0 0 24px 4px rgba(167,139,250,.55);animation:wag-pousa .5s .25s ease-out backwards}
 .wag-onda{position:fixed;pointer-events:none;border:2px solid rgba(196,181,253,.7);animation:wag-onda 1.2s .7s cubic-bezier(.2,.8,.2,1) 2 backwards}
 .wag-dim{position:fixed;inset:0;background:${G.dim};animation:wag-pousa .2s linear backwards}
 .wag-btn1{position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:46px;padding:0 20px;border:0;border-radius:999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;background:${G.btn};box-shadow:${G.btnSombra};transition:transform .08s ease-out}

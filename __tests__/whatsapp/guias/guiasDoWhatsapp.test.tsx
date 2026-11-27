@@ -52,14 +52,14 @@ function alvo(chave: string, w = 120, h = 40) {
 afterEach(() => { montados.splice(0).forEach((m) => { try { act(() => { m.root.unmount(); }); } catch { /* ok */ } }); document.body.innerHTML = ""; try { localStorage.clear(); } catch { /* ok */ } jest.useRealTimers(); });
 
 describe("o texto e o alvo de cada balão", () => {
-  it("guia 1 tem 4 passos; guia 2, 5; guia 3, 6", () => {
+  it("guia 1 tem 4 passos; guia 2, 7 (Venda+ e Pronto do GuiaExecucao); guia 3, 6", () => {
     expect(guia1(false).passos).toHaveLength(4);
-    expect(guia2().passos).toHaveLength(5);
+    expect(guia2().passos).toHaveLength(7);
     expect(guia3().passos).toHaveLength(6);
   });
   it("alvos na ordem do artboard", () => {
     expect(guia1(false).passos.map((p) => p.alvo ?? "(centro)")).toEqual(["wa.conexao", "wa.conectar", "(centro)", "wa.saldos"]);
-    expect(guia2().passos.map((p) => p.alvo)).toEqual(["wa.saldos", "wa.divisao", "wa.auto.aniversario", "wa.crediario.linha", "wa.editar"]);
+    expect(guia2().passos.map((p) => p.alvo)).toEqual(["wa.saldos", "wa.divisao", "wa.auto.aniversario", "wa.crediario.linha", "wa.auto.venda_mais", "wa.editar", "wa.auto.cartoes"]);
     expect(guia3().passos.map((p) => p.alvo)).toEqual(["wa.lista", "wa.janela", "wa.acoes", "wa.microfone", "wa.ligar_cadastro", "wa.convite"]);
   });
   it("textos finais (amostra literal do artboard)", () => {
@@ -191,7 +191,7 @@ describe("o motor dos guias", () => {
     const t = monta(<GuiaTour guia={guia2()} ctx={ctx} onFim={onFim} />);
     passa(700);
     expect(ctx.irPara).toHaveBeenCalledWith({ aba: "automaticas" });
-    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 5");
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 7");
     expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Três saldos, cada um no seu limite");
     expect(document.querySelector("[data-testid='guia-proximo']")?.textContent).toContain("Próximo");
     expect(document.querySelector("[data-testid='guia-pular']")?.textContent).toBe("Pular guia");
@@ -210,7 +210,7 @@ describe("o motor dos guias", () => {
     act(() => { (document.querySelector("[data-testid='guia-proximo']") as HTMLElement).click(); });
     passa(3000);
     passa(700);
-    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("3 de 5");
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("3 de 7");
     t.desmonta();
   });
 
@@ -355,9 +355,9 @@ describe("teclado (acessibilidade no computador)", () => {
     expect(dentro).toContain(document.activeElement as HTMLElement);
     // → avança, ← volta
     tecla("ArrowRight"); passa(700);
-    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("2 de 5");
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("2 de 7");
     tecla("ArrowLeft"); passa(700);
-    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 5");
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 7");
     // Esc fecha e devolve o foco a quem abriu
     tecla("Escape");
     expect(onFim).toHaveBeenCalledWith({ feito: false });
@@ -372,5 +372,86 @@ describe("teclado (acessibilidade no computador)", () => {
     for (let k = 0; k < 5; k++) { tecla("Tab"); expect(itens).toContain(document.activeElement as HTMLElement); }
     tecla("Escape");
     expect(onFechar).toHaveBeenCalled();
+  });
+});
+
+describe("Venda+, Pronto, buraco que desliza e guia 3 pendente", () => {
+  const passa = (ms: number) => act(() => { jest.advanceTimersByTime(ms); });
+
+  it("Venda+ liga com aceite e pelas ações da tela", () => {
+    jest.useFakeTimers();
+    alvo("wa.auto.venda_mais");
+    const ligar = jest.fn().mockResolvedValue({ ok: true, code: null });
+    const info: any = { aceiteEm: null, autos: { venda_mais: { ligada: false, livres: 4, config: {} } } };
+    const ctx = ctxBase({ conectado: true, status: { connected: true, addon_active: true } as any, auto: { ...ctxBase().auto, info, ligar } as any });
+    const so = { ...guia2(), passos: guia2().passos.filter((p) => p.id === "g2-venda") };
+    monta(<GuiaTour guia={so} ctx={ctx} onFim={jest.fn()} />);
+    passa(700);
+    expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Venda+ todo dia 1º");
+    const liga = () => document.querySelector("[data-testid='guia-acao']") as HTMLButtonElement;
+    expect(liga().textContent).toBe("Ligar o Venda+");
+    expect(liga().disabled).toBe(true);
+    act(() => { (document.querySelector("[data-testid='guia-chk-aceite']") as HTMLElement).click(); });
+    act(() => { liga().click(); });
+    expect(ligar).toHaveBeenCalledWith("venda_mais", true, true);
+  });
+
+  it("Pronto resume o que ficou ligado e encadeia o guia 3", () => {
+    jest.useFakeTimers();
+    alvo("wa.auto.cartoes");
+    const info: any = { aceiteEm: "x", autos: { aniversario: { ligada: true }, crediario_cobrar: { ligada: false }, venda_mais: { ligada: true } } };
+    const ctx = ctxBase({ auto: { ...ctxBase().auto, info } as any });
+    const so = { ...guia2(), passos: guia2().passos.filter((p) => p.id === "g2-pronto") };
+    const onFim = jest.fn();
+    monta(<GuiaTour guia={so} ctx={ctx} onFim={onFim} />);
+    passa(700);
+    expect(document.querySelector("[data-testid='guia-resumo']")?.textContent).toContain("Ligado: Aniversário, Venda+.");
+    act(() => { (document.querySelector("[data-testid='guia-acao']") as HTMLElement).click(); });
+    expect(onFim).toHaveBeenCalledWith({ feito: true, depois: 3 });
+  });
+
+  it("Pronto sem nada ligado diz isso", () => {
+    jest.useFakeTimers();
+    alvo("wa.auto.cartoes");
+    const info: any = { aceiteEm: "x", autos: { aniversario: { ligada: false } } };
+    const so = { ...guia2(), passos: guia2().passos.filter((p) => p.id === "g2-pronto") };
+    monta(<GuiaTour guia={so} ctx={ctxBase({ auto: { ...ctxBase().auto, info } as any })} onFim={jest.fn()} />);
+    passa(700);
+    expect(document.querySelector("[data-testid='guia-resumo']")?.textContent).toContain("Nada foi ligado");
+  });
+
+  it("o buraco é um elemento de tamanho fixo posicionado por translate e scale", () => {
+    jest.useFakeTimers();
+    alvo("wa.saldos", 200, 60);
+    const so = { ...guia2(), passos: guia2().passos.filter((p) => p.id === "g2-saldos") };
+    monta(<GuiaTour guia={so} ctx={ctxBase()} onFim={jest.fn()} />);
+    passa(700);
+    const f = document.querySelector(".wag-furo-d") as HTMLElement;
+    expect(f).not.toBeNull();
+    expect(f.style.width).toBe("100px");
+    expect(f.style.height).toBe("100px");
+    expect(f.style.transform).toContain("translate(94px, 94px)");
+    expect(f.style.transform).toContain("scale(2.12, 0.72)");
+  });
+
+  it("guia 3 sem conversa aberta fica pendente (não pula) e a retomada volta no passo da janela", () => {
+    jest.useFakeTimers();
+    alvo("wa.lista");
+    const onFim = jest.fn();
+    monta(<GuiaTour guia={guia3()} ctx={ctxBase()} onFim={onFim} />);
+    passa(700);
+    act(() => { (document.querySelector("[data-testid='guia-proximo']") as HTMLElement).click(); });
+    passa(3000); passa(700);
+    expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Falta uma conversa aberta");
+    act(() => { (document.querySelector("[data-testid='guia-pendente']") as HTMLElement).click(); });
+    expect(onFim).toHaveBeenCalledWith({ feito: false, pendente: "g3-janela" });
+  });
+
+  it("retomada: com inicioId o guia começa no passo da janela", () => {
+    jest.useFakeTimers();
+    alvo("wa.janela");
+    monta(<GuiaTour guia={guia3()} ctx={ctxBase()} onFim={jest.fn()} inicioId="g3-janela" />);
+    passa(700);
+    expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("2 de 6");
   });
 });

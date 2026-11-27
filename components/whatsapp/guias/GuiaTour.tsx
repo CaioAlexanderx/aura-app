@@ -25,6 +25,7 @@ import { G, WEB, Z, movimentoReduzido, posicionaBalao, useGuiaCss, type Retangul
 
 const RESPIRO = 6;
 const LARGURA_BALAO = 400;
+const FURO_BASE = 100;
 const ESPERA_PADRAO = 2500;
 const POLL_MS = 120;
 const MEDE_MS = 250;
@@ -35,12 +36,16 @@ export interface FimDoGuia {
   feito: boolean;
   /** Abrir este guia em seguida. */
   depois?: 1 | 2 | 3;
+  /** O guia parou neste passo por falta de conversa aberta e continua quando a primeira abrir. */
+  pendente?: string;
 }
 
 interface Props {
   guia: Guia;
   ctx: GuiaCtx;
   onFim: (f: FimDoGuia) => void;
+  /** Começa neste passo (retomada do guia 3). */
+  inicioId?: string | null;
 }
 
 function raioDe(r: Retangulo): number {
@@ -52,10 +57,11 @@ function igual(a: Retangulo | null, b: Retangulo | null): boolean {
   return Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1 && Math.abs(a.w - b.w) < 1 && Math.abs(a.h - b.h) < 1;
 }
 
-export function GuiaTour({ guia, ctx, onFim }: Props) {
+export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
   useGuiaCss();
   const passos = guia.passos;
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(() => Math.max(0, guia.passos.findIndex((p) => p.id === inicioId)));
+  const [semConversa, setSemConversa] = useState(false);
   const [rect, setRect] = useState<Retangulo | null>(null);
   const [pronto, setPronto] = useState(false);
   const [solto, setSolto] = useState(false);
@@ -92,7 +98,7 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
   const proximo = useCallback(() => vaiPara(i + 1, 1), [i, vaiPara]);
   const voltar = useCallback(() => vaiPara(i - 1, -1), [i, vaiPara]);
   const pular = useCallback(() => terminar({ feito: false }), [terminar]);
-  const encadear = useCallback(() => terminar({ feito: true, depois: 2 }), [terminar]);
+  const encadear = useCallback((n: 1 | 2 | 3) => terminar({ feito: true, depois: n }), [terminar]);
 
   // Guarda de onde veio o foco, para devolver ao terminar.
   useEffect(() => {
@@ -143,7 +149,7 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
     alvoRef.current = null;
     setPronto(false);
     setSolto(false);
-    setRect(null);
+    setSemConversa(false);
 
     const pula = () => { if (!cancelado) vaiPara(i + dir, dir); };
 
@@ -153,6 +159,7 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
     if (passo.aba) ctxRef.current.irPara(passo.aba);
 
     if (!passo.alvo) {
+      setRect(null);
       setPronto(true);
       return () => { cancelado = true; };
     }
@@ -164,6 +171,7 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
       const el = findTourTarget([sel]);
       if (!el) {
         if (Date.now() - inicio < espera) { t1 = setTimeout(tenta, POLL_MS); return; }
+        if (passo.exigeConversa) { setSemConversa(true); setRect(null); setPronto(true); return; } // fica pendente, não pula
         pula(); // alvo ausente: pula o passo
         return;
       }
@@ -242,7 +250,8 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
   }, [pronto, passo?.id]);
 
   if (!WEB || !passo) return null;
-  if (!pronto) return null;
+  // entre passos: só o buraco do passo anterior segura a tela (e depois desliza para o novo alvo); o balão espera
+  if (!pronto && !rect) return null;
 
   const ultimo = i === passos.length - 1;
   const furo: Retangulo | null = rect && !solto
@@ -257,6 +266,7 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
   const rotuloProximo = passo.cta || (ultimo ? "Entendi" : "Próximo");
   const tituloId = "wag-titulo-" + passo.id;
 
+  const furoTela = rect && !solto ? { x: rect.x - RESPIRO, y: rect.y - RESPIRO, w: rect.w + RESPIRO * 2, h: rect.h + RESPIRO * 2 } : null;
   const bandas = furo && !solto ? (
     <>
       {/* quatro bandas transparentes seguram o toque fora do buraco */}
@@ -272,13 +282,25 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
     <div className="wag-root" data-testid="wa-guia" data-guia={guia.n} data-passo={passo.id} style={{ position: "fixed", inset: 0, zIndex: Z.guia, pointerEvents: "none" } as any}>
       {!solto && !furo && <div className="wag-dim" style={{ pointerEvents: "auto" }} />}
       {bandas}
-      {furo && (
+      {/* o buraco é UM elemento de tamanho fixo: translate e scale o levam de um alvo ao outro (só transform e opacity) */}
+      {furoTela && (
+        <div
+          className="wag-furo-d"
+          style={{
+            width: FURO_BASE, height: FURO_BASE,
+            transform: `translate(${furoTela.x}px, ${furoTela.y}px) scale(${furoTela.w / FURO_BASE}, ${furoTela.h / FURO_BASE})`,
+            borderWidth: `${2 / (furoTela.h / FURO_BASE)}px ${2 / (furoTela.w / FURO_BASE)}px`,
+            borderRadius: `${raioDe(furoTela) / (furoTela.w / FURO_BASE)}px / ${raioDe(furoTela) / (furoTela.h / FURO_BASE)}px`,
+          }}
+        />
+      )}
+      {furo && pronto && (
         <>
-          <div key={"f" + passo.id} className="wag-furo" style={{ left: furo.x, top: furo.y, width: furo.w, height: furo.h, borderRadius: raioDe(furo) }} />
+          <div key={"h" + passo.id} className="wag-halo" style={{ left: furo.x, top: furo.y, width: furo.w, height: furo.h, borderRadius: raioDe(furo) }} />
           <div key={"o" + passo.id} className="wag-onda" style={{ left: furo.x - 4, top: furo.y - 4, width: furo.w + 8, height: furo.h + 8, borderRadius: raioDe(furo) + 4 }} />
         </>
       )}
-      <div
+      {pronto && <div
         key={"b" + passo.id}
         ref={balaoRef}
         className="wag-tip"
@@ -302,10 +324,14 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
           )}
         </div>
 
-        <h2 id={tituloId} className="wag-h" style={{ fontSize: 21 }} data-testid="guia-titulo">{passo.titulo}<em>.</em></h2>
-        <p className="wag-p" style={{ fontSize: 14 }} data-testid="guia-corpo">{passo.corpo}</p>
+        <h2 id={tituloId} className="wag-h" style={{ fontSize: 21 }} data-testid="guia-titulo">{semConversa ? "Falta uma conversa aberta" : passo.titulo}<em>.</em></h2>
+        {(semConversa || !!passo.corpo) && (
+          <p className="wag-p" style={{ fontSize: 14 }} data-testid="guia-corpo">
+            {semConversa ? "Este guia roda com uma conversa aberta. Quando a primeira abrir, ele continua daqui." : passo.corpo}
+          </p>
+        )}
 
-        {execComBotao && (
+        {execComBotao && !semConversa && (
           <ExecBloco passo={passo} ctx={ctx} proximo={proximo} encadear={encadear} produtoFeito={produtoFeito} />
         )}
 
@@ -314,11 +340,13 @@ export function GuiaTour({ guia, ctx, onFim }: Props) {
             {i > 0 && <button type="button" className="wag-lnk" style={{ paddingLeft: 0 }} onClick={voltar} data-testid="guia-voltar">Voltar</button>}
             <button type="button" className="wag-lnk sutil" style={i > 0 ? undefined : { paddingLeft: 0 }} onClick={pular} data-testid="guia-pular">Pular guia</button>
           </div>
-          {!execComBotao && (
+          {semConversa ? (
+            <BotaoPrincipal seta onClick={() => terminar({ feito: false, pendente: passo.id })} testID="guia-pendente">Entendi</BotaoPrincipal>
+          ) : !execComBotao && (
             <BotaoPrincipal seta onClick={proximo} testID="guia-proximo">{rotuloProximo}</BotaoPrincipal>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 
