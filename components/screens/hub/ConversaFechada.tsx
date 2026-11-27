@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Pressable, TextInput, Linking, ActivityIndicator } from "react-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web, SANS } from "./waVisual";
+import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web, SANS } from "./conversasUi";
 import { hubApi, type HubConvite, type HubConvites } from "@/services/hubApi";
 import { tourTarget } from "@/utils/tourTarget";
 import { copyToClipboard } from "@/utils/clipboard";

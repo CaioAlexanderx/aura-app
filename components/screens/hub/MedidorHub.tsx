@@ -1,18 +1,17 @@
 // ============================================================
-// WhatsApp · Conversas — cabeçalho do mockup (Main.dc.html):
-//   "WhatsApp da <loja>" (meta) + "Conversas." | abas em pílula + medidor.
+// WhatsApp · Conversas — medidor do topo (Main.dc.html):
+// "Avisos 72 de 100 · Novidades 6 de 10", ao lado das abas.
 //
-// O medidor lê o saldo do servidor (waSaldo / GET /whatsapp/saldo) e segue a
-// regra que já vale na tela: trava desligada (ativo:false) ou saldo ilegível =
-// nenhum número, porque o limite não existe ou não se sabe. Nunca inventa.
-// Celular: o cabeçalho é só título e abas; o "72 avisos" vai para a conversa.
+// Lê o saldo do servidor (waSaldo / GET /whatsapp/saldo) e segue a regra que
+// já vale na tela: trava desligada (ativo:false) ou saldo ilegível = nenhum
+// número, porque o limite não existe ou não se sabe. Nunca inventa.
+// O cabeçalho (título, abas, Guias) é o CabecalhoWa compartilhado; o medidor
+// entra nele pela prop `extra`.
 // ============================================================
 import { View } from "react-native";
-import { IS_WIDE } from "@/constants/helpers";
 import type { SaldoInfo } from "@/components/whatsapp/waSaldo";
-import { K, Meta, Titulo, Tx, Pilula, Barra, web, superficie } from "./waVisual";
-
-export interface AbaWa { key: string; label: string; testID?: string }
+import { animCai, V } from "@/components/whatsapp/waVisual";
+import { K, Tx, Barra, web, superficie } from "./conversasUi";
 
 const MAX_CAPS = 12;
 
@@ -42,34 +41,13 @@ export function MedidorHub({ saldo }: { saldo: SaldoInfo | null | undefined }) {
             <View style={{ flexDirection: "row", gap: 3 }}>
               {Array.from({ length: novidades.total }).map((_, i) => {
                 const livre = i >= novidades.total - novidades.restante;
-                return <View key={i} style={[{ width: 9, height: 8, borderRadius: 999, backgroundColor: livre ? "#a78bfa" : K.trilho },
-                  livre ? web({ backgroundImage: "linear-gradient(180deg,#f3efff,#a78bfa)", boxShadow: "0 0 9px rgba(167,139,250,.6)" }) : null]} />;
+                return <View key={i} {...(livre ? ({ dataSet: { waAnim: "1" } } as any) : {})}
+                  style={[{ width: 9, height: 8, borderRadius: 999, backgroundColor: livre ? "#a78bfa" : V.track },
+                    livre ? web({ backgroundImage: "linear-gradient(180deg,#f3efff,#a78bfa)", boxShadow: "0 0 9px rgba(167,139,250,.6)" }) : null, livre ? animCai(i) : null]} />;
               })}
             </View>
           )
           : <Barra pct={novidades.total > 0 ? novidades.restante / novidades.total : 0} altura={6} />}
-      </View>
-    </View>
-  );
-}
-
-export function HubCabecalho({ lojaNome, abas, ativa, onSelect, saldo }: {
-  lojaNome: string; abas: AbaWa[]; ativa: string; onSelect: (k: string) => void; saldo?: SaldoInfo | null;
-}) {
-  const largo = IS_WIDE;
-  return (
-    <View testID="hub-cabecalho" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
-      <View style={{ gap: 10 }}>
-        <Meta>{lojaNome ? `WhatsApp da ${lojaNome}` : "WhatsApp da loja"}</Meta>
-        <Titulo size={largo ? 46 : 34}>Conversas</Titulo>
-      </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-        <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {abas.map((a) => (
-            <Pilula key={a.key} testID={a.testID} on={a.key === ativa} onPress={() => onSelect(a.key)}>{a.label}</Pilula>
-          ))}
-        </View>
-        {largo && <MedidorHub saldo={saldo} />}
       </View>
     </View>
   );

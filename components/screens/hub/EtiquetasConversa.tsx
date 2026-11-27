@@ -14,7 +14,7 @@ import { useState } from "react";
 import { View, Pressable, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hubApi, type HubLabel } from "@/services/hubApi";
-import { K, Tx, Meta, Pilula, Ponto, superficie, SANS } from "./waVisual";
+import { K, Tx, Meta, Pilula, Ponto, superficie, SANS } from "./conversasUi";
 
 export const CORES_ETIQUETA = ["#7c3aed", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#ef4444"];
 

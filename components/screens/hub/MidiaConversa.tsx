@@ -11,9 +11,9 @@ import { useEffect, useRef, useState } from "react";
 import { View, Pressable, TextInput, Image } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Ico, Pilula, BotaoRedondo, Ponto, superficie, web, SANS } from "./waVisual";
+import { K, Tx, Ico, Pilula, BotaoRedondo, Ponto, superficie, web, SANS } from "./conversasUi";
 import { AtalhoAcao, Folha, type VarianteAtalho } from "./EnvioRapido";
-import { Meta } from "./waVisual";
+import { Meta } from "./conversasUi";
 import { hubApi } from "@/services/hubApi";
 import {
   Gravador, MAX_SEGUNDOS_AUDIO, gravacaoDisponivel, blobParaBase64, escolherArquivo, prepararFoto, relogio,

@@ -14,7 +14,7 @@ import { useState } from "react";
 import { View, Pressable } from "react-native";
 import { useAuthStore } from "@/stores/auth";
 import { copyToClipboard } from "@/utils/clipboard";
-import { K, Tx, Meta, MONO, SERIF, web } from "./waVisual";
+import { K, Tx, Meta, MONO, SERIF, web } from "./conversasUi";
 
 const limpa = (s: string) => s.replace(/[*_]/g, "").trim();
 const VALOR = /R\$\s*[\d.]+(?:,\d{1,2})?/;

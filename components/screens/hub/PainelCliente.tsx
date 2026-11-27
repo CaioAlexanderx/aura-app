@@ -14,7 +14,7 @@ import { hubApi } from "@/services/hubApi";
 import { conversaAbertaAte, CATEGORIES, CATEGORY_META } from "./types";
 import { ClientePainel } from "./ClienteConversa";
 import { EtiquetasConversa } from "./EtiquetasConversa";
-import { K, Tx, Meta, Ico, Pilula, Ponto, superficie } from "./waVisual";
+import { K, Tx, Meta, Ico, Pilula, Ponto, superficie } from "./conversasUi";
 
 export function PainelCliente({ companyId, convId, embutido = false }: { companyId: string; convId: string; embutido?: boolean }) {
   const qc = useQueryClient();

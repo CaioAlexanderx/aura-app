@@ -85,6 +85,23 @@ describe("validar (igual ao servidor)", () => {
     expect(validar(AVISO, "Oi, {Nome. Vale {Valor}.").checks.some((c) => c.id === "chaves" && !c.ok)).toBe(true);
   });
 
+  it("botão do modelo (Quero o Pix): o texto precisa citá-lo, igual ao servidor", () => {
+    const PIX = { ...AVISO, botoes: [{ tipo: "QUICK_REPLY", texto: "Quero o Pix" }] };
+    const com = validar(PIX, "Oi, {Nome}. A parcela {Parcela} vence {Vencimento}: {Valor}. Toque em 'Quero o Pix' que eu te mando o código.");
+    expect(com.ok).toBe(true);
+    expect(com.checks.find((c) => c.id === "botao")).toMatchObject({ ok: true, texto: 'O texto avisa do botão "Quero o Pix".' });
+    // sem a frase (maiúsculas não importam), o texto não passa e não há correção de um toque (o servidor também não tem)
+    const sem = validar(PIX, "Oi, {Nome}. A parcela {Parcela} vence {Vencimento}: {Valor}. Se preferir, pague na loja.");
+    const b = sem.checks.find((c) => c.id === "botao")!;
+    expect(b).toMatchObject({ ok: false, texto: 'Mantenha no texto a frase que fala do botão "Quero o Pix".' });
+    expect(b.correcao).toBeUndefined();
+    expect(sem.ok).toBe(false);
+    expect(validar(PIX, "oi, {Nome}. QUERO O PIX é o botão. Valor {Valor}.").checks.find((c) => c.id === "botao")!.ok).toBe(true);
+    // modelo sem botão: a regra não existe (ordem dos itens: oferta, botão, tamanho)
+    expect(validar(AVISO, "Oi, {Nome}. Vale {Valor}.").checks.some((c) => c.id === "botao")).toBe(false);
+    expect(com.checks.map((c) => c.id)).toEqual(["campos", "comeca", "termina", "colados", "oferta", "botao", "tamanho"]);
+  });
+
   it("1.024 letras", () => {
     const longo = "Oi, {Nome}. " + "a".repeat(1100) + ".";
     const t = validar(AVISO, longo).checks.find((c) => c.id === "tamanho")!;

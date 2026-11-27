@@ -75,7 +75,12 @@ export interface Check {
 export interface Validacao { ok: boolean; checks: Check[]; previa: string }
 
 /** Recorte do modelo que a validação usa. */
-export interface ModeloParaValidar { campos: string[]; categoria: string }
+export interface ModeloParaValidar {
+  campos: string[];
+  categoria: string;
+  /** Botões do modelo (ex.: "Quero o Pix" nos avisos do Crediário); o servidor manda em `botoes`. */
+  botoes?: { tipo?: string | null; texto: string }[] | null;
+}
 
 // Palavras que fazem a Meta tratar o texto como propaganda.
 const OFERTA_RE = /(desconto|promo[cç][aã]o|promocional|oferta|cupom|gr[aá]tis|brinde|ganhe|aproveite|liquida[cç][aã]o|black friday|\d+\s*%|%\s*off|\boff\b)/i;
@@ -127,6 +132,13 @@ export function validar(modelo: ModeloParaValidar, texto: string | null | undefi
     add("oferta", !trecho, "Sem oferta. Continua sendo aviso.",
       "Aviso não pode ter oferta: o WhatsApp passa a cobrar como novidade.",
       trecho ? { correcao: "TIRAR_OFERTA", trecho } : {});
+  }
+
+  // Mesma regra do servidor (modelos.js, check "botao"): o texto precisa citar o botão do modelo.
+  if (Array.isArray(modelo.botoes) && modelo.botoes.length && modelo.botoes[0] && typeof modelo.botoes[0].texto === "string") {
+    const rotulo = modelo.botoes[0].texto;
+    const cita = t.toLowerCase().includes(rotulo.toLowerCase());
+    add("botao", cita, `O texto avisa do botão "${rotulo}".`, `Mantenha no texto a frase que fala do botão "${rotulo}".`);
   }
 
   const previa = renderizar(t);

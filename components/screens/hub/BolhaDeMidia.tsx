@@ -8,7 +8,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Image, Pressable, Linking } from "react-native";
-import { K, Tx, Ico, web } from "./waVisual";
+import { K, Tx, Ico, web } from "./conversasUi";
 import { Colors } from "@/constants/colors";
 import type { HubMessage } from "@/services/hubApi";
 

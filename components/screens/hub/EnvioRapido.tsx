@@ -22,7 +22,7 @@ import { fmt } from "@/constants/helpers";
 import { hubApi, type HubEnvioTipo } from "@/services/hubApi";
 import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./waVisual";
+import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
 import { useOrcamentoNovo } from "./useOrcamentoNovo";
 
 /**

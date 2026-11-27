@@ -22,7 +22,7 @@ import { CHANNEL_META, STATUS_META, CATEGORY_META, shortTime, nomeDoContato, con
 import { ThreadView } from "./ThreadView";
 import { tourTarget } from "@/utils/tourTarget";
 import { PainelCliente } from "./PainelCliente";
-import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web, SANS } from "./waVisual";
+import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web, SANS } from "./conversasUi";
 
 type StatusFilter = "todas" | HubStatus;
 

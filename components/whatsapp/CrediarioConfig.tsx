@@ -10,11 +10,12 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { tourTarget } from "@/utils/tourTarget";
+import { ANIM_TRACA, Avatar, BtnPrimario, Superficie, V, WEB, ESCURO, estiloBolha, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
-import { BolhaExemplo, Interruptor, Passo, PilulaToggle, PreviaCorteView } from "./configUi";
+import { Interruptor, PreviaCorteView, Secao } from "./configUi";
 import { ModelosEditaveis } from "./ModelosEditaveis";
 import { podeMandarNovidades, quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import { PONTOS_ROTULO, alternarPonto, lerPontos } from "./waAutomaticaConfig";
@@ -67,43 +68,86 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
     ? `Usam os avisos do mês: ${saldo.avisos.livres}. Se acabarem, cada aviso vira um botão "Cobrar pelo meu WhatsApp", de graça.`
     : 'Usam os avisos do mês. Se acabarem, cada aviso vira um botão "Cobrar pelo meu WhatsApp", de graça.';
 
+  const ultimoOn = PONTOS_ROTULO.reduce((acc, p, idx) => (pontos?.[p.k] ? idx : acc), -1);
+  const preenchido = ultimoOn < 0 ? 0 : Math.round((ultimoOn / Math.max(PONTOS_ROTULO.length - 1, 1)) * 100);
+
   return (
-    <View style={{ gap: 14 }} testID="wa-cred-tela">
-      <Passo n="01 · COBRAR" titulo="Avisos de parcela" sub={`Toque nos pontos da linha para escolher quando avisar. ${avisosTxt}`}>
-        <View style={s.linha}>
-          <Text style={s.titulo}>{cobrar.ligada ? "Ligado" : "Desligado"}</Text>
-          <Interruptor
-            ligado={cobrar.ligada} desabilitado={travado} rotulo={(cobrar.ligada ? "Desligar" : "Ligar") + " os avisos de parcela"}
-            testID="wa-cred-cobrar-liga" onToggle={() => alt.alternar("crediario_cobrar")}
-          />
-        </View>
-        <View style={s.pilulas}>
-          {PONTOS_ROTULO.map(({ k, rotulo }) => (
-            <PilulaToggle
-              key={k} rotulo={rotulo} ligada={!!pontos?.[k]} desabilitado={travado || !pontos}
-              testID={`wa-cred-ponto-${k}`}
-              onToggle={() => pontos && auto.salvarConfig("crediario_cobrar", { pontos: alternarPonto(pontos, k) })}
+    <View style={{ gap: 28 }} testID="wa-cred-tela">
+      <Secao
+        variante="glass" meta="01 · Cobrar" titulo="Avisos de parcela" sub={`Toque nos pontos da linha para escolher quando avisar. ${avisosTxt}`}
+        direita={
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={t(15, cobrar.ligada ? V.ok : V.ink2, "700")}>{cobrar.ligada ? "Ligado" : "Desligado"}</Text>
+            <Interruptor
+              ligado={cobrar.ligada} desabilitado={travado} rotulo={(cobrar.ligada ? "Desligar" : "Ligar") + " os avisos de parcela"}
+              testID="wa-cred-cobrar-liga" onToggle={() => alt.alternar("crediario_cobrar")}
             />
-          ))}
+          </View>
+        }
+      >
+        <View {...tourTarget("wa.crediario.linha")} style={{ position: "relative", flexDirection: "row", justifyContent: "space-between", gap: 8, paddingBottom: 4 }}>
+          <View
+            pointerEvents="none"
+            style={[{ position: "absolute", left: 55, right: 55, top: 10, height: 2, backgroundColor: V.track } as any,
+              WEB ? ({ backgroundImage: `linear-gradient(90deg,#a78bfa 0%,#a78bfa ${preenchido}%,${V.track} ${preenchido}%)`, ...ANIM_TRACA } as any) : null]}
+          />
+          {PONTOS_ROTULO.map(({ k, rotulo }) => {
+            const on = !!pontos?.[k];
+            const off = travado || !pontos;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => pontos && auto.salvarConfig("crediario_cobrar", { pontos: alternarPonto(pontos, k) })}
+                disabled={off}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on, disabled: off }}
+                testID={`wa-cred-ponto-${k}`}
+                style={{ flex: 1, minWidth: 64, alignItems: "center", gap: 10, minHeight: 44, opacity: off ? 0.6 : 1 }}
+              >
+                <View
+                  style={[{
+                    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                    borderColor: on ? "#e9e3ff" : V.chkLine, backgroundColor: on ? "#a78bfa" : (ESCURO ? "#120b2c" : "#ffffff"),
+                  } as any, WEB && on ? ({ backgroundImage: "radial-gradient(circle at 35% 35%,#f3efff,#a78bfa)", boxShadow: "0 0 0 6px rgba(167,139,250,.18)" } as any) : null]}
+                />
+                <Text style={t(14, on ? V.ink : V.ink3, "600", { textAlign: "center" })}>{rotulo}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {pubCobrar.carregando && !pubCobrar.publico && <ActivityIndicator size="small" color={Colors.violet3} />}
+        {pubCobrar.carregando && !pubCobrar.publico && <ActivityIndicator size="small" color={V.acc} />}
         {typeof amanha?.saem === "number" && (
-          <View style={{ gap: 6 }} testID="wa-cred-amanha">
-            <Text style={s.tituloMenor}>
-              Amanhã, às 9h, {amanha.saem === 1 ? "sai 1 aviso" : `saem ${amanha.saem} avisos`}
-            </Text>
-            <Text style={s.sub}>Quem já pagou some da lista sozinho.</Text>
-            {itens.map((p) => (
-              <View key={`${p.nome}-${p.ponto}`} style={s.pessoa}>
-                <Text style={s.pessoaNome}>{p.nome}</Text>
-                {!!p.detalhe && <Text style={s.pessoaDet}>{p.detalhe}{p.ponto ? ` · ${p.ponto}` : ""}</Text>}
+          <Superficie variante="dry" raio={24} padding={{ h: 20, v: 18 }} gap={12}>
+            <View testID="wa-cred-amanha" style={{ gap: 12 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <Text style={t(17, V.ink, "700")}>
+                  Amanhã, às 9h, {amanha.saem === 1 ? "sai 1 aviso" : `saem ${amanha.saem} avisos`}
+                </Text>
+                <Text style={t(13, V.ink3)}>Quem já pagou some da lista sozinho.</Text>
               </View>
-            ))}
-          </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {itens.map((p) => (
+                  <View key={`${p.nome}-${p.ponto}`} style={{ flexGrow: 1, flexBasis: 260, flexDirection: "row", gap: 12, alignItems: "center" }}>
+                    <Avatar nome={p.nome || ""} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={t(15, V.ink, "700")}>{p.nome}</Text>
+                      {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}{p.ponto ? ` · ${p.ponto}` : ""}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+            {foraCobrar.length > 0 && (
+              <Text style={t(14, V.ink2)} testID="wa-cred-fora">
+                {foraCobrar.length === 1 ? "1 cliente fica de fora: " : `${foraCobrar.length} clientes ficam de fora: `}
+                {foraCobrar.map((p) => `${p.nome} (${motivoFora(p.motivo)})`).join(", ")}.
+              </Text>
+            )}
+          </Superficie>
         )}
-        {foraCobrar.length > 0 && (
-          <Text style={s.sub} testID="wa-cred-fora">
+        {typeof amanha?.saem !== "number" && foraCobrar.length > 0 && (
+          <Text style={t(14, V.ink2)} testID="wa-cred-fora">
             {foraCobrar.length === 1 ? "1 cliente fica de fora: " : `${foraCobrar.length} clientes ficam de fora: `}
             {foraCobrar.map((p) => `${p.nome} (${motivoFora(p.motivo)})`).join(", ")}.
           </Text>
@@ -111,66 +155,77 @@ export function CrediarioConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         {alt.perguntando === "crediario_cobrar" && (
           <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
         )}
-      </Passo>
+      </Secao>
 
-      <Passo
-        n="02 · VENDER"
+      <Secao
+        meta="02 · Vender"
         titulo={corte ? `${corte.total} clientes pagam em dia e têm limite livre` : "Clientes que pagam em dia"}
         sub="Uma oferta por mês lembra que o crediário está ali. Esta usa as novidades do mês guardadas para o Crediário."
+        direita={
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={t(14, V.ink2)}>Oferta {vender.ligada ? "ligada" : "desligada"}</Text>
+            <Interruptor
+              ligado={vender.ligada} desabilitado={travado} rotulo={(vender.ligada ? "Desligar" : "Ligar") + " a oferta do Crediário"}
+              testID="wa-cred-vender-liga" onToggle={() => alt.alternar("crediario_vender")}
+            />
+          </View>
+        }
       >
-        <PreviaCorteView
-          idBase="wa-cred" corte={corte} substantivo="clientes" dono="o Crediário"
-          reserva={vender.livres} trazer={trazer} trazendo={travado}
-          onTrazer={() => {
-            const prox = trazerDoVendaMais(info.divisao, info.usadas, "crediario", trazer);
-            if (prox) auto.aplicarDivisao(prox).then(() => pubVender.recarregar());
-          }}
-        />
-        <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagemOferta} />
-        {!!pubVender.enviado && (pubVender.enviado.enfileiradas ?? 0) > 0 && (
-          <Text style={s.ok} testID="wa-cred-enviado">Pronto. A oferta sai ainda hoje.</Text>
-        )}
-        <Pressable
-          onPress={() => { pubVender.enviarAgora(); }}
-          disabled={!pode.pode || pubVender.enviando || travado}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !pode.pode || pubVender.enviando || travado }}
-          style={[s.btnPrim, (!pode.pode || pubVender.enviando || travado) && { opacity: 0.45 }]}
-          testID="wa-cred-enviar"
-        >
-          {pubVender.enviando && <ActivityIndicator size="small" color="#fff" />}
-          <Text style={s.btnPrimTxt}>{corte ? `Mandar para as ${corte.cabem} agora` : "Mandar agora"}</Text>
-        </Pressable>
-        <Text style={s.sub} testID="wa-cred-enviar-nota">
-          {pode.pode
-            ? `Usa ${corte!.cabem} · ficam ${Math.max(0, (vender.livres ?? 0) - corte!.cabem)} do Crediário.`
-            : pode.motivo}
-        </Text>
-        {!!pubVender.erro && <Text style={s.erro}>{pubVender.erro}</Text>}
-
-        <View style={s.linha}>
-          <Text style={s.titulo}>Oferta {vender.ligada ? "ligada" : "desligada"}</Text>
-          <Interruptor
-            ligado={vender.ligada} desabilitado={travado} rotulo={(vender.ligada ? "Desligar" : "Ligar") + " a oferta do Crediário"}
-            testID="wa-cred-vender-liga" onToggle={() => alt.alternar("crediario_vender")}
-          />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
+          <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 420, minWidth: 0 }}>
+            <PreviaCorteView
+              idBase="wa-cred" companyId={companyId} corte={corte} substantivo="clientes" dono="o Crediário" estilo="linhas"
+              reserva={vender.livres} trazer={trazer} trazendo={travado}
+              onTrazer={() => {
+                const prox = trazerDoVendaMais(info.divisao, info.usadas, "crediario", trazer);
+                if (prox) auto.aplicarDivisao(prox).then(() => pubVender.recarregar());
+              }}
+            />
+          </View>
+          <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 340, maxWidth: 440, minWidth: 0, gap: 14 }}>
+            {!!mensagemOferta && (
+              <View style={[estiloBolha(), { alignSelf: "stretch", maxWidth: "100%", paddingTop: 12, paddingBottom: 10 }]} testID="wa-config-bolha">
+                <Text style={t(15, V.ink, "400", { lineHeight: 22 })}>{mensagemOferta}</Text>
+                <Text style={t(12, V.ink3, "400", { marginTop: 6 })}>Para não receber mais, responda SAIR.</Text>
+                <Text style={t(12, V.ink3, "400", { marginTop: 4, textAlign: "right" })}>prévia</Text>
+              </View>
+            )}
+            {!!pubVender.enviado && (pubVender.enviado.enfileiradas ?? 0) > 0 && (
+              <Text style={t(14, V.ok, "700")} testID="wa-cred-enviado">Pronto. A oferta sai ainda hoje.</Text>
+            )}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+              <BtnPrimario
+                onPress={() => { pubVender.enviarAgora(); }}
+                disabled={!pode.pode || pubVender.enviando || travado}
+                carregando={pubVender.enviando}
+                testID="wa-cred-enviar"
+              >
+                {corte ? `Mandar para as ${corte.cabem} agora` : "Mandar agora"}
+              </BtnPrimario>
+              <Text style={t(13, V.ink3, "400", { flexShrink: 1 })} testID="wa-cred-enviar-nota">
+                {pode.pode
+                  ? `Usa ${corte!.cabem} · ficam ${Math.max(0, (vender.livres ?? 0) - corte!.cabem)} do Crediário.`
+                  : pode.motivo}
+              </Text>
+            </View>
+            {!!pubVender.erro && <Text style={s.erro}>{pubVender.erro}</Text>}
+          </View>
         </View>
         {alt.perguntando === "crediario_vender" && (
           <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
         )}
         {!!auto.erro && !alt.perguntando && <Text style={s.erro}>{auto.erro}</Text>}
-      </Passo>
+      </Secao>
 
-      <Passo
-        n="03 · MENSAGENS" titulo="O que o cliente lê"
+      <Secao
+        meta="03 · Mensagens" titulo="O que o cliente lê"
         sub="Todas vêm prontas. Se você mudar um texto, ele passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá continua indo o anterior."
       >
         <ModelosEditaveis companyId={companyId} automatica="crediario" lojaNome={lojaNome} modelosDoPai={modelos} />
-      </Passo>
+      </Secao>
     </View>
   );
 }
-
 function motivoFora(m: string | null | undefined): string {
   if (m === "SEM_TELEFONE") return "sem telefone";
   if (m === "OPT_OUT") return "pediu para não receber";
@@ -179,20 +234,6 @@ function motivoFora(m: string | null | undefined): string {
 }
 
 const s = StyleSheet.create({
-  aviso: { fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
-  linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  titulo: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  tituloMenor: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  ok: { fontSize: 12.5, fontWeight: "700", color: Colors.green },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
-  pilulas: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  pessoa: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 8 },
-  pessoaNome: { fontSize: 12.5, fontWeight: "700", color: Colors.ink },
-  pessoaDet: { fontSize: 11.5, color: Colors.ink3 },
-  btnPrim: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48,
-    backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 16,
-  },
-  btnPrimTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  aviso: { fontSize: 14, fontWeight: "600", color: V.warn, lineHeight: 20 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);

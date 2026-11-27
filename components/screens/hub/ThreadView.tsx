@@ -22,7 +22,7 @@ import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConver
 import { PainelCliente } from "./PainelCliente";
 import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB, SANS } from "./waVisual";
+import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -158,7 +158,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
 
   // ── Cabeçalho ──
   const cabecalho = compacto ? (
-    <View style={[superficie.vidro(24, 16), { marginTop: 12, marginHorizontal: 12, paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 10, zIndex: 2 }]}>
+    <View style={[superficie.vidro(24), { marginTop: 12, marginHorizontal: 12, paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 10, zIndex: 2 }]}>
       {onBack && (
         <Pressable onPress={onBack} accessibilityLabel="Voltar para a lista" accessibilityRole="button"
           style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>

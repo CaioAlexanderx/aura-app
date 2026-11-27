@@ -20,7 +20,7 @@ import { formatarTelefone } from "@/utils/telefone";
 import { tourTarget } from "@/utils/tourTarget";
 import { hubApi, type HubCliente } from "@/services/hubApi";
 import { creditApi } from "@/services/creditApi";
-import { K, Tx, Meta, Pilula, Ico, superficie, web, SANS } from "./waVisual";
+import { K, Tx, Meta, Pilula, Ico, superficie, web, SANS } from "./conversasUi";
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
