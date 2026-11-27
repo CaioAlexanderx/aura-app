@@ -188,7 +188,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{sub}</Tx>
         </View>
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%" }}>
         {abertaAte && (
           <View testID="hub-janela-aberta" {...tourTarget("wa.janela")} style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 36, paddingHorizontal: 14 }]}>
             <Ico nome="relogio" size={16} cor={K.ok} traco={2} />
