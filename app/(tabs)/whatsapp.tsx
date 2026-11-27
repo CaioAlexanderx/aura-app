@@ -56,31 +56,43 @@ import { AniversarioConfig } from "@/components/whatsapp/AniversarioConfig";
 import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import type { WaAutoKey } from "@/services/waConfigApi";
-import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
+import { MedidorSaldoCard, SaldosApagados } from "@/components/whatsapp/MedidorSaldoCard";
+import { Pilula, Spots, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
+import { CabecalhoWa } from "@/components/whatsapp/CabecalhoWa";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
-type AbaReal = "conversas" | "config";
+type AbaReal = "conversas" | "automaticas" | "venda_mais" | "config";
 
 // Seções da aba Configurações, na ordem em que aparecem. Cada uma é um bloco
 // próprio: acrescentar uma é acrescentar uma linha aqui + o bloco abaixo.
 //
-// `nova: true` = seção da tela nova de 26/11/2026 (medidor, Automáticas,
-// Aniversário, Venda+, Crediário, Editor). Até a liberação elas só aparecem
-// para a equipe Aura e para a empresa sandbox (whatsappOficialLiberadoPara):
-// a loja real conectada continua vendo Conexão, Cobranças e Templates.
+// `nova: true` = seção da tela nova de 26/11/2026 (Aniversário, Crediário e o
+// Editor). Até a liberação elas só aparecem para a equipe Aura e para a
+// empresa sandbox (whatsappOficialLiberadoPara): a loja real conectada
+// continua vendo Conexão, Cobranças e Templates.
+// Automáticas e Venda+ são abas do topo (artboard GuiaCentral), não seções.
 const SECOES_CONFIG = [
   { key: "conexao", label: "Conexão", nova: false },
-  { key: "automaticas", label: "Automáticas", nova: true },
   { key: "aniversario", label: "Aniversário", nova: true },
-  { key: "venda_mais", label: "Venda+", nova: true },
   { key: "crediario", label: "Crediário", nova: true },
   { key: "cobrancas", label: "Cobranças", nova: false },
   { key: "templates", label: "Templates", nova: false },
 ] as const;
 type SecaoKey = (typeof SECOES_CONFIG)[number]["key"];
 
+// Cabeçalho de cada tela nova (textos literais dos artboards aprovados).
+const CABECALHO: Record<string, { titulo: string; sub: string; voltar?: boolean }> = {
+  automaticas: { titulo: "Mensagens que trabalham sozinhas", sub: "Mensagem, presente e dia já vêm prontos. Um toque liga." },
+  aniversario: { titulo: "Aniversário", sub: "Escolha com um toque em cada linha. Tudo já vem preenchido.", voltar: true },
+  venda_mais: { titulo: "Venda+", sub: "Chame de volta quem parou de comprar, com um presente." },
+  crediario: { titulo: "Crediário", sub: "Cobra sozinho quem deve. Oferece para quem paga em dia.", voltar: true },
+};
+
 export default function WhatsAppScreen() {
+  useWaFontes();
+  useWaKeyframes();
+  useWaQuedas();
   const [tab, setTab] = useState(0);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
@@ -90,13 +102,22 @@ export default function WhatsAppScreen() {
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
-  // Seções novas: só equipe Aura ou empresa sandbox, até a liberação.
+  // Telas novas: só equipe Aura ou empresa sandbox, até a liberação.
   const novas = whatsappOficialLiberadoPara(user, undefined, empresaSandbox(company, consolidatedView === true));
   const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
+
+  // Atendimento (hub social) — módulo próprio vendável como add-on. Sem ele
+  // não existe a aba Conversas.
+  const hubVisible = useVisibleModules().has("hub_social");
+  // Sem as telas novas só existem Conversas e Configurações.
+  const abaPedida: AbaReal = !novas && (abaReal === "automaticas" || abaReal === "venda_mais") ? "config" : abaReal;
+  const abaAtiva: AbaReal = hubVisible ? abaPedida : abaPedida === "conversas" ? "config" : abaPedida;
+
   // O saldo é por loja: no consolidado multi-CNPJ não se lê (a tela pede para escolher a loja).
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
-  // As automáticas (divisão, liga/desliga, escolhas) alimentam as 4 seções.
-  const autoAtiva = !demo && !consolidatedView && novas && ["automaticas", "aniversario", "venda_mais", "crediario"].includes(secao);
+  // As automáticas (divisão, liga/desliga, escolhas) alimentam as telas Automáticas, Venda+, Aniversário e Crediário.
+  const autoAtiva = !demo && !consolidatedView && novas
+    && (abaAtiva === "automaticas" || abaAtiva === "venda_mais" || (abaAtiva === "config" && (secao === "aniversario" || secao === "crediario")));
   const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
   const auto = useWaAutomaticas(companyId, autoAtiva);
 
@@ -104,21 +125,18 @@ export default function WhatsAppScreen() {
   // nada em company real (queries com enabled: !isDemo).
   const mock = useWhatsApp();
 
-  // Atendimento (hub social) — módulo próprio vendável como add-on; é a
-  // mesma regra que o Agentes usava. Sem ele só existe Configurações.
-  const hubVisible = useVisibleModules().has("hub_social");
-  const abaAtiva: AbaReal = hubVisible ? abaReal : "config";
-
   const abas: string[] = demo ? TABS : [];
   const ativa = Math.min(tab, Math.max(abas.length - 1, 0));
 
-  // I1.3 — cabeçalho editorial padrão (ScreenHero), igual às outras onze
-  // telas. Subtítulo lê o estado da conexão + mensagens do mês direto do
-  // wa.status que a aba Conexão já carrega — nenhuma chamada nova.
+  // Abas do topo (artboard GuiaCentral): Conversas · Automáticas · Venda+ · Configurações.
   const tabsHero: ScreenTabItem[] = demo
-    ? abas.map((t, i) => ({ key: String(i), label: t, testID: `wa-varejo-aba-${i}` }))
+    ? abas.map((t2, i) => ({ key: String(i), label: t2, testID: `wa-varejo-aba-${i}` }))
     : [
-        { key: "conversas", label: "Conversas", testID: "wa-varejo-aba-conversas" },
+        ...(hubVisible ? [{ key: "conversas", label: "Conversas", testID: "wa-varejo-aba-conversas" }] : []),
+        ...(novas ? [
+          { key: "automaticas", label: "Automáticas", testID: "wa-varejo-aba-automaticas" },
+          { key: "venda_mais", label: "Venda+", testID: "wa-varejo-aba-venda_mais" },
+        ] : []),
         { key: "config", label: "Configurações", testID: "wa-varejo-aba-config" },
       ];
 
@@ -149,6 +167,26 @@ export default function WhatsAppScreen() {
 
   const hero = <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />;
 
+  const irPara = (k: AbaReal) => { setAbaReal(k); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
+
+  // Aba destacada: Aniversário e Crediário moram sob "Automáticas" (o voltar diz "← Automáticas").
+  const abaDestaque: AbaReal = abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? "automaticas" : abaAtiva;
+  const chaveCab = abaAtiva === "automaticas" ? "automaticas" : abaAtiva === "venda_mais" ? "venda_mais"
+    : abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? secao : null;
+
+  // Cabeçalho das telas novas (artboards Main e GuiaCentral): título à esquerda; abas
+  // (pílulas translúcidas) e o botão "Guias" à direita, na mesma linha. No celular, uma
+  // linha só, rolável, com o Guias só em ícone.
+  const cabecalhoNovo = () => (
+    <CabecalhoWa
+      largo={IS_WIDE} lojaNome={lojaNome} tabs={tabsHero} ativa={abaDestaque}
+      titulo={chaveCab ? CABECALHO[chaveCab].titulo : abaAtiva === "conversas" ? "Conversas" : "Configurações"}
+      sub={chaveCab ? CABECALHO[chaveCab].sub : undefined}
+      voltar={chaveCab ? !!CABECALHO[chaveCab].voltar : false}
+      onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => irPara("automaticas")}
+    />
+  );
+
   // Conversas: container próprio — o HubView tem os seus ScrollViews
   // internos (lista + thread) e não pode ficar dentro de outro ScrollView.
   // No consolidado multi-CNPJ o próprio HubView mostra "Escolha uma loja".
@@ -156,31 +194,48 @@ export default function WhatsAppScreen() {
     return (
       <View style={s.screen} testID="wa-varejo-conversas">
         <View style={[s.content, { flex: 1 }]}>
-          {hero}
-          <ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} />
+          {novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>)}
           <HubView />
         </View>
       </View>
     );
   }
 
-  return (
-    <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
-      {hero}
+  const medidor = !novas ? null : consolidatedView ? (
+    <View style={s.linkCard} testID="wa-varejo-escolha-loja">
+      <Icon name="alert" size={14} color={Colors.violet3} />
+      <Text style={s.linkTxt}>
+        As mensagens e as automáticas do WhatsApp são por loja. Saia da visão consolidada e escolha a loja.
+      </Text>
+    </View>
+  ) : (
+    <MedidorSaldoCard
+      companyId={companyId}
+      saldo={saldo.saldo}
+      carregando={saldo.carregando}
+      falhou={saldo.falhou}
+      status={wa.status}
+      onRetry={saldo.recarregar}
+    />
+  );
 
-      {demo ? (
-        <ScreenTabs
-          tabs={tabsHero}
-          active={String(ativa)}
-          onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
-        />
-      ) : hubVisible ? (
-        <ScreenTabs
-          tabs={tabsHero}
-          active="config"
-          onSelect={(k) => { setAbaReal(k as AbaReal); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
-        />
-      ) : null}
+  return (
+    <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, novas && !demo && { maxWidth: 1360 }]}>
+      {novas && !demo && <Spots />}
+      {novas && !demo ? cabecalhoNovo() : (
+        <>
+          {hero}
+          {demo ? (
+            <ScreenTabs
+              tabs={tabsHero}
+              active={String(ativa)}
+              onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+            />
+          ) : tabsHero.length > 1 ? (
+            <ScreenTabs tabs={tabsHero} active={abaAtiva} onSelect={(k) => irPara(k as AbaReal)} quebraNoCelular />
+          ) : null}
+        </>
+      )}
 
       {demo ? (
         <View testID="wa-varejo-maquete">
@@ -190,38 +245,46 @@ export default function WhatsAppScreen() {
           {ativa === 3 && <TabConfig isConnected={mock.isConnected} />}
           <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>
         </View>
-      ) : (
-        <View style={{ gap: 14 }} testID="wa-varejo-real">
-          {!novas ? null : consolidatedView ? (
-            <View style={s.linkCard} testID="wa-varejo-escolha-loja">
-              <Icon name="alert" size={14} color={Colors.violet3} />
-              <Text style={s.linkTxt}>
-                As mensagens e as automáticas do WhatsApp são por loja. Saia da visão consolidada e escolha a loja.
-              </Text>
+      ) : abaAtiva === "automaticas" ? (
+        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
+          {medidor}
+          {!consolidatedView && (
+            <View testID="wa-varejo-bloco-automaticas">
+              <AutomaticasCard
+                auto={auto}
+                companyId={companyId}
+                onAjustar={(k: WaAutoKey) => {
+                  if (k === "venda_mais") { irPara("venda_mais"); return; }
+                  setSecao(k === "aniversario" ? "aniversario" : "crediario");
+                  irPara("config");
+                }}
+              />
             </View>
-          ) : (
-            <MedidorSaldoCard
-              companyId={companyId}
-              saldo={saldo.saldo}
-              carregando={saldo.carregando}
-              falhou={saldo.falhou}
-              status={wa.status}
-              onRetry={saldo.recarregar}
-            />
           )}
+        </View>
+      ) : abaAtiva === "venda_mais" ? (
+        <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
+          {!consolidatedView && (
+            <View testID="wa-varejo-bloco-venda-mais">
+              <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={{ gap: novas ? 24 : 14, zIndex: 1 }} testID="wa-varejo-real">
           {/* Seções de Configurações: uma de cada vez, cada uma num bloco
               próprio (SECOES_CONFIG). */}
           <View style={s.secoes} testID="wa-varejo-config-secoes">
             {SECOES_CONFIG.filter((sc) => !sc.nova || novas).map((sc) => (
-              <Pressable
+              <Pilula
                 key={sc.key}
                 onPress={() => setSecao(sc.key)}
-                accessibilityRole="button"
-                style={[s.secaoPill, secao === sc.key && s.secaoPillOn]}
+                ligada={secao === sc.key}
+                estado={{ selected: secao === sc.key }}
                 testID={`wa-varejo-secao-${sc.key}`}
               >
-                <Text style={[s.secaoTxt, secao === sc.key && s.secaoTxtOn]}>{sc.label}</Text>
-              </Pressable>
+                <Text style={t(14, secao === sc.key ? V.onTxt : V.ink, "600")}>{sc.label}</Text>
+              </Pilula>
             ))}
           </View>
 
@@ -233,7 +296,17 @@ export default function WhatsAppScreen() {
 
           {secao === "conexao" && (
             <View style={{ gap: 14 }} testID="wa-varejo-bloco-conexao">
-              <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
+              {novas ? (
+                // GuiaExecucao, guia 1: a conexão e os saldos lado a lado.
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
+                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>
+                    <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} vidro />
+                  </View>
+                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
+                </View>
+              ) : (
+                <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
+              )}
               <UsoCard status={wa.status} companyId={companyId} onChanged={wa.reloadStatus} />
               <ConsentimentoMarketingCard
                 companyId={companyId}
@@ -254,21 +327,9 @@ export default function WhatsAppScreen() {
             </View>
           )}
 
-          {secao === "automaticas" && !consolidatedView && (
-            <View testID="wa-varejo-bloco-automaticas">
-              <AutomaticasCard auto={auto} onAjustar={(k: WaAutoKey) => setSecao(k === "venda_mais" ? "venda_mais" : k === "aniversario" ? "aniversario" : "crediario")} />
-            </View>
-          )}
-
           {secao === "aniversario" && !consolidatedView && (
             <View testID="wa-varejo-bloco-aniversario">
               <AniversarioConfig companyId={companyId} auto={auto} lojaNome={lojaNome} />
-            </View>
-          )}
-
-          {secao === "venda_mais" && !consolidatedView && (
-            <View testID="wa-varejo-bloco-venda-mais">
-              <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
             </View>
           )}
 
@@ -304,11 +365,11 @@ export default function WhatsAppScreen() {
     </ScrollView>
   );
 }
-
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
   secoes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  abasLinha: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 },
   secaoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   secaoPillOn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
   secaoTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink3 },

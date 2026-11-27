@@ -20,6 +20,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { estiloSuperficie } from "./waVisual";
 import { Icon } from "@/components/Icon";
 import { WaStatus } from "@/services/waApi";
 import { birthdayApi } from "@/services/birthdayApi";
@@ -126,7 +127,7 @@ export function ConsentimentoMarketingCard({ companyId, status, onChanged }: Pro
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  card: { ...estiloSuperficie("dry", 24), padding: 20 },
   headRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 14, fontWeight: "800", color: Colors.ink },
   sub: { fontSize: 12.5, color: Colors.ink2, marginTop: 8, lineHeight: 18, maxWidth: 620 },

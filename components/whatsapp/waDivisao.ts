@@ -105,6 +105,8 @@ export interface AutoLida {
 }
 
 export interface AutomaticasInfo {
+  /** Mês das novidades ("2026-12"), o mesmo do saldo. */
+  mes: string | null;
   total: number;
   divisao: Partes;
   usadas: Partes;
@@ -139,5 +141,6 @@ export function lerAutomaticas(raw: any): AutomaticasInfo | null {
     }
   }
   const aceiteEm = typeof raw.aceite_novidades_em === "string" && raw.aceite_novidades_em ? raw.aceite_novidades_em : null;
-  return { total, divisao, usadas, aceiteEm, autos };
+  const mes = typeof raw.mes === "string" && /^\d{4}-\d{2}$/.test(raw.mes) ? raw.mes : null;
+  return { mes, total, divisao, usadas, aceiteEm, autos };
 }
