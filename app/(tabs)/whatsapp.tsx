@@ -48,6 +48,7 @@ import { ConsentimentoMarketingCard } from "@/components/whatsapp/ConsentimentoM
 import { fmtPhoneBR } from "@/components/whatsapp/waGuards";
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 import { HubView } from "@/components/screens/hub/HubView";
+import { MedidorHub } from "@/components/screens/hub/MedidorHub";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useWaSaldo } from "@/hooks/useWaSaldo";
 import { useWaAutomaticas } from "@/hooks/useWaAutomaticas";
@@ -94,6 +95,7 @@ export default function WhatsAppScreen() {
   useWaKeyframes();
   useWaQuedas();
   const [tab, setTab] = useState(0);
+  const [emConversa, setEmConversa] = useState(false);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
@@ -184,6 +186,7 @@ export default function WhatsAppScreen() {
       sub={chaveCab ? CABECALHO[chaveCab].sub : undefined}
       voltar={chaveCab ? !!CABECALHO[chaveCab].voltar : false}
       onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => irPara("automaticas")}
+      extra={abaAtiva === "conversas" && !consolidatedView ? <MedidorHub saldo={saldo.saldo} /> : undefined}
     />
   );
 
@@ -193,9 +196,11 @@ export default function WhatsAppScreen() {
   if (!demo && abaAtiva === "conversas") {
     return (
       <View style={s.screen} testID="wa-varejo-conversas">
-        <View style={[s.content, { flex: 1 }]}>
-          {novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>)}
-          <HubView />
+        {/* Celular, dentro de uma conversa: sem título e abas; a conversa ocupa a tela, só com o cabeçalho de vidro (artboard Celular). */}
+        <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
+          {novas && <Spots />}
+          {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
+          <HubView onConversaAberta={setEmConversa} />
         </View>
       </View>
     );

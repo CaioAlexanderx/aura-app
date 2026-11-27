@@ -31,6 +31,25 @@ export const CATEGORY_META: Record<HubCategory, { label: string; color: string }
 
 export const CATEGORIES: HubCategory[] = ["produto", "troca", "entrega", "pagamento", "novidades"];
 
+/**
+ * Quem está no comando, só quando NÃO é o usuário logado: a Aurinha ("Aurinha" no
+ * cabeçalho, "Aurinha atendendo" na lista) ou OUTRO usuário ("Com <nome>", ou
+ * "Com outra pessoa" se o nome não vier). Com você: null, nada na tela.
+ */
+export function quemAtende(
+  conv: { status: string; assigned_user_id?: string | null; assigned_user_name?: string | null },
+  meuId: string | null | undefined,
+  aurinhaLigada: boolean,
+  longo = false,
+): { rotulo: string; cor: string } | null {
+  if (conv.status === "ia") return aurinhaLigada ? { rotulo: longo ? "Aurinha atendendo" : "Aurinha", cor: Colors.violet3 } : null;
+  if (conv.assigned_user_id && meuId && conv.assigned_user_id !== meuId) {
+    const nome = (conv.assigned_user_name || "").trim();
+    return { rotulo: nome ? `Com ${nome}` : "Com outra pessoa", cor: Colors.amber };
+  }
+  return null;
+}
+
 /** Horas restantes da janela de 24h da Meta; null = janela fechada/desconhecida. */
 export function windowHoursLeft(lastInboundAt: string | null): number | null {
   if (!lastInboundAt) return null;

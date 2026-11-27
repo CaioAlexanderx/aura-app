@@ -23,6 +23,8 @@ export interface HubLabel { id: string; name: string; color: string; n?: number 
 export interface HubCliente {
   id: string; name: string; phone: string | null; email: string | null;
   birth_date: string | null; since: string | null; last_purchase_at: string | null; total_spent: number | null;
+  /** Total da última venda não cancelada (Aura-backend: last_purchase_amount). Ausente em servidor antigo. */
+  last_purchase_amount?: number | null;
 }
 
 export interface HubConviteCampo { key: string; rotulo: string; auto: boolean; exemplo: string; max: number }
@@ -53,6 +55,10 @@ export interface HubConvites {
 }
 
 export interface HubConversation {
+  /** Quem assumiu a conversa (usuário da loja); null = ninguém / a Aurinha. */
+  assigned_user_id?: string | null;
+  /** Primeiro nome de quem assumiu (vem do servidor; pode faltar). */
+  assigned_user_name?: string | null;
   /** Etiquetas aplicadas (migration 474). */
   labels?: HubLabel[];
   id: string;
@@ -71,7 +77,24 @@ export interface HubConversation {
 
 export interface HubCount { channel: HubChannel; status: HubStatus; n: number }
 
+/** Dados do cartão da thread (Aura-backend: metadata.cartao). Ausente em mensagens antigas. */
+export interface HubCartao {
+  numero?: number | null;
+  itens?: { nome: string; qtd: number; valor: number }[];
+  total?: number | null;
+  validade?: string | null;
+  url?: string | null;
+  valor?: number | null;
+  loja?: string | null;
+  chave?: string | null;
+  codigo?: string | null;
+  imagem?: string | null;
+  descricao?: string | null;
+}
+
 export interface HubMessage {
+  /** Cartão estruturado de orçamento, Pix ou link da loja. */
+  cartao?: HubCartao | null;
   id: string;
   direction: "inbound" | "outbound";
   content: string;

@@ -199,8 +199,8 @@ describe("É ela", () => {
     const r = await abrirThread();
     expect(porId(r, "hub-cliente-nome")[0].props.children).toBe("Ana Paula Ribeiro");
     expect(tudo(r)).toContain("(11) 98422-1093");
-    expect(tudo(r)).toContain("aniversário 12/12");
-    expect(tudo(r)).toContain("última compra 02/11");
+    expect(tudo(r)).toContain("Aniversário12/12"); // linha do painel "Sobre o cliente": rótulo + valor
+    expect(tudo(r)).toContain("Última compra02/11");
     await tocar(r, "hub-cliente-desfazer");
     expect(mockHub.ligarCliente).toHaveBeenCalledWith(COMPANY, "conv-1", null);
   });

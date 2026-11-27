@@ -62,9 +62,11 @@ interface Props {
   voltar?: boolean;
   onSelect: (k: string) => void;
   onVoltar: () => void;
+  /** Peça a mais ao lado das abas (ex.: o medidor das Conversas, como no artboard Main). Só no desktop. */
+  extra?: React.ReactNode;
 }
 
-export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar, onSelect, onVoltar }: Props) {
+export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar, onSelect, onVoltar, extra }: Props) {
   return (
     <View
       style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 16 } as any, !largo && { flexDirection: "column", alignItems: "stretch" }]}
@@ -77,7 +79,14 @@ export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar,
         <Titulo tamanho={largo ? 52 : 36}>{titulo}</Titulo>
         {!!sub && <Text style={t(18, V.ink2, "400", { lineHeight: 26 })}>{sub}</Text>}
       </View>
-      {largo && <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />}
+      {largo && (extra
+        ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
+            <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />
+            {extra}
+          </View>
+        )
+        : <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />)}
     </View>
   );
 }
