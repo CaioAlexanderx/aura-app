@@ -60,6 +60,9 @@ import type { WaAutoKey } from "@/services/waConfigApi";
 import { MedidorSaldoCard, SaldosApagados } from "@/components/whatsapp/MedidorSaldoCard";
 import { Pilula, Spots, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
 import { CabecalhoWa } from "@/components/whatsapp/CabecalhoWa";
+import { WaGuiasHost } from "@/components/whatsapp/guias/WaGuiasHost";
+import { useWaGuias } from "@/stores/waGuias";
+import type { DestinoAba } from "@/components/whatsapp/guias/guiasConteudo";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -104,6 +107,8 @@ export default function WhatsAppScreen() {
   const demo = isDemo === true;
 
   const wa = useWaVarejo(companyId, !demo);
+  // Guias do WhatsApp (27/11/2026): o guia 2 precisa das automáticas lidas mesmo fora da aba delas.
+  const guiaAberto = useWaGuias((s) => s.aberto);
   // Telas novas: só equipe Aura ou empresa sandbox, até a liberação.
   const novas = whatsappOficialLiberadoPara(user, undefined, empresaSandbox(company, consolidatedView === true));
   const secao: SecaoKey = SECOES_CONFIG.some((sc) => sc.key === secaoSel && (!sc.nova || novas)) ? secaoSel : "conexao";
@@ -119,7 +124,7 @@ export default function WhatsAppScreen() {
   const saldo = useWaSaldo(companyId, !demo && !consolidatedView && novas);
   // As automáticas (divisão, liga/desliga, escolhas) alimentam as telas Automáticas, Venda+, Aniversário e Crediário.
   const autoAtiva = !demo && !consolidatedView && novas
-    && (abaAtiva === "automaticas" || abaAtiva === "venda_mais" || (abaAtiva === "config" && (secao === "aniversario" || secao === "crediario")));
+    && (guiaAberto === 2 || abaAtiva === "automaticas" || abaAtiva === "venda_mais" || (abaAtiva === "config" && (secao === "aniversario" || secao === "crediario")));
   const lojaNome = String((company as any)?.trade_name || (company as any)?.name || "");
   const auto = useWaAutomaticas(companyId, autoAtiva);
 
@@ -186,9 +191,26 @@ export default function WhatsAppScreen() {
       sub={chaveCab ? CABECALHO[chaveCab].sub : undefined}
       voltar={chaveCab ? !!CABECALHO[chaveCab].voltar : false}
       onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => irPara("automaticas")}
+      onGuias={() => useWaGuias.getState().abrirMenu()}
       extra={abaAtiva === "conversas" && !consolidatedView ? <MedidorHub saldo={saldo.saldo} /> : undefined}
     />
   );
+
+  // Guias (27/11/2026): só a tela nova (equipe Aura e sandbox). O guia troca a aba antes de procurar o alvo.
+  const guiaIrPara = (d: DestinoAba) => {
+    if (d.secao) setSecao(d.secao as SecaoKey);
+    setAbaReal(d.aba);
+  };
+  const guias = novas && !demo ? (
+    <WaGuiasHost
+      userId={(user as any)?.id}
+      ctx={{
+        companyId, lojaNome, status: wa.status ?? null, conectado: wa.status?.connected === true,
+        telefone: fmtPhoneBR(wa.status?.phone_display), auto, saldo: saldo.saldo, hubVisible, celular: !IS_WIDE,
+        irPara: guiaIrPara,
+      }}
+    />
+  ) : null;
 
   // Conversas: container próprio — o HubView tem os seus ScrollViews
   // internos (lista + thread) e não pode ficar dentro de outro ScrollView.
@@ -202,6 +224,7 @@ export default function WhatsAppScreen() {
           {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
           <HubView onConversaAberta={setEmConversa} />
         </View>
+        {guias}
       </View>
     );
   }
@@ -367,6 +390,7 @@ export default function WhatsAppScreen() {
           )}
         </View>
       )}
+      {guias}
     </ScrollView>
   );
 }

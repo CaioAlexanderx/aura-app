@@ -22,6 +22,7 @@ import { fmt } from "@/constants/helpers";
 import { hubApi, type HubEnvioTipo } from "@/services/hubApi";
 import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
+import { useWaGuias } from "@/stores/waGuias";
 import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
 import { useOrcamentoNovo } from "./useOrcamentoNovo";
 
@@ -121,6 +122,8 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
           await hubApi.aplicarEtiqueta(companyId, convId, alvo.id);
         } catch { /* o Pix já saiu; a etiqueta é só o lembrete */ }
       }
+      // O guia 3 do WhatsApp espera por isto: o produto saiu de verdade na conversa.
+      if (body.type === "produto") useWaGuias.getState().sinalizarProdutoEnviado();
       onSent();
     },
     onError: (e: any) => onError(e?.message || "Não foi possível enviar."),
