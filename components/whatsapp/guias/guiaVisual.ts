@@ -28,9 +28,10 @@ export const G = {
   bad: "#fca5a5",
   dim: "rgba(4,2,15,.72)",
   dimMenu: "rgba(4,2,15,.6)",
-  bolha: "linear-gradient(160deg,rgba(40,28,88,.96),rgba(22,14,52,.97))",
-  bolhaMenu: "linear-gradient(160deg,rgba(40,28,88,.97),rgba(22,14,52,.98))",
-  seta: "rgba(36,25,80,.97)",
+  // fundo SÓLIDO (alfa 1): nada do que está atrás aparece por dentro do balão, nem no modo leve nem com blur desligado
+  bolha: "linear-gradient(160deg,rgb(40,28,88),rgb(22,14,52))",
+  bolhaMenu: "linear-gradient(160deg,rgb(40,28,88),rgb(22,14,52))",
+  seta: "rgb(36,25,80)",
   borda: "rgba(255,255,255,.18)",
   sombra: "0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.32)",
   btn: "linear-gradient(135deg,#8b5cf6,#7c3aed 45%,#6d28d9)",

@@ -535,3 +535,34 @@ describe("guia 2: Crediário abre pelo caminho novo (Automáticas → Ajustar)",
     expect(ctx.irPara).toHaveBeenCalledWith({ aba: "automaticas", sub: "crediario" });
   });
 });
+
+describe("balão opaco", () => {
+  it("o fundo do balão e do menu é sólido: nenhum tom do gradiente tem transparência", () => {
+    const { G, CSS_GUIAS } = require("@/components/whatsapp/guias/guiaVisual");
+    [G.bolha, G.bolhaMenu, G.seta].forEach((c: string) => { expect(c).not.toMatch(/rgba|hsla|transparent/); });
+    // a regra do balão e a do menu usam esses fundos, sem blur que deixe vazar
+    const regra = (sel: string) => (CSS_GUIAS.match(new RegExp("\\" + sel + "\\{[^}]*\\}")) || [""])[0];
+    ["wag-tip", "wag-pop"].forEach((c) => {
+      const r = CSS_GUIAS.slice(CSS_GUIAS.indexOf("." + c + "{"), CSS_GUIAS.indexOf("}", CSS_GUIAS.indexOf("." + c + "{")));
+      expect(r).toContain("background:linear-gradient(160deg,rgb(");
+      expect(r).not.toMatch(/backdrop-filter|rgba\(40,28,88|rgba\(22,14,52/);
+    });
+    void regra;
+  });
+
+  it("o anel do spotlight some enquanto o alvo ainda não assentou", () => {
+    jest.useFakeTimers();
+    alvo("wa.saldos");
+    alvo("wa.divisao");
+    const so = guia2();
+    const t = monta(<GuiaTour guia={{ ...so, passos: so.passos.slice(0, 2) }} ctx={ctxBase()} onFim={jest.fn()} />);
+    act(() => { jest.advanceTimersByTime(700); });
+    const anel = () => document.querySelector(".wag-furo-d") as HTMLElement;
+    expect(anel().style.borderColor).toBe("");
+    act(() => { (document.querySelector("[data-testid='guia-proximo']") as HTMLElement).click(); });
+    expect(anel().style.borderColor).toBe("transparent"); // entre passos: anel escondido
+    act(() => { jest.advanceTimersByTime(900); });
+    expect(anel().style.borderColor).toBe("");
+    t.desmonta();
+  });
+});

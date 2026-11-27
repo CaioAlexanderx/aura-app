@@ -314,6 +314,8 @@ export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
             width: FURO_BASE, height: FURO_BASE,
             transform: `translate(${furoTela.x}px, ${furoTela.y}px) scale(${furoTela.w / FURO_BASE}, ${furoTela.h / FURO_BASE})`,
             borderWidth: `${2 / (furoTela.h / FURO_BASE)}px ${2 / (furoTela.w / FURO_BASE)}px`,
+            // durante a rolagem/busca o anel some (o escurecimento fica); só aparece quando o alvo assenta
+            ...(pronto ? null : { borderColor: "transparent" }),
             borderRadius: `${raioDe(furoTela) / (furoTela.w / FURO_BASE)}px / ${raioDe(furoTela) / (furoTela.h / FURO_BASE)}px`,
           }}
         />
