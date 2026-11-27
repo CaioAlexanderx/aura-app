@@ -55,6 +55,8 @@ import CrediarioSettingsScreen from "@/app/(tabs)/crediario/settings";
 async function flush() {
   await act(async () => {
     for (let i = 0; i < 6; i++) await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 30));
+    for (let i = 0; i < 6; i++) await Promise.resolve();
   });
 }
 

@@ -25,6 +25,10 @@ let mockParams: any = {};
 jest.mock("expo-router", () => ({
   router: { push: (...a: any[]) => mockPush(...a), back: jest.fn() },
   useLocalSearchParams: () => mockParams,
+  Redirect: ({ href }: any) => {
+    const R = require("react");
+    return R.createElement("Redirect", { testID: "redirect", href });
+  },
 }));
 
 let mockPlano: string | null = "essencial";
@@ -250,64 +254,15 @@ describe("tela do Essencial", () => {
     t.unmount();
   });
 
-  test("no Negócio a rota segue no fluxo da Meta, com Chamar por linha", async () => {
+  // Virada do WhatsApp (27/11/2026): a reativação pela Meta passou para a
+  // aba Venda+; a rota só redireciona para lá. O Essencial segue aqui.
+  test("no Negócio a rota redireciona para o Venda+, sem chamar a Meta", async () => {
     mockPlano = "negocio";
-    mockMetaGet.mockResolvedValueOnce({
-      metrics: { at_risk: 1 },
-      priority_reactivation: [
-        { id: "c1", name: "Ana Souza", phone: "11999998888", total_spent: 900, days_since_purchase: 45, segment: "at_risk" },
-      ],
-    } as any);
     let t: any;
     await act(async () => { t = renderer.create(<ReativacaoScreen />); });
-    expect(mockMetaGet).toHaveBeenCalled();
+    expect(achar(t, "redirect")[0].props.href).toBe("/whatsapp?aba=venda_mais");
     expect(achar(t, "reativacao-essencial").length).toBe(0);
-    const botao = achar(t, "reativacao-chamar-c1")[0];
-    await act(async () => { botao.props.onPress(); });
-    expect(mockAbrir).toHaveBeenCalledTimes(1);
-    // A marca da linha do Negócio usa o mesmo rótulo ("neste aparelho").
-    expect(achar(t, "reativacao-chamado-c1").length).toBe(1);
-    expect(textoTudo(t)).toContain("chamado neste aparelho em 14/10");
-    expect(textoTudo(t)).not.toContain("chamado em ");
+    expect(mockMetaGet).not.toHaveBeenCalled();
     t.unmount();
-  });
-
-  // Plano velho no login: o JWT diz "negócio", a empresa é Essencial. O
-  // backend responde 403 e a tela NÃO mostra caixa de plano com "Ver
-  // planos": cai na mesma tela que o Essencial vê (premissa de 16/09).
-  test("Negócio com 403 da Meta (plano velho no login) cai no ChamarSumidos, sem caixa de plano", async () => {
-    mockPlano = "negocio";
-    mockMetaGet.mockRejectedValueOnce({ status: 403 } as any);
-    let t: any;
-    await act(async () => { t = renderer.create(<ReativacaoScreen />); });
-    expect(mockMetaGet).toHaveBeenCalled();
-    expect(achar(t, "reativacao-essencial").length).toBeGreaterThan(0);
-    expect(achar(t, "reativacao-sem-plano").length).toBe(0);
-    const tudo = textoTudo(t);
-    expect(tudo).not.toContain("Disponível no plano Negócio");
-    expect(tudo).not.toContain("Ver planos");
-    // E a lista de quem sumiu está lá, com o toque "Chamar".
-    expect(tudo).toContain("Ana Souza");
-    t.unmount();
-  });
-
-  test("outro erro da Meta (não 403) segue na tela da Meta, sem virar ChamarSumidos", async () => {
-    mockPlano = "negocio";
-    mockMetaGet.mockRejectedValueOnce({ status: 500, message: "falhou" } as any);
-    let t: any;
-    await act(async () => { t = renderer.create(<ReativacaoScreen />); });
-    expect(achar(t, "reativacao-essencial").length).toBe(0);
-    t.unmount();
-  });
-});
-
-describe("fonte", () => {
-  test("a rota decide pelo plano antes de qualquer chamada à Meta", () => {
-    const src = fs.readFileSync(path.join(__dirname, "..", "app/(tabs)/clientes/reativacao.tsx"), "utf8");
-    expect(src).toContain("return <ChamarSumidos />");
-    expect(src.indexOf("function ReativacaoMeta")).toBeGreaterThan(src.indexOf("export default function ReativacaoScreen"));
-    // O 403 devolve a mesma tela; a caixa "Disponível no plano Negócio" saiu.
-    expect(src).toContain("if (semAcesso) return <ChamarSumidos />");
-    expect(src).not.toContain("reativacao-sem-plano");
   });
 });

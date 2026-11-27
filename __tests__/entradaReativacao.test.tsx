@@ -240,12 +240,10 @@ describe("a porta abre com a tela: aba Lista de Clientes", () => {
 
   beforeEach(() => { mockPush.mockClear(); mockRefreshMe.mockClear(); mockHook = estado(); });
 
-  it("a aba que abre é a Lista, e a porta está nela", async () => {
+  it("no Negócio a porta saiu (o Venda+ do WhatsApp substitui)", async () => {
     let tree: any;
     await act(async () => { tree = montarTela(); });
-    // Sem tocar em aba nenhuma: é o estado inicial da tela.
-    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(true);
-    expect(tem(tree, "clientes-ir-para-reativacao-contagem")).toBe(true);
+    expect(tem(tree, "clientes-ir-para-reativacao")).toBe(false);
     tree.unmount();
   });
 

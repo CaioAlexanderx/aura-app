@@ -370,7 +370,7 @@ export default function ClientesScreen() {
           onSelect={(k) => handleTabSelect(Number(k))}
         />
 
-        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
+        {tab === 0 && isEssencial && !planBlocked && !isLoading && !isError && customers.length > 0 && (
           <View style={s.importRow}>
             <ImportExportBar onExport={handleExport} itemCount={customers.length} />
             {!consolidatedView && (
@@ -404,7 +404,7 @@ export default function ClientesScreen() {
 
             Base vazia não mostra bloco: "0 clientes · R$ 0,00" numa loja
             nova não é informação, é desânimo. */}
-        {tab === 0 && !planBlocked && !isLoading && !isError && customers.length > 0 && (
+        {tab === 0 && isEssencial && !planBlocked && !isLoading && !isError && customers.length > 0 && (
           <ReativacaoEntrada
             customers={customers}
             plan={plan}
@@ -549,7 +549,7 @@ export default function ClientesScreen() {
                 propósito: o produto pago é o disparo, não a contagem, e
                 quem está no Essencial vê justamente o número que é o
                 argumento do upgrade. Só o botão muda de destino. */}
-            {!isLoading && !isError && customers.length > 0 && (
+            {isEssencial && !isLoading && !isError && customers.length > 0 && (
               <ReativacaoEntrada
                 customers={customers}
                 plan={plan}
