@@ -256,6 +256,15 @@ export function estiloSuperficie(v: VarianteSuperficie, raio: number): any {
   };
 }
 
+/** Fundo da gaveta do celular: lido na hora de abrir (o modo leve pode mudar depois da medição). Leve: V.solidLeve; senão V.solid. */
+export function fundoGaveta(): any {
+  const leve = liteAgora;
+  return {
+    backgroundColor: leve ? V.solidLeve : V.solid,
+    ...(WEB && leve && V.solidLeveGrad ? { backgroundImage: V.solidLeveGrad } : {}),
+  };
+}
+
 export function estiloBolha(): any {
   return {
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderRadius: 20, borderBottomRightRadius: 6,
