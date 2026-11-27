@@ -234,6 +234,9 @@ describe("Aurinha responde por você", () => {
   it("dono vê o estado e o interruptor; ligar abre o convite como antes", async () => {
     const r = await montar();
     expect(porId(r, "hub-aurinha-situacao")[0].props.children).toBe("Desligada");
+    // rótulo curto na tela, texto completo para o leitor de tela; sem "IA" na tela
+    expect(porId(r, "hub-aurinha-estado")[0].props.accessibilityLabel).toContain("Aurinha responde por você");
+    expect(porId(r, "hub-ativar-aurinha")[0].props.accessibilityLabel).toBe("Aurinha responde por você");
     await act(async () => { porId(r, "hub-ativar-aurinha")[0].props.onPress(); });
     await flush();
     expect(porId(r, "hub-convite-aurinha")).toHaveLength(1);

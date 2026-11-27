@@ -30,7 +30,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   companyId: string; convId: string; onBack?: () => void;
   /** Dono ou admin: pode pedir à Meta os modelos de convite que faltam. */
   podeConfigurar?: boolean;
-  /** Aurinha desligada: a equipe atende sozinha — sem "IA atendendo" nem "Devolver à Aurinha". */
+  /** Aurinha desligada: a equipe atende sozinha — sem "Com a Aurinha" nem "Devolver à Aurinha". */
   aurinhaLigada?: boolean;
 }) {
   const qc = useQueryClient();

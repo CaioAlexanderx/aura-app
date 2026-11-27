@@ -29,16 +29,13 @@ import { BtnPrimario } from "@/components/whatsapp/waVidro";
 type StatusFilter = "todas" | HubStatus;
 
 /**
- * Linha de filtros (radiogroup). No computador quebra em duas linhas quando falta largura;
- * no celular rola de lado e, havendo mais à direita, um esmaecido na borda avisa que rola.
+ * Linha de filtros (radiogroup): uma linha que rola de lado, em qualquer largura. Havendo mais à direita,
+ * um esmaecido na borda avisa que rola. O teclado (setas) vale igual.
  */
-function LinhaFiltros({ largo, testID, aria, children }: { largo: boolean; testID?: string; aria: any; children: React.ReactNode }) {
+function LinhaFiltros({ testID, aria, children }: { testID?: string; aria: any; children: React.ReactNode }) {
   const [larg, setLarg] = useState(0);
   const [cont, setCont] = useState(0);
   const [x, setX] = useState(0);
-  if (largo) {
-    return <View testID={testID} {...aria} style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{children}</View>;
-  }
   const maisADireita = cont > larg + x + 4;
   return (
     <View style={{ position: "relative" }}>
@@ -59,11 +56,10 @@ function AurinhaResponde({ ligada, podeConfigurar, ocupado, onLigar, onDesligar 
   ligada: boolean; podeConfigurar: boolean; ocupado: boolean; onLigar: () => void; onDesligar: () => void;
 }) {
   return (
-    <View testID="hub-aurinha-estado" style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 52, paddingLeft: 16, paddingRight: 10 }]}>
-      <View style={{ flex: 1, minWidth: 0, paddingVertical: 6 }}>
-        <Tx style={{ fontSize: 14, fontWeight: "600", lineHeight: 18 }}>Aurinha responde por você</Tx>
-        <Tx testID="hub-aurinha-situacao" style={{ fontSize: 12, fontWeight: "700", lineHeight: 16, color: ligada ? K.ok : K.ink3 }}>{ligada ? "Ligada" : "Desligada"}</Tx>
-      </View>
+    <View testID="hub-aurinha-estado" accessibilityLabel={`Aurinha responde por você: ${ligada ? "ligada" : "desligada"}`}
+      style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, paddingLeft: 16, paddingRight: 10 }]}>
+      <Tx numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: "600", lineHeight: 18 }}>Aurinha responde</Tx>
+      <Tx testID="hub-aurinha-situacao" style={{ fontSize: 12, fontWeight: "700", lineHeight: 16, color: ligada ? K.ok : K.ink3 }}>{ligada ? "Ligada" : "Desligada"}</Tx>
       {podeConfigurar && (
         <Pressable testID={ligada ? "hub-desativar-aurinha" : "hub-ativar-aurinha"} disabled={ocupado} onPress={ligada ? onDesligar : onLigar}
           accessibilityRole="switch" accessibilityLabel="Aurinha responde por você" accessibilityState={{ checked: ligada }}
@@ -225,7 +221,7 @@ export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }:
   const FILTERS: { key: StatusFilter; label: string }[] = [
     { key: "todas", label: "Todas" },
     { key: "precisa_humano", label: needsHuman > 0 ? `Precisa de você · ${needsHuman}` : "Precisa de você" },
-    ...(enabled ? [{ key: "ia" as StatusFilter, label: "IA atendendo" }] : []),
+    ...(enabled ? [{ key: "ia" as StatusFilter, label: "Com a Aurinha" }] : []),
     { key: "humano", label: "Com você" },
     { key: "resolvida", label: "Resolvidas" },
   ];
@@ -249,7 +245,7 @@ export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }:
           onLigar={() => setConviteAberto((v) => !v)} onDesligar={() => mSettings.mutate({ enabled: false })} />
       )}
       {/* Estados numa linha só; se faltar largura, a linha rola de lado. */}
-      <LinhaFiltros largo={IS_WIDE}
+      <LinhaFiltros
         aria={{ role: "radiogroup", "aria-label": "Estado das conversas", onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="radio"]', seleciona: true, circular: true, horizontal: true }) }}>
         {FILTERS.map((f) => (
           <Pilula key={f.key} pequena role="radio" semTab={statusFilter !== f.key} on={statusFilter === f.key} onPress={() => setStatusFilter(f.key)}
@@ -259,7 +255,7 @@ export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }:
         ))}
       </LinhaFiltros>
       {(etiquetas?.labels || []).length > 0 && (
-        <LinhaFiltros largo={IS_WIDE} testID="hub-filtro-etiquetas"
+        <LinhaFiltros testID="hub-filtro-etiquetas"
           aria={{ role: "radiogroup", "aria-label": "Etiquetas", onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="radio"]', seleciona: true, circular: true, horizontal: true }) }}>
           {(etiquetas?.labels || []).map((l, i) => {
             const on = etiquetaFiltro === l.id;
