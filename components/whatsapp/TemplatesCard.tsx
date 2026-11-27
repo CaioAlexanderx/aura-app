@@ -78,11 +78,30 @@ interface Props {
   notConnected: boolean;
   error: string | null;
   onReload: () => void;
+  /** Telas novas: "Mensagens" no lugar de "Templates" e sem "Meta". */
+  nomeNovo?: boolean;
+}
+
+/** Nas telas novas a palavra "template" (e "Meta") não aparece: a lojista lê "mensagens" e "WhatsApp". */
+export function falaDaTela(s: string): string {
+  return s
+    .replace(/{tx("Todos os templates da conta")}/g, "Todas as mensagens da conta")
+    .replace(/este template/g, "esta mensagem")
+    .replace(/\b(\d+) templates? sincronizados? da Meta/g, (_m, n) => (n === "1" ? "1 mensagem sincronizada do WhatsApp" : `${n} mensagens sincronizadas do WhatsApp`))
+    .replace(/Templates da loja/g, "Mensagens da loja")
+    .replace(/Criar template de/g, "Criar mensagem de")
+    .replace(/os templates/g, "as mensagens")
+    .replace(/pela Meta/g, "pelo WhatsApp")
+    .replace(/da Meta/g, "do WhatsApp")
+    .replace(/na Meta/g, "no WhatsApp")
+    .replace(/A Meta recusou/g, "O WhatsApp recusou")
+    .replace(/MARKETING/g, "novidade");
 }
 
 export function TemplatesCard({
-  companyId, templates, status, loading, notConnected, error, onReload,
+  companyId, templates, status, loading, notConnected, error, onReload, nomeNovo,
 }: Props) {
+  const tx = (s: string) => (nomeNovo ? falaDaTela(s) : s);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncErr, setSyncErr] = useState<string | null>(null);
@@ -125,7 +144,7 @@ export function TemplatesCard({
     try {
       const res = await waApi.syncTemplates(companyId);
       const n = res?.synced ?? 0;
-      setSyncMsg(n === 1 ? "1 template sincronizado da Meta." : `${n} templates sincronizados da Meta.`);
+      setSyncMsg(tx(n === 1 ? "1 template sincronizado da Meta." : `${n} templates sincronizados da Meta.`));
       onReload();
     } catch (e: any) {
       // Só `message` (pt-BR do backend) vai pra tela — `detail` é o inglês da Meta.
@@ -167,20 +186,18 @@ export function TemplatesCard({
             {criando === p.preset
               ? <ActivityIndicator size="small" color="#fff" />
               : <Icon name="plus" size={13} color="#fff" />}
-            <Text style={s.primaryTxt}>{criando === p.preset ? "Criando…" : p.botao}</Text>
+            <Text style={s.primaryTxt}>{criando === p.preset ? "Criando…" : tx(p.botao)}</Text>
           </Pressable>
         )}
 
         {(st === "PENDING" || st === "IN_APPEAL") && (
           <Text style={s.presetNota} testID={`wa-varejo-pendente-${p.preset}`}>
-            Aguardando aprovação da Meta (normalmente até 24h). Quando sair a resposta, toque em
-            Sincronizar para atualizar o status aqui.
+            {tx("Aguardando aprovação da Meta (normalmente até 24h). Quando sair a resposta, toque em Sincronizar para atualizar o status aqui.")}
           </Text>
         )}
         {st === "REJECTED" && (
           <Text style={[s.presetNota, { color: Colors.red }]}>
-            A Meta recusou este template. Fale com a Aura: é preciso ajustar o texto e reenviar para
-            análise antes de ligar o envio automático.
+            {tx("A Meta recusou este template. Fale com a Aura: é preciso ajustar o texto e reenviar para análise antes de ligar o envio automático.")}
           </Text>
         )}
       </View>
@@ -192,7 +209,7 @@ export function TemplatesCard({
       <View style={s.head}>
         <View style={s.headTitle}>
           <Icon name="file_text" size={16} color={Colors.violet3} />
-          <Text style={s.title}>Templates da loja</Text>
+          <Text style={s.title}>{tx("Templates da loja")}</Text>
         </View>
         <Pressable
           onPress={sincronizar}
@@ -206,9 +223,7 @@ export function TemplatesCard({
         </Pressable>
       </View>
       <Text style={s.sub}>
-        Só dá para iniciar uma conversa no WhatsApp com um texto aprovado pela Meta. A régua do
-        crediário precisa dos dois primeiros; aniversário e reativação, dos dois de marketing. Aqui
-        você cria o texto certo e acompanha o status — a aprovação é do lado da Meta.
+        {tx("Só dá para iniciar uma conversa no WhatsApp com um texto aprovado pela Meta. A régua do crediário precisa dos dois primeiros; aniversário e reativação, dos dois de marketing. Aqui você cria o texto certo e acompanha o status — a aprovação é do lado da Meta.")}
       </Text>
 
       {!!syncErr && <Text style={s.errTxt}>{syncErr}</Text>}
@@ -222,7 +237,7 @@ export function TemplatesCard({
       {notConnected && (
         <View style={s.stateBox} testID="wa-varejo-templates-sem-conexao">
           <Icon name="link" size={20} color={Colors.ink3} />
-          <Text style={s.stateTxt}>Conecte o WhatsApp da loja para criar e ver os templates.</Text>
+          <Text style={s.stateTxt}>{tx("Conecte o WhatsApp da loja para criar e ver os templates.")}</Text>
         </View>
       )}
 
@@ -233,9 +248,7 @@ export function TemplatesCard({
           <View style={s.grupo} testID="wa-varejo-grupo-marketing">
             <Text style={s.grupoTitulo}>Mensagens de marketing</Text>
             <Text style={s.grupoSub}>
-              Reativação e aniversário são de categoria MARKETING na Meta: custam mais por mensagem
-              que a cobrança, têm limite por cliente e só saem para quem autorizou receber. O
-              consentimento é marcado na aba Conexão.
+              {tx("Reativação e aniversário são de categoria MARKETING na Meta: custam mais por mensagem que a cobrança, têm limite por cliente e só saem para quem autorizou receber. O consentimento é marcado na aba Conexão.")}
             </Text>
             <View style={s.presets}>{PRESETS_MARKETING.map(renderPreset)}</View>
           </View>
@@ -261,7 +274,7 @@ export function TemplatesCard({
 
       {!loading && !notConnected && !error && templates.length > 0 && (
         <View style={s.list}>
-          <Text style={s.listaTitulo}>Todos os templates da conta</Text>
+          <Text style={s.listaTitulo}>{tx("Todos os templates da conta")}</Text>
           {templates.map((t) => {
             const spec = waTemplateStatusSpec(t.status);
             const tone = waTonePair(spec.tone);
