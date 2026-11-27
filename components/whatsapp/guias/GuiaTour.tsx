@@ -33,7 +33,6 @@ const FURO_BASE = 100;
 const ESPERA_PADRAO = 2500;
 const POLL_MS = 120;
 const MEDE_MS = 250;
-const ROLAGEM_MS = 400;
 
 export interface FimDoGuia {
   /** O guia chegou ao fim (último passo ou nenhum que sobrasse): conta como visto. */
@@ -181,12 +180,23 @@ export function GuiaTour({ guia, ctx, onFim, inicioId }: Props) {
       }
       alvoRef.current = el;
       try { el.scrollIntoView({ behavior: movimentoReduzido() ? "auto" : "smooth", block: "center", inline: "nearest" }); } catch { /* ok */ }
-      t2 = setTimeout(() => {
+      // espera a rolagem assentar (rolagem suave de longa distância passa de 400 ms): mede de novo até o alvo parar de mexer
+      let ultimo: DOMRect | null = null;
+      let parado = 0;
+      let amostras = 0;
+      const assenta = () => {
         if (cancelado) return;
         const r = el.getBoundingClientRect();
-        setRect({ x: r.left, y: r.top, w: r.width, h: r.height });
-        setPronto(true);
-      }, movimentoReduzido() ? 0 : ROLAGEM_MS);
+        const igual = !!ultimo && Math.abs(r.top - ultimo.top) < 2 && Math.abs(r.left - ultimo.left) < 2;
+        parado = igual ? parado + 1 : 0;
+        ultimo = r;
+        amostras++;
+        if (parado >= 2 || amostras >= 12) {
+          setRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+          setPronto(true);
+        } else t2 = setTimeout(assenta, 100);
+      };
+      t2 = setTimeout(assenta, movimentoReduzido() ? 0 : 150);
     };
     tenta();
     return () => { cancelado = true; clearTimeout(t1); clearTimeout(t2); };
