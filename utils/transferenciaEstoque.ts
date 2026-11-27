@@ -20,6 +20,8 @@ export type LinhaTransferencia = {
   rotulo: string | null;
   disponivel: number;
   unidade: string;
+  /** Venda condicional: peças com clientes já tiradas de disponivel (0/ausente = nada). */
+  comClientes?: number;
 };
 
 export function chaveDaLinha(productId: string, variantId: string | null | undefined): string {

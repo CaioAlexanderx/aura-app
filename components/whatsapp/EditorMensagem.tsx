@@ -123,7 +123,15 @@ export function EditorMensagem({ companyId, modelo, clientes, onFechar, onMudou 
   }));
 
   return (
-    <View style={{ gap: 26 }} testID="wa-editor">
+    <View
+      style={{ gap: 26 }} testID="wa-editor"
+      // Esc volta à lista (padrão do teclado); dentro do texto, Esc não descarta o que foi escrito.
+      {...({ onKeyDown: (e: any) => {
+        const alvo = e?.target;
+        const escrevendo = alvo?.getAttribute?.("role") === "textbox" || alvo?.tagName === "TEXTAREA" || alvo?.tagName === "INPUT";
+        if (e?.key === "Escape" && !escrevendo) { e.preventDefault?.(); onFechar(); }
+      } } as any)}
+    >
       <View style={{ gap: 10 }}>
         <Lnk onPress={onFechar} testID="wa-editor-voltar" style={{ minHeight: 32, paddingHorizontal: 0 }}>← Voltar</Lnk>
         <Titulo tamanho={52}>Do seu jeito</Titulo>
