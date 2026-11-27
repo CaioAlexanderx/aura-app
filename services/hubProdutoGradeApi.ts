@@ -1,60 +1,81 @@
 // ============================================================
 // hubProdutoGradeApi — "Produto com fotos e tamanhos" na conversa aberta.
+// Contrato: Aura-backend #1142 (contrato-produto-grade.md).
 //
-// Isolado de hubApi porque o contrato do backend (contrato-produto-grade.md)
-// ainda estava sendo fechado quando a tela foi feita. Só este arquivo conhece
-// os caminhos e os formatos; se o contrato mudar, muda aqui.
+//   GET  /companies/:cid/hub/produtos/:pid/grade
+//   POST /companies/:cid/hub/conversations/:conv/send         { type: "produto_grade", ... }
+//   POST /companies/:cid/hub/conversations/:conv/reservar-pix { message_id }
 //
-//   GET  /companies/:cid/hub/catalogo/:pid/grade
-//   POST /companies/:cid/hub/conversations/:conv/send   { type: "produto_grade", ... }
-//   POST /companies/:cid/hub/conversations/:conv/reservar-pix
-//
-// O app manda ids e a escolha; o texto, as fotos e os botões são montados no
-// servidor a partir do cadastro (product_images, product_variants.image_url,
-// product_variant_values com estoque > 0). Quantidade nunca vai à cliente.
+// O app manda a escolha; o texto, as fotos e os botões são montados no
+// servidor. Quantidade nunca chega: a grade traz só os tamanhos com peça, com
+// `ultimo` quando sobra 1.
 // ============================================================
 import { request } from "@/services/api";
 
-export interface GradeFoto { id: string; url: string }
-export interface GradeTamanho { label: string; qty: number }
+export interface GradeFoto { url: string; thumb_url?: string | null }
+export interface GradeTamanho { tamanho: string; variant_id: string; preco: number; ultimo: boolean }
 export interface GradeCor {
-  /** Chave estável da cor (a mesma que volta no envio). */
-  key: string;
-  label: string;
-  /** #rrggbb quando a cor tem. */
+  /** Hex sem # (ou slug do nome). É o `cor` do envio. */
+  chave: string;
+  /** null = o produto não tem cor. */
+  nome: string | null;
   hex: string | null;
+  preco: number;
+  foto: string | null;
   fotos: GradeFoto[];
+  disponivel: boolean;
+  /** Só os tamanhos com peça livre. */
   tamanhos: GradeTamanho[];
 }
 export interface HubProdutoGrade {
-  product: { id: string; name: string; price: number; image_url: string | null };
-  /** Produto sem cor: uma cor só, sem rótulo. */
-  tem_cor: boolean;
-  cores: GradeCor[];
-  /** Galeria do produto (vale para a cor que não tem foto própria). */
+  produto: { id: string; nome: string; preco: number; compartilhado?: boolean };
+  /** Galeria principal do produto. */
   fotos: GradeFoto[];
+  cores: GradeCor[];
+  /** false: produto sem variações (cores = []). */
+  tem_grade: boolean;
 }
 
 export interface EnvioGradeBody {
   type: "produto_grade";
   product_id: string;
-  color_key: string | null;
-  photo_ids: string[];
-  /** Pergunta "Qual tamanho?" com botões de resposta. */
+  cor?: string;
+  /** URLs que a rota da grade devolveu (até 5). */
+  fotos: string[];
   perguntar_tamanho: boolean;
 }
 
-export interface ReservaPixBody { product_id: string; color_key: string | null; size: string }
-
 export const hubProdutoGradeApi = {
   grade: (companyId: string, productId: string) =>
-    request<HubProdutoGrade>(`/companies/${companyId}/hub/catalogo/${productId}/grade`),
+    request<HubProdutoGrade>(`/companies/${companyId}/hub/produtos/${productId}/grade`),
   enviar: (companyId: string, convId: string, body: EnvioGradeBody) =>
     request<{ ok: boolean; wamid: string | null }>(
       `/companies/${companyId}/hub/conversations/${convId}/send`, { method: "POST", body, retry: 0 }
     ),
-  reservarEMandarPix: (companyId: string, convId: string, body: ReservaPixBody) =>
-    request<{ ok: boolean }>(
-      `/companies/${companyId}/hub/conversations/${convId}/reservar-pix`, { method: "POST", body, retry: 0 }
+  reservarEMandarPix: (companyId: string, convId: string, messageId: string) =>
+    request<{ ok: boolean; order_id: string; order_number?: number; total: number; wamid: string | null }>(
+      `/companies/${companyId}/hub/conversations/${convId}/reservar-pix`, { method: "POST", body: { message_id: messageId, quantity: 1 }, retry: 0 }
     ),
 };
+
+/** Sugestão gravada pelo servidor em `metadata.sugestao` da mensagem da cliente. */
+export interface SugestaoReserva {
+  tipo: "reservar_e_mandar_pix";
+  rotulo?: string;
+  product_id: string; variant_id: string; tamanho: string; quantidade: number; preco: number;
+  nome?: string; cor?: string | null;
+  estado: "pendente" | "sem_estoque" | "feita";
+  order_id?: string;
+}
+
+/** Frase clara para cada recusa da reserva (409/403/422 do servidor). */
+export function mensagemDaReserva(e: any, nome: string): string {
+  const cod = String(e?.data?.code || e?.code || "");
+  if (cod === "JA_RESERVADO" || e?.status === 409 && /reserv/i.test(String(e?.message))) return `Esta peça já está reservada para ${nome}. O Pix já foi enviado.`;
+  if (cod === "JANELA_FECHADA") return "A conversa fechou. Espere a cliente escrever de novo para reservar.";
+  if (cod === "SEM_PIX" || cod === "PIX_INVALIDO") return "A loja ainda não tem uma chave Pix válida. Cadastre a chave e tente de novo.";
+  if (cod === "PEDIDO_SEM_SALDO") return e?.message || "Não há mais peça livre desse tamanho.";
+  return e?.message || "Não foi possível reservar.";
+}
+
+export const ehReservaNaoLiberada = (e: any): boolean => e?.status === 403 && String(e?.data?.code || e?.code || "") === "PEDIDO_NAO_LIBERADO";

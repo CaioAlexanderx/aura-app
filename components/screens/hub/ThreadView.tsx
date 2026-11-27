@@ -21,8 +21,10 @@ import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
 import { EtiquetasConversa } from "./EtiquetasConversa";
 import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConversa";
 import { PainelCliente } from "./PainelCliente";
-import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CartaoProdutoGrade, RespostaDeBotao, SugestaoDeReserva, CARTAO_TIPOS, TIPO_GRADE, TIPO_RESPOSTA_BOTAO } from "./CartoesDaThread";
-import { hubProdutoGradeApi } from "@/services/hubProdutoGradeApi";
+import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
+import { CartaoProdutoGrade, PerguntaDeTamanho, RespostaDeBotao, SugestaoDeReserva, TIPO_PERGUNTA } from "./CartoesDaGrade";
+import { hubProdutoGradeApi, mensagemDaReserva, ehReservaNaoLiberada, type SugestaoReserva } from "@/services/hubProdutoGradeApi";
+import { pedidoLiberado } from "@/utils/pedidoLiberado";
 import { tourTarget } from "@/utils/tourTarget";
 import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
@@ -55,6 +57,24 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["hub-thread", companyId, convId] });
     qc.invalidateQueries({ queryKey: ["hub-conversations", companyId] });
+  };
+
+  // A reserva usa o Pedido do balcão (trava PEDIDO_LIBERADO). Sem ela: "Mandar o Pix" com o preço do tamanho.
+  const reservaLiberada = pedidoLiberado((useAuthStore() as any)?.user);
+  const [semReserva, setSemReserva] = useState(false);
+  const mandarSoPix = (sg: SugestaoReserva) => {
+    hubApi.send(companyId, convId, { type: "pix", amount: Number(sg.preco) })
+      .then(() => invalidate())
+      .catch((e: any) => setFeedback(e?.message || "Não foi possível mandar o Pix."));
+  };
+  const reservar = (messageId: string, nome: string) => {
+    hubProdutoGradeApi.reservarEMandarPix(companyId, convId, messageId)
+      .then(() => invalidate())
+      .catch((e: any) => {
+        if (ehReservaNaoLiberada(e)) { setSemReserva(true); return; }
+        setFeedback(mensagemDaReserva(e, nome));
+        if (e?.status === 409) invalidate();
+      });
   };
 
   const mAction = useMutation({
@@ -221,10 +241,12 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         {data.messages.map((m) => {
           const mine = m.direction === "outbound";
           const author = rotuloDoAutor(m, conv);
-          const produto = m.tipo === "produto" && !!m.image_url;
+          const produto = m.tipo === "produto" && !!m.image_url && !m.cartao?.fotos?.length;
           const cartao = !!m.tipo && CARTAO_TIPOS.includes(m.tipo);
-          const grade = m.tipo === TIPO_GRADE;
-          const respostaBotao = m.tipo === TIPO_RESPOSTA_BOTAO;
+          const grade = m.tipo === "produto" && !!m.cartao?.fotos?.length;
+          const pergunta = m.tipo === TIPO_PERGUNTA && Array.isArray(m.metadata?.opcoes);
+          const respostaGrade = m.direction === "inbound" ? m.metadata?.produto_grade : null;
+          const sugestao = (m.direction === "inbound" ? m.metadata?.sugestao : null) as SugestaoReserva | null;
           const audio = m.media?.kind === "audio";
           return (
             <View key={m.id} style={{ gap: compacto ? 9 : 10 }}>
@@ -234,7 +256,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                   maxWidth: larguraBolha, paddingTop: produto ? 8 : 10, paddingHorizontal: produto ? 8 : 14, paddingBottom: 8, borderRadius: 20, borderWidth: 1,
                   borderBottomLeftRadius: mine ? 20 : 6, borderBottomRightRadius: mine ? 6 : 20,
                   borderColor: mine ? K.bolhaOutBorda : K.bolhaInBorda, backgroundColor: mine ? K.bolhaOutFb : K.bolhaInFb,
-                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, grade ? { width: 360, paddingTop: 6, paddingHorizontal: 6 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
+                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, grade || pergunta ? { width: 360, paddingTop: 6, paddingHorizontal: 6 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
                 {produto && (
                   <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
                 )}
@@ -243,8 +265,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                 {m.tipo === "pix" && <CartaoPix content={m.content} cartao={m.cartao} />}
                 {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} cartao={m.cartao} />}
                 {grade && <CartaoProdutoGrade cartao={m.cartao} />}
-                {respostaBotao && <RespostaDeBotao content={m.content} cartao={m.cartao} />}
-                {!cartao && !grade && !respostaBotao && textoDaBolha(m) != null && (
+                {pergunta && <PerguntaDeTamanho opcoes={m.metadata!.opcoes} />}
+                {respostaGrade && <RespostaDeBotao tamanho={respostaGrade.tamanho} lista={/^escolheu na lista/i.test(m.content || "")} />}
+                {!cartao && !grade && !pergunta && !respostaGrade && textoDaBolha(m) != null && (
                   <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
                 )}
                 {/* Rodapé da bolha: "Lorena · 10:14 · lida". */}
@@ -256,9 +279,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                 </View>
               </View>
             </View>
-            {respostaBotao && m.cartao?.sugestao && (
-              <SugestaoDeReserva nome={nomeCurto} cartao={m.cartao} ocupado={mAction.isPending}
-                onReservar={() => { const sg = m.cartao!.sugestao!; mAction.mutate(() => hubProdutoGradeApi.reservarEMandarPix(companyId, convId, { product_id: sg.product_id, color_key: sg.color_key, size: sg.size })); }} />
+            {sugestao && sugestao.tipo === "reservar_e_mandar_pix" && (
+              <SugestaoDeReserva nome={nomeCurto} sugestao={sugestao} reservaLiberada={reservaLiberada && !semReserva} ocupado={mAction.isPending}
+                onReservar={() => reservar(m.id, nomeCurto)} onMandarPix={() => mandarSoPix(sugestao)} />
             )}
             </View>
           );

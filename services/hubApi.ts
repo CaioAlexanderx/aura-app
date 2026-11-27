@@ -90,18 +90,13 @@ export interface HubCartao {
   codigo?: string | null;
   imagem?: string | null;
   descricao?: string | null;
-  // ── produto_grade (fotos e tamanhos) e a resposta da cliente ──
-  /** Fotos mandadas na bolha. */
+  // ── produto com fotos e tamanhos (tipo "produto" com `fotos`) ──
+  nome?: string | null;
+  cor?: string | null;
+  preco?: number | null;
+  /** Fotos mandadas na bolha (URLs). */
   fotos?: string[] | null;
-  /** [negrito, apoio] da legenda. */
-  legenda?: string[] | null;
-  /** "Qual tamanho?" com os botões de resposta. */
-  pergunta?: string | null;
-  botoes?: string[] | null;
-  /** Resposta da cliente por botão (mensagem inbound `resposta_botao`). */
-  tamanho?: string | null;
-  /** Sugestão de reservar e mandar o Pix, vinda do servidor com a resposta. */
-  sugestao?: { product_id: string; color_key: string | null; size: string; valor: number } | null;
+  tamanhos?: { tamanho: string; ultimo?: boolean }[] | null;
 }
 
 export interface HubMessage {
@@ -118,6 +113,8 @@ export interface HubMessage {
   author?: HubAuthor | null;
   /** Mensagem rica enviada pela tela: produto | orcamento | pix | link_loja. */
   tipo?: string | null;
+  /** metadata crua da mensagem: `sugestao` e `produto_grade` (resposta da cliente), `opcoes` e `formato` (pergunta_tamanho). */
+  metadata?: Record<string, any> | null;
   /** Foto do produto mandada (cartão de produto na thread). */
   image_url?: string | null;
   /** Foto ou áudio guardado (URL assinada de 1 h). null = não foi guardado. */

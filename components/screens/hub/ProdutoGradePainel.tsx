@@ -18,7 +18,7 @@ import { Lnk, Sw } from "@/components/whatsapp/waVidro";
 import { K, Tx, Meta, Pilula, BotaoPrincipal, superficie, anima, web, WEB } from "./conversasUi";
 import { escolherArquivo, prepararFoto } from "./midiaWeb";
 import {
-  contadorFotos, fotosDaCor, hexValido, marcadasIniciais, notaDoTamanho, rotuloEnviar, subtituloDoProduto,
+  contadorFotos, coresDoPainel, fotosDaCor, hexValido, marcadasIniciais, notaDoTamanho, rotuloEnviar, subtituloDoProduto, temCor,
 } from "./produtoGrade";
 
 const LARGURA_FOTO: any = WEB ? "calc((100% - 24px) / 4)" : "23%";
@@ -43,16 +43,18 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
   const [perguntar, setPerguntar] = useState(true);
   const [subindo, setSubindo] = useState(false);
 
-  const cor: GradeCor | undefined = grade ? (grade.cores.find((c) => c.key === corKey) || grade.cores[0]) : undefined;
+  const cores = grade ? coresDoPainel(grade) : [];
+  const comCor = grade ? temCor(grade) : false;
+  const cor: GradeCor | undefined = cores.find((c) => c.chave === corKey) || cores[0];
   const fotos = grade ? fotosDaCor(grade, cor) : [];
-  const chaveEscolha = cor?.key || "_";
+  const chaveEscolha = cor?.chave || "_";
   const marcadas = escolhas[chaveEscolha] ?? marcadasIniciais(fotos);
   const fotosMarcadas = fotos.filter((f) => marcadas[f.id]);
 
   const mEnviar = useMutation({
     mutationFn: () => hubProdutoGradeApi.enviar(companyId, convId, {
-      type: "produto_grade", product_id: productId, color_key: grade?.tem_cor && cor ? cor.key : null,
-      photo_ids: fotosMarcadas.map((f) => f.id), perguntar_tamanho: perguntar,
+      type: "produto_grade", product_id: productId, ...(comCor && cor?.chave ? { cor: cor.chave } : {}),
+      fotos: fotosMarcadas.map((f) => f.id), perguntar_tamanho: perguntar,
     }),
     onSuccess: () => onSent(),
     onError: (e: any) => onError(e?.message || "Não foi possível enviar."),
@@ -68,7 +70,7 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
       if (!file) return;
       const pronta = await prepararFoto(file);
       await productImagesApi.upload(companyId, productId, {
-        content: pronta.base64, content_type: pronta.mime, color_hex: grade?.tem_cor ? hexValido(cor?.hex) : null,
+        content: pronta.base64, content_type: pronta.mime, color_hex: comCor ? hexValido(cor?.hex) : null,
       });
       await qc.invalidateQueries({ queryKey: chave });
     } catch (e: any) {
@@ -93,7 +95,7 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
     );
   }
 
-  const capa = fotos[0]?.url || grade.product.image_url;
+  const capa = fotos[0]?.url || null;
   const sub = subtituloDoProduto(grade);
   const tamanhos = cor?.tamanhos || [];
   const semFoto = fotos.length === 0;
@@ -107,21 +109,21 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
           ? <Image source={{ uri: capa }} style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: K.trilho }} />
           : <View style={[{ width: 56, height: 56, borderRadius: 16, backgroundColor: "#b9ab95" }, web({ backgroundImage: "linear-gradient(150deg,#efe6d6,#b9ab95)" })]} />}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Tx numberOfLines={1} style={{ fontSize: 18, fontWeight: "700", lineHeight: 24 }}>{grade.product.name}</Tx>
-          <Tx numberOfLines={1} style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>{[fmt(Number(grade.product.price)), sub].filter(Boolean).join(" · ")}</Tx>
+          <Tx numberOfLines={1} style={{ fontSize: 18, fontWeight: "700", lineHeight: 24 }}>{grade.produto.nome}</Tx>
+          <Tx numberOfLines={1} style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>{[fmt(Number(cor?.preco ?? grade.produto.preco)), sub].filter(Boolean).join(" · ")}</Tx>
         </View>
         <Lnk testID="hub-grade-trocar" onPress={onTrocar}>Trocar</Lnk>
       </View>
 
       {/* A cor primeiro */}
-      {grade.tem_cor && grade.cores.length > 0 && (
+      {comCor && cores.length > 0 && (
         <View style={{ gap: 8 }}>
           <Meta>Cor</Meta>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {grade.cores.map((c) => (
-              <Pilula key={c.key} pequena on={c.key === cor?.key} testID={`hub-grade-cor-${c.key}`} acessLabel={c.label} onPress={() => setCorKey(c.key)}>
+            {cores.map((c) => (
+              <Pilula key={c.chave} pequena on={c.chave === cor?.chave} testID={`hub-grade-cor-${c.chave}`} acessLabel={c.nome || ""} onPress={() => setCorKey(c.chave)}>
                 <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.hex || K.trilho, borderWidth: 1, borderColor: "rgba(255,255,255,.4)" }} />
-                <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: c.key === cor?.key ? K.pillOnInk : K.ink }}>{c.label}</Tx>
+                <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: c.chave === cor?.chave ? K.pillOnInk : K.ink }}>{c.nome}</Tx>
               </Pilula>
             ))}
           </View>
@@ -170,20 +172,17 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
       <View style={{ gap: 8 }}>
         <Meta>Tamanhos com peça</Meta>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {tamanhos.map((z) => {
-            const nota = notaDoTamanho(z.qty);
-            const zero = z.qty <= 0;
-            return (
-              <View key={z.label} testID={`hub-grade-tam-${z.label}`}
-                style={{
-                  minWidth: 58, minHeight: 54, borderRadius: 16, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb,
-                  alignItems: "center", justifyContent: "center", paddingHorizontal: 8, opacity: zero ? 0.35 : 1,
-                }}>
-                <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 20, textDecorationLine: zero ? "line-through" : "none" }}>{z.label}</Tx>
-                <Tx style={{ fontSize: 11, fontWeight: "600", color: K.ink3, lineHeight: 14, textDecorationLine: zero ? "line-through" : "none" }}>{nota}</Tx>
-              </View>
-            );
-          })}
+          {tamanhos.map((z) => (
+            <View key={z.variant_id || z.tamanho} testID={`hub-grade-tam-${z.tamanho}`}
+              style={{
+                minWidth: 58, minHeight: 54, borderRadius: 16, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb,
+                alignItems: "center", justifyContent: "center", paddingHorizontal: 8,
+              }}>
+              <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 20 }}>{z.tamanho}</Tx>
+              <Tx style={{ fontSize: 11, fontWeight: "600", color: K.ink3, lineHeight: 14 }}>{notaDoTamanho(z)}</Tx>
+            </View>
+          ))}
+          {tamanhos.length === 0 && <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Sem peça livre nesta cor.</Tx>}
         </View>
         <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>A cliente vê só os que têm peça, sem a quantidade. "Último" quando sobra um.</Tx>
       </View>

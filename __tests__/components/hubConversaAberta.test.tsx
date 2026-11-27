@@ -30,6 +30,7 @@ jest.mock("@/services/hubApi", () => ({
 
 const mockGrade: Record<string, jest.Mock> = { grade: jest.fn(), enviar: jest.fn(), reservarEMandarPix: jest.fn() };
 jest.mock("@/services/hubProdutoGradeApi", () => ({
+  ...jest.requireActual("@/services/hubProdutoGradeApi"),
   hubProdutoGradeApi: new Proxy({}, { get: (_t, k: string) => (...a: any[]) => (mockGrade as any)[k](...a) }),
 }));
 
@@ -58,15 +59,15 @@ function preparar(lastInbound: string) {
   mockHub.messages.mockResolvedValue({ conversation: conv(lastInbound), messages: MSGS, pending_approvals: [] });
 }
 
+const T = (tamanho: string, ultimo = false) => ({ tamanho, variant_id: "v-" + tamanho, preco: 189.9, ultimo });
 const GRADE = {
-  product: { id: "p1", name: "Saia midi plissada", price: 189.9, image_url: null }, tem_cor: true,
-  fotos: [],
+  produto: { id: "p1", nome: "Saia midi plissada", preco: 189.9 }, tem_grade: true, fotos: [],
   cores: [
-    { key: "caramelo", label: "Caramelo", hex: "#9a6a4f",
-      fotos: [{ id: "f1", url: "https://r2/f1.jpg" }, { id: "f2", url: "https://r2/f2.jpg" }, { id: "f3", url: "https://r2/f3.jpg" }],
-      tamanhos: [{ label: "P", qty: 2 }, { label: "M", qty: 1 }, { label: "G", qty: 3 }, { label: "GG", qty: 0 }] },
-    { key: "preto", label: "Preto", hex: "#1d1a22", fotos: [{ id: "f4", url: "https://r2/f4.jpg" }],
-      tamanhos: [{ label: "P", qty: 0 }, { label: "M", qty: 2 }] },
+    { chave: "9a6a4f", nome: "Caramelo", hex: "#9a6a4f", preco: 189.9, foto: null, disponivel: true,
+      fotos: [{ url: "https://r2/f1.jpg" }, { url: "https://r2/f2.jpg" }, { url: "https://r2/f3.jpg" }],
+      tamanhos: [T("P"), T("M", true), T("G")] },
+    { chave: "1d1a22", nome: "Preto", hex: "#1d1a22", preco: 189.9, foto: null, disponivel: true,
+      fotos: [{ url: "https://r2/f4.jpg" }], tamanhos: [T("M"), T("G", true)] },
   ],
 };
 
@@ -153,8 +154,7 @@ describe("conversa aberta", () => {
     expect(t).toContain("Grátis: a conversa está aberta");
     // sem quantidade; "último" quando sobra 1; GG sem peça
     expect(t).toContain("último");
-    expect(t).toContain("sem peça");
-    expect(t).not.toMatch(/3 peças/);
+        expect(t).not.toMatch(/3 peças/);
   });
 
   it("painel: trocar a cor troca fotos e tamanhos; marcar a foto muda o contador e o envio", async () => {
@@ -164,12 +164,12 @@ describe("conversa aberta", () => {
     await flush();
     await act(async () => { await porId(r, "hub-produto-p1")[0].props.onPress(); });
     await flush();
-    await act(async () => { porId(r, "hub-grade-foto-f3")[0].props.onPress(); });
+    await act(async () => { porId(r, "hub-grade-foto-https://r2/f3.jpg")[0].props.onPress(); });
     expect(tudo(r)).toContain("3 de 3 marcadas");
     await act(async () => { await porId(r, "hub-grade-enviar")[0].props.onPress(); });
     await flush();
     expect(mockGrade.enviar).toHaveBeenCalledWith(COMPANY, "conv-1", {
-      type: "produto_grade", product_id: "p1", color_key: "caramelo", photo_ids: ["f1", "f2", "f3"], perguntar_tamanho: true,
+      type: "produto_grade", product_id: "p1", cor: "9a6a4f", fotos: ["https://r2/f1.jpg", "https://r2/f2.jpg", "https://r2/f3.jpg"], perguntar_tamanho: true,
     });
   });
 
@@ -180,18 +180,18 @@ describe("conversa aberta", () => {
     await flush();
     await act(async () => { await porId(r, "hub-produto-p1")[0].props.onPress(); });
     await flush();
-    await act(async () => { porId(r, "hub-grade-cor-preto")[0].props.onPress(); });
+    await act(async () => { porId(r, "hub-grade-cor-1d1a22")[0].props.onPress(); });
     expect(tudo(r)).toContain("1 de 1 marcadas");
     expect(tudo(r)).toContain("Mandar 1 foto e tamanhos");
     await act(async () => { porId(r, "hub-grade-perguntar")[0].props.onToggle(); });
     await act(async () => { await porId(r, "hub-grade-enviar")[0].props.onPress(); });
     await flush();
-    expect(mockGrade.enviar).toHaveBeenCalledWith(COMPANY, "conv-1", expect.objectContaining({ color_key: "preto", photo_ids: ["f4"], perguntar_tamanho: false }));
+    expect(mockGrade.enviar).toHaveBeenCalledWith(COMPANY, "conv-1", expect.objectContaining({ cor: "1d1a22", fotos: ["https://r2/f4.jpg"], perguntar_tamanho: false }));
   });
 
   it("painel sem foto: aviso, 'Tirar foto agora' e o botão de preço", async () => {
-    mockGrade.grade.mockResolvedValue({ product: { id: "p1", name: "Blusa de linho", price: 129.9, image_url: null }, tem_cor: false, fotos: [],
-      cores: [{ key: "unica", label: "", hex: null, fotos: [], tamanhos: [{ label: "P", qty: 1 }, { label: "M", qty: 4 }] }] });
+    mockGrade.grade.mockResolvedValue({ produto: { id: "p1", nome: "Blusa de linho", preco: 129.9 }, tem_grade: true, fotos: [],
+      cores: [{ chave: "unica", nome: null, hex: null, preco: 129.9, foto: null, fotos: [], disponivel: true, tamanhos: [T("P", true), T("M")] }] });
     preparar(horasAtras(2));
     const r = await abrirThread();
     await act(async () => { porId(r, "hub-envio-produto")[0].props.onPress(); });
@@ -219,24 +219,68 @@ describe("conversa aberta", () => {
     expect(mockHub.send).toHaveBeenCalledWith(COMPANY, "conv-1", { type: "produto", product_id: "p1" });
   });
 
-  it("thread: bolha com fotos e botões, resposta da cliente e a sugestão de reservar", async () => {
+  const msgsGrade = (sugestao: any) => [
+    ...MSGS,
+    { id: "m3", direction: "outbound", content: "Saia midi", author: "humano", source_type: "humano", created_at: "2026-11-26T12:02:00Z", tipo: "produto",
+      cartao: { nome: "Saia midi plissada", cor: "Caramelo", preco: 189.9, fotos: ["https://r2/f1.jpg", "https://r2/f2.jpg"], tamanhos: [{ tamanho: "P" }, { tamanho: "M", ultimo: true }, { tamanho: "G" }] } },
+    { id: "m3b", direction: "outbound", content: "Qual tamanho?", author: "humano", source_type: "humano", created_at: "2026-11-26T12:02:01Z", tipo: "pergunta_tamanho",
+      metadata: { tipo: "pergunta_tamanho", formato: "botoes", opcoes: ["P", "M", "G"], product_id: "p1" } },
+    { id: "m4", direction: "inbound", content: "Tocou no botão: M", author: "cliente", source_type: null, created_at: "2026-11-26T12:03:00Z",
+      metadata: { produto_grade: { product_id: "p1", variant_id: "v-M", tamanho: "M" }, sugestao } },
+  ];
+  const SUG = { tipo: "reservar_e_mandar_pix", product_id: "p1", variant_id: "v-M", tamanho: "M", quantidade: 1, preco: 189.9, estado: "pendente" };
+  async function abrirComSugestao(sugestao: any) {
     mockHub.conversations.mockResolvedValue({ conversations: [conv(horasAtras(2))], counts: [] });
-    mockHub.messages.mockResolvedValue({ conversation: conv(horasAtras(2)), pending_approvals: [], messages: [
-      ...MSGS,
-      { id: "m3", direction: "outbound", content: "Saia midi", author: "humano", source_type: "humano", created_at: "2026-11-26T12:02:00Z", tipo: "produto_grade",
-        cartao: { fotos: ["https://r2/f1.jpg", "https://r2/f2.jpg"], legenda: ["Saia midi plissada · Caramelo · R$ 189,90", "Tem P, M (último) e G."], pergunta: "Qual tamanho?", botoes: ["P", "M", "G"] } },
-      { id: "m4", direction: "inbound", content: "M", author: "cliente", source_type: null, created_at: "2026-11-26T12:03:00Z", tipo: "resposta_botao",
-        cartao: { tamanho: "M", sugestao: { product_id: "p1", color_key: "caramelo", size: "M", valor: 189.9 } } },
-    ] });
-    mockHub.reservarEMandarPix = jest.fn().mockResolvedValue({ ok: true });
-    const r = await abrirThread();
+    mockHub.messages.mockResolvedValue({ conversation: conv(horasAtras(2)), pending_approvals: [], messages: msgsGrade(sugestao) });
+    return abrirThread();
+  }
+
+  it("thread: bolha com fotos, 'Qual tamanho?' com botões e a resposta; sem a trava do Pedido a sugestão vira só Pix", async () => {
+    const r = await abrirComSugestao(SUG);
     expect(porId(r, "hub-cartao-grade")).toHaveLength(1);
-    expect(porId(r, "hub-cartao-grade-botao-M")).toHaveLength(1);
+    expect(porId(r, "hub-pergunta-botao-M")).toHaveLength(1);
     expect(porId(r, "hub-resposta-botao")).toHaveLength(1);
     const t = tudo(r);
+    expect(t).toContain("Saia midi plissada · Caramelo · R$ 189,90");
+    expect(t).toContain("Tem P, M (último) e G.");
     expect(t).toContain("tocou no botão");
-    expect(t).toContain("Reservar uma e mandar o Pix de R$ 189,90?");
-    expect(t).toContain("quer o M");
+    expect(t).toContain("quer o M. Mandar o Pix de R$ 189,90?");
+    expect(t).not.toContain("Reservar e mandar o Pix");
+    await act(async () => { await porId(r, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(mockHub.send).toHaveBeenCalledWith(COMPANY, "conv-1", { type: "pix", amount: 189.9 });
+    expect(mockGrade.reservarEMandarPix).not.toHaveBeenCalled();
+  });
+
+  it("thread: com a trava do Pedido ligada, 'Reservar e mandar o Pix' reserva pela mensagem", async () => {
+    mockAuth = { ...mockAuth, user: { id: "u1", is_staff: true } };
+    const r = await abrirComSugestao(SUG);
+    expect(tudo(r)).toContain("Reservar uma e mandar o Pix de R$ 189,90?");
+    mockGrade.reservarEMandarPix.mockResolvedValue({ ok: true, order_id: "o1", total: 189.9 });
+    await act(async () => { await porId(r, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(mockGrade.reservarEMandarPix).toHaveBeenCalledWith(COMPANY, "conv-1", "m4");
+  });
+
+  it("thread: 403 PEDIDO_NAO_LIBERADO cai para 'Mandar o Pix'; JA_RESERVADO e sem_estoque têm frase", async () => {
+    mockAuth = { ...mockAuth, user: { id: "u1", is_staff: true } };
+    const r = await abrirComSugestao(SUG);
+    mockGrade.reservarEMandarPix.mockRejectedValue(Object.assign(new Error("x"), { status: 403, data: { code: "PEDIDO_NAO_LIBERADO" } }));
+    await act(async () => { await porId(r, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(tudo(r)).toContain("Mandar o Pix de R$ 189,90?");
+    // JA_RESERVADO
+    mockGrade.reservarEMandarPix.mockRejectedValue(Object.assign(new Error("x"), { status: 409, data: { code: "JA_RESERVADO" } }));
+    tree!.unmount(); tree = null;
+    const r2 = await abrirComSugestao(SUG);
+    await act(async () => { await porId(r2, "hub-sugestao-reservar")[0].props.onPress(); });
+    await flush();
+    expect(tudo(r2)).toContain("já está reservada para Ana");
+    // sem_estoque
+    tree!.unmount(); tree = null;
+    const r3 = await abrirComSugestao({ ...SUG, estado: "sem_estoque" });
+    expect(tudo(r3)).toContain("esse tamanho acabou entre o envio e o toque");
+    expect(porId(r3, "hub-sugestao-reservar")).toHaveLength(0);
   });
 
   it("Pix com valor manda o valor", async () => {
