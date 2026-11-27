@@ -125,6 +125,7 @@ async function abrirThread() {
   await flush();
   return tree!;
 }
+const srcDoAudio = (r: renderer.ReactTestRenderer, id: string) => r.root.findAll((n) => n.props && n.props.testID === id && n.props.dataSet)[0]?.props.dataSet.src;
 const porId = (r: renderer.ReactTestRenderer, id: string) => r.root.findAllByProps({ testID: id }, { deep: false });
 const textoDe = (n: any): string => (typeof n === "string" ? n : Array.isArray(n.children) ? n.children.map(textoDe).join("") : n.children ? textoDe(n.children) : "");
 const tudo = (r: renderer.ReactTestRenderer) => textoDe(r.toJSON());
@@ -239,6 +240,8 @@ describe("robustez", () => {
     mockHub.conversations.mockResolvedValue({ conversations: [CONV, B], counts: [] });
     const r = await abrirThread();
     await act(async () => { await porId(r, "hub-envio-foto")[0].props.onPress(); });
+    // a grade "Fotos dos produtos" abre primeiro; depois "Escolher do computador"
+    await act(async () => { await porId(r, "hub-foto-computador")[0].props.onPress(); });
     await flush();
     expect(porId(r, "hub-foto-previa")).toHaveLength(1);
     await act(async () => { porId(r, "hub-conv-conv-2")[0].props.onPress(); });
@@ -250,11 +253,11 @@ describe("robustez", () => {
     const msg = (url: string) => ({ id: "a1", direction: "inbound", content: "[audio]", author: "cliente", created_at: recente, media: { kind: "audio", mime: "audio/ogg", url } });
     mockHub.messages.mockResolvedValue({ conversation: CONV, pending_approvals: [], messages: [msg("https://r2/a.ogg?sig=1")] });
     const r = await abrirThread();
-    expect(r.root.findAll((n) => n.type === "audio")[0].props.src).toBe("https://r2/a.ogg?sig=1");
+    expect(srcDoAudio(r, "hub-msg-midia-a1")).toBe("https://r2/a.ogg?sig=1");
     mockHub.messages.mockResolvedValue({ conversation: CONV, pending_approvals: [], messages: [msg("https://r2/a.ogg?sig=2")] });
     await act(async () => { await qc.invalidateQueries({ queryKey: ["hub-thread", COMPANY, "conv-1"] }); });
     await flush();
-    expect(r.root.findAll((n) => n.type === "audio")[0].props.src).toBe("https://r2/a.ogg?sig=1");
+    expect(srcDoAudio(r, "hub-msg-midia-a1")).toBe("https://r2/a.ogg?sig=1");
   });
 });
 
@@ -264,6 +267,8 @@ describe("foto", () => {
     mockPrepararFoto.mockResolvedValue({ base64: "QUJD", mime: "image/jpeg", previa: "data:image/jpeg;base64,QUJD" });
     const r = await abrirThread();
     await act(async () => { await porId(r, "hub-envio-foto")[0].props.onPress(); });
+    // a grade "Fotos dos produtos" abre primeiro; depois "Escolher do computador"
+    await act(async () => { await porId(r, "hub-foto-computador")[0].props.onPress(); });
     await flush();
     expect(porId(r, "hub-foto-previa")).toHaveLength(1);
     await act(async () => { porId(r, "hub-foto-legenda")[0].props.onChangeText("Olha a cor"); });
@@ -277,6 +282,8 @@ describe("foto", () => {
     mockEscolher.mockResolvedValue(null);
     const r = await abrirThread();
     await act(async () => { await porId(r, "hub-envio-foto")[0].props.onPress(); });
+    // a grade "Fotos dos produtos" abre primeiro; depois "Escolher do computador"
+    await act(async () => { await porId(r, "hub-foto-computador")[0].props.onPress(); });
     await flush();
     expect(porId(r, "hub-foto-previa")).toHaveLength(0);
     expect(mockHub.midia).not.toHaveBeenCalled();
@@ -287,6 +294,8 @@ describe("foto", () => {
     mockPrepararFoto.mockRejectedValue(new Error("Escolha uma foto JPEG ou PNG."));
     const r = await abrirThread();
     await act(async () => { await porId(r, "hub-envio-foto")[0].props.onPress(); });
+    // a grade "Fotos dos produtos" abre primeiro; depois "Escolher do computador"
+    await act(async () => { await porId(r, "hub-foto-computador")[0].props.onPress(); });
     await flush();
     expect(tudo(r)).toContain("Escolha uma foto JPEG ou PNG.");
   });
@@ -302,9 +311,10 @@ describe("na thread", () => {
       ],
     });
     const r = await abrirThread();
-    const player = r.root.findAll((n) => n.type === "audio");
-    expect(player).toHaveLength(1);
-    expect(player[0].props.src).toBe("https://r2.assinado/a.ogg");
+    // player do mockup (tocar/pausar + onda), não o <audio controls> do navegador
+    expect(porId(r, "hub-msg-midia-a1")).toHaveLength(1);
+    expect(srcDoAudio(r, "hub-msg-midia-a1")).toBe("https://r2.assinado/a.ogg");
+    expect(porId(r, "hub-msg-midia-a1-tocar")).toHaveLength(1);
     expect(porId(r, "hub-msg-midia-f1")).toHaveLength(1);
     expect(tudo(r)).not.toContain("[audio]");
     expect(tudo(r)).toContain("Olha esse");

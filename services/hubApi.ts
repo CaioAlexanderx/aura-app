@@ -23,6 +23,8 @@ export interface HubLabel { id: string; name: string; color: string; n?: number 
 export interface HubCliente {
   id: string; name: string; phone: string | null; email: string | null;
   birth_date: string | null; since: string | null; last_purchase_at: string | null; total_spent: number | null;
+  /** Total da última venda não cancelada (Aura-backend: last_purchase_amount). Ausente em servidor antigo. */
+  last_purchase_amount?: number | null;
 }
 
 export interface HubConviteCampo { key: string; rotulo: string; auto: boolean; exemplo: string; max: number }

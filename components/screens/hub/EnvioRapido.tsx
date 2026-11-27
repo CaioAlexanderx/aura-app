@@ -16,12 +16,14 @@
 // ============================================================
 import { useState, type ReactNode } from "react";
 import { View, Pressable, TextInput, Image, ScrollView, ActivityIndicator } from "react-native";
+import { router } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fmt } from "@/constants/helpers";
 import { hubApi, type HubEnvioTipo } from "@/services/hubApi";
 import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Pilula, superficie, web, ICONES } from "./waVisual";
+import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./waVisual";
+import { useOrcamentoNovo } from "./useOrcamentoNovo";
 
 /**
  * "189,90" e "1.189,90" (pt-BR) e também "10.50" (ponto como decimal, vindo de
@@ -70,11 +72,12 @@ export function AtalhoAcao({ icone, label, onPress, testID, on, destaque, disabl
 }
 
 /** Folha de vidro sólido do mockup: flutua acima da barra no desktop; no celular fica no fluxo. */
-function Folha({ label, testID, flutua, children, gap = 6, padding = 14 }: { label: string; testID?: string; flutua: boolean; children: ReactNode; gap?: number; padding?: number }) {
+export function Folha({ label, testID, flutua, children, gap = 6, padding = 14 }: { label: string; testID?: string; flutua: boolean; children: ReactNode; gap?: number; padding?: number }) {
+  const an = anima("abre", 0.38);
   return (
-    <View testID={testID} accessibilityLabel={label}
+    <View testID={testID} accessibilityLabel={label} {...({ dataSet: an.dataSet } as any)}
       style={[superficie.solida(24), { padding, gap },
-        flutua ? { position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: 420, zIndex: 3 } : null]}>
+        flutua ? { position: "absolute", left: 18, bottom: "100%" as any, marginBottom: 10, width: "100%", maxWidth: 420, zIndex: 3, transformOrigin: "bottom left" } : null, an.style]}>
       {children}
     </View>
   );
@@ -85,7 +88,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   onSent: () => void;
   onError: (mensagem: string) => void;
   /** Foto, áudio e o painel de gravação/prévia (useMidiaConversa). */
-  midia: { foto: (v: VarianteAtalho) => ReactNode; audio: (v: VarianteAtalho) => ReactNode; painel: ReactNode };
+  midia: { foto: (v: VarianteAtalho) => ReactNode; audio: (v: VarianteAtalho) => ReactNode; painel: ReactNode; folha: (flutua: boolean) => ReactNode };
   /** Celular: barra "Mandar para a Ana" + folha de baixo com os atalhos. */
   compacto?: boolean;
   nome?: string;
@@ -97,14 +100,29 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   children?: ReactNode;
 }) {
   const [painel, setPainel] = useState<Painel>(null);
-  const [folhaAberta, setFolhaAberta] = useState(false);
+  // Celular: como no artboard, a gaveta "Mandar na conversa" já nasce aberta; toque no fundo ou na alça fecha.
+  const [folhaAberta, setFolhaAberta] = useState(compacto);
+  const [outroValor, setOutroValor] = useState(false);
+  const orcamentoNovo = useOrcamentoNovo();
   const [busca, setBusca] = useState("");
   const [valor, setValor] = useState("");
   const primeiro = nome || "o cliente";
 
   const mSend = useMutation({
     mutationFn: (body: Parameters<typeof hubApi.send>[2]) => hubApi.send(companyId, convId, body),
-    onSuccess: () => { setPainel(null); setBusca(""); setValor(""); onSent(); },
+    onSuccess: async (_r, body) => {
+      setPainel(null); setBusca(""); setValor(""); setOutroValor(false);
+      // Mandar o Pix aplica a etiqueta "Esperando Pix" (cria na loja se ainda não existir). A "Pago" automática fica para depois.
+      if (body.type === "pix") {
+        try {
+          const { labels } = await hubApi.etiquetas(companyId);
+          let alvo = (labels || []).find((l) => l.name.trim().toLowerCase() === "esperando pix");
+          if (!alvo) alvo = (await hubApi.criarEtiqueta(companyId, { name: "Esperando Pix", color: "#f59e0b" })).label;
+          await hubApi.aplicarEtiqueta(companyId, convId, alvo.id);
+        } catch { /* o Pix já saiu; a etiqueta é só o lembrete */ }
+      }
+      onSent();
+    },
     onError: (e: any) => onError(e?.message || "Não foi possível enviar."),
   });
 
@@ -117,7 +135,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   const { data: orcs, isLoading: carregandoOrc } = useQuery({
     queryKey: ["hub-orcamentos", companyId, convId],
     queryFn: () => hubApi.orcamentos(companyId, convId),
-    enabled: painel === "orcamento",
+    enabled: painel === "orcamento" || painel === "pix",
   });
 
   const escolher = (key: HubEnvioTipo) => {
@@ -132,7 +150,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
 
   const campoBusca = {
     flex: 1, minWidth: 0, minHeight: 40, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda,
-    backgroundColor: K.dryFb, fontFamily: "inherit", fontSize: 14, color: K.ink,
+    backgroundColor: K.dryFb, fontFamily: SANS, fontSize: 14, color: K.ink,
   } as const;
 
   const linhaProduto = { flexDirection: "row", alignItems: "center", gap: 12, padding: 8, borderRadius: 18, borderWidth: 1, borderColor: "transparent" } as const;
@@ -186,27 +204,57 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
                 Nenhum orçamento enviado para este cliente. Envie o orçamento por Personalizados e ele aparece aqui.
               </Tx>
             )}
+            {orcamentoNovo && (
+              <Pressable testID="hub-orcamento-novo" onPress={() => router.push(orcamentoNovo as any)} style={{ minHeight: 44, justifyContent: "center", paddingLeft: 10 }}>
+                <Tx style={{ fontSize: 14, fontWeight: "600", color: K.acc, lineHeight: 18 }}>Fazer um orçamento novo</Tx>
+              </Pressable>
+            )}
           </View>
         </Folha>
       )}
 
-      {painel === "pix" && (
-        <Folha label="Mandar Pix" testID="hub-envio-painel-pix" flutua={!compacto} gap={10} padding={16}>
-          <Meta>{`Quanto ${primeiro === "o cliente" ? "o cliente" : `a ${primeiro}`} vai pagar?`}</Meta>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <TextInput testID="hub-pix-valor" style={[campoBusca, { minHeight: 58, borderRadius: 20, minWidth: 180 }]} value={valor} onChangeText={setValor}
-              keyboardType="decimal-pad" placeholder="Valor em reais (opcional)" placeholderTextColor={K.ink3} />
-            <Pilula testID="hub-pix-mandar" on style={{ minHeight: 58, borderRadius: 20, paddingHorizontal: 18 }}
-              disabled={mSend.isPending || (valor.trim() !== "" && !valorOk)}
-              onPress={() => mSend.mutate(valorOk ? { type: "pix", amount: valorNum } : { type: "pix" })}>
-              {valorOk ? `Mandar Pix de ${fmt(valorNum)}` : "Mandar chave Pix"}
-            </Pilula>
-          </View>
-          <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Vai o código "copia e cola" da chave cadastrada no canal digital da loja.</Tx>
-        </Folha>
-      )}
+      {painel === "pix" && (() => {
+        // Opções do artboard: orçamento inteiro e sinal de 50% (quando há orçamento), "Outro valor".
+        // Pedido não entra: a tela ainda não lê pedidos do cliente.
+        const q0 = (orcs?.quotes || [])[0];
+        const totalQ = q0 ? Number(q0.total) : NaN;
+        const opcoes = Number.isFinite(totalQ) && totalQ > 0
+          ? [{ valor: totalQ, rotulo: "orçamento inteiro" }, { valor: Math.round(totalQ * 50) / 100, rotulo: "sinal de 50%" }]
+          : [];
+        const mostrarCampo = outroValor || opcoes.length === 0;
+        return (
+          <Folha label="Mandar Pix" testID="hub-envio-painel-pix" flutua={!compacto} gap={10} padding={16}>
+            <Meta>{`Quanto ${primeiro === "o cliente" ? "o cliente" : `a ${primeiro}`} vai pagar?`}</Meta>
+            {opcoes.length > 0 && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {opcoes.map((o) => (
+                  <Pilula key={o.rotulo} testID={`hub-pix-opcao-${o.rotulo.includes("50") ? "sinal" : "inteiro"}`} disabled={mSend.isPending}
+                    style={{ flexDirection: "column", alignItems: "flex-start", gap: 0, minHeight: 58, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20 }}
+                    onPress={() => mSend.mutate({ type: "pix", amount: o.valor })}>
+                    <Tx style={{ fontSize: 16, fontWeight: "700", lineHeight: 22 }}>{fmt(o.valor)}</Tx>
+                    <Tx style={{ fontSize: 12, fontWeight: "500", color: K.ink2, lineHeight: 16 }}>{o.rotulo}</Tx>
+                  </Pilula>
+                ))}
+                <Pilula testID="hub-pix-outro" on={outroValor} style={{ minHeight: 58, borderRadius: 20 }} onPress={() => setOutroValor((v) => !v)}>Outro valor</Pilula>
+              </View>
+            )}
+            {mostrarCampo && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <TextInput testID="hub-pix-valor" style={[campoBusca, { minHeight: 52, borderRadius: 20, minWidth: 180 }]} value={valor} onChangeText={setValor}
+                  keyboardType="decimal-pad" placeholder="Valor em reais (opcional)" placeholderTextColor={K.ink3} />
+                <Pilula testID="hub-pix-mandar" on style={{ minHeight: 52, borderRadius: 20, paddingHorizontal: 18 }}
+                  disabled={mSend.isPending || (valor.trim() !== "" && !valorOk)}
+                  onPress={() => mSend.mutate(valorOk ? { type: "pix", amount: valorNum } : { type: "pix" })}>
+                  {valorOk ? `Mandar Pix de ${fmt(valorNum)}` : "Mandar chave Pix"}
+                </Pilula>
+              </View>
+            )}
+            <Tx style={{ fontSize: 13, color: K.ink3, lineHeight: 18 }}>Vai o código "copia e cola" da chave cadastrada no canal digital da loja. Ao mandar, a conversa ganha a etiqueta "Esperando Pix".</Tx>
+          </Folha>
+        );
+      })()}
 
-      {painelEtiqueta}
+      {midia.folha(!compacto)}      {painelEtiqueta}
     </>
   );
 
@@ -243,7 +291,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
         {children}
         {/* Fechada, a grade fica montada e escondida (os atalhos seguem no lugar); aberta, vira a folha de baixo. */}
         {!folhaAberta && <View style={{ display: "none" }}>{cabecalhoFolha}{grade}</View>}
-        <WebPortal active={folhaAberta}>
+        {EM_TESTE ? (folhaAberta ? (<>
           <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}>
             <Pressable testID="hub-envio-fundo" accessibilityLabel="Fechar" onPress={() => setFolhaAberta(false)}
               style={[{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: K.scrim }]} />
@@ -260,7 +308,24 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
               {grade}
             </View>
           </View>
-        </WebPortal>
+</>) : null) : (<WebPortal active={folhaAberta}>
+          <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}>
+            <Pressable testID="hub-envio-fundo" accessibilityLabel="Fechar" onPress={() => setFolhaAberta(false)}
+              style={[{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: K.scrim }]} />
+            <View role="dialog" accessibilityLabel="Mandar na conversa"
+              style={[{
+                position: "absolute", left: 0, right: 0, bottom: 0,
+                paddingTop: 10, paddingHorizontal: 18, paddingBottom: 22, gap: 16, borderTopLeftRadius: 30, borderTopRightRadius: 30,
+                backgroundColor: K.sheetMobile, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.18)",
+              }, web({ boxShadow: "0 -24px 60px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)" })]}>
+              <Pressable onPress={() => setFolhaAberta(false)} accessibilityLabel="Fechar" style={{ alignSelf: "center", paddingVertical: 4 }}>
+                <View style={{ width: 40, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,.25)" }} />
+              </Pressable>
+              {cabecalhoFolha}
+              {grade}
+            </View>
+          </View>
+</WebPortal>)}
       </View>
     );
   }

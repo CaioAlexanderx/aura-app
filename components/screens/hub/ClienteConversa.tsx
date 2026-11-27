@@ -14,14 +14,13 @@
 // ============================================================
 import { useState } from "react";
 import { View, Pressable, TextInput } from "react-native";
-import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fmt } from "@/constants/helpers";
 import { formatarTelefone } from "@/utils/telefone";
 import { tourTarget } from "@/utils/tourTarget";
 import { hubApi, type HubCliente } from "@/services/hubApi";
 import { creditApi } from "@/services/creditApi";
-import { K, Tx, Meta, Pilula, Ico, superficie, web } from "./waVisual";
+import { K, Tx, Meta, Pilula, Ico, superficie, web, SANS } from "./waVisual";
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -97,10 +96,8 @@ export function FaixaEhEla({ companyId, convId, onChanged, onError }: {
       </Tx>
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
         <Pilula testID="hub-cliente-e-ela" {...tourTarget("wa.ligar_cadastro")} pequena on disabled={mLigar.isPending} onPress={() => mLigar.mutate(sugestao.id)}>É ela</Pilula>
-        <Pilula testID="hub-cliente-novo" pequena onPress={() => router.push("/clientes" as any)}>Criar cliente novo</Pilula>
-        <Pressable testID="hub-cliente-nao-e" onPress={() => setRecusada(true)} style={{ paddingHorizontal: 6, minHeight: 36, justifyContent: "center" }}>
-          <Tx style={{ fontSize: 13, fontWeight: "600", color: K.ink3, lineHeight: 18 }}>Não é</Tx>
-        </Pressable>
+        {/* Rótulo do mockup; a ação é a de sempre do "Não é": solta a sugestão e o cadastro se liga ou se cria pela coluna ao lado. */}
+        <Pilula testID="hub-cliente-nao-e" pequena onPress={() => setRecusada(true)}>Criar cliente novo</Pilula>
       </View>
     </View>
   );
@@ -135,7 +132,7 @@ export function ClientePainel({ companyId, convId, onChanged, onError }: {
         <Ico nome="busca" size={16} cor={K.ink3} />
         <TextInput testID="hub-cliente-busca-input" value={q} onChangeText={setQ} autoFocus
           placeholder="Buscar cliente por nome, telefone ou e-mail" placeholderTextColor={K.ink3}
-          style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }, web({ outlineStyle: "none", border: 0, background: "none" })]} />
+          style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: SANS }, web({ outlineStyle: "none", border: 0, background: "none" })]} />
       </View>
       {(achados?.clientes || []).map((c: Pick<HubCliente, "id" | "name" | "phone" | "email">) => (
         <Pressable key={c.id} testID={`hub-cliente-achado-${c.id}`} disabled={mLigar.isPending} onPress={() => mLigar.mutate(c.id)}
@@ -166,7 +163,7 @@ export function ClientePainel({ companyId, convId, onChanged, onError }: {
           {!!sub && <Tx style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{sub}</Tx>}
         </View>
         <View style={{ gap: 10 }}>
-          <Linha rotulo="Última compra">{ultima || "ainda sem compra"}</Linha>
+          <Linha rotulo="Última compra">{ultima ? (cliente.last_purchase_amount != null ? `${fmt(cliente.last_purchase_amount)} · ${ultima}` : ultima) : "ainda sem compra"}</Linha>
           {!!cliente.total_spent && <Linha rotulo="Em compras">{fmt(cliente.total_spent)}</Linha>}
           {livre != null && <Linha rotulo="Crediário" cor={K.ok}>{`${reais(livre)} livres`}</Linha>}
           {!!aniv && <Linha rotulo="Aniversário">{aniv}</Linha>}

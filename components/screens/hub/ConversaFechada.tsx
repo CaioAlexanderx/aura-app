@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Pressable, TextInput, Linking, ActivityIndicator } from "react-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web } from "./waVisual";
+import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web, SANS } from "./waVisual";
 import { hubApi, type HubConvite, type HubConvites } from "@/services/hubApi";
 import { tourTarget } from "@/utils/tourTarget";
 import { copyToClipboard } from "@/utils/clipboard";
@@ -244,7 +244,7 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
                 <TextInput testID={`hub-convite-campo-${f.key}`} value={valores[f.key] || ""} maxLength={f.max}
                   onChangeText={(t) => setValores((v) => ({ ...v, [f.key]: t }))}
                   placeholder={f.exemplo} placeholderTextColor={K.ink3}
-                  style={[superficie.seca(999), { minHeight: 44, paddingHorizontal: 16, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }]} />
+                  style={[superficie.seca(999), { minHeight: 44, paddingHorizontal: 16, fontSize: 14, color: K.ink, fontFamily: SANS }] as any} />
               </View>
             ))}
           </View>

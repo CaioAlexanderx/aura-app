@@ -9,10 +9,11 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Pressable, TextInput, Image } from "react-native";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Ico, Pilula, BotaoRedondo, Ponto, superficie, web } from "./waVisual";
-import { AtalhoAcao, type VarianteAtalho } from "./EnvioRapido";
+import { K, Tx, Ico, Pilula, BotaoRedondo, Ponto, superficie, web, SANS } from "./waVisual";
+import { AtalhoAcao, Folha, type VarianteAtalho } from "./EnvioRapido";
+import { Meta } from "./waVisual";
 import { hubApi } from "@/services/hubApi";
 import {
   Gravador, MAX_SEGUNDOS_AUDIO, gravacaoDisponivel, blobParaBase64, escolherArquivo, prepararFoto, relogio,
@@ -29,6 +30,8 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
 }) {
   const [estado, setEstado] = useState<Estado>({ tipo: "livre" });
   const [legenda, setLegenda] = useState("");
+  // Foto: a grade "Fotos dos produtos" abre primeiro; "Escolher do computador" vem depois (artboard Main).
+  const [grade, setGrade] = useState(false);
   const gravador = useRef<Gravador | null>(null);
   const relogioId = useRef<any>(null);
 
@@ -83,7 +86,29 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
     }
   };
 
+  const { data: catalogo } = useQuery({
+    queryKey: ["hub-catalogo", companyId, ""],
+    queryFn: () => hubApi.catalogo(companyId, ""),
+    enabled: grade,
+    staleTime: 30000,
+  });
+  const fotosDosProdutos = (catalogo?.products || []).filter((p) => !!p.image_url).slice(0, 7);
+
+  // Um toque na foto do produto manda a foto (sem o cartão de produto). O navegador baixa a imagem e a manda como mídia.
+  const mandarFotoDoProduto = async (url: string) => {
+    setGrade(false);
+    try {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const pronta = await prepararFoto(new File([blob], "produto.jpg", { type: blob.type || "image/jpeg" }));
+      mSend.mutate({ kind: "foto", mime: pronta.mime, data: pronta.base64 });
+    } catch {
+      onError("Não consegui carregar a foto do produto. Use \"Escolher do computador\".");
+    }
+  };
+
   const escolherFoto = async () => {
+    setGrade(false);
     try {
       const file = await escolherArquivo("image/jpeg,image/png");
       if (!file) return;
@@ -101,11 +126,11 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
 
   // Foto: pílula na barra (desktop) ou círculo na folha (celular).
   const foto = (v: VarianteAtalho) => v === "acao"
-    ? <AtalhoAcao testID="hub-envio-foto" icone="foto" label="Foto" on={estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={escolherFoto} />
+    ? <AtalhoAcao testID="hub-envio-foto" icone="foto" label="Foto" on={grade || estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={() => setGrade((v) => !v)} />
     : (
-      <Pilula testID="hub-envio-foto" on={estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={escolherFoto}>
-        <Ico nome="foto" cor={estado.tipo === "foto" ? K.pillOnInk : K.ink} />
-        <Tx style={{ fontSize: 14, fontWeight: "600", lineHeight: 18, color: estado.tipo === "foto" ? K.pillOnInk : K.ink }}>Foto</Tx>
+      <Pilula testID="hub-envio-foto" on={grade || estado.tipo === "foto"} disabled={bloqueadoFoto} onPress={() => setGrade((v) => !v)}>
+        <Ico nome="foto" cor={grade || estado.tipo === "foto" ? K.pillOnInk : K.ink} />
+        <Tx style={{ fontSize: 14, fontWeight: "600", lineHeight: 18, color: grade || estado.tipo === "foto" ? K.pillOnInk : K.ink }}>Foto</Tx>
       </Pilula>
     );
 
@@ -144,7 +169,7 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
       <View style={{ flex: 1, minWidth: 160, gap: 8 }}>
         <TextInput testID="hub-foto-legenda" value={legenda} onChangeText={setLegenda}
           placeholder="Legenda (opcional)" placeholderTextColor={K.ink3}
-          style={{ minHeight: 40, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb, fontFamily: "inherit" as any, fontSize: 14, color: K.ink }} />
+          style={{ minHeight: 40, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda, backgroundColor: K.dryFb, fontFamily: SANS, fontSize: 14, color: K.ink }} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
           <Pilula testID="hub-foto-mandar" pequena on disabled={ocupado}
             onPress={() => mSend.mutate({ kind: "foto", mime: estado.foto.mime, data: estado.foto.base64, caption: legenda.trim() || undefined })}>
@@ -159,5 +184,23 @@ export function useMidiaConversa({ companyId, convId, onSent, onError }: {
   ) : ocupado ? (
     <View style={painelBase}><Tx style={{ fontSize: 14, color: K.ink2 }}>Enviando…</Tx></View>
   ) : null;
-  return { foto, audio, painel };
+  const folha = (flutua: boolean) => !grade ? null : (
+    <Folha label="Mandar foto" testID="hub-foto-grade" flutua={flutua} gap={10}>
+      <Meta style={{ paddingHorizontal: 6, paddingTop: 4 }}>Fotos dos produtos</Meta>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {fotosDosProdutos.map((p) => (
+          <Pressable key={p.id} testID={`hub-foto-produto-${p.id}`} accessibilityLabel={p.name} onPress={() => void mandarFotoDoProduto(p.image_url!)}
+            style={[{ width: "23%", aspectRatio: 1, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,.14)", backgroundColor: K.trilho }, web({ cursor: "pointer" })]}>
+            <Image source={{ uri: p.image_url! }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          </Pressable>
+        ))}
+        <Pressable testID="hub-foto-computador" accessibilityLabel="Escolher do computador" onPress={() => void escolherFoto()}
+          style={[{ width: "23%", aspectRatio: 1, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(255,255,255,.3)", alignItems: "center", justifyContent: "center" }, web({ cursor: "pointer" })]}>
+          <Ico nome="mais" size={24} cor={K.ink2} traco={1.8} />
+        </Pressable>
+      </View>
+    </Folha>
+  );
+
+  return { foto, audio, painel, folha };
 }

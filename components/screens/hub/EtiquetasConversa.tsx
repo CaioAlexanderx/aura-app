@@ -14,7 +14,7 @@ import { useState } from "react";
 import { View, Pressable, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hubApi, type HubLabel } from "@/services/hubApi";
-import { K, Tx, Meta, Pilula, Ponto, superficie } from "./waVisual";
+import { K, Tx, Meta, Pilula, Ponto, superficie, SANS } from "./waVisual";
 
 export const CORES_ETIQUETA = ["#7c3aed", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#ef4444"];
 
@@ -112,7 +112,7 @@ export function EtiquetasConversa({ companyId, convId, aplicadas, onChanged, onE
         <View testID={id("hub-etiqueta-form")} style={[superficie.seca(20), { padding: 12, gap: 10 }]}>
           <TextInput testID={id("hub-etiqueta-nome")} value={nome} onChangeText={setNome} maxLength={30}
             placeholder="Nome da etiqueta (ex.: Esperando Pix)" placeholderTextColor={K.ink3}
-            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }} />
+            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: K.dryBorda, fontSize: 14, color: K.ink, fontFamily: SANS }} />
           <View style={{ flexDirection: "row", gap: 8 }}>
             {CORES_ETIQUETA.map((c) => (
               <Pressable key={c} testID={id(`hub-etiqueta-cor-${c}`)} onPress={() => setCor(c)} accessibilityLabel={`Cor ${c}`}

@@ -20,8 +20,9 @@ import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
 import { EtiquetasConversa } from "./EtiquetasConversa";
 import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConversa";
 import { PainelCliente } from "./PainelCliente";
+import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB } from "./waVisual";
+import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB, SANS } from "./waVisual";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -138,6 +139,21 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
     </View>
   ) : null;
 
+  // Assumir / Devolver / Resolver: pílulas secundárias. No desktop ficam no cabeçalho, à direita do
+  // relógio "Conversa aberta"; no celular, numa linha curta abaixo do cabeçalho.
+  const botoesEstado = (
+    <>
+      {(conv.status === "ia" || conv.status === "precisa_humano") && (
+        <Pilula pequena onPress={() => mAction.mutate(() => hubApi.assume(companyId, convId))}>Assumir conversa</Pilula>
+      )}
+      {conv.status === "humano" && aurinhaLigada && (
+        <Pilula testID="hub-devolver-aurinha" pequena onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>Devolver à Aurinha</Pilula>
+      )}
+      {conv.status !== "resolvida" && (
+        <Pilula pequena onPress={() => mAction.mutate(() => hubApi.resolve(companyId, convId))}>Resolver</Pilula>
+      )}
+    </>
+  );
   const larguraBolha: any = compacto ? "82%" : (WEB ? "min(440px, 78%)" : "78%");
 
   // ── Cabeçalho ──
@@ -182,37 +198,18 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
             </Tx>
           </View>
         )}
+        {botoesEstado}
         {statusPill}
       </View>
     </View>
   );
 
-  const acoes = (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 10, paddingHorizontal: compacto ? 14 : 22 }}>
-      {compacto && statusPill}
-      {(conv.status === "ia" || conv.status === "precisa_humano") && (
-        <Pilula pequena on onPress={() => mAction.mutate(() => hubApi.assume(companyId, convId))}>Assumir conversa</Pilula>
-      )}
-      {conv.status === "humano" && aurinhaLigada && (
-        <Pilula testID="hub-devolver-aurinha" pequena onPress={() => mAction.mutate(() => hubApi.returnToAi(companyId, convId))}>Devolver à Aurinha</Pilula>
-      )}
-      {conv.status !== "resolvida" && (
-        <Pilula pequena onPress={() => mAction.mutate(() => hubApi.resolve(companyId, convId))}>Resolver</Pilula>
-      )}
-      <View style={{ flex: 1 }} />
-      {(!compacto || detalhes) && CATEGORIES.map((cat) => {
-        const meta = CATEGORY_META[cat];
-        const on = conv.category === cat;
-        return (
-          <Pressable key={cat} onPress={() => mAction.mutate(() => hubApi.setCategory(companyId, convId, on ? null : cat))}
-            style={[{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderColor: meta.color + "66" }, on && { backgroundColor: meta.color + "22" }]}>
-            <Tx style={{ fontSize: 12, fontWeight: "700", color: meta.color, lineHeight: 16 }}>{meta.label}</Tx>
-          </Pressable>
-        );
-      })}
+  const acoes = compacto ? (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center", paddingVertical: 10, paddingHorizontal: 14 }}>
+      {statusPill}
+      {botoesEstado}
     </View>
-  );
-
+  ) : null;
   // ── Mensagens ──
   const mensagens = (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: compacto ? 9 : 10, paddingVertical: compacto ? 16 : 20, paddingHorizontal: compacto ? 14 : 22, minHeight: compacto ? 0 : 360 }}>
@@ -222,6 +219,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           const mine = m.direction === "outbound";
           const author = rotuloDoAutor(m, conv);
           const produto = m.tipo === "produto" && !!m.image_url;
+          const cartao = !!m.tipo && CARTAO_TIPOS.includes(m.tipo);
+          const audio = m.media?.kind === "audio";
           return (
             <View key={m.id} style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
               <View testID={`hub-msg-${m.id}`}
@@ -229,20 +228,24 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                   maxWidth: larguraBolha, paddingTop: produto ? 8 : 10, paddingHorizontal: produto ? 8 : 14, paddingBottom: 8, borderRadius: 20, borderWidth: 1,
                   borderBottomLeftRadius: mine ? 20 : 6, borderBottomRightRadius: mine ? 6 : 20,
                   borderColor: mine ? K.bolhaOutBorda : K.bolhaInBorda, backgroundColor: mine ? K.bolhaOutFb : K.bolhaInFb,
-                }, produto ? { width: 280 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
-                {author && (
-                  <Tx testID={`hub-msg-autor-${m.id}`} style={{ fontSize: 11, fontWeight: "700", color: mine ? K.acc : K.ink2, marginBottom: 2, lineHeight: 15, paddingHorizontal: produto ? 6 : 0 }}>{author}</Tx>
-                )}
+                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
                 {produto && (
                   <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
                 )}
                 {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={{ ...m.media, url: urlEstavel(m.id, m.media.url) }} /> : null}
-                {textoDaBolha(m) != null && (
+                {m.tipo === "orcamento" && <CartaoOrcamento content={m.content} />}
+                {m.tipo === "pix" && <CartaoPix content={m.content} />}
+                {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} />}
+                {!cartao && textoDaBolha(m) != null && (
                   <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
                 )}
-                <Tx style={{ fontSize: 12, color: K.ink3, textAlign: "right", marginTop: 4, lineHeight: 16, paddingHorizontal: produto ? 6 : 0 }}>
-                  {`${shortTime(m.created_at)}${mine && m.status ? ` · ${m.status}` : ""}`}
-                </Tx>
+                {/* Rodapé da bolha: "Lorena · 10:14 · lida". */}
+                <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4, paddingHorizontal: produto ? 6 : 0 }}>
+                  {author && <Tx testID={`hub-msg-autor-${m.id}`} style={{ fontSize: 12, color: K.ink3, lineHeight: 16 }}>{author}</Tx>}
+                  <Tx style={{ fontSize: 12, color: K.ink3, lineHeight: 16 }}>
+                    {`${author ? " · " : ""}${shortTime(m.created_at)}${mine && m.status ? ` · ${m.status}` : ""}`}
+                  </Tx>
+                </View>
               </View>
             </View>
           );
@@ -254,7 +257,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         <View key={p.id} style={[superficie.seca(20), { alignSelf: "flex-end", maxWidth: "84%", padding: 12, gap: 8, borderStyle: "dashed", borderWidth: 1.5, borderColor: "rgba(196,181,253,.55)" }]}>
           <Tx style={{ fontSize: 12, fontWeight: "700", color: K.acc, lineHeight: 16 }}>✦ Resposta sugerida pela Aurinha — aguardando aprovação</Tx>
           {editingId === p.id ? (
-            <TextInput style={{ borderWidth: 1, borderColor: K.dryBorda, borderRadius: 14, padding: 10, fontSize: 15, color: K.ink, minHeight: 70, textAlignVertical: "top", fontFamily: "inherit" as any }}
+            <TextInput style={{ borderWidth: 1, borderColor: K.dryBorda, borderRadius: 14, padding: 10, fontSize: 15, color: K.ink, minHeight: 70, textAlignVertical: "top", fontFamily: SANS }}
               value={editText} onChangeText={setEditText} multiline placeholderTextColor={K.ink3} />
           ) : (
             <Tx style={{ fontSize: 15, lineHeight: 22 }}>{p.edited_body || p.text_body}</Tx>
@@ -288,7 +291,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
       <View style={[superficie.seca(999), { flex: 1, minWidth: 0, minHeight: compacto ? 46 : 52, paddingHorizontal: 18, justifyContent: "center" }]}>
         <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholder} placeholderTextColor={K.ink3}
           onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
-          style={[{ fontSize: 15, color: K.ink, fontFamily: "inherit" as any, minWidth: 0 }, web({ outlineStyle: "none" })]} />
+          style={[{ fontSize: 15, color: K.ink, fontFamily: SANS, minWidth: 0 }, web({ outlineStyle: "none" })]} />
       </View>
       {!compacto && abertaAte && midia.audio("redondo")}
       <BotaoPrincipal disabled={!podeEnviar} onPress={() => mReply.mutate(draft.trim())}>{mReply.isPending ? "..." : "Enviar"}</BotaoPrincipal>

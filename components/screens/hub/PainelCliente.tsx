@@ -11,10 +11,10 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hubApi } from "@/services/hubApi";
-import { conversaAbertaAte } from "./types";
+import { conversaAbertaAte, CATEGORIES, CATEGORY_META } from "./types";
 import { ClientePainel } from "./ClienteConversa";
 import { EtiquetasConversa } from "./EtiquetasConversa";
-import { K, Tx, Ico, superficie } from "./waVisual";
+import { K, Tx, Meta, Ico, Pilula, Ponto, superficie } from "./waVisual";
 
 export function PainelCliente({ companyId, convId, embutido = false }: { companyId: string; convId: string; embutido?: boolean }) {
   const qc = useQueryClient();
@@ -39,6 +39,20 @@ export function PainelCliente({ companyId, convId, embutido = false }: { company
         : [superficie.solida(30), { padding: 22, gap: 18, alignSelf: "flex-start", width: "100%" }]}>
       <ClientePainel companyId={companyId} convId={convId} onChanged={mudou} onError={setErro} />
       <EtiquetasConversa companyId={companyId} convId={convId} aplicadas={conv.labels || []} onChanged={mudou} onError={setErro} />
+      {/* Triagem (produto, troca, entrega...): mesmas pílulas pequenas das etiquetas, na mesma seção. */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: -10 }}>
+        {CATEGORIES.map((cat) => {
+          const meta = CATEGORY_META[cat];
+          const on = conv.category === cat;
+          return (
+            <Pilula key={cat} testID={`hub-categoria-${cat}`} pequena on={on}
+              onPress={() => { void hubApi.setCategory(companyId, convId, on ? null : cat).then(mudou).catch((e: any) => setErro(e?.message || "Não foi possível mudar a categoria.")); }}>
+              <Ponto cor={meta.color} />
+              <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: on ? K.pillOnInk : K.ink }}>{meta.label}</Tx>
+            </Pilula>
+          );
+        })}
+      </View>
       {erro && <Tx testID="hub-painel-erro" style={{ fontSize: 13, color: K.warn, lineHeight: 18 }}>{erro}</Tx>}
       {aberta && (
         <View style={[superficie.seca(20), { flexDirection: "row", gap: 10, alignItems: "flex-start", paddingVertical: 14, paddingHorizontal: 16 }]}>

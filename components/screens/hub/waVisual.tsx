@@ -7,11 +7,13 @@
 // cor sólida equivalente. Tema: o app recarrega a página ao trocar claro/escuro,
 // então a paleta é escolhida uma vez, na carga (IS_DARK_MODE).
 // ============================================================
-import { createElement, useEffect, type ReactNode } from "react";
+import { createElement, useEffect, useState, type ReactNode } from "react";
 import { View, Text, Pressable, Platform, type TextProps, type ViewStyle, type TextStyle, type StyleProp } from "react-native";
 import { IS_DARK_MODE } from "@/constants/colors";
 
 export const WEB = Platform.OS === "web";
+/** Jest: o react-test-renderer não monta portais; a gaveta do celular fica no fluxo só aí. */
+export const EM_TESTE = typeof process !== "undefined" && !!(process as any).env?.JEST_WORKER_ID;
 
 export const SANS = '"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
 export const MONO = '"DM Mono", ui-monospace, monospace';
@@ -59,10 +61,13 @@ const LIGHT = {
 } as const;
 // As quatro quedas (linguagem-vidro, seção 10): sem backdrop-filter, transparência reduzida,
 // modo leve (aparelho fraco / economia de dados) => superfície sólida equivalente, sem desfoque.
-// Movimento reduzido é tratado no CSS injetado (useFontesWa). O modo leve guardado em
-// sessionStorage ("aura-lite") e a decisão por aparelho seguem a receita; a medição por
-// quadros, depois da carga, fica de fora (ver PR).
-export const LEVE: boolean = (() => {
+// Movimento reduzido é tratado no CSS injetado (useFontesWa). O modo leve segue a receita:
+// decidido na carga (pedido do sistema, "aura-lite" guardado em sessionStorage, aparelho fraco)
+// e CONFIRMADO medindo os quadros depois da carga (seção 12, `mede`): aparelho que começou leve
+// e mede bem sobe para o completo; o que começou completo e mede mal desce. A tela se redesenha
+// quando o modo muda.
+let LITE_PORQUE: "" | "pedido" | "guardado" | "aparelho" = "";
+function decideLeve(): boolean {
   if (!WEB || typeof window === "undefined") return false;
   try {
     const mm = (q: string) => !!(window.matchMedia && window.matchMedia(q).matches);
@@ -71,12 +76,61 @@ export const LEVE: boolean = (() => {
     try { guardado = sessionStorage.getItem("aura-lite"); } catch {}
     const pedido = !!(n.connection && n.connection.saveData) || mm("(prefers-reduced-transparency: reduce)");
     const fraco = !!((n.deviceMemory && n.deviceMemory <= 4) || (n.hardwareConcurrency && n.hardwareConcurrency <= 4));
+    LITE_PORQUE = pedido ? "pedido" : guardado ? "guardado" : fraco ? "aparelho" : "";
     return pedido || guardado === "1" || (guardado !== "0" && fraco);
   } catch { return false; }
-})();
-const SEM_BLUR: boolean = LEVE || (WEB && typeof CSS !== "undefined" && typeof CSS.supports === "function"
-  && !(CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)")));
+}
+const SEM_SUPORTE: boolean = WEB && typeof CSS !== "undefined" && typeof CSS.supports === "function"
+  && !(CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)"));
+export let LEVE: boolean = decideLeve();
+let SEM_BLUR: boolean = LEVE || SEM_SUPORTE;
 
+const ouvintesLeve = new Set<() => void>();
+function guardaLite(v: "0" | "1") { try { sessionStorage.setItem("aura-lite", v); } catch {} }
+function setLeve(on: boolean, salva: boolean) {
+  const mudou = on !== LEVE;
+  LEVE = on;
+  SEM_BLUR = on || SEM_SUPORTE;
+  try { if (on) document.documentElement.dataset.lite = "1"; else delete document.documentElement.dataset.lite; } catch {}
+  if (salva) guardaLite(on ? "1" : "0");
+  if (mudou) ouvintesLeve.forEach((f) => f());
+}
+/** Intervalo que 75% dos quadros cumprem; null se não deu para medir (aba oculta). */
+function amostra(cb: (q: number | null) => void) {
+  let n = 0, last = 0, fim = false;
+  const ds: number[] = [];
+  const t0 = performance.now();
+  const acaba = () => {
+    if (fim) return; fim = true;
+    if (ds.length < 40) return cb(null);
+    ds.sort((a, b) => a - b);
+    cb(ds[Math.floor(ds.length * 0.75)]);
+  };
+  const f = (t: number) => {
+    if (fim) return;
+    if (last) ds.push(t - last);
+    last = t;
+    if (++n < 90 && t - t0 < 2500 && !document.hidden) requestAnimationFrame(f); else acaba();
+  };
+  requestAnimationFrame(f);
+  setTimeout(acaba, 3200);
+}
+let medido = false;
+function mede() {
+  if (!WEB || medido || typeof requestAnimationFrame !== "function") return;
+  medido = true;
+  if (LITE_PORQUE === "pedido" || LITE_PORQUE === "guardado") return;
+  amostra((q) => {
+    if (q == null) return;
+    if (LEVE) {
+      if (q > 25) return guardaLite("1");
+      setLeve(false, false);
+      setTimeout(() => amostra((q2) => { if (q2 != null) setLeve(q2 > 25, true); }), 400);
+    } else if (q > 25) {
+      setTimeout(() => amostra((q2) => { if (q2 != null && q2 > 25) setLeve(true, true); }), 600);
+    }
+  });
+}
 export const K: typeof DARK = (IS_DARK_MODE ? DARK : LIGHT) as any;
 
 /** Estilo só do navegador (gradiente, blur, sombra); fora dele, vazio. */
@@ -117,6 +171,7 @@ export function useFontesWa() {
     l.rel = "stylesheet";
     l.href = "https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Instrument+Serif&display=swap";
     document.head.appendChild(l);
+    setTimeout(mede, 700);
     if (!document.getElementById("wa-anim-css")) {
       const s = document.createElement("style");
       s.id = "wa-anim-css";
@@ -295,8 +350,15 @@ export function Fio() {
 /** Fundo da tela: escuro com brilho violeta (claro: lavanda com brilho suave). */
 export function FundoWa({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   useFontesWa();
+  // Se a medição de quadros mudar o modo leve, a tela se redesenha com a superfície certa.
+  const [, redesenha] = useState(0);
+  useEffect(() => {
+    const f = () => redesenha((n) => n + 1);
+    ouvintesLeve.add(f);
+    return () => { ouvintesLeve.delete(f); };
+  }, []);
   return (
-    <View style={[{ position: "relative", backgroundColor: K.bg, overflow: "hidden", borderRadius: 0 }, web({ isolation: "isolate" }), style]}>
+    <View key={LEVE ? "leve" : "completo"} style={[{ position: "relative", backgroundColor: K.bg, overflow: "hidden", borderRadius: 0 }, web({ isolation: "isolate" }), style]}>
       {WEB && <View pointerEvents="none" style={[{ position: "absolute", left: "28%", top: 120, width: 900, height: 640, borderRadius: 450, zIndex: -1 }, web({ backgroundImage: K.spot })]} />}
       {WEB && <View pointerEvents="none" style={[{ position: "absolute", right: -120, top: -160, width: 620, height: 520, borderRadius: 310, opacity: 0.55, zIndex: -1 }, web({ backgroundImage: K.spot })]} />}
       {children}

@@ -22,7 +22,7 @@ import { CHANNEL_META, STATUS_META, CATEGORY_META, shortTime, nomeDoContato, con
 import { ThreadView } from "./ThreadView";
 import { tourTarget } from "@/utils/tourTarget";
 import { PainelCliente } from "./PainelCliente";
-import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web } from "./waVisual";
+import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web, SANS } from "./waVisual";
 
 type StatusFilter = "todas" | HubStatus;
 
@@ -177,7 +177,7 @@ export function HubView() {
         <Ico nome="busca" size={18} cor={K.ink3} />
         <TextInput testID="hub-busca" accessibilityLabel="Buscar conversa" value={busca} onChangeText={setBusca}
           placeholder="Buscar nome, telefone ou produto" placeholderTextColor={K.ink3} autoCapitalize="none"
-          style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: "inherit" as any }, web({ outlineStyle: "none" })]} />
+          style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: SANS }, web({ outlineStyle: "none" })]} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {FILTERS.map((f) => (
