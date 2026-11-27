@@ -113,7 +113,7 @@ export const V = ESCURO
   ? {
       ink: "#f3efff", ink2: "rgba(226,219,255,.82)", ink3: "rgba(184,172,223,.86)",
       acc: "#c4b5fd", acc2: "#9a6cf7", gb: "rgba(255,255,255,.17)", hi: "rgba(255,255,255,.32)",
-      solid: "rgba(22,14,52,.94)", ok: "#6ee7b7", warn: "#fcd34d", bad: "#fca5a5",
+      solid: "rgba(22,14,52,.94)", solidLeve: "#161324", solidLeveGrad: "linear-gradient(160deg,#1f1a30,#0d0b18)", ok: "#6ee7b7", warn: "#fcd34d", bad: "#fca5a5",
       rule: "rgba(255,255,255,.1)", fill: "rgba(255,255,255,.05)", fill2: "rgba(255,255,255,.08)",
       line: "rgba(255,255,255,.14)", lineOn: "rgba(196,181,253,.62)", on: "rgba(167,139,250,.2)", onTxt: "#ffffff",
       track: "rgba(255,255,255,.12)", capFree: "rgba(255,255,255,.06)", capFreeLine: "rgba(255,255,255,.28)",
@@ -129,7 +129,7 @@ export const V = ESCURO
   : {
       ink: "#18172b", ink2: "#3b3461", ink3: "#3f3760",
       acc: "#4c1d95", acc2: "#6d28d9", gb: "rgba(109,40,217,.2)", hi: "#ffffff",
-      solid: "rgba(250,249,255,.96)", ok: "#047857", warn: "#b45309", bad: "#b91c1c",
+      solid: "rgba(250,249,255,.96)", solidLeve: "rgba(250,249,255,.96)", solidLeveGrad: "", ok: "#047857", warn: "#b45309", bad: "#b91c1c",
       rule: "rgba(24,23,43,.16)", fill: "rgba(109,40,217,.05)", fill2: "rgba(109,40,217,.08)",
       line: "rgba(109,40,217,.22)", lineOn: "rgba(109,40,217,.6)", on: "rgba(124,58,237,.14)", onTxt: "#3b1a8a",
       track: "rgba(24,23,43,.1)", capFree: "rgba(109,40,217,.05)", capFreeLine: "rgba(109,40,217,.35)",
@@ -227,7 +227,7 @@ export function estiloSuperficie(v: VarianteSuperficie, raio: number): any {
   const base: any = { borderRadius: raio, borderWidth: 1 };
   if (v === "glass" && liteAgora) {
     // queda: a placa vira a superfície sólida equivalente (sem desfoque)
-    return { ...base, borderColor: V.gb, backgroundColor: V.solid, ...(WEB ? { boxShadow: `0 30px 80px ${V.sombra}, inset 0 1px 0 ${V.hi}` } : {}) };
+    return { ...base, borderColor: V.gb, backgroundColor: V.solidLeve, ...(WEB ? { ...(V.solidLeveGrad ? { backgroundImage: V.solidLeveGrad } : {}), boxShadow: `0 30px 80px ${V.sombra}, inset 0 1px 0 ${V.hi}` } : {}) };
   }
   if (v === "glass") {
     return {
@@ -248,9 +248,11 @@ export function estiloSuperficie(v: VarianteSuperficie, raio: number): any {
       } : {}),
     };
   }
+  // modo leve: o mesmo token da placa de vidro leve (uma familia de cor so)
+  const leve = liteAgora;
   return {
-    ...base, borderColor: V.gb, backgroundColor: V.solid,
-    ...(WEB ? { boxShadow: `0 30px 80px ${ESCURO ? "rgba(3,0,20,.5)" : V.sombra}, inset 0 1px 0 ${V.hi}` } : {}),
+    ...base, borderColor: V.gb, backgroundColor: leve ? V.solidLeve : V.solid,
+    ...(WEB ? { ...(leve && V.solidLeveGrad ? { backgroundImage: V.solidLeveGrad } : {}), boxShadow: `0 30px 80px ${ESCURO ? "rgba(3,0,20,.5)" : V.sombra}, inset 0 1px 0 ${V.hi}` } : {}),
   };
 }
 

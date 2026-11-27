@@ -66,12 +66,12 @@ export const superficie = {
   solida: (r = 30): ViewStyle => estiloSuperficie("solid", r),
   /**
    * Placa da conversa: o vidro do artboard Main, branco 13% -> 4% direto sobre o fundo escuro (sem base roxa por baixo).
-   * No modo leve (sem desfoque) a superficie vira o equivalente opaco desse vidro sobre #04020f, nao o roxo de V.solid.
+   * No modo leve (sem desfoque) vale o token unico V.solidLeve (estiloSuperficie).
    */
   placa: (r = 30): ViewStyle => {
     const v: any = estiloSuperficie("glass", r);
     if (!ESCURO) return v;
-    if (modoLeve()) return { ...v, backgroundColor: "#16141f", ...(WEB ? { backgroundImage: "linear-gradient(160deg,#25232e,#0e0c19)" } : {}) };
+    if (modoLeve()) return v; // o ramo leve do vidro ja usa V.solidLeve
     return { ...v, backgroundColor: "transparent" };
   },
 };
