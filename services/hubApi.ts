@@ -90,6 +90,18 @@ export interface HubCartao {
   codigo?: string | null;
   imagem?: string | null;
   descricao?: string | null;
+  // ── produto_grade (fotos e tamanhos) e a resposta da cliente ──
+  /** Fotos mandadas na bolha. */
+  fotos?: string[] | null;
+  /** [negrito, apoio] da legenda. */
+  legenda?: string[] | null;
+  /** "Qual tamanho?" com os botões de resposta. */
+  pergunta?: string | null;
+  botoes?: string[] | null;
+  /** Resposta da cliente por botão (mensagem inbound `resposta_botao`). */
+  tamanho?: string | null;
+  /** Sugestão de reservar e mandar o Pix, vinda do servidor com a resposta. */
+  sugestao?: { product_id: string; color_key: string | null; size: string; valor: number } | null;
 }
 
 export interface HubMessage {

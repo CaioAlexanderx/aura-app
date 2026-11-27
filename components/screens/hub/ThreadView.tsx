@@ -21,7 +21,8 @@ import { BolhaDeMidia, textoDaBolha } from "./BolhaDeMidia";
 import { EtiquetasConversa } from "./EtiquetasConversa";
 import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConversa";
 import { PainelCliente } from "./PainelCliente";
-import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
+import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CartaoProdutoGrade, RespostaDeBotao, SugestaoDeReserva, CARTAO_TIPOS, TIPO_GRADE, TIPO_RESPOSTA_BOTAO } from "./CartoesDaThread";
+import { hubProdutoGradeApi } from "@/services/hubProdutoGradeApi";
 import { tourTarget } from "@/utils/tourTarget";
 import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
@@ -222,15 +223,18 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
           const author = rotuloDoAutor(m, conv);
           const produto = m.tipo === "produto" && !!m.image_url;
           const cartao = !!m.tipo && CARTAO_TIPOS.includes(m.tipo);
+          const grade = m.tipo === TIPO_GRADE;
+          const respostaBotao = m.tipo === TIPO_RESPOSTA_BOTAO;
           const audio = m.media?.kind === "audio";
           return (
-            <View key={m.id} style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
+            <View key={m.id} style={{ gap: compacto ? 9 : 10 }}>
+            <View style={{ flexDirection: "row", justifyContent: mine ? "flex-end" : "flex-start" }}>
               <View testID={`hub-msg-${m.id}`}
                 style={[{
                   maxWidth: larguraBolha, paddingTop: produto ? 8 : 10, paddingHorizontal: produto ? 8 : 14, paddingBottom: 8, borderRadius: 20, borderWidth: 1,
                   borderBottomLeftRadius: mine ? 20 : 6, borderBottomRightRadius: mine ? 6 : 20,
                   borderColor: mine ? K.bolhaOutBorda : K.bolhaInBorda, backgroundColor: mine ? K.bolhaOutFb : K.bolhaInFb,
-                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
+                }, produto ? { width: 280 } : null, cartao ? { width: 300, paddingTop: m.tipo === "link_loja" ? 8 : 14, paddingHorizontal: m.tipo === "link_loja" ? 8 : 16 } : null, audio ? { width: 300 } : null, grade ? { width: 360, paddingTop: 6, paddingHorizontal: 6 } : null, web({ backgroundImage: mine ? K.bolhaOut : K.bolhaIn })]}>
                 {produto && (
                   <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
                 )}
@@ -238,7 +242,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                 {m.tipo === "orcamento" && <CartaoOrcamento content={m.content} cartao={m.cartao} />}
                 {m.tipo === "pix" && <CartaoPix content={m.content} cartao={m.cartao} />}
                 {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} cartao={m.cartao} />}
-                {!cartao && textoDaBolha(m) != null && (
+                {grade && <CartaoProdutoGrade cartao={m.cartao} />}
+                {respostaBotao && <RespostaDeBotao content={m.content} cartao={m.cartao} />}
+                {!cartao && !grade && !respostaBotao && textoDaBolha(m) != null && (
                   <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
                 )}
                 {/* Rodapé da bolha: "Lorena · 10:14 · lida". */}
@@ -249,6 +255,11 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                   </Tx>
                 </View>
               </View>
+            </View>
+            {respostaBotao && m.cartao?.sugestao && (
+              <SugestaoDeReserva nome={nomeCurto} cartao={m.cartao} ocupado={mAction.isPending}
+                onReservar={() => { const sg = m.cartao!.sugestao!; mAction.mutate(() => hubProdutoGradeApi.reservarEMandarPix(companyId, convId, { product_id: sg.product_id, color_key: sg.color_key, size: sg.size })); }} />
+            )}
             </View>
           );
         })}

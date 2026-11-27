@@ -18,7 +18,7 @@ import { useAuthStore } from "@/stores/auth";
 import { copyToClipboard } from "@/utils/clipboard";
 import { fmt } from "@/constants/helpers";
 import type { HubCartao } from "@/services/hubApi";
-import { K, Tx, Meta, MONO, SERIF, web } from "./conversasUi";
+import { K, Tx, Meta, Pilula, MONO, SERIF, web, superficie, anima } from "./conversasUi";
 
 const limpa = (s: string) => s.replace(/[*_]/g, "").trim();
 const VALOR = /R\$\s*[\d.]+(?:,\d{1,2})?/;
@@ -156,3 +156,68 @@ export function CartaoLinkLoja({ content, cartao }: { content: string; cartao?: 
 
 /** Larguras do mockup: cartões de 300 px (link, 300 com 8 de borda). */
 export const CARTAO_TIPOS = ["orcamento", "pix", "link_loja"];
+/** Mensagens que a thread desenha com peça própria (fotos e tamanhos; resposta por botão). */
+export const TIPO_GRADE = "produto_grade";
+export const TIPO_RESPOSTA_BOTAO = "resposta_botao";
+
+/** Bolha com as fotos, a legenda e o "Qual tamanho?" com os botões (.bub do artboard ProdutoGrade). */
+export function CartaoProdutoGrade({ cartao }: { cartao?: HubCartao | null }) {
+  const c = cartao || {};
+  const fotos = (c.fotos || []).filter(Boolean);
+  const [l1, l2] = c.legenda || [];
+  const botoes = (c.botoes || []).filter(Boolean);
+  return (
+    <View testID="hub-cartao-grade">
+      {fotos.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+          {fotos.map((u, i) => (
+            <Image key={`${u}-${i}`} testID={`hub-cartao-grade-foto-${i}`} source={{ uri: u }} resizeMode="cover"
+              style={{ width: fotos.length === 1 ? "100%" : "49%", aspectRatio: 1, borderRadius: 12, backgroundColor: K.trilho }} />
+          ))}
+        </View>
+      )}
+      <View style={{ paddingTop: 8, paddingHorizontal: 8, paddingBottom: 2, gap: 2 }}>
+        {!!l1 && <Tx style={{ fontWeight: "700" }}>{l1}</Tx>}
+        {!!l2 && <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>{l2}</Tx>}
+      </View>
+      {botoes.length > 0 && (
+        <View style={{ marginTop: 6 }}>
+          <Tx style={{ paddingTop: 4, paddingHorizontal: 8, paddingBottom: 6, fontSize: 14, fontWeight: "600", lineHeight: 20 }}>{c.pergunta || "Qual tamanho?"}</Tx>
+          {botoes.map((b) => (
+            <View key={b} testID={`hub-cartao-grade-botao-${b}`} style={{ minHeight: 40, alignItems: "center", justifyContent: "center", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.16)" }}>
+              <Tx style={{ fontSize: 14, fontWeight: "700", color: K.acc, lineHeight: 20 }}>{b}</Tx>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** A resposta da cliente por botão: "tocou no botão" e o tamanho. */
+export function RespostaDeBotao({ content, cartao }: { content: string; cartao?: HubCartao | null }) {
+  return (
+    <View testID="hub-resposta-botao">
+      <Tx style={{ fontSize: 12, color: K.ink3, lineHeight: 16 }}>tocou no botão</Tx>
+      <Tx style={{ fontSize: 15, lineHeight: 22 }}>{cartao?.tamanho || content}</Tx>
+    </View>
+  );
+}
+
+/** "A Ana quer o M. Reservar uma e mandar o Pix de R$ X?" com o botão de reservar. */
+export function SugestaoDeReserva({ nome, cartao, ocupado, onReservar }: {
+  nome: string; cartao: HubCartao; ocupado?: boolean; onReservar: () => void;
+}) {
+  const s = cartao.sugestao;
+  const an = anima("pop", 0.4, 0.2);
+  if (!s) return null;
+  return (
+    <View testID="hub-sugestao-reserva" {...({ dataSet: an.dataSet } as any)}
+      style={[superficie.seca(20), { alignSelf: "stretch", paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" }, an.style]}>
+      <Tx style={{ flex: 1, minWidth: 200, fontSize: 14, color: K.ink2, lineHeight: 20 }}>
+        {`${nome === "o cliente" ? "O cliente" : `A ${nome}`} quer o ${s.size}. Reservar uma e mandar o Pix de ${fmt(Number(s.valor))}?`}
+      </Tx>
+      <Pilula pequena on testID="hub-sugestao-reservar" disabled={ocupado} onPress={onReservar}>Reservar e mandar o Pix</Pilula>
+    </View>
+  );
+}
