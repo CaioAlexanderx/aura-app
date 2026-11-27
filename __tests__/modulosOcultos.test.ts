@@ -92,8 +92,8 @@ describe("plano e permissão por baixo do menu", () => {
     expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBeDefined();
   });
 
-  test("WhatsApp segue no Negócio; Reativação vale para o Essencial (wa.me)", () => {
-    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("negocio");
+  test("WhatsApp vale desde o Essencial (virada de 27/11); Reativação é rota legada", () => {
+    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("essencial");
     expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBe("essencial");
   });
 
@@ -111,10 +111,10 @@ describe("plano e permissão por baixo do menu", () => {
     RELIGADAS.forEach((m) => expect(v.has(m)).toBe(true));
   });
 
-  test("o Essencial vê a Reativação e NÃO vê o WhatsApp da Meta", () => {
+  test("o Essencial vê o WhatsApp e a rota legada da Reativação", () => {
     const v = computeVisibleModules("essencial", null, undefined);
     expect(v.has("clientes.reativacao")).toBe(true);
-    expect(v.has("whatsapp")).toBe(false);
+    expect(v.has("whatsapp")).toBe(true);
     expect(v.has("clientes")).toBe(true);
   });
 });

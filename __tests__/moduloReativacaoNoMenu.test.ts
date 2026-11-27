@@ -58,12 +58,12 @@ describe("Reativação: chaves próprias nos dois mapas", () => {
 
   test("tem chave própria: o plano é decisão dela, não herança de /clientes", () => {
     expect(Object.prototype.hasOwnProperty.call(MODULE_PLAN_MAP, "clientes.reativacao")).toBe(true);
-    // O canal da Meta continua um degrau acima.
-    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("negocio");
+    // 27/11/2026: o WhatsApp oficial vale para todos os planos.
+    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("essencial");
   });
 
-  test("whatsapp continua com chave própria no Negócio", () => {
-    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("negocio");
+  test("whatsapp continua com chave própria, agora desde o Essencial", () => {
+    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("essencial");
   });
 
   test("os quatro itens do grupo estão em MODULE_PLAN_MAP", () => {
@@ -116,11 +116,12 @@ describe("Reativação: permissão do membro", () => {
 });
 
 describe("Reativação: visibilidade por plano", () => {
-  test("Essencial vê Clientes e a Reativação (wa.me), mas não o WhatsApp da Meta", () => {
+  test("Essencial vê Clientes e o WhatsApp (virada de 27/11); a Reativação é rota legada", () => {
     const v = computeVisibleModules("essencial", null, undefined);
     expect(v.has("clientes")).toBe(true);
     expect(v.has("clientes.reativacao")).toBe(true);
-    expect(v.has("whatsapp")).toBe(false);
+    expect(v.has("whatsapp")).toBe(true);
+    expect(v.has("hub_social")).toBe(true);
   });
 
   test("Negócio e Expansão veem o grupo inteiro", () => {
@@ -145,14 +146,14 @@ describe("Reativação: visibilidade por plano", () => {
     expect(v.has("clientes")).toBe(true);
   });
 
-  test("permissão não vence o plano: `clientes` no Essencial não libera o WhatsApp da Meta", () => {
+  test("a permissão `clientes` no Essencial libera o WhatsApp (todos os planos)", () => {
     const v = computeVisibleModules("essencial", null, {
       is_owner: false,
       permissions: { clientes: true },
     });
     expect(v.has("clientes")).toBe(true);
     expect(v.has("clientes.reativacao")).toBe(true);
-    expect(v.has("whatsapp")).toBe(false);
+    expect(v.has("whatsapp")).toBe(true);
   });
 });
 

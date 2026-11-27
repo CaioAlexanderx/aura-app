@@ -82,7 +82,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // chave PROPRIA (regra 3), mesmo plano do crediario -- como otica.config.
   'crediario.config': 'negocio',
   agendamento: 'negocio',
-  canal: 'negocio', whatsapp: 'negocio',
+  canal: 'negocio',
+  // 27/11/2026 (virada do WhatsApp) -- franquia fechada com a Celia em 26/11:
+  // o WhatsApp oficial vale para todos. Negocio: 10 novidades, 100 avisos e
+  // 80 conversas da Aurinha por mes; Essencial: presente de boas-vindas
+  // 10/30/50 (uma vez) + adicional de R$ 29/mes. O custo e controlado pelo
+  // saldo no servidor (inclusive a Aurinha).
+  whatsapp: 'essencial',
   // 16/09/2026 -- Reativacao por WhatsApp (app/clientes/reativacao.tsx) ganha
   // chave PROPRIA (regra 3). A tela existia desde a Fase 7 mas era orfa: nao
   // havia item de menu nenhum apontando pra ela, e o unico jeito de chegar era
@@ -106,7 +112,8 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // Agentes, com chave PROPRIA (regra da casa) para poder ser vendida como
   // add-on via module_overrides independente do resto da aba. O gate
   // comercial fino e hub_agent_settings.enabled no backend.
-  hub_social: 'expansao',
+  // 27/11/2026: aba Conversas do WhatsApp vale para todos os planos (ver 'whatsapp').
+  hub_social: 'essencial',
   // 2026-05-21 (F2 do polish pre-Fase 7): vertical Food entra com gates
   // distintos por sub-modulo. Mesas/Pedidos/Cardapio/KDS sao basicos do
   // restaurante (Negocio). Delivery (rotas, motoboys, frete) e NFC-e
