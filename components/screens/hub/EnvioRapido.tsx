@@ -22,7 +22,7 @@ import { fmt } from "@/constants/helpers";
 import { hubApi, type HubEnvioTipo } from "@/services/hubApi";
 import { WebPortal } from "@/components/WebPortal";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
+import { K, Tx, Meta, fundoGaveta, Ico, Pilula, superficie, web, anima, EM_TESTE, ICONES, SANS } from "./conversasUi";
 import { useOrcamentoNovo } from "./useOrcamentoNovo";
 import { ProdutoGradePainel } from "./ProdutoGradePainel";
 import { aoTeclarNoPainel, focarPrimeiro } from "./teclado";
@@ -332,7 +332,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
               style={[{
                 position: "absolute", left: 0, right: 0, bottom: 0,
                 paddingTop: 10, paddingHorizontal: 18, paddingBottom: 22, gap: 16, borderTopLeftRadius: 30, borderTopRightRadius: 30,
-                backgroundColor: K.sheetMobile, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.18)",
+                ...fundoGaveta(), borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.18)",
               }, web({ boxShadow: "0 -24px 60px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)" })]}>
               <Pressable onPress={() => setFolhaAberta(false)} accessibilityLabel="Fechar" style={{ alignSelf: "center", paddingVertical: 4 }}>
                 <View style={{ width: 40, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,.25)" }} />
@@ -349,7 +349,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
               style={[{
                 position: "absolute", left: 0, right: 0, bottom: 0,
                 paddingTop: 10, paddingHorizontal: 18, paddingBottom: 22, gap: 16, borderTopLeftRadius: 30, borderTopRightRadius: 30,
-                backgroundColor: K.sheetMobile, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.18)",
+                ...fundoGaveta(), borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.18)",
               }, web({ boxShadow: "0 -24px 60px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)" })]}>
               <Pressable onPress={() => setFolhaAberta(false)} accessibilityLabel="Fechar" style={{ alignSelf: "center", paddingVertical: 4 }}>
                 <View style={{ width: 40, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,.25)" }} />
