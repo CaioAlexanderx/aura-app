@@ -227,7 +227,7 @@ export default function WhatsAppScreen() {
         <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
           {novas && <Spots />}
           {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
-          <HubView onConversaAberta={setEmConversa} numeroConectado={wa.status ? !!wa.status.connected : undefined} aoConectarNumero={abrirConexao} />
+          <HubView onConversaAberta={setEmConversa} numeroConectado={wa.status ? !!wa.status.connected : undefined} statusCarregando={wa.statusLoading} aoConectarNumero={abrirConexao} />
         </View>
       </View>
     );

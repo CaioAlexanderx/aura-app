@@ -74,4 +74,24 @@ describe("Conversas vazia", () => {
       tree = null;
     }
   });
+
+  it("status do número carregando e sem conversa: estado neutro, sem 'Nenhuma conversa ainda' nem convite", async () => {
+    const r = await montar({ numeroConectado: undefined, statusCarregando: true });
+    const t = textoDe(r.toJSON());
+    expect(t).not.toContain("Nenhuma conversa ainda");
+    expect(t).not.toContain("Conecte o número da loja");
+    expect(porId(r, "hub-status-carregando")).toHaveLength(1);
+    act(() => { tree!.unmount(); });
+    tree = null;
+    // acabou de carregar e o número não está conectado: o convite aparece
+    const r2 = await montar({ numeroConectado: false, statusCarregando: false });
+    expect(textoDe(r2.toJSON())).toContain("Conecte o número da loja para começar");
+  });
+
+  it("sem conversa selecionada: 'Escolha uma conversa na lista para abrir.'", async () => {
+    const r = await montar({ numeroConectado: true });
+    const t = textoDe(r.toJSON());
+    expect(t).toContain("Escolha uma conversa na lista para abrir.");
+    expect(t).not.toContain("ver a thread");
+  });
 });

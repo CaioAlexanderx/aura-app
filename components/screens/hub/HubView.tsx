@@ -115,11 +115,13 @@ function ConversationRow({ conv, selected, tabbable, onPress, onAbrirTeclado, au
     </Pressable>
   );
 }
-export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }: {
+export function HubView({ onConversaAberta, numeroConectado, statusCarregando, aoConectarNumero }: {
   /** Avisa a tela quando há conversa aberta (no celular o cabeçalho da tela some). */
   onConversaAberta?: (aberta: boolean) => void;
   /** false = o número do WhatsApp da loja ainda não está conectado (undefined = não se sabe: texto de sempre). */
   numeroConectado?: boolean;
+  /** O status do número ainda carrega: sem conversa na lista, mostra o estado neutro (nada de "Nenhuma conversa ainda" piscando antes do convite). */
+  statusCarregando?: boolean;
   /** "Conectar WhatsApp": leva a Configurações → Conexão (a tela decide; os guias trocam por aqui). */
   aoConectarNumero?: () => void;
 } = {}) {
@@ -277,7 +279,10 @@ export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }:
           <BtnPrimario testID="hub-conectar-whatsapp" onPress={aoConectarNumero}>Conectar WhatsApp</BtnPrimario>
         </View>
       )}
-      {!isLoading && todas.length === 0 && numeroConectado !== false && (
+      {!isLoading && todas.length === 0 && numeroConectado !== false && statusCarregando && (
+        <View testID="hub-status-carregando" style={{ alignItems: "center", paddingVertical: 30 }}><ActivityIndicator color={K.acc} /></View>
+      )}
+      {!isLoading && todas.length === 0 && numeroConectado !== false && !statusCarregando && (
         <EmptyState icon="star" iconColor={Colors.violet3}
           title="Nenhuma conversa ainda"
           subtitle={enabled ? "Quando alguém mandar mensagem no Instagram da loja, a conversa aparece aqui — e a Aurinha já começa a atender." : ""} />
@@ -309,7 +314,7 @@ export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }:
             ? <ThreadView key={selectedId} companyId={companyId} convId={selectedId} aurinhaLigada={enabled} podeConfigurar={podeConfigurar} />
             : (
               <View style={[superficie.vidro(30), { flex: 1, minHeight: 560, justifyContent: "center" }]}>
-                <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para ver a thread." />
+                <EmptyState icon="users" iconColor={Colors.violet3} title="Selecione uma conversa" subtitle="Escolha uma conversa na lista para abrir." />
               </View>
             )}
         </View>
