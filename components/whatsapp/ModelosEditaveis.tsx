@@ -4,7 +4,7 @@
 // Aura" descarta o texto recusado (POST /modelos/:key/restaurar).
 import React, { useCallback, useState } from "react";
 import { Text } from "react-native";
-import { Colors } from "@/constants/colors";
+import { V } from "./waVidro";
 import { waConfigApi, erroConfig, type WaModeloRaw } from "@/services/waConfigApi";
 import { useWaModelos } from "@/hooks/useWaAutomatica";
 import { useClientesPrevia } from "@/hooks/useClientesPrevia";
@@ -55,7 +55,7 @@ export function ModelosEditaveis({ companyId, automatica, lojaNome, chaves, mode
         automatica={automatica} modelos={m.modelos} carregando={m.carregando} chaves={chaves}
         onEditar={setEditando} onRestaurar={restaurar}
       />
-      {!!erro && <Text style={{ fontSize: 12, fontWeight: "600", color: Colors.red }} testID="wa-modelos-erro">{erro}</Text>}
+      {!!erro && <Text style={{ fontSize: 12, fontWeight: "600", color: V.bad }} testID="wa-modelos-erro">{erro}</Text>}
     </>
   );
 }

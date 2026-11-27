@@ -1,52 +1,102 @@
 // ============================================================
 // configUi — peças compartilhadas das telas de cada automática
 //
-// Passo (bloco numerado), Pilulas (escolha com um toque), PilulaToggle,
-// Interruptor, BolhaExemplo (a mensagem como a cliente vê) e
-// PreviaCorteView ("Cabem N de M", quem fica de fora apagado, "Trazer N do
-// Venda+").
+// Passo (linha numerada do vidro), Secao (bloco com título grande),
+// Pilulas, PilulaToggle, Interruptor, BolhaExemplo (a mensagem como a
+// cliente vê, dentro do celular) e PreviaCorteView ("Cabem N de M", quem
+// fica de fora apagado, "Trazer N do Venda+").
+// A cara vem de waVidro (artboards aprovados); aqui só estrutura e estilo.
 // ============================================================
 import React from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import type { Corte } from "./waCorte";
+import {
+  Avatar, Celular, Meta, Pilula, Sw, Superficie, Titulo, V, WEB, estiloBolha, t, MONO, SANS,
+} from "./waVidro";
 
-export function Passo({ n, titulo, sub, children }: { n?: string; titulo: string; sub?: string; children?: React.ReactNode }) {
+/** Linha numerada (.sec): número grande vazado, título 20px, escolhas, nota. */
+export function Passo({ n, titulo, sub, children, primeiro }: {
+  n?: string; titulo: string; sub?: string; children?: React.ReactNode; primeiro?: boolean;
+}) {
   return (
-    <View style={s.card}>
-      <View style={s.passoTopo}>
-        {!!n && <Text style={s.passoN}>{n}</Text>}
-        <Text style={s.titulo}>{titulo}</Text>
+    <View
+      style={{
+        flexDirection: "row", gap: 18, paddingVertical: 22, minWidth: 0,
+        borderTopWidth: primeiro ? 0 : 1, borderTopColor: V.rule,
+      }}
+    >
+      {!!n && (
+        <Text
+          style={{
+            fontFamily: SANS, fontWeight: "800", fontSize: 40, lineHeight: 40, letterSpacing: -1.6,
+            color: WEB ? "transparent" : V.numLine, minWidth: 54,
+            ...(WEB ? { WebkitTextStroke: `1.5px ${V.numLine}` } : {}),
+          } as any}
+        >
+          {n}
+        </Text>
+      )}
+      <View style={{ flex: 1, minWidth: 0, gap: 12 }}>
+        <Text style={t(20, V.ink, "800", { letterSpacing: -0.4, lineHeight: 26 })}>{titulo}</Text>
+        {children}
+        {!!sub && <Text style={t(13, V.ink3)}>{sub}</Text>}
       </View>
-      {!!sub && <Text style={s.sub}>{sub}</Text>}
-      {children}
     </View>
+  );
+}
+
+/** Seção com meta + título grande (Crediário: "01 · Cobrar" / "Avisos de parcela."). */
+export function Secao({ meta, titulo, sub, children, variante = "solid", direita, testID }: {
+  meta: string; titulo: string; sub?: string; children?: React.ReactNode; variante?: "glass" | "solid"; direita?: React.ReactNode; testID?: string;
+}) {
+  return (
+    <Superficie variante={variante} raio={30} padding={{ h: 30, v: 26 }} gap={22} testID={testID}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+        <View style={{ gap: 6, flexShrink: 1, flexGrow: 1, flexBasis: 280, maxWidth: 740 }}>
+          <Meta>{meta}</Meta>
+          <Titulo tamanho={30}>{titulo}</Titulo>
+          {!!sub && <Text style={t(15, V.ink2)}>{sub}</Text>}
+        </View>
+        {direita}
+      </View>
+      {children}
+    </Superficie>
   );
 }
 
 export interface Opcao<T extends string> { valor: T; rotulo: string }
 
 export function Pilulas<T extends string>({
-  opcoes, valor, onPick, desabilitado, idBase,
-}: { opcoes: Opcao<T>[]; valor: T | null | undefined; onPick: (v: T) => void; desabilitado?: boolean; idBase: string }) {
+  opcoes, valor, onPick, desabilitado, idBase, comCheck,
+}: { opcoes: Opcao<T>[]; valor: T | null | undefined; onPick: (v: T) => void; desabilitado?: boolean; idBase: string; comCheck?: boolean }) {
   return (
-    <View style={s.pilulas}>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {opcoes.map((o) => {
         const on = o.valor === valor;
         return (
-          <Pressable
-            key={o.valor}
-            onPress={() => onPick(o.valor)}
-            disabled={desabilitado}
-            accessibilityRole="button"
-            accessibilityState={{ selected: on, disabled: !!desabilitado }}
-            style={[s.pilula, on && s.pilulaOn, desabilitado && { opacity: 0.6 }]}
+          <Pilula
+            key={o.valor} ligada={on} desabilitado={desabilitado} onPress={() => onPick(o.valor)}
             testID={`${idBase}-${o.valor}`}
           >
-            <Text style={[s.pilulaTxt, on && s.pilulaTxtOn]}>{o.rotulo}</Text>
-          </Pressable>
+            {comCheck && <Caixa marcada={on} />}
+            <Text style={t(14, on ? V.onTxt : V.ink, "600")}>{o.rotulo}</Text>
+          </Pilula>
         );
       })}
+    </View>
+  );
+}
+
+/** O quadradinho .chk das pílulas de "Quando sai". */
+function Caixa({ marcada }: { marcada: boolean }) {
+  return (
+    <View
+      style={{
+        width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, alignItems: "center", justifyContent: "center",
+        borderColor: marcada ? "#e9e3ff" : V.chkLine, backgroundColor: marcada ? "#e9e3ff" : "transparent",
+      }}
+    >
+      {marcada && <Text style={t(13, "#1b1338", "800", { lineHeight: 15 })}>✓</Text>}
     </View>
   );
 }
@@ -56,48 +106,51 @@ export function PilulaToggle({
   rotulo, ligada, onToggle, desabilitado, testID,
 }: { rotulo: string; ligada: boolean; onToggle: () => void; desabilitado?: boolean; testID: string }) {
   return (
-    <Pressable
-      onPress={onToggle}
-      disabled={desabilitado}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: ligada, disabled: !!desabilitado }}
-      style={[s.pilula, ligada && s.pilulaOn, desabilitado && { opacity: 0.6 }]}
-      testID={testID}
+    <Pilula
+      role="checkbox" ligada={ligada} onPress={onToggle} desabilitado={desabilitado} testID={testID}
+      estado={{ checked: ligada, disabled: !!desabilitado }}
     >
-      <Text style={[s.pilulaTxt, ligada && s.pilulaTxtOn]}>{rotulo}</Text>
-    </Pressable>
+      <Caixa marcada={ligada} />
+      <Text style={t(14, ligada ? V.onTxt : V.ink, "600")}>{rotulo}</Text>
+    </Pilula>
   );
 }
 
 export function Interruptor({
   ligado, onToggle, desabilitado, rotulo, testID,
 }: { ligado: boolean; onToggle: () => void; desabilitado?: boolean; rotulo: string; testID: string }) {
-  return (
-    <Pressable
-      onPress={onToggle}
-      disabled={desabilitado}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: ligado, disabled: !!desabilitado }}
-      accessibilityLabel={rotulo}
-      style={[s.sw, ligado && s.swOn, desabilitado && { opacity: 0.6 }]}
-      testID={testID}
-    >
-      <View style={[s.swBolinha, ligado && s.swBolinhaOn]} />
-    </Pressable>
-  );
+  return <Sw ligado={ligado} onToggle={onToggle} desabilitado={desabilitado} rotulo={rotulo} testID={testID} />;
 }
 
-export function BolhaExemplo({ titulo, mensagem, rodape }: { titulo: string; mensagem: string | null | undefined; rodape?: boolean }) {
+/** A mensagem como a cliente vê, dentro do celular do mockup. */
+export function BolhaExemplo({ titulo, mensagem, rodape, loja, presente }: {
+  titulo: string; mensagem: string | null | undefined; rodape?: boolean; loja?: string;
+  /** Aniversário: o presente que vai junto (rótulo já legível). */
+  presente?: { de: string; rotulo: string } | null;
+}) {
   // Sem exemplo, não inventa texto.
   if (!mensagem) return null;
   return (
-    <View style={s.bolhaWrap} testID="wa-config-bolha">
-      <Text style={s.bolhaTitulo}>{titulo}</Text>
-      <View style={s.bolha}>
-        <Text style={s.bolhaTxt}>{mensagem}</Text>
-        {rodape !== false && <Text style={s.bolhaSair}>Para não receber mais, responda SAIR.</Text>}
+    <Celular loja={loja || ""} legenda={titulo} minAltura={220} testID="wa-config-bolha">
+      <View style={estiloBolha()}>
+        <Text style={t(15, V.ink, "400", { lineHeight: 22 })}>{mensagem}</Text>
+        {rodape !== false && <Text style={t(12, V.ink3, "400", { marginTop: 6 })}>Para não receber mais, responda SAIR.</Text>}
+        <Text style={t(12, V.ink3, "400", { marginTop: 4, textAlign: "right" })}>10:00</Text>
       </View>
-    </View>
+      {!!presente && (
+        <View
+          style={[{
+            alignSelf: "flex-end", width: "94%", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, gap: 4,
+            borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(196,181,253,.6)",
+          } as any, WEB ? ({ backgroundImage: "linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.04))" } as any) : null]}
+          testID="wa-config-bolha-presente"
+        >
+          <Meta style={{ color: "#e9e3ff" }}>Presente da {presente.de}</Meta>
+          <Text style={t(22, V.ink, "800", { letterSpacing: -0.4 })}>{presente.rotulo}</Text>
+          <Text style={t(12, V.ink3)}>vale 15 dias · na loja e no site</Text>
+        </View>
+      )}
+    </Celular>
   );
 }
 
@@ -113,89 +166,98 @@ interface PreviaProps {
   onTrazer?: () => void;
   trazendo?: boolean;
   idBase: string;
+  /** avatares: círculos com iniciais (Aniversário); linhas: um cartão por pessoa (Crediário). */
+  estilo?: "avatares" | "linhas";
 }
 
-export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onTrazer, trazendo, idBase }: PreviaProps) {
+export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onTrazer, trazendo, idBase, estilo = "linhas" }: PreviaProps) {
   if (!corte) {
     return (
-      <Text style={s.aviso} testID={`${idBase}-previa-indisponivel`}>
+      <Text style={t(14, V.warn, "600")} testID={`${idBase}-previa-indisponivel`}>
         Não consegui calcular quem cabe agora. Por segurança, nada é enviado até eu conseguir.
       </Text>
     );
   }
   const fica = corte.total - corte.cabem;
   return (
-    <View style={{ gap: 8 }} testID={`${idBase}-previa`}>
-      <Text style={s.tituloMenor} testID={`${idBase}-cabem`}>
+    <View style={{ gap: 12 }} testID={`${idBase}-previa`}>
+      <Text style={t(15, corte.cabeTodos ? V.ok : V.warn, "700")} testID={`${idBase}-cabem`}>
         {corte.cabeTodos ? "Cabe todo mundo." : `Cabem ${corte.cabem} de ${corte.total}.`}
       </Text>
-      <Text style={s.sub}>
+      <Text style={t(15, V.ink2)}>
         {corte.cabeTodos
           ? `Usa ${corte.precisa} das ${reserva ?? 0} novidades guardadas para ${dono}.`
           : `${fica} ${substantivo} ficam sem a mensagem${corte.ordem ? ` (${corte.ordem})` : ""}. Ninguém recebe além do que cabe.`}
       </Text>
 
-      {corte.recebem.map((p) => (
-        <View key={`r-${p.nome}`} style={s.pessoa} testID={`${idBase}-recebe`}>
-          <Text style={s.pessoaNome}>{p.nome}</Text>
-          {!!p.detalhe && <Text style={s.pessoaDet}>{p.detalhe}</Text>}
+      {estilo === "avatares" ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
+          {corte.recebem.map((p) => (
+            <View key={`r-${p.nome}`} testID={`${idBase}-recebe`} accessibilityLabel={p.nome} style={{ alignItems: "center", gap: 2 }}>
+              <Avatar nome={p.nome} />
+              <Text style={t(11, V.ink2, "600", { lineHeight: 14 })}>{p.nome}</Text>
+              {!!p.detalhe && <Text style={t(11, V.ink3, "400", { lineHeight: 14 })}>{p.detalhe}</Text>}
+            </View>
+          ))}
+          {corte.ficam.map((p) => (
+            <View key={`f-${p.nome}`} testID={`${idBase}-fora`} accessibilityLabel={`${p.nome} · fica de fora`} style={{ alignItems: "center", gap: 2, opacity: 0.35 }}>
+              <Avatar nome={p.nome} />
+              <Text style={t(11, V.ink2, "600", { lineHeight: 14 })}>{p.nome} · fica de fora</Text>
+              {!!p.detalhe && <Text style={t(11, V.ink3, "400", { lineHeight: 14 })}>{p.detalhe}</Text>}
+            </View>
+          ))}
         </View>
-      ))}
-      {corte.ficam.map((p) => (
-        <View key={`f-${p.nome}`} style={[s.pessoa, { opacity: 0.35 }]} testID={`${idBase}-fora`}>
-          <Text style={s.pessoaNome}>{p.nome} · fica de fora</Text>
-          {!!p.detalhe && <Text style={s.pessoaDet}>{p.detalhe}</Text>}
+      ) : (
+        <View style={{ gap: 10 }}>
+          {corte.recebem.map((p) => (
+            <View
+              key={`r-${p.nome}`} testID={`${idBase}-recebe`}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 18, borderWidth: 1, borderColor: V.tokLine, backgroundColor: V.tokBg }}
+            >
+              <Avatar nome={p.nome} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={t(15, V.ink, "700")}>{p.nome}</Text>
+                {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}</Text>}
+              </View>
+            </View>
+          ))}
+          {corte.ficam.map((p) => (
+            <View
+              key={`f-${p.nome}`} testID={`${idBase}-fora`}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 18, opacity: 0.45 }}
+            >
+              <Avatar nome={p.nome} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={t(15, V.ink, "700")}>{p.nome} · fica de fora</Text>
+                {!!p.detalhe && <Text style={t(13, V.ink2)}>{p.detalhe}</Text>}
+              </View>
+            </View>
+          ))}
         </View>
-      ))}
-      {corte.alemDaLista > 0 && <Text style={s.sub}>e mais {corte.alemDaLista} {substantivo}</Text>}
+      )}
+      {corte.alemDaLista > 0 && <Text style={t(14, V.ink2)}>e mais {corte.alemDaLista} {substantivo}</Text>}
 
       {trazer > 0 && !!onTrazer && (
-        <Pressable
-          onPress={onTrazer}
-          disabled={trazendo}
-          accessibilityRole="button"
-          style={[s.btnSec, trazendo && { opacity: 0.6 }]}
-          testID={`${idBase}-trazer`}
-        >
-          {trazendo && <ActivityIndicator size="small" color={Colors.violet3} />}
-          <Text style={s.btnSecTxt}>{trazer === 1 ? "Trazer 1 do Venda+" : `Trazer ${trazer} do Venda+`}</Text>
-        </Pressable>
+        <Pilula ligada onPress={onTrazer} desabilitado={trazendo} testID={`${idBase}-trazer`}>
+          {trazendo && <ActivityIndicator size="small" color={V.acc} />}
+          <Text style={t(14, V.onTxt, "600")}>{trazer === 1 ? "Trazer 1 do Venda+" : `Trazer ${trazer} do Venda+`}</Text>
+        </Pilula>
       )}
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
-  passoTopo: { flexDirection: "row", alignItems: "center", gap: 10 },
-  passoN: { fontSize: 11, fontWeight: "800", color: Colors.violet3, letterSpacing: 1 },
-  titulo: { fontSize: 14, fontWeight: "800", color: Colors.ink, flexShrink: 1 },
-  tituloMenor: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  aviso: { fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
-  pilulas: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  pilula: {
-    minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999,
-    backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2,
-  },
-  pilulaOn: { backgroundColor: Colors.violetD, borderColor: Colors.violet3 },
-  pilulaTxt: { fontSize: 12.5, fontWeight: "600", color: Colors.ink2 },
-  pilulaTxtOn: { color: Colors.violet3, fontWeight: "800" },
-  sw: { width: 48, height: 28, borderRadius: 14, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border2, justifyContent: "center", padding: 2 },
-  swOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  swBolinha: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.ink3 },
-  swBolinhaOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
-  bolhaWrap: { gap: 6 },
-  bolhaTitulo: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
-  bolha: { backgroundColor: Colors.violetD, borderRadius: 16, borderWidth: 1, borderColor: Colors.border2, padding: 12, gap: 6 },
-  bolhaTxt: { fontSize: 13.5, color: Colors.ink, lineHeight: 20 },
-  bolhaSair: { fontSize: 11, color: Colors.ink3 },
-  pessoa: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 8 },
-  pessoaNome: { fontSize: 12.5, fontWeight: "700", color: Colors.ink },
-  pessoaDet: { fontSize: 11.5, color: Colors.ink3 },
-  btnSec: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "flex-start",
-    minHeight: 44, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2,
-  },
-  btnSecTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
-} as any);
+/** Caixa "dry" com o mês em meta (cabeçalho da prévia do Aniversário). */
+export function CaixaPrevia({ meta, direita, children }: { meta?: string; direita?: string; children?: React.ReactNode }) {
+  return (
+    <Superficie variante="dry" raio={24} padding={{ h: 20, v: 18 }} gap={12}>
+      {(!!meta || !!direita) && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          {!!meta && <Text style={{ fontFamily: MONO, fontSize: 12, letterSpacing: 1.7, textTransform: "uppercase", color: V.ink3 } as any}>{meta}</Text>}
+          {!!direita && <Text style={t(14, V.ink2)}>{direita}</Text>}
+        </View>
+      )}
+      {children}
+    </Superficie>
+  );
+}

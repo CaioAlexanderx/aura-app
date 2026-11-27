@@ -8,12 +8,12 @@
 // ============================================================
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Colors } from "@/constants/colors";
+import { Superficie, BtnPrimario, V, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
 import {
-  BolhaExemplo, Interruptor, Passo, Pilulas, PreviaCorteView,
+  BolhaExemplo, CaixaPrevia, Interruptor, Passo, Pilulas, PreviaCorteView,
 } from "./configUi";
 import { quantoTrazer, trazerDoVendaMais } from "./waCorte";
 import {
@@ -66,87 +66,102 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
   const trazer = quantoTrazer(pub.corte, info.divisao, info.usadas, "aniversario");
   const ligada = lida.ligada;
 
+  const primeiroNome = primeira;
+  const presente = comPresente && cfg.presente ? { de: primeiroNome || "cliente", rotulo: rotuloDoPresente(cfg.presente) || "" } : null;
+
   return (
-    <View style={{ gap: 14 }} testID="wa-aniv-tela">
-      <Passo n="01" titulo="O jeito de falar">
-        <Pilulas<TomAniversario>
-          idBase="wa-aniv-tom" opcoes={OPCOES_TOM} valor={tom} desabilitado={travado}
-          onPick={(v) => salvar({ tom: v })}
-        />
-      </Passo>
-
-      <Passo n="02" titulo="O presente" sub="O cupom nasce sozinho no dia: um por cliente, vale 15 dias, na loja e no site.">
-        <Pilulas<PresenteChave>
-          idBase="wa-aniv-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
-          onPick={(v) => salvar(patchDePresente(v, quando))}
-        />
-      </Passo>
-
-      <Passo n="03" titulo="Quando sai" sub="Uma mensagem só por aniversário, sempre às 10h. Quem pediu para não receber fica de fora sozinho. Sem presente, só sai no dia.">
-        <Pilulas<QuandoAniversario>
-          idBase="wa-aniv-quando" opcoes={OPCOES_QUANDO} valor={quando}
-          desabilitado={travado || !quando}
-          onPick={(v) => { if (quandoPermitido(v, comPresente)) salvar({ quando: v }); }}
-        />
-        {!comPresente && (
-          <Text style={s.sub} testID="wa-aniv-quando-nota">Para sair antes do dia, escolha um presente.</Text>
-        )}
-      </Passo>
-
-      <Passo
-        titulo={nomeDoMes(null)}
-        sub={pub.corte
-          ? `${pub.corte.total} aniversariantes com WhatsApp · 1 mensagem cada`
-          : undefined}
-      >
-        <PreviaCorteView
-          idBase="wa-aniv" corte={pub.corte} substantivo="aniversariantes" dono="o Aniversário"
-          reserva={lida.livres} trazer={trazer} trazendo={travado}
-          onTrazer={() => {
-            const prox = trazerDoVendaMais(info.divisao, info.usadas, "aniversario", trazer);
-            if (prox) auto.aplicarDivisao(prox).then(() => pub.recarregar());
-          }}
-        />
-      </Passo>
-
-      <BolhaExemplo titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem} />
-
-      <Passo
-        titulo="Quer escrever do seu jeito?"
-        sub="A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui."
-      >
-        <ModelosEditaveis
-          companyId={companyId} automatica="aniversario" lojaNome={lojaNome} modelosDoPai={modelos}
-          chaves={tom && quando ? [modeloDoAniversario(tom, comPresente, quando)] : []}
-        />
-      </Passo>
-
-      <View style={s.card}>
-        <View style={s.linha}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.titulo}>Ligar o aniversário</Text>
-            <Text style={s.sub}>Desligar é a qualquer hora, e para na mesma hora.</Text>
-          </View>
-          <Interruptor
-            ligado={ligada} desabilitado={travado} rotulo={(ligada ? "Desligar" : "Ligar") + " o aniversário"}
-            testID="wa-aniv-liga" onToggle={() => alt.alternar("aniversario")}
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 28, alignItems: "flex-start" }} testID="wa-aniv-tela">
+      <Superficie variante="glass" raio={30} padding={{ h: 30, v: 8 }} gap={0} style={{ flexGrow: 999, flexShrink: 1, flexBasis: 620, paddingBottom: 26 }}>
+        <Passo n="01" titulo="O jeito de falar" primeiro>
+          <Pilulas<TomAniversario>
+            idBase="wa-aniv-tom" opcoes={OPCOES_TOM} valor={tom} desabilitado={travado}
+            onPick={(v) => salvar({ tom: v })}
           />
+        </Passo>
+
+        <Passo n="02" titulo="O presente" sub="O cupom nasce sozinho no dia: um por cliente, vale 15 dias, na loja e no site.">
+          <Pilulas<PresenteChave>
+            idBase="wa-aniv-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
+            onPick={(v) => salvar(patchDePresente(v, quando))}
+          />
+        </Passo>
+
+        <Passo n="03" titulo="Quando sai" sub="Uma mensagem só por aniversário, sempre às 10h. Quem pediu para não receber fica de fora sozinho. Sem presente, só sai no dia.">
+          <Pilulas<QuandoAniversario>
+            idBase="wa-aniv-quando" opcoes={OPCOES_QUANDO} valor={quando} comCheck
+            desabilitado={travado || !quando}
+            onPick={(v) => { if (quandoPermitido(v, comPresente)) salvar({ quando: v }); }}
+          />
+          {!comPresente && (
+            <Text style={t(13, V.ink3)} testID="wa-aniv-quando-nota">Para sair antes do dia, escolha um presente.</Text>
+          )}
+        </Passo>
+
+        <CaixaPrevia
+          meta={nomeDoMes(null)}
+          direita={pub.corte ? `${pub.corte.total} aniversariantes com WhatsApp · 1 mensagem cada` : undefined}
+        >
+          <PreviaCorteView
+            idBase="wa-aniv" corte={pub.corte} substantivo="aniversariantes" dono="o Aniversário" estilo="avatares"
+            reserva={lida.livres} trazer={trazer} trazendo={travado}
+            onTrazer={() => {
+              const prox = trazerDoVendaMais(info.divisao, info.usadas, "aniversario", trazer);
+              if (prox) auto.aplicarDivisao(prox).then(() => pub.recarregar());
+            }}
+          />
+        </CaixaPrevia>
+
+        <Passo
+          titulo="Quer escrever do seu jeito?"
+          sub="A mensagem nova passa pela aprovação do WhatsApp, que costuma levar algumas horas. Até lá vai a escolhida aqui."
+        >
+          <ModelosEditaveis
+            companyId={companyId} automatica="aniversario" lojaNome={lojaNome} modelosDoPai={modelos}
+            chaves={tom && quando ? [modeloDoAniversario(tom, comPresente, quando)] : []}
+          />
+        </Passo>
+      </Superficie>
+
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
+        <BolhaExemplo
+          titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem}
+          loja={lojaNome} presente={presente}
+        />
+
+        <View style={{ gap: 10, alignItems: "flex-start" }}>
+          {ligada ? (
+            <Superficie variante="dry" raio={24} padding={{ h: 18, v: 14 }} gap={10} style={{ alignSelf: "stretch" }}>
+              <View style={s.linha}>
+                <View style={{ flex: 1 }}>
+                  <Text style={t(15, V.ink, "700")}>Aniversário ligado</Text>
+                  <Text style={t(13, V.ink2)}>Desligar é a qualquer hora, e para na mesma hora.</Text>
+                </View>
+                <Interruptor
+                  ligado={ligada} desabilitado={travado} rotulo="Desligar o aniversário"
+                  testID="wa-aniv-liga" onToggle={() => alt.alternar("aniversario")}
+                />
+              </View>
+            </Superficie>
+          ) : (
+            <>
+              <BtnPrimario testID="wa-aniv-liga" disabled={travado} onPress={() => alt.alternar("aniversario")}>
+                Ligar o aniversário
+              </BtnPrimario>
+              <Text style={t(13, V.ink3)}>Desligar é a qualquer hora, e para na mesma hora.</Text>
+            </>
+          )}
+          {alt.perguntando === "aniversario" && (
+            <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
+          )}
+          {!!auto.erro && alt.perguntando !== "aniversario" && <Text style={s.erro}>{auto.erro}</Text>}
         </View>
-        {alt.perguntando === "aniversario" && (
-          <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
-        )}
-        {!!auto.erro && alt.perguntando !== "aniversario" && <Text style={s.erro}>{auto.erro}</Text>}
       </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  aviso: { fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
+  aviso: { fontSize: 14, fontWeight: "600", color: V.warn, lineHeight: 20 },
   linha: { flexDirection: "row", alignItems: "center", gap: 10 },
-  titulo: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
-  pilulas: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);

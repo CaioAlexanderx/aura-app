@@ -15,6 +15,9 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
+import { Lnk, Meta, Passo44, Superficie, Sw, V, t } from "./waVidro";
+
+import { nomeDoMes } from "./waAutomaticaConfig";
 import { Icon } from "@/components/Icon";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
@@ -63,29 +66,26 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
 
   if (auto.carregando && !info) {
     return (
-      <View style={s.card} testID="wa-auto-carregando">
-        <ActivityIndicator size="small" color={Colors.violet3} />
-      </View>
+      <Superficie variante="glass" raio={30} padding={26} testID="wa-auto-carregando">
+        <ActivityIndicator size="small" color={V.acc} />
+      </Superficie>
     );
   }
 
   if (!info) {
     return (
-      <View style={s.card} testID="wa-auto-indisponivel">
+      <Superficie variante="glass" raio={30} padding={26} gap={10} testID="wa-auto-indisponivel">
         <View style={s.linha}>
-          <Icon name="alert" size={13} color={Colors.amber} />
+          <Icon name="alert" size={13} color={V.warn} />
           <Text style={s.aviso}>
             Não consegui ler as mensagens automáticas agora. Por segurança, nada é ligado nem
             alterado até eu conseguir.
           </Text>
         </View>
-        <Pressable onPress={() => { auto.recarregar(); }} accessibilityRole="button" style={s.btnLink} testID="wa-auto-tentar-de-novo">
-          <Text style={s.btnLinkTxt}>Tentar de novo</Text>
-        </Pressable>
-      </View>
+        <Lnk onPress={() => { auto.recarregar(); }} testID="wa-auto-tentar-de-novo">Tentar de novo</Lnk>
+      </Superficie>
     );
   }
-
   const total = info.total;
   const livres = semDono(info.divisao, total);
   const travado = auto.salvando;
@@ -99,165 +99,179 @@ export function AutomaticasCard({ auto, onAjustar }: Props) {
   });
   for (let j = 0; j < Math.max(0, livres); j++) caps.push({ key: `livre-${j}`, cor: "transparent", usada: false, livre: true });
 
-  return (
-    <View style={{ gap: 14 }} testID="wa-auto-bloco">
-      <View style={s.card} testID="wa-auto-divisao">
-        <Text style={s.titulo}>Cada novidade tem um dono</Text>
-        <Text style={s.sub}>
-          A Aura já dividiu as {total}. Mude com + e −; a soma nunca passa do que o plano tem. A
-          parte apagada de cada cor já foi usada.
-        </Text>
+  const cartoes = ORDEM.filter((k) => k !== "crediario_cobrar");
 
-        <View style={s.caps} accessibilityLabel={`Das ${total} novidades: ` + AUTO_KEYS.map((k) => `${ROTULO_AUTO[k]} ${info.divisao[k]}`).join(", ")}>
+  return (
+    <View style={{ gap: 28 }} testID="wa-auto-bloco">
+      <Superficie variante="glass" raio={30} padding={{ h: 30, v: 26 }} gap={20} testID="wa-auto-divisao" tour="wa.divisao">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ gap: 4, flexShrink: 1, flexGrow: 1, flexBasis: 300 }}>
+            <Meta>{nomeDoMes(null)} · {total} novidades no seu plano</Meta>
+            <Text style={t(28, V.ink, "800", { letterSpacing: -0.9, lineHeight: 32 })}>
+              Cada novidade tem um dono<Text style={{ color: V.acc2 }}>.</Text>
+            </Text>
+            <Text style={[t(15, V.ink2), { maxWidth: 740 }]}>
+              A Aura já dividiu as {total}. Mude com + e −; a soma nunca passa do que o plano tem. A
+              parte apagada de cada cor já foi usada.
+            </Text>
+          </View>
+          <Text style={t(15, V.ink2)} testID="wa-auto-livres">
+            <Text style={t(22, V.ink, "800")}>{livres}</Text> livres de {total}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }} accessibilityLabel={`Das ${total} novidades: ` + AUTO_KEYS.map((k) => `${ROTULO_AUTO[k]} ${info.divisao[k]}`).join(", ")}>
           {caps.map((c) => (
             <View
               key={c.key}
-              style={[s.cap, c.livre ? s.capLivre : { backgroundColor: c.cor }, c.usada && { opacity: 0.35 }]}
+              style={[{ width: 22, height: 40, borderRadius: 999 } as any,
+                c.livre
+                  ? { backgroundColor: V.capFree, borderWidth: 1.5, borderStyle: "dashed", borderColor: V.capFreeLine }
+                  : { backgroundColor: c.cor },
+                c.usada && { opacity: 0.32 }]}
             />
           ))}
         </View>
 
-        <View style={s.rows}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
           {AUTO_KEYS.map((k) => {
             const menos = !travado && podeTirar(info.divisao, info.usadas, k);
             const mais = !travado && podeDarMais(info.divisao, k, total);
             return (
-              <View key={k} style={s.row} testID={`wa-auto-divisao-${k}`}>
-                <View style={[s.bolinha, { backgroundColor: COR_AUTO[k] }]} />
-                <Text style={s.rowRotulo}>{ROTULO_AUTO[k]}</Text>
-                <Pressable
-                  onPress={() => { setUltimo("divisao"); auto.ajustar(k, -1); }}
-                  disabled={!menos}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Tirar 1 de ${ROTULO_AUTO[k]}`}
-                  accessibilityState={{ disabled: !menos }}
-                  style={[s.passo, !menos && s.passoOff]}
-                  testID={`wa-auto-menos-${k}`}
-                >
-                  <Text style={s.passoTxt}>−</Text>
-                </Pressable>
-                <Text style={s.rowN} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
-                <Pressable
-                  onPress={() => { setUltimo("divisao"); auto.ajustar(k, 1); }}
-                  disabled={!mais}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Dar mais 1 para ${ROTULO_AUTO[k]}`}
-                  accessibilityState={{ disabled: !mais }}
-                  style={[s.passo, !mais && s.passoOff]}
-                  testID={`wa-auto-mais-${k}`}
-                >
-                  <Text style={s.passoTxt}>+</Text>
-                </Pressable>
-                <Text style={s.rowUsadas}>{info.usadas[k]} usadas</Text>
-              </View>
+              <Superficie key={k} variante="dry" raio={22} padding={{ h: 16, v: 14 }} gap={10} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 240 }}>
+                <View testID={`wa-auto-divisao-${k}`} style={{ gap: 10 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={{ width: 12, height: 12, borderRadius: 4, backgroundColor: COR_AUTO[k] }} />
+                    <Text style={t(15, V.ink, "700")}>{ROTULO_AUTO[k]}</Text>
+                  </View>
+                  <Text style={t(13, V.ink2, "400", { minHeight: 38 })}>{DESC_DIVISAO[k]}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <Passo44
+                      simbolo="−" rotulo={`Tirar 1 de ${ROTULO_AUTO[k]}`} disabled={!menos}
+                      onPress={() => { setUltimo("divisao"); auto.ajustar(k, -1); }} testID={`wa-auto-menos-${k}`}
+                    />
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={t(24, V.ink, "800", { lineHeight: 26 })} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
+                      <Text style={t(12, V.ink3)}>{info.usadas[k]} usadas</Text>
+                    </View>
+                    <Passo44
+                      simbolo="+" rotulo={`Dar mais 1 para ${ROTULO_AUTO[k]}`} disabled={!mais}
+                      onPress={() => { setUltimo("divisao"); auto.ajustar(k, 1); }} testID={`wa-auto-mais-${k}`}
+                    />
+                  </View>
+                </View>
+              </Superficie>
             );
           })}
         </View>
-
-        <Text style={s.resumo} testID="wa-auto-livres">
-          {livres} livres de {total}
-          {livres <= 0 ? ". As " + total + " já têm dono. Para dar mais a um, tire de outro." : ""}
-        </Text>
+        {livres <= 0 && (
+          <Text style={t(14, V.ink2)}>
+            <Text style={t(14, V.warn, "700")}>As {total} já têm dono.</Text> Para dar mais a um, tire de outro.
+          </Text>
+        )}
         {!!auto.erro && ultimo === "divisao" && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
+      </Superficie>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18 }}>
+        {cartoes.map((k) => <CartaoAuto key={k} k={k} />)}
       </View>
 
-      {ORDEM.map((k) => {
-        const lida = info.autos[k];
-        const ligada = lida?.ligada === true;
-        const d = DESC[k];
-        const linhas = lida?.resumo ? [lida.resumo, ...d.linhas] : d.linhas;
-        const usaNovidades = k !== "crediario_cobrar";
-        return (
-          <View key={k} style={s.card} testID={`wa-auto-cartao-${k}`}>
-            <View style={s.cartaoTopo}>
-              <View style={[s.bolinha, { backgroundColor: d.cor }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.titulo}>{d.titulo}</Text>
-                <Text style={s.sub}>{d.desc}</Text>
-              </View>
-              <Pressable
-                onPress={() => { setUltimo(k); alt.alternar(k); }}
-                disabled={travado || !lida}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: ligada, disabled: travado || !lida }}
-                accessibilityLabel={(ligada ? "Desligar " : "Ligar ") + d.titulo}
-                style={[s.sw, ligada && s.swOn, (travado || !lida) && { opacity: 0.6 }]}
-                testID={`wa-auto-liga-${k}`}
-              >
-                <View style={[s.swBolinha, ligada && s.swBolinhaOn]} />
-              </Pressable>
-            </View>
-            {linhas.map((l) => (
-              <View key={l} style={s.linha}>
-                <Text style={s.ponto}>•</Text>
-                <Text style={s.linhaTxt}>{l}</Text>
-              </View>
-            ))}
-            <View style={s.rodape}>
-              <Text style={[s.estado, { color: ligada ? Colors.green : Colors.ink3 }]} testID={`wa-auto-estado-${k}`}>
-                {!lida
-                  ? "Indisponível"
-                  : ligada
-                    ? (usaNovidades ? `Ligado · ${lida.livres ?? 0} de ${info.divisao[parteDe(k)]} livres este mês` : "Ligado")
-                    : "Desligado · nada sai"}
-              </Text>
-              {!!onAjustar && (
-                <Pressable onPress={() => onAjustar(k)} accessibilityRole="button" style={s.btnLink} testID={`wa-auto-ajustar-${k}`}>
-                  <Text style={s.btnLinkTxt}>Ajustar</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {!!auto.erro && ultimo === k && alt.perguntando !== k && (
-              <Text style={s.erro} testID={`wa-auto-erro-${k}`}>{auto.erro}</Text>
-            )}
-            {alt.perguntando === k && (
-              <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
-            )}
-          </View>
-        );
-      })}
+      <CartaoAuto k="crediario_cobrar" tira />
     </View>
   );
-}
 
+  function CartaoAuto({ k, tira }: { k: WaAutoKey; tira?: boolean }) {
+    const lida = info!.autos[k];
+    const ligada = lida?.ligada === true;
+    const d = DESC[k];
+    const linhas = lida?.resumo ? [lida.resumo, ...d.linhas] : d.linhas;
+    const usaNovidades = k !== "crediario_cobrar";
+    const estado = !lida
+      ? "Indisponível"
+      : ligada
+        ? (usaNovidades ? `Ligado · ${lida.livres ?? 0} de ${info!.divisao[parteDe(k)]} livres este mês` : "Ligado")
+        : "Desligado · nada sai";
+    const sw = (
+      <Sw
+        ligado={ligada} desabilitado={travado || !lida}
+        rotulo={(ligada ? "Desligar " : "Ligar ") + d.titulo} testID={`wa-auto-liga-${k}`} tour={k === "aniversario" ? "wa.auto.aniversario" : undefined}
+        onPress={() => { setUltimo(k); alt.alternar(k); }}
+      />
+    );
+    const erros = (
+      <>
+        {!!auto.erro && ultimo === k && alt.perguntando !== k && <Text style={s.erro} testID={`wa-auto-erro-${k}`}>{auto.erro}</Text>}
+        {alt.perguntando === k && (
+          <AceiteNovidadesPergunta gravando={alt.gravando} erro={auto.erro} onSim={alt.confirmar} onNao={alt.recusar} />
+        )}
+      </>
+    );
+    if (tira) {
+      // "Cobranças do crediário": a faixa do mockup, com o liga/desliga que a loja já usa.
+      return (
+        <Superficie variante="dry" raio={24} padding={{ h: 22, v: 16 }} gap={10} testID={`wa-auto-cartao-${k}`}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={t(16, V.ok, "800")}>✓</Text>
+              <Text style={t(15, V.ink, "700")}>Cobranças do crediário</Text>
+            </View>
+            <Text style={[t(14, V.ink2), { flexShrink: 1, flexGrow: 1, flexBasis: 260 }]}>{d.desc} {d.linhas[0]}.</Text>
+            <Text style={t(13, ligada ? V.ok : V.ink3, "600")} testID={`wa-auto-estado-${k}`}>{estado}</Text>
+            {sw}
+            {!!onAjustar && <Lnk onPress={() => onAjustar(k)} testID={`wa-auto-ajustar-${k}`}>Ajustar</Lnk>}
+          </View>
+          {erros}
+        </Superficie>
+      );
+    }
+    return (
+      <Superficie variante="solid" raio={28} padding={22} gap={14} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 300 }} testID={`wa-auto-cartao-${k}`}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 12, height: 12, borderRadius: 4, backgroundColor: d.cor }} />
+              <Text style={t(20, V.ink, "800", { letterSpacing: -0.4, lineHeight: 26 })}>{d.titulo}</Text>
+            </View>
+            <Text style={t(14, V.ink2)}>{d.desc}</Text>
+          </View>
+          {sw}
+        </View>
+        {erros}
+        <View style={{ gap: 6 }}>
+          {linhas.map((l) => (
+            <View key={l} style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
+              <Text style={t(14, V.ink3)}>•</Text>
+              <Text style={[t(14, V.ink2), { flex: 1 }]}>{l}</Text>
+            </View>
+          ))}
+        </View>
+        <View
+          style={{
+            marginTop: "auto" as any, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8,
+            paddingTop: 12, borderTopWidth: 1, borderTopColor: V.rule,
+          }}
+        >
+          <Text style={t(13, ligada ? V.ok : V.ink3, "600")} testID={`wa-auto-estado-${k}`}>{estado}</Text>
+          {!!onAjustar && <Lnk onPress={() => onAjustar(k)} testID={`wa-auto-ajustar-${k}`}>Ajustar</Lnk>}
+        </View>
+      </Superficie>
+    );
+  }
+}
 function parteDe(k: WaAutoKey): "aniversario" | "venda_mais" | "crediario" {
   const par = (Object.keys(AUTOMATICA_DA_PARTE) as ("aniversario" | "venda_mais" | "crediario")[]).find((p) => AUTOMATICA_DA_PARTE[p] === k);
   return par || "crediario";
 }
 
+const DESC_DIVISAO: Record<"aniversario" | "venda_mais" | "crediario", string> = {
+  aniversario: "Parabéns com presente no dia",
+  venda_mais: "Convite para quem sumiu voltar",
+  crediario: "Oferta para quem tem limite livre",
+};
+
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
-  titulo: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  caps: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
-  cap: { width: 22, height: 14, borderRadius: 4 },
-  capLivre: { borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2 },
-  rows: { gap: 4 },
-  row: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, flexWrap: "wrap" },
-  bolinha: { width: 10, height: 10, borderRadius: 5 },
-  rowRotulo: { flex: 1, minWidth: 110, fontSize: 13, fontWeight: "700", color: Colors.ink },
-  passo: {
-    width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-  },
-  passoOff: { opacity: 0.35 },
-  passoTxt: { fontSize: 18, fontWeight: "800", color: Colors.violet3 },
-  rowN: { minWidth: 24, textAlign: "center", fontSize: 16, fontWeight: "800", color: Colors.ink },
-  rowUsadas: { fontSize: 11, color: Colors.ink3, minWidth: 64 },
-  resumo: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
-  aviso: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
+  card: { backgroundColor: "transparent", gap: 10 },
+  aviso: { flex: 1, fontSize: 14, fontWeight: "600", color: V.warn, lineHeight: 20 },
   linha: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  ponto: { fontSize: 12, color: Colors.ink3 },
-  linhaTxt: { flex: 1, fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  cartaoTopo: { flexDirection: "row", alignItems: "center", gap: 10 },
-  rodape: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
-  estado: { fontSize: 12, fontWeight: "700" },
-  sw: { width: 48, height: 28, borderRadius: 14, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border2, justifyContent: "center", padding: 2 },
-  swOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  swBolinha: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.ink3 },
-  swBolinhaOn: { backgroundColor: "#fff", alignSelf: "flex-end" },
-  btnLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-start" },
-  btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);

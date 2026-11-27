@@ -12,8 +12,9 @@
 // Saldo que não deu para ler = aviso de bloqueio, nunca número inventado.
 // ============================================================
 import React from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { tourTarget } from "@/utils/tourTarget";
+import { Lnk, Meta, Superficie, V, WEB, t } from "./waVidro";
 import { Icon } from "@/components/Icon";
 import type { WaStatus } from "@/services/waApi";
 import { useWaPacotes } from "@/hooks/useWaPacotes";
@@ -33,23 +34,34 @@ interface Props {
   onRetry: () => void;
 }
 
-const COR_BALDE: Record<Balde["key"], string> = {
-  novidades: Colors.violet3,
-  avisos: Colors.green,
-  aurinha: Colors.amber,
+const DESC_BALDE: Record<Balde["key"], string> = {
+  novidades: "Aniversário, Venda+ e oferta do Crediário. Divididas logo abaixo.",
+  avisos: "Parcelas do crediário e convites para conversa fechada.",
+  aurinha: "Quando acabam, a Aurinha para de responder e a conversa fica com você.",
 };
 
 function BaldeView({ b }: { b: Balde }) {
-  const cor = b.esgotado ? Colors.red : b.acabando ? Colors.amber : COR_BALDE[b.key];
+  const fundo = b.esgotado
+    ? "linear-gradient(90deg,#f87171,#fca5a5)"
+    : b.acabando ? "linear-gradient(90deg,#f59e0b,#fcd34d)" : "linear-gradient(90deg,#a78bfa,#f3efff)";
+  const solido = b.esgotado ? V.bad : b.acabando ? V.warn : V.acc;
   return (
-    <View style={s.balde} testID={`wa-saldo-${b.key}`}>
-      <Text style={s.baldeRotulo}>{b.rotulo}</Text>
-      <Text style={s.baldeLivres} testID={`wa-saldo-${b.key}-livres`}>{b.livres}</Text>
-      <View style={s.barra} accessibilityLabel={`${b.rotulo}: ${b.livres}`}>
-        <View style={[s.barraFill, { width: `${Math.round((1 - b.gasto) * 100)}%`, backgroundColor: cor }]} />
+    <Superficie variante="dry" raio={22} padding={{ h: 18, v: 14 }} gap={8} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 260 }}>
+      <View testID={`wa-saldo-${b.key}`} style={{ gap: 8 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+          <Text style={t(15, V.ink, "700")}>{b.rotulo}</Text>
+          <Text style={t(14, V.ink2)} testID={`wa-saldo-${b.key}-livres`}>{b.livres}</Text>
+        </View>
+        <View style={{ height: 6, borderRadius: 999, backgroundColor: V.track, overflow: "hidden" }} accessibilityLabel={`${b.rotulo}: ${b.livres}`}>
+          <View
+            style={[{ height: 6, borderRadius: 999, width: `${Math.round((1 - b.gasto) * 100)}%`, backgroundColor: solido } as any,
+              WEB ? ({ backgroundImage: fundo } as any) : null]}
+          />
+        </View>
+        {!!b.faltam && <Text style={t(13, V.warn, "700")} testID={`wa-saldo-${b.key}-faltam`}>{b.faltam}</Text>}
+        <Text style={t(13, V.ink2)}>{DESC_BALDE[b.key]}</Text>
       </View>
-      {!!b.faltam && <Text style={s.faltam} testID={`wa-saldo-${b.key}-faltam`}>{b.faltam}</Text>}
-    </View>
+    </Superficie>
   );
 }
 
@@ -58,29 +70,25 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
   const pac = useWaPacotes(companyId, algumEsgotado);
   if (carregando && !saldo) {
     return (
-      <View style={s.card} testID="wa-saldo-carregando">
-        <ActivityIndicator size="small" color={Colors.violet3} />
-      </View>
+      <Superficie variante="dry" raio={22} padding={{ h: 18, v: 14 }} testID="wa-saldo-carregando">
+        <ActivityIndicator size="small" color={V.acc} />
+      </Superficie>
     );
   }
 
   if (!saldo) {
     // Dúvida bloqueia: sem saldo lido, nada que gasta mensagem fica ativo.
     return (
-      <View style={s.card} testID="wa-saldo-indisponivel">
+      <Superficie variante="dry" raio={22} padding={{ h: 18, v: 14 }} gap={8} testID="wa-saldo-indisponivel">
         <View style={s.linhaAviso}>
-          <Icon name="alert" size={13} color={Colors.amber} />
+          <Icon name="alert" size={13} color={V.warn} />
           <Text style={s.avisoTxt}>
             Não consegui ler o saldo de mensagens agora. Por segurança, os envios que gastam
             mensagem ficam travados até eu conseguir.
           </Text>
         </View>
-        {falhou && (
-          <Pressable onPress={onRetry} accessibilityRole="button" style={s.btnLink} testID="wa-saldo-tentar-de-novo">
-            <Text style={s.btnLinkTxt}>Tentar de novo</Text>
-          </Pressable>
-        )}
-      </View>
+        {falhou && <Lnk onPress={onRetry} testID="wa-saldo-tentar-de-novo">Tentar de novo</Lnk>}
+      </Superficie>
     );
   }
 
@@ -88,12 +96,12 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
   // nesta loja; mostrar "10 de 10" daria a entender que valem.
   if (!saldo.ativo) {
     return (
-      <View style={s.card} testID="wa-saldo-inativo">
+      <Superficie variante="dry" raio={22} padding={{ h: 18, v: 14 }} testID="wa-saldo-inativo">
         <View style={s.linhaAviso}>
-          <Icon name="alert" size={13} color={Colors.amber} />
+          <Icon name="alert" size={13} color={V.warn} />
           <Text style={s.avisoTxt}>Os limites novos ainda não estão valendo nesta loja.</Text>
         </View>
-      </View>
+      </Superficie>
     );
   }
 
@@ -101,20 +109,20 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
   const atencao = saldo.numeroEmAtencao || waNumeroEmAtencao(status);
 
   return (
-    <View style={s.card} testID="wa-saldo-medidor">
-      <Text style={s.titulo}>Mensagens de {saldo.mesNome}</Text>
+    <View style={{ gap: 12 }} testID="wa-saldo-medidor" {...tourTarget("wa.saldos")}>
+      <Meta>Mensagens de {saldo.mesNome}</Meta>
       {!!saldo.textoPresente && (
-        <Text style={s.presente} testID="wa-saldo-presente">{saldo.textoPresente}</Text>
+        <Text style={t(14, V.acc, "600")} testID="wa-saldo-presente">{saldo.textoPresente}</Text>
       )}
 
-      <View style={s.baldes}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {saldo.baldes.map((b) => <BaldeView key={b.key} b={b} />)}
       </View>
 
       {esgotados.map((b) => (
         <View key={b.key} style={s.linhaAviso} testID={`wa-saldo-${b.key}-esgotado`}>
-          <Icon name="alert" size={13} color={Colors.red} />
-          <Text style={[s.avisoTxt, { color: Colors.red }]}>
+          <Icon name="alert" size={13} color={V.bad} />
+          <Text style={[s.avisoTxt, { color: V.bad }]}>
             {b.textoEsgotado}
             {b.key === "avisos" ? ' As cobranças viram "Cobrar pelo meu WhatsApp".' : ""}
           </Text>
@@ -122,32 +130,30 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
       ))}
 
       {esgotados.some((b) => !!b.pacote) && !!companyId && (
-        <View style={s.pacotes} testID="wa-saldo-pacotes">
+        <View style={{ gap: 4 }} testID="wa-saldo-pacotes">
           {esgotados.filter((b) => !!b.pacote).map((b) => (
-            <Pressable
-              key={b.key}
-              onPress={() => pac.comprar(b.key as WaBucket)}
-              disabled={pac.comprando !== null}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: pac.comprando !== null }}
-              style={[s.btnPacote, pac.comprando !== null && { opacity: 0.6 }]}
-              testID={`wa-saldo-pacote-${b.key}`}
-            >
-              {pac.comprando === b.key && <ActivityIndicator size="small" color="#fff" />}
-              <Text style={s.btnPacoteTxt}>{b.pacote!.rotulo}</Text>
-            </Pressable>
+            <View key={b.key} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {pac.comprando === b.key && <ActivityIndicator size="small" color={V.acc} />}
+              <Lnk
+                onPress={() => pac.comprar(b.key as WaBucket)}
+                desabilitado={pac.comprando !== null}
+                testID={`wa-saldo-pacote-${b.key}`}
+              >
+                {b.pacote!.rotulo}
+              </Lnk>
+            </View>
           ))}
-          <Text style={s.pacoteNota} testID="wa-saldo-pacote-nota">
+          <Text style={t(13, V.ink3)} testID="wa-saldo-pacote-nota">
             Só passa a valer depois do pagamento. A Aura nunca compra sozinha.
           </Text>
           {!!pac.erro && <Text style={s.erro} testID="wa-saldo-pacote-erro">{pac.erro}</Text>}
           {pac.abaBloqueada && (
-            <Text style={s.pacoteNota} testID="wa-saldo-pacote-bloqueada">
+            <Text style={t(13, V.ink3)} testID="wa-saldo-pacote-bloqueada">
               Se o pagamento não abriu, toque em abrir o pagamento.
             </Text>
           )}
           {!!pac.manual && (
-            <Text style={s.pacoteNota} testID="wa-saldo-pacote-manual">
+            <Text style={t(13, V.ink3)} testID="wa-saldo-pacote-manual">
               Pedido registrado. Ainda não gerei o link de pagamento: a Aura vai te chamar para combinar o pagamento
               e soma o pacote depois que for confirmado.
             </Text>
@@ -156,28 +162,23 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
       )}
 
       {pac.pendentes.length > 0 && (
-        <View style={s.pacotes} testID="wa-saldo-pacotes-pendentes">
+        <View style={{ gap: 2 }} testID="wa-saldo-pacotes-pendentes">
           {pac.pendentes.map((p) => (
-            <Pressable
-              key={p.id} onPress={() => pac.abrir(String(p.payment_url))} accessibilityRole="button"
-              style={s.btnLink} testID={`wa-saldo-pacote-pagar-${p.id}`}
-            >
-              <Text style={s.btnLinkTxt}>Pacote de {p.qty} aguardando pagamento: abrir o pagamento</Text>
-            </Pressable>
+            <Lnk key={p.id} onPress={() => pac.abrir(String(p.payment_url))} testID={`wa-saldo-pacote-pagar-${p.id}`}>
+              {`Pacote de ${p.qty} aguardando pagamento: abrir o pagamento`}
+            </Lnk>
           ))}
-          <Pressable onPress={onRetry} accessibilityRole="button" style={s.btnLink} testID="wa-saldo-pacote-atualizar">
-            <Text style={s.btnLinkTxt}>Já paguei: atualizar o saldo</Text>
-          </Pressable>
+          <Lnk onPress={onRetry} testID="wa-saldo-pacote-atualizar">Já paguei: atualizar o saldo</Lnk>
         </View>
       )}
 
       {saldo.mostrarOferta && (
-        <Text style={s.oferta} testID="wa-saldo-oferta">{TEXTO_OFERTA_ESSENCIAL}</Text>
+        <Text style={t(14, V.ink2, "600")} testID="wa-saldo-oferta">{TEXTO_OFERTA_ESSENCIAL}</Text>
       )}
 
       {atencao && (
         <View style={s.linhaAviso} testID="wa-saldo-numero-em-atencao">
-          <Icon name="alert" size={13} color={Colors.amber} />
+          <Icon name="alert" size={13} color={V.warn} />
           <Text style={s.avisoTxt}>{TEXTO_NUMERO_EM_ATENCAO}</Text>
         </View>
       )}
@@ -186,30 +187,7 @@ export function MedidorSaldoCard({ companyId, saldo, carregando, falhou, status,
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
-  titulo: { fontSize: 14, fontWeight: "800", color: Colors.ink },
-  presente: { fontSize: 12, fontWeight: "600", color: Colors.violet3, lineHeight: 17 },
-  baldes: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  balde: {
-    flexGrow: 1, flexBasis: 160, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2,
-    borderRadius: 11, paddingVertical: 10, paddingHorizontal: 13, gap: 4,
-  },
-  baldeRotulo: { fontSize: 11.5, fontWeight: "700", color: Colors.ink2 },
-  baldeLivres: { fontSize: 15, fontWeight: "800", color: Colors.ink },
-  barra: { height: 6, borderRadius: 999, backgroundColor: Colors.bg4, overflow: "hidden" },
-  barraFill: { height: 6, borderRadius: 999 },
-  faltam: { fontSize: 11.5, fontWeight: "700", color: Colors.amber },
   linhaAviso: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  avisoTxt: { flex: 1, fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
-  oferta: { fontSize: 12, fontWeight: "600", color: Colors.ink2, lineHeight: 17 },
-  pacotes: { gap: 8 },
-  btnPacote: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48,
-    backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 16,
-  },
-  btnPacoteTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  pacoteNota: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
-  btnLink: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
-  btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
+  avisoTxt: { flex: 1, fontSize: 14, fontWeight: "600", color: V.warn, lineHeight: 20 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);

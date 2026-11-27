@@ -17,8 +17,12 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { WaSignupMode, WaStatus } from "@/services/waApi";
 import { useWaEmbeddedSignup } from "./useWaEmbeddedSignup";
 import { fmtPhoneBR } from "./waGuards";
+import { tourTarget } from "@/utils/tourTarget";
+import { Meta, V, estiloSuperficie, t } from "./waVidro";
 
 interface Props {
+  /** Visual do artboard GuiaExecucao (só equipe/sandbox até a liberação). */
+  vidro?: boolean;
   companyId: string;
   status: WaStatus | null;
   /** Conectou/desconectou — o pai recarrega status, templates e fila. */
@@ -46,7 +50,7 @@ function ModeOption({
   );
 }
 
-export function ConexaoCard({ companyId, status, onChanged }: Props) {
+export function ConexaoCard({ companyId, status, onChanged, vidro }: Props) {
   // Coexistence é o default: a maioria das lojas já usa o número no app
   // do celular, e trocar de número para conectar seria o pior caminho.
   const [signupMode, setSignupMode] = useState<WaSignupMode>("coexistence");
@@ -67,11 +71,25 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
   const connectLabel = mode === "reconectar" ? "Reconectar o WhatsApp" : "Conectar o WhatsApp da loja";
 
   return (
-    <View style={s.card} testID="wa-varejo-conexao">
+    <View style={[s.card, vidro && vidroCard]} testID="wa-varejo-conexao" {...tourTarget("wa.conexao")}>
+      {vidro ? (
+        <View style={{ gap: 4 }}>
+          <Meta>Conexão</Meta>
+          <Text style={t(22, V.ink, "800", { letterSpacing: -0.4, lineHeight: 28 })} testID="wa-varejo-conexao-titulo">
+            {mode === "conectado" ? "WhatsApp ligado" : "WhatsApp não conectado"}
+          </Text>
+          <Text style={t(14, V.ink2)}>
+            {mode === "conectado"
+              ? `${fmtPhoneBR(status?.phone_display)}${status?.coexistence === true ? " · também no celular" : ""}`
+              : mode === "conectar" || mode === "reconectar" ? "Ligue o número da loja para conversar e mandar avisos." : ""}
+          </Text>
+        </View>
+      ) : (
       <View style={s.headRow}>
         <Icon name="whatsapp" size={16} color={Colors.violet3} />
         <Text style={s.title}>Número da loja</Text>
       </View>
+      )}
 
       {mode === "conectado" && (
         <View testID="wa-varejo-conectado">
@@ -101,7 +119,7 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
             testID="wa-varejo-desconectar"
           >
             <Icon name="x_circle" size={13} color={Colors.ink3} />
-            <Text style={s.ghostTxt}>Desconectar</Text>
+            <Text style={s.ghostTxt}>{vidro ? "Trocar o número" : "Desconectar"}</Text>
           </Pressable>
         </View>
       )}
@@ -159,10 +177,11 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
             accessibilityRole="button"
             style={[s.primaryBtn, btnDisabled && s.btnDisabled]}
             testID="wa-varejo-conectar"
+            {...tourTarget("wa.conectar")}
           >
             {busy ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="link" size={14} color="#fff" />}
             <Text style={s.primaryTxt}>
-              {busy ? "Conectando…" : btnDisabled ? "Carregando…" : connectLabel}
+              {busy ? "Conectando…" : btnDisabled ? "Carregando…" : vidro && mode === "conectar" ? "Conectar WhatsApp" : connectLabel}
             </Text>
           </Pressable>
           {!!sdkError && <Text style={s.errTxt} testID="wa-varejo-sdk-erro">{sdkError}</Text>}
@@ -206,6 +225,8 @@ export function ConexaoCard({ companyId, status, onChanged }: Props) {
     </View>
   );
 }
+
+const vidroCard: any = { ...estiloSuperficie("dry", 24), padding: 20 };
 
 const s = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },

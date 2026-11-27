@@ -9,8 +9,8 @@
 // responde 409 SEM_ACEITE_NOVIDADES. Desligar é sempre direto.
 // `crediario_cobrar` usa avisos e nunca pergunta.
 import React, { useCallback, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import { Pilula, Superficie, V, t } from "@/components/whatsapp/waVidro";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 
@@ -45,40 +45,24 @@ export function AceiteNovidadesPergunta(
   { gravando, erro, onSim, onNao }: { gravando: boolean; erro: string | null; onSim: () => void; onNao: () => void }
 ) {
   return (
-    <View style={s.aceite} testID="wa-auto-aceite">
-      <Text style={s.titulo}>Seus clientes aceitaram receber novidades da loja pelo WhatsApp?</Text>
+    <Superficie variante="dry" raio={20} padding={14} gap={10} testID="wa-auto-aceite">
+      <Text style={t(14, V.ink)}>Seus clientes aceitaram receber novidades da loja pelo WhatsApp?</Text>
       <View style={s.botoes}>
-        <Pressable
-          onPress={onSim}
-          disabled={gravando}
-          accessibilityRole="button"
-          style={[s.btnPrim, gravando && { opacity: 0.6 }]}
-          testID="wa-auto-aceite-sim"
-        >
-          {gravando && <ActivityIndicator size="small" color="#fff" />}
-          <Text style={s.btnPrimTxt}>Sim, aceitaram</Text>
-        </Pressable>
-        <Pressable onPress={onNao} accessibilityRole="button" style={s.btnSec} testID="wa-auto-aceite-nao">
-          <Text style={s.btnSecTxt}>Ainda não</Text>
-        </Pressable>
+        <Pilula ligada onPress={onSim} disabled={gravando} testID="wa-auto-aceite-sim">
+          {gravando && <ActivityIndicator size="small" color={V.acc} />}
+          <Text style={t(14, V.onTxt, "600")}>Sim, aceitaram</Text>
+        </Pilula>
+        <Pilula onPress={onNao} testID="wa-auto-aceite-nao">
+          <Text style={t(14, V.ink, "600")}>Ainda não</Text>
+        </Pilula>
       </View>
-      <Text style={s.sub}>Pergunta feita uma vez só. Quem pedir para sair deixa de receber sozinho.</Text>
+      <Text style={t(12, V.ink3)}>Pergunta feita uma vez só. Quem pedir para sair deixa de receber sozinho.</Text>
       {!!erro && <Text style={s.erro}>{erro}</Text>}
-    </View>
+    </Superficie>
   );
 }
 
 const s = StyleSheet.create({
-  aceite: { backgroundColor: Colors.violetD, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, padding: 12, gap: 8 },
-  titulo: { fontSize: 13, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
   botoes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  btnPrim: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44,
-    backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14,
-  },
-  btnPrimTxt: { fontSize: 12.5, fontWeight: "700", color: "#fff" },
-  btnSec: { minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2 },
-  btnSecTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
 } as any);

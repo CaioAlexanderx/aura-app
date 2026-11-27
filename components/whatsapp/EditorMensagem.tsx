@@ -14,8 +14,9 @@
 // Overlay não: o editor abre no lugar da lista (dentro do shell).
 // ============================================================
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/colors";
+import { View, Text, TextInput, StyleSheet } from "react-native";
+import { BtnPrimario, BtnTracejado, Lnk, Meta, Pilula, Selo, Superficie, Titulo, V, EDITOR_INLINE, estiloBolha, t } from "./waVidro";
+import { EditorInline } from "./EditorInline";
 import { waConfigApi, erroConfig, type WaModeloRaw } from "@/services/waConfigApi";
 import { aplicarCorrecao, inserirCampo, renderizar, segmentos, validar } from "./waMensagem";
 import type { ClientePrevia } from "./waPreviaClientes";
@@ -113,162 +114,189 @@ export function EditorMensagem({ companyId, modelo, clientes, onFechar, onMudou 
 
   const diferenteDaAura = !!modelo.texto_novo || (modelo.texto_padrao != null && emUso !== modelo.texto_padrao);
   const aviso = categoria === "UTILITY" ? "os avisos" : "as mensagens";
+  const trechoOferta = v.checks.find((c) => c.id === "oferta" && !c.ok)?.trecho || null;
+  const donoMeta = `${modelo.automatica === "crediario" ? "Crediário" : modelo.automatica === "aniversario" ? "Aniversário" : modelo.automatica === "venda_mais" ? "Venda+" : "Mensagem"} · ${categoria === "UTILITY" ? "aviso" : "novidade"}`;
+  const partesPrevia = segmentos(texto).map((g) => ({
+    campo: g.campo,
+    v: g.campo ? renderizar(`{${g.v}}`, usandoExemplo ? undefined : atual.valores, usandoExemplo) : g.v,
+  }));
 
   return (
-    <View style={s.card} testID="wa-editor">
-      <Pressable onPress={onFechar} accessibilityRole="button" style={s.btnLink} testID="wa-editor-voltar">
-        <Text style={s.btnLinkTxt}>← Voltar</Text>
-      </Pressable>
-      <Text style={s.titulo}>Do seu jeito</Text>
-      <Text style={s.sub}>Mude o texto à vontade. A Aura cuida das regras do WhatsApp.</Text>
-      <Text style={s.meta}>{modelo.titulo}</Text>
-
-      {diferenteDaAura && (
-        <Pressable onPress={voltarAura} disabled={enviando} accessibilityRole="button" style={s.btnLink} testID="wa-editor-voltar-aura">
-          <Text style={s.btnLinkTxt}>Voltar ao texto da Aura</Text>
-        </Pressable>
-      )}
-
-      <Text style={s.sub}>Escreva como você fala com a cliente. Os campos roxos a Aura preenche sozinha.</Text>
-      <TextInput
-        value={texto}
-        onChangeText={(t) => { if (!travado) setTexto(t); }}
-        onSelectionChange={(e) => setSel({ start: e.nativeEvent.selection.start, end: e.nativeEvent.selection.end })}
-        selection={sel}
-        editable={!travado}
-        multiline
-        style={[s.input, travado && { opacity: 0.6 }]}
-        accessibilityLabel="Texto da mensagem"
-        testID="wa-editor-texto"
-      />
-
-      <View style={s.pilulasTexto} testID="wa-editor-pilulas">
-        {segmentos(texto).map((g, i) => (
-          <Text key={i} style={g.campo ? s.tok : s.palavra}>{g.v}</Text>
-        ))}
+    <View style={{ gap: 26 }} testID="wa-editor">
+      <View style={{ gap: 10 }}>
+        <Lnk onPress={onFechar} testID="wa-editor-voltar" style={{ minHeight: 32, paddingHorizontal: 0 }}>← Voltar</Lnk>
+        <Titulo tamanho={52}>Do seu jeito</Titulo>
+        <Text style={t(18, V.ink2, "400", { lineHeight: 26 })}>Mude o texto à vontade. A Aura cuida das regras do WhatsApp.</Text>
       </View>
 
-      <Text style={s.meta}>Toque para colocar no texto:</Text>
-      <View style={s.linhaBtns}>
-        {campos.map((c) => (
-          <Pressable
-            key={c} onPress={() => inserir(c)} disabled={travado}
-            accessibilityRole="button" accessibilityLabel={`Colocar o campo ${c}`}
-            style={[s.btnCampo, travado && { opacity: 0.6 }]} testID={`wa-editor-campo-${c}`}
-          >
-            <Text style={s.btnCampoTxt}>+ {c}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 28, alignItems: "flex-start" }}>
+        <Superficie variante="glass" raio={30} padding={{ h: 30, v: 26 }} gap={18} style={{ flexGrow: 999, flexShrink: 1, flexBasis: 640 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <View>
+              <Meta>{donoMeta}</Meta>
+              <Text style={t(24, V.ink, "800", { letterSpacing: -0.7, lineHeight: 30 })}>{modelo.titulo}</Text>
+            </View>
+            {diferenteDaAura && (
+              <Lnk onPress={voltarAura} desabilitado={enviando} testID="wa-editor-voltar-aura">Voltar ao texto da Aura</Lnk>
+            )}
+          </View>
 
-      <View style={{ gap: 8 }} testID="wa-editor-checks">
-        {v.checks.map((c) => (
-          <View key={c.id} style={s.check} testID={`wa-editor-check-${c.id}`}>
-            <Text style={[s.mark, { color: c.ok ? Colors.green : Colors.amber }]}>{c.ok ? "✓" : "!"}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.checkTxt, !c.ok && { color: Colors.ink }]}>{c.texto}</Text>
-              {!c.ok && !!c.correcao && !travado && (
-                <Pressable
-                  onPress={() => setTexto(aplicarCorrecao(texto, c))}
-                  accessibilityRole="button" style={s.btnLink} testID={`wa-editor-corrigir-${c.id}`}
-                >
-                  <Text style={s.btnLinkTxt}>
-                    {c.correcao === "PONTO_FINAL" ? "Pôr um ponto final" : c.correcao === "SEPARAR" ? "Separar" : "Tirar o trecho amarelo"}
-                  </Text>
-                </Pressable>
-              )}
+          <View style={{ gap: 8 }}>
+            <Text style={t(14, V.ink2)}>Escreva como você fala com a cliente. Os campos roxos a Aura preenche sozinha.</Text>
+            {EDITOR_INLINE ? (
+              <EditorInline
+                valor={texto} cursor={sel.start} travado={travado} destaque={trechoOferta}
+                onChange={(tx) => { if (!travado) setTexto(tx); }}
+                onSel={(a, b) => setSel({ start: a, end: b })}
+                testID="wa-editor-texto"
+              />
+            ) : (
+              <>
+                <TextInput
+                  value={texto}
+                  onChangeText={(tx) => { if (!travado) setTexto(tx); }}
+                  onSelectionChange={(e) => setSel({ start: e.nativeEvent.selection.start, end: e.nativeEvent.selection.end })}
+                  selection={sel}
+                  editable={!travado}
+                  multiline
+                  style={[s.input, travado && { opacity: 0.6 }]}
+                  accessibilityLabel="Texto da mensagem"
+                  testID="wa-editor-texto"
+                />
+                <View style={s.pilulasTexto} testID="wa-editor-pilulas">
+                  {segmentos(texto).map((g, i) => (
+                    <Text key={i} style={g.campo ? s.tok : s.palavra}>{g.v}</Text>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Text style={t(14, V.ink2)}>Toque para colocar no texto:</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {campos.map((c) => (
+                <Pilula key={c} peq onPress={() => inserir(c)} desabilitado={travado} testID={`wa-editor-campo-${c}`}>
+                  <Text accessibilityLabel={`Colocar o campo ${c}`} style={t(13, V.ink, "600")}>+ {c}</Text>
+                </Pilula>
+              ))}
             </View>
           </View>
-        ))}
-      </View>
 
-      <Text style={s.meta}>{usandoExemplo ? "Como chega (cliente de exemplo)" : `Como chega para ${atual.nome}`}</Text>
-      {!usandoExemplo && (
-        <View style={s.linhaBtns}>
-          {clientes.map((c, i) => (
-            <Pressable
-              key={c.nome + i} onPress={() => setCliente(i)} accessibilityRole="button"
-              style={[s.pilula, i === cliente && s.pilulaOn]} testID={`wa-editor-cliente-${i}`}
-            >
-              <Text style={[s.pilulaTxt, i === cliente && s.pilulaTxtOn]}>{c.nome}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <View style={s.bolha} testID="wa-editor-previa">
-        <Text style={s.bolhaTxt}>{preview}</Text>
-      </View>
+          <Superficie variante="dry" raio={22} padding={{ h: 18, v: 16 }} gap={10}>
+            <View style={{ gap: 10 }} testID="wa-editor-checks">
+              {v.checks.map((c) => (
+                <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }} testID={`wa-editor-check-${c.id}`}>
+                  <View style={{ width: 22, height: 22, borderRadius: 11, marginTop: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.ok ? V.okBg : V.warnBg }}>
+                    <Text style={t(13, c.ok ? V.ok : V.warn, "800", { lineHeight: 16 })}>{c.ok ? "✓" : "!"}</Text>
+                  </View>
+                  <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10, rowGap: 4 }}>
+                    <Text style={t(14, c.ok ? V.ink2 : V.ink)}>{c.texto}</Text>
+                    {!c.ok && !!c.correcao && !travado && (
+                      <Pilula peq ligada onPress={() => setTexto(aplicarCorrecao(texto, c))} testID={`wa-editor-corrigir-${c.id}`}>
+                        <Text style={t(13, V.onTxt, "600")}>
+                          {c.correcao === "PONTO_FINAL" ? "Pôr um ponto final" : c.correcao === "SEPARAR" ? "Separar" : "Tirar o trecho amarelo"}
+                        </Text>
+                      </Pilula>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </Superficie>
+        </Superficie>
 
-      {enviado ? (
-        <View style={{ gap: 4 }} testID="wa-editor-enviado">
-          <Text style={s.ok}>Enviado para aprovação.</Text>
-          <Text style={s.sub}>Até a resposta, {aviso} saem com o texto atual. A Aura avisa no sino quando o seu passar a valer.</Text>
-        </View>
-      ) : (
-        <>
-          <Pressable
-            onPress={enviar} disabled={!pode}
-            accessibilityRole="button" accessibilityState={{ disabled: !pode }}
-            style={[s.btnPrim, !pode && { opacity: 0.45 }]} testID="wa-editor-enviar"
-          >
-            {enviando && <ActivityIndicator size="small" color="#fff" />}
-            <Text style={s.btnPrimTxt}>Mandar para aprovação</Text>
-          </Pressable>
-          {!!limite ? (
-            <Text style={s.aviso} testID="wa-editor-limite">{limite}</Text>
-          ) : !v.ok ? (
-            <Text style={s.aviso} testID="wa-editor-ajuste">Ajuste o item amarelo para mandar</Text>
+        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
+          <Superficie variante="solid" raio={34} padding={14} gap={12}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: V.rule }}>
+              <Text style={t(13, V.ink3)} accessibilityLabel={usandoExemplo ? "Como chega (cliente de exemplo)" : `Como chega para ${atual.nome}`}>{usandoExemplo ? "Como chega (cliente de exemplo)" : "Como chega para"}</Text>
+              {!usandoExemplo && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                  {clientes.map((c, i) => (
+                    <Pilula key={c.nome + i} peq role="radio" ligada={i === cliente} onPress={() => setCliente(i)} testID={`wa-editor-cliente-${i}`}>
+                      <Text style={t(13, i === cliente ? V.onTxt : V.ink, "600")}>{c.nome}</Text>
+                    </Pilula>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={{ minHeight: 240, justifyContent: "flex-end", padding: 6 }}>
+              <View style={estiloBolha()} testID="wa-editor-previa">
+                <Text style={t(15, V.ink, "400", { lineHeight: 22 })} accessibilityLabel={partesPrevia.map((p) => p.v).join("")}>
+                  {partesPrevia.map((p, i) => (
+                    <Text key={i} style={p.campo ? { fontWeight: "700" } : undefined}>{p.v}</Text>
+                  ))}
+                </Text>
+                <Text style={t(12, V.ink3, "400", { marginTop: 4, textAlign: "right" })}>9:00</Text>
+              </View>
+            </View>
+          </Superficie>
+
+          {enviado ? (
+            <Superficie variante="dry" raio={24} padding={{ h: 18, v: 16 }} gap={6}>
+              <View testID="wa-editor-enviado" style={{ gap: 6 }}>
+                <Text style={t(17, V.ink, "700")}>Enviado para aprovação.</Text>
+                <Text style={t(14, V.ink2)}>Até a resposta, {aviso} saem com o texto atual. A Aura avisa no sino quando o seu passar a valer.</Text>
+              </View>
+            </Superficie>
           ) : (
-            <Text style={s.sub}>O WhatsApp confere todo texto novo. Costuma levar algumas horas; até lá vai o texto atual.</Text>
+            <View style={{ gap: 10, alignItems: "flex-start" }}>
+              {pode ? (
+                <BtnPrimario onPress={enviar} disabled={false} carregando={enviando} testID="wa-editor-enviar">Mandar para aprovação</BtnPrimario>
+              ) : (
+                <BtnTracejado testID="wa-editor-enviar" disabled onPress={() => {}}>
+                  {limite ? "Edição indisponível agora" : "Ajuste o item amarelo para mandar"}
+                </BtnTracejado>
+              )}
+              {!!limite ? (
+                <Text style={s.aviso} testID="wa-editor-limite">{limite}</Text>
+              ) : !v.ok ? (
+                <Text style={s.aviso} testID="wa-editor-ajuste">Ajuste o item amarelo para mandar</Text>
+              ) : (
+                <Text style={t(13, V.ink3)}>O WhatsApp confere todo texto novo. Costuma levar algumas horas; até lá vai o texto atual.</Text>
+              )}
+            </View>
           )}
-        </>
-      )}
-      {!!erro && <Text style={s.erro} testID="wa-editor-erro">{erro}</Text>}
+          {!!erro && <Text style={s.erro} testID="wa-editor-erro">{erro}</Text>}
+        </View>
+      </View>
+
+      <View style={{ gap: 12 }}>
+        <Meta>Depois de mandar</Meta>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+          <Superficie variante="solid" raio={24} padding={{ h: 20, v: 18 }} gap={6} style={{ flexGrow: 1, flexBasis: 300 }}>
+            <Selo texto="Em aprovação" tom="warn" />
+            <Text style={t(14, V.ink2)}>Na lista de mensagens, com o texto novo apagado e o atual valendo.</Text>
+          </Superficie>
+          <Superficie variante="solid" raio={24} padding={{ h: 20, v: 18 }} gap={6} style={{ flexGrow: 1, flexBasis: 300 }}>
+            <Selo texto="Aprovado" tom="ok" />
+            <Text style={t(14, V.ink2)}>{'No sino: "Seu texto de \'' + modelo.titulo + '\' já está valendo."'}</Text>
+          </Superficie>
+          <Superficie variante="solid" raio={24} padding={{ h: 20, v: 18 }} gap={8} style={{ flexGrow: 1, flexBasis: 300 }}>
+            <Selo texto="Não aprovado" tom="danger" />
+            <Text style={t(14, V.ink2)}>"O WhatsApp achou que o texto parece propaganda. O texto atual continua valendo."</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              <Pilula peq ligada><Text style={t(13, V.onTxt, "600")}>Ajustar para mim</Text></Pilula>
+              <Pilula peq><Text style={t(13, V.ink, "600")}>Ficar com o da Aura</Text></Pilula>
+            </View>
+          </Superficie>
+        </View>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: Colors.bg3, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 10 },
-  titulo: { fontSize: 16, fontWeight: "800", color: Colors.ink },
-  sub: { fontSize: 12, color: Colors.ink2, lineHeight: 17 },
-  meta: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: Colors.ink3, textTransform: "uppercase" },
   input: {
-    minHeight: 120, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2,
-    padding: 12, fontSize: 14, lineHeight: 21, color: Colors.ink, textAlignVertical: "top",
+    minHeight: 120, borderRadius: 12, borderWidth: 1, borderColor: V.campoLine, backgroundColor: V.campoBg,
+    padding: 12, fontSize: 14, lineHeight: 21, color: V.ink, textAlignVertical: "top",
   },
   pilulasTexto: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 2 },
-  palavra: { fontSize: 13, color: Colors.ink2 },
+  palavra: { fontSize: 13, color: V.ink2 },
   tok: {
-    fontSize: 12.5, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD,
+    fontSize: 12.5, fontWeight: "700", color: V.tokTxt, backgroundColor: V.tokBg,
     borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2, overflow: "hidden",
   },
-  linhaBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  btnCampo: {
-    minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 999,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-  },
-  btnCampoTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
-  check: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  mark: { fontSize: 14, fontWeight: "800", width: 16, textAlign: "center" },
-  checkTxt: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
-  pilula: {
-    minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999,
-    backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border2,
-  },
-  pilulaOn: { backgroundColor: Colors.violetD, borderColor: Colors.violet3 },
-  pilulaTxt: { fontSize: 12.5, fontWeight: "600", color: Colors.ink2 },
-  pilulaTxtOn: { color: Colors.violet3, fontWeight: "800" },
-  bolha: { backgroundColor: Colors.violetD, borderRadius: 16, borderWidth: 1, borderColor: Colors.border2, padding: 12 },
-  bolhaTxt: { fontSize: 13.5, color: Colors.ink, lineHeight: 20 },
-  btnPrim: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48,
-    backgroundColor: Colors.violet, borderRadius: 12, paddingHorizontal: 16,
-  },
-  btnPrimTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  btnLink: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
-  btnLinkTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
-  ok: { fontSize: 13, fontWeight: "800", color: Colors.green },
-  aviso: { fontSize: 12, fontWeight: "600", color: Colors.amber, lineHeight: 17 },
-  erro: { fontSize: 12, fontWeight: "600", color: Colors.red, lineHeight: 17 },
+  aviso: { fontSize: 13, fontWeight: "600", color: V.warn, lineHeight: 18 },
+  erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);
