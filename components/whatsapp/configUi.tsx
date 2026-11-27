@@ -10,6 +10,7 @@
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import type { Corte } from "./waCorte";
+import { useSetas } from "./waTeclado";
 import { useWaPacotes } from "@/hooks/useWaPacotes";
 import {
   Avatar, Celular, Lnk, Meta, Pilula, Selo, Sw, Superficie, Titulo, V, WEB, estiloBolha, t, MONO, SANS,
@@ -68,15 +69,22 @@ export function Secao({ meta, titulo, sub, children, variante = "solid", direita
 export interface Opcao<T extends string> { valor: T; rotulo: string }
 
 export function Pilulas<T extends string>({
-  opcoes, valor, onPick, desabilitado, idBase, comCheck,
-}: { opcoes: Opcao<T>[]; valor: T | null | undefined; onPick: (v: T) => void; desabilitado?: boolean; idBase: string; comCheck?: boolean }) {
+  opcoes, valor, onPick, desabilitado, idBase, comCheck, rotulo,
+}: { opcoes: Opcao<T>[]; valor: T | null | undefined; onPick: (v: T) => void; desabilitado?: boolean; idBase: string; comCheck?: boolean; rotulo?: string }) {
+  // Escolha única (radiogroup): uma só parada de Tab; as setas movem e escolhem.
+  const atual = opcoes.findIndex((o) => o.valor === valor);
+  const { propsDoItem } = useSetas({
+    qtd: opcoes.length, ativo: atual, ativarAoMover: true, desabilitados: desabilitado ? opcoes.map(() => true) : undefined,
+    aoMover: (i) => { if (!desabilitado) onPick(opcoes[i].valor); },
+  });
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      {opcoes.map((o) => {
+    <View accessibilityRole="radiogroup" aria-label={rotulo || idBase} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {opcoes.map((o, i) => {
         const on = o.valor === valor;
         return (
           <Pilula
-            key={o.valor} ligada={on} desabilitado={desabilitado} onPress={() => onPick(o.valor)}
+            key={o.valor} role="radio" ligada={on} desabilitado={desabilitado} onPress={() => onPick(o.valor)}
+            estado={{ checked: on, selected: on, disabled: !!desabilitado }} nav={propsDoItem(i)}
             testID={`${idBase}-${o.valor}`}
           >
             {comCheck && <Caixa marcada={on} />}
@@ -87,7 +95,6 @@ export function Pilulas<T extends string>({
     </View>
   );
 }
-
 /** O quadradinho .chk das pílulas de "Quando sai". */
 function Caixa({ marcada }: { marcada: boolean }) {
   return (

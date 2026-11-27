@@ -20,6 +20,7 @@ import {
   rotuloDoPresente, type PresenteChave, type SegmentoVenda,
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
+import { useSetas } from "./waTeclado";
 import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -43,6 +44,12 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const segmento = lerSegmento(cfg.segmento);
   const presenteChave = chaveDoPresente(cfg.presente);
   const alt = useAlternarAutomatica(auto);
+  // Sumindo / Sumiu: escolha única (radiogroup); as setas movem e escolhem.
+  const setasSeg = useSetas({
+    qtd: OPCOES_SEGMENTO.length, ativo: OPCOES_SEGMENTO.findIndex((o) => o.valor === segmento), ativarAoMover: true,
+    desabilitados: auto.salvando ? OPCOES_SEGMENTO.map(() => true) : undefined,
+    aoMover: (i) => { if (!auto.salvando) auto.salvarConfig("venda_mais", { segmento: OPCOES_SEGMENTO[i].valor }); },
+  });
 
   const pub = useWaPublico(companyId, "venda_mais", segmento || undefined, lida?.livres ?? null, !!lida && !!segmento, JSON.stringify(cfg));
   // O outro grupo também mostra a contagem ("18 clientes" / "23 clientes").
@@ -92,16 +99,19 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 28, alignItems: "flex-start" }} testID="wa-venda-tela">
       <Superficie variante="glass" raio={30} padding={{ h: 30, v: 26 }} gap={22} style={{ flexGrow: 999, flexShrink: 1, flexBasis: 640 }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          {OPCOES_SEGMENTO.map((o) => {
+        <View accessibilityRole="radiogroup" aria-label="Quem chamar" style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          {OPCOES_SEGMENTO.map((o, idx) => {
             const on = o.valor === segmento;
+            const nav = setasSeg.propsDoItem(idx);
             return (
               <Pressable
                 key={o.valor}
+                ref={nav.innerRef as any}
+                {...({ tabIndex: nav.tabIndex, onKeyDown: nav.onKeyDown, onFocus: nav.onFocus, "aria-checked": on } as any)}
                 onPress={() => salvar({ segmento: o.valor })}
                 disabled={travado}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on, disabled: travado }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on, selected: on, disabled: travado }}
                 testID={`wa-venda-segmento-${o.valor}`}
                 style={[{
                   flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, gap: 6, paddingHorizontal: 22, paddingVertical: 20,
@@ -122,7 +132,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         <View style={{ gap: 10 }}>
           <Text style={t(17, V.ink, "700")}>Presente</Text>
           <Pilulas<PresenteChave>
-            idBase="wa-venda-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
+            rotulo="Presente" idBase="wa-venda-presente" opcoes={OPCOES_PRESENTE} valor={presenteChave} desabilitado={travado}
             onPick={(v) => salvar({ presente: presenteDaChave(v) })}
           />
         </View>

@@ -156,7 +156,21 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
                       simbolo="−" rotulo={`Tirar 1 de ${ROTULO_AUTO[k]}`} disabled={!menos}
                       onPress={() => { setUltimo("divisao"); auto.ajustar(k, -1); }} testID={`wa-auto-menos-${k}`}
                     />
-                    <View style={{ alignItems: "center" }}>
+                    <View
+                      testID={`wa-auto-valor-${k}`}
+                      style={{ alignItems: "center" }}
+                      {...({
+                        role: "spinbutton", tabIndex: travado ? -1 : 0,
+                        "aria-label": `Novidades de ${ROTULO_AUTO[k]}`, "aria-valuenow": info.divisao[k],
+                        "aria-valuemin": info.usadas[k], "aria-valuemax": info.divisao[k] + Math.max(0, livres),
+                        "aria-valuetext": `${info.divisao[k]} novidades, ${info.usadas[k]} já usadas`,
+                        // ↑ ↓ mudam o valor (as mesmas travas do + e do −)
+                        onKeyDown: (e: any) => {
+                          if (e?.key === "ArrowUp" && mais) { e.preventDefault?.(); setUltimo("divisao"); auto.ajustar(k, 1); }
+                          else if (e?.key === "ArrowDown" && menos) { e.preventDefault?.(); setUltimo("divisao"); auto.ajustar(k, -1); }
+                        },
+                      } as any)}
+                    >
                       <Text style={t(24, V.ink, "800", { lineHeight: 26 })} testID={`wa-auto-n-${k}`}>{info.divisao[k]}</Text>
                       <Text style={t(12, V.ink3)}>{info.usadas[k]} usadas</Text>
                     </View>

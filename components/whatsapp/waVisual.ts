@@ -124,7 +124,7 @@ export const V = ESCURO
       glassA: "rgba(255,255,255,.13)", glassB: "rgba(255,255,255,.04)", dryA: "rgba(255,255,255,.08)", dryB: "rgba(255,255,255,.025)",
       dryLine: "rgba(255,255,255,.12)", avTxt: "#1b1338", chkLine: "rgba(255,255,255,.35)", numLine: "#c4b5fd",
       swOff: "rgba(255,255,255,.08)", swLine: "rgba(255,255,255,.22)", knob: "#e9e3ff", sombra: "rgba(3,0,20,.6)",
-      spot: "rgba(139,92,246,.42)",
+      spot: "rgba(139,92,246,.42)", bgTela: "#04020f",
     }
   : {
       ink: "#18172b", ink2: "#3b3461", ink3: "#3f3760",
@@ -140,7 +140,7 @@ export const V = ESCURO
       glassA: "rgba(255,255,255,.9)", glassB: "rgba(255,255,255,.5)", dryA: "rgba(255,255,255,.6)", dryB: "rgba(255,255,255,.35)",
       dryLine: "rgba(109,40,217,.14)", avTxt: "#1b1338", chkLine: "rgba(109,40,217,.45)", numLine: "#6d28d9",
       swOff: "rgba(24,23,43,.1)", swLine: "rgba(109,40,217,.3)", knob: "#ffffff", sombra: "rgba(76,29,149,.22)",
-      spot: "rgba(139,92,246,.22)",
+      spot: "rgba(139,92,246,.22)", bgTela: "#e6e4f0",
     };
 
 export const SANS: any = WEB ? '"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif' : undefined;
@@ -184,6 +184,8 @@ const KEYFRAMES = `
 @keyframes wa-traca{from{transform:scaleX(0)}to{transform:none}}
 @keyframes wa-vai{0%{opacity:1;transform:none}100%{opacity:.25;transform:translateY(-6px)}}
 html[data-lite] [data-wa-anim]{animation:none!important}
+[data-wa-root] :focus{outline:none}
+[data-wa-root] :focus-visible{outline:2px solid #c4b5fd!important;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){[data-wa-anim]{animation:none!important}[data-wa-anim] *{animation:none!important;transition:none!important}}
 `;
 const ANIMAR = WEB && !SEM_MOVIMENTO;
@@ -229,7 +231,7 @@ export function estiloSuperficie(v: VarianteSuperficie, raio: number): any {
   }
   if (v === "glass") {
     return {
-      ...base, borderColor: V.gb, backgroundColor: ESCURO ? "rgba(34,24,72,.78)" : "rgba(255,255,255,.82)",
+      ...base, borderColor: V.gb, backgroundColor: ESCURO ? "rgba(10,6,28,.35)" : "rgba(255,255,255,.82)",
       ...(WEB ? {
         backgroundImage: `linear-gradient(160deg,${V.glassA},${V.glassB})`,
         backdropFilter: "blur(24px) saturate(165%)", WebkitBackdropFilter: "blur(24px) saturate(165%)",
