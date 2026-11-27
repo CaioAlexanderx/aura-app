@@ -45,6 +45,7 @@ import { studioApi, type StudioOrder, type StudioProductionStatus, type Marketpl
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { propsDoModalDeAprovacao, useAprovacaoNova } from "@/components/studio/aprovacaoDaArte/trava";
 import { CollectCustomizationModal } from "@/components/studio/CollectCustomizationModal";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
@@ -485,6 +486,7 @@ function KanbanColumn({
 }
 
 export default function StudioProducao() {
+  const aprovacaoNova = useAprovacaoNova();
   const router = useRouter();
   const params = useLocalSearchParams();
   const t = useStudioTokens();
@@ -836,7 +838,7 @@ export default function StudioProducao() {
 
       <Modal
         visible={!!approvalFor}
-        animationType="slide"
+        {...propsDoModalDeAprovacao(aprovacaoNova)}
         onRequestClose={() => setApprovalFor(null)}
       >
         {approvalFor && (
