@@ -118,6 +118,13 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const totalVenda = info.divisao.venda_mais ?? 0;
   const usadasVenda = info.usadas.venda_mais ?? 0;
   const livresVenda = lida.livres ?? 0;
+  // O cartão do grupo mostra o TOTAL do grupo (artboard: 18); "podem receber" é o que sobra depois dos descontos
+  // (recentes, SAIR, sem telefone, sem a peça): total = aptos + os que ficam de fora, pelos contadores do servidor.
+  function totalDoGrupo(c: { total: number } | null | undefined, f: any): number | null {
+    if (!c) return null;
+    const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
+    return c.total + n(f?.recebeu_ha_menos_de_7_dias) + n(f?.pediu_para_nao_receber) + n(f?.sem_telefone) + n(f?.sem_a_peca_da_ultima_compra);
+  }
   const contagem = (n: number | null | undefined) => (typeof n === "number" ? `${n} ${n === 1 ? "cliente" : "clientes"}. ` : "");
   const DESC_SEG: Record<string, string> = { sumindo: "A melhor hora de chamar.", sumiu: "Precisa de um presente maior." };
 
@@ -147,7 +154,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                 <Meta>{o.meta}</Meta>
                 <Text style={t(24, V.ink, "800", { letterSpacing: -0.7, lineHeight: 28 })}>{o.rotulo}</Text>
                 <Text style={t(14, V.ink2)}>
-                  {contagem(o.valor === segmento ? corte?.total : pubOutro.corte?.total)}{DESC_SEG[o.valor] || ""}
+                  {contagem(o.valor === segmento ? totalDoGrupo(corteBruto, fora) : totalDoGrupo(pubOutro.corte, pubOutro.publico?.fora as any))}{DESC_SEG[o.valor] || ""}
                 </Text>
               </Pressable>
             );

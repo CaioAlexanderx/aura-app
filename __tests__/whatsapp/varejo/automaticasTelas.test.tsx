@@ -463,7 +463,28 @@ describe("QA real: Venda+", () => {
     expect(x).toContain("Como chega para Armand");
     expect(x).not.toContain("Como a Armand vê");
   });
-  it("de 2 em diante: Mandar para as N que mais compravam", () => {
+  it("o cartão do grupo mostra o TOTAL do grupo; 'podem receber' é o que sobra depois dos descontos", () => {
+    mockModelos.current = modelosHook([vendaModelo]);
+    // 14 aptos + 2 recentes + 1 SAIR + 1 sem telefone = 18 no grupo (como no artboard)
+    mockPub.current = pubHook(publico({ elegiveis: 14, cabem: 4, vao: ["Ana", "Marta", "Cris", "Bia"].map((n) => ({ nome: n, detalhe: "", ultima_peca: "o vestido", ultima_compra: "2026-08-12" })), guardados: [], ficam_guardados: 10, fora: { recebeu_ha_menos_de_7_dias: 2, pediu_para_nao_receber: 1, sem_telefone: 1 } }));
+    let x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("18 clientes. A melhor hora de chamar.");
+    expect(x).toContain("14 podem receber");
+    // uma cliente sem a peça: o grupo tem 1 cliente (não 0) e 0 podem receber
+    mockPub.current = um({ ultima_compra: "2026-08-12" });
+    x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("1 cliente. A melhor hora de chamar.");
+    expect(x).toContain("0 podem receber");
+    expect(x).toContain("1 sem a peça da última compra");
+  });
+  it("a peça do exemplo tem o mesmo formato da real (com artigo e minúscula)", () => {
+    mockModelos.current = modelosHook([vendaModelo]);
+    mockPub.current = pubHook(publico({ elegiveis: 0, cabem: 0, vao: [], guardados: [], ficam_guardados: 0, falta_para_todos: 0 }));
+    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("Como chega (cliente de exemplo)");
+    expect(x).toContain("na Lume: o vestido verde.");
+    expect(x).not.toContain("Vestido Verde");
+  });  it("de 2 em diante: Mandar para as N que mais compravam", () => {
     mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4, vao: ["Ana", "Marta", "Cris", "Bia"].map((n) => ({ nome: n, detalhe: "", ultima_peca: "o vestido", ultima_compra: "2026-08-12" })) }));
     mockModelos.current = modelosHook([vendaModelo]);
     const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
