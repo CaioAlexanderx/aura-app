@@ -190,7 +190,7 @@ describe("o motor dos guias", () => {
     const onFim = jest.fn();
     const t = monta(<GuiaTour guia={guia2()} ctx={ctx} onFim={onFim} />);
     passa(700);
-    expect(ctx.irPara).toHaveBeenCalledWith({ aba: "automaticas" });
+    expect(ctx.irPara).toHaveBeenCalledWith({ aba: "automaticas", sub: null });
     expect(document.querySelector("[data-testid='guia-contador']")?.textContent).toBe("1 de 7");
     expect(document.querySelector("[data-testid='guia-titulo']")?.textContent).toContain("Três saldos, cada um no seu limite");
     expect(document.querySelector("[data-testid='guia-proximo']")?.textContent).toContain("Próximo");
