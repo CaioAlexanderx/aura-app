@@ -147,6 +147,20 @@ describe("navegação da tela do WhatsApp", () => {
     t.unmount();
   });
 
+  it("Configurações: as duas colunas (Conexão e saldos) encolhem e quebram em uma só no celular (sem passar da tela)", async () => {
+    const t = await montar();
+    await toque(t, "wa-varejo-aba-config");
+    const plano = (el: any) => Object.assign({}, ...[].concat(el.props.style || []).flat(3).filter(Boolean));
+    for (const id of ["wa-varejo-conexao-col", "wa-varejo-saldos-col"]) {
+      const est = plano(achar(t, id));
+      expect(est.flexShrink).toBe(1);
+      expect(est.minWidth).toBe(0);
+      expect(est.maxWidth).toBe("100%");
+      expect(est.flexBasis).toBeGreaterThan(0);
+    }
+    t.unmount();
+  });
+
   it("trocar de aba fecha a página de dentro das Automáticas", async () => {
     const t = await montar();
     await toque(t, "wa-varejo-aba-automaticas");

@@ -335,10 +335,11 @@ export default function WhatsAppScreen() {
               {novas ? (
                 // GuiaExecucao, guia 1: a conexão e os saldos lado a lado.
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
-                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>
+                  {/* Duas colunas que quebram para uma só no celular: flexShrink 1 + minWidth 0 (nada passa da tela; 390 e 375 sem rolagem lateral). */}
+                  <View testID="wa-varejo-conexao-col" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0, maxWidth: "100%" }}>
                     <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} vidro />
                   </View>
-                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
+                  <View testID="wa-varejo-saldos-col" style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0, maxWidth: "100%" }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
                 </View>
               ) : (
                 <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />
