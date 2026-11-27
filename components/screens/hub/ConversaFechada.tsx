@@ -21,6 +21,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { K, Tx, Meta, MONO, Ico, Pilula, BotaoPrincipal, superficie, web, SANS } from "./conversasUi";
 import { hubApi, type HubConvite, type HubConvites } from "@/services/hubApi";
 import { tourTarget } from "@/utils/tourTarget";
+import { tratarSetas } from "./teclado";
 import { copyToClipboard } from "@/utils/clipboard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -207,9 +208,10 @@ export function ConversaFechada({ companyId, convId, nome, podeConfigurar, onSen
   return (
     <View testID="hub-fechada" {...tourTarget("wa.convite")} style={{ gap: 14 }}>
       <Tx style={{ fontSize: 15, fontWeight: "600" }}>Para falar com {nome}, escolha o convite:</Tx>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Convite" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Convite" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+        {...({ dataSet: { waFoco: "1" }, onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="radio"]:not([aria-disabled="true"])', seleciona: true, circular: true, horizontal: true }) } as any)}>
         {data.convites.map((c) => (
-          <Pilula key={c.key} testID={`hub-convite-${c.key}`} disabled={!c.pronto} on={escolhido === c.key && c.pronto}
+          <Pilula key={c.key} testID={`hub-convite-${c.key}`} role="radio" semTab={!(escolhido === c.key && c.pronto)} disabled={!c.pronto} on={escolhido === c.key && c.pronto}
             onPress={() => { setEscolhido(c.key); setAviso(null); }}
             style={!c.pronto ? { opacity: 0.45 } : undefined}>
             {`${c.titulo}${!c.pronto ? " · em aprovação" : ""}`}

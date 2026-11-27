@@ -10,7 +10,7 @@
 //     "Ativar a Aurinha" fica como ação secundária, só para dono/admin
 //     (o PUT /hub/settings recusa membro), e abre o card de ativação.
 // ============================================================
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, ScrollView, Pressable, Switch, ActivityIndicator, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -22,12 +22,62 @@ import { CHANNEL_META, CATEGORY_META, shortTime, nomeDoContato, conversaAbertaAt
 import { ThreadView } from "./ThreadView";
 import { tourTarget } from "@/utils/tourTarget";
 import { PainelCliente } from "./PainelCliente";
-import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web, SANS } from "./conversasUi";
+import { K, Tx, Ico, Avatar, Pilula, Ponto, superficie, web, SANS, FOCO, useFocoVisivel } from "./conversasUi";
+import { tratarSetas, focarPorTestID } from "./teclado";
+import { BtnPrimario } from "@/components/whatsapp/waVidro";
 
 type StatusFilter = "todas" | HubStatus;
 
-function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
-  conv: HubConversation; selected: boolean; onPress: () => void; aurinhaLigada: boolean;
+/**
+ * Linha de filtros (radiogroup). No computador quebra em duas linhas quando falta largura;
+ * no celular rola de lado e, havendo mais à direita, um esmaecido na borda avisa que rola.
+ */
+function LinhaFiltros({ largo, testID, aria, children }: { largo: boolean; testID?: string; aria: any; children: React.ReactNode }) {
+  const [larg, setLarg] = useState(0);
+  const [cont, setCont] = useState(0);
+  const [x, setX] = useState(0);
+  if (largo) {
+    return <View testID={testID} {...aria} style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>{children}</View>;
+  }
+  const maisADireita = cont > larg + x + 4;
+  return (
+    <View style={{ position: "relative" }}>
+      <ScrollView testID={testID} horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 28 }}
+        onLayout={(e) => setLarg(e.nativeEvent.layout.width)} onContentSizeChange={(w) => setCont(w)} onScroll={(e) => setX(e.nativeEvent.contentOffset.x)} {...aria}>
+        {children}
+      </ScrollView>
+      {maisADireita && (
+        <View testID={testID ? `${testID}-mais` : "hub-filtros-mais"} pointerEvents="none"
+          style={[{ position: "absolute", right: 0, top: 0, bottom: 0, width: 36 }, web({ backgroundImage: `linear-gradient(to right, transparent, ${Colors.bg})` })]} />
+      )}
+    </View>
+  );
+}
+
+/** "Aurinha responde por você": o estado para todos; o interruptor só para dono ou admin (o servidor recusa membro). */
+function AurinhaResponde({ ligada, podeConfigurar, ocupado, onLigar, onDesligar }: {
+  ligada: boolean; podeConfigurar: boolean; ocupado: boolean; onLigar: () => void; onDesligar: () => void;
+}) {
+  return (
+    <View testID="hub-aurinha-estado" style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 52, paddingLeft: 16, paddingRight: 10 }]}>
+      <View style={{ flex: 1, minWidth: 0, paddingVertical: 6 }}>
+        <Tx style={{ fontSize: 14, fontWeight: "600", lineHeight: 18 }}>Aurinha responde por você</Tx>
+        <Tx testID="hub-aurinha-situacao" style={{ fontSize: 12, fontWeight: "700", lineHeight: 16, color: ligada ? K.ok : K.ink3 }}>{ligada ? "Ligada" : "Desligada"}</Tx>
+      </View>
+      {podeConfigurar && (
+        <Pressable testID={ligada ? "hub-desativar-aurinha" : "hub-ativar-aurinha"} disabled={ocupado} onPress={ligada ? onDesligar : onLigar}
+          accessibilityRole="switch" accessibilityLabel="Aurinha responde por você" accessibilityState={{ checked: ligada }}
+          {...({ onKeyDown: (e: any) => { if (e?.key === " ") { e.preventDefault?.(); (ligada ? onDesligar : onLigar)(); } } } as any)}
+          style={[{ width: 44, height: 26, borderRadius: 13, justifyContent: "center", paddingHorizontal: 3, backgroundColor: ligada ? "#7c3aed" : K.trilho, opacity: ocupado ? 0.6 : 1 }, web({ cursor: "pointer" })]}>
+          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", alignSelf: ligada ? "flex-end" : "flex-start" }} />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function ConversationRow({ conv, selected, tabbable, onPress, onAbrirTeclado, aurinhaLigada }: {
+  conv: HubConversation; selected: boolean; tabbable: boolean; onPress: () => void; onAbrirTeclado: () => void; aurinhaLigada: boolean;
 }) {
   const ch = CHANNEL_META[conv.channel];
   const meuId = (useAuthStore() as any)?.user?.id as string | undefined;
@@ -38,7 +88,8 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
   const tag = { flexDirection: "row", alignItems: "center", gap: 6, height: 24, paddingHorizontal: 10, borderRadius: 999, backgroundColor: K.tag } as const;
   const tagTx = { fontSize: 12, fontWeight: "600", lineHeight: 16, color: K.ink2 } as const;
   return (
-    <Pressable testID={`hub-conv-${conv.id}`} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }}
+    <Pressable testID={`hub-conv-${conv.id}`} onPress={onPress} accessibilityState={{ selected }}
+      {...({ role: "option", "aria-selected": selected, tabIndex: tabbable ? 0 : -1, onKeyDown: (e: any) => { if (e?.key === "Enter" || e?.key === " ") { e.preventDefault?.(); onAbrirTeclado(); } } } as any)}
       style={[{ flexDirection: "row", gap: 12, alignItems: "center", padding: 12, borderRadius: 18, borderWidth: 1, borderColor: selected ? K.convSelBorda : "transparent", backgroundColor: selected ? K.convSel : "transparent" },
         web({ cursor: "pointer" })]}>
       <View>
@@ -68,7 +119,14 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
     </Pressable>
   );
 }
-export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conversa aberta (no celular o cabeçalho da tela some). */ onConversaAberta?: (aberta: boolean) => void } = {}) {
+export function HubView({ onConversaAberta, numeroConectado, aoConectarNumero }: {
+  /** Avisa a tela quando há conversa aberta (no celular o cabeçalho da tela some). */
+  onConversaAberta?: (aberta: boolean) => void;
+  /** false = o número do WhatsApp da loja ainda não está conectado (undefined = não se sabe: texto de sempre). */
+  numeroConectado?: boolean;
+  /** "Conectar WhatsApp": leva a Configurações → Conexão (a tela decide; os guias trocam por aqui). */
+  aoConectarNumero?: () => void;
+} = {}) {
   const { company } = useAuthStore();
   const papel: string = (company as any)?.member_role || "owner";
   const podeConfigurar = papel === "owner" || papel === "admin";
@@ -79,6 +137,7 @@ export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conv
   const [conviteAberto, setConviteAberto] = useState(false);
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
+  useFocoVisivel();
   useEffect(() => { onConversaAberta?.(!!selectedId); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: settings } = useQuery({
@@ -171,45 +230,58 @@ export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conv
     { key: "resolvida", label: "Resolvidas" },
   ];
 
+  // Enter ou espaço na conversa: abre e leva o foco para a conversa aberta.
+  const abrirPorTeclado = (id: string) => {
+    setSelectedId(id);
+    setTimeout(() => focarPorTestID("hub-thread-regiao"), 200);
+  };
+
   const list = (
-    <View {...tourTarget("wa.lista")} style={IS_WIDE ? { flexGrow: 1, flexShrink: 1, flexBasis: 300, maxWidth: 340, minWidth: 0, gap: 12 } : { flex: 1, gap: 12 }}>
+    <View {...tourTarget("wa.lista")} {...FOCO} style={IS_WIDE ? { flexGrow: 1, flexShrink: 1, flexBasis: 300, maxWidth: 340, minWidth: 0, gap: 12 } : { flex: 1, gap: 12 }}>
       <View style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 16 }]}>
         <Ico nome="busca" size={18} cor={K.ink3} />
         <TextInput testID="hub-busca" accessibilityLabel="Buscar conversa" value={busca} onChangeText={setBusca}
           placeholder="Buscar nome, telefone ou produto" placeholderTextColor={K.ink3} autoCapitalize="none"
           style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: SANS }, web({ outlineStyle: "none" })]} />
       </View>
-      {settings && !enabled && podeConfigurar && (
-        <Pressable testID="hub-ativar-aurinha" onPress={() => setConviteAberto((v) => !v)} accessibilityRole="button"
-          style={{ alignSelf: "flex-end", minHeight: 28, justifyContent: "center", marginBottom: -6 }}>
-          <Tx style={{ fontSize: 13, fontWeight: "600", color: K.acc, lineHeight: 18 }}>Ativar a Aurinha</Tx>
-        </Pressable>
+      {settings && (
+        <AurinhaResponde ligada={enabled} podeConfigurar={podeConfigurar} ocupado={mSettings.isPending}
+          onLigar={() => setConviteAberto((v) => !v)} onDesligar={() => mSettings.mutate({ enabled: false })} />
       )}
       {/* Estados numa linha só; se faltar largura, a linha rola de lado. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
+      <LinhaFiltros largo={IS_WIDE}
+        aria={{ role: "radiogroup", "aria-label": "Estado das conversas", onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="radio"]', seleciona: true, circular: true, horizontal: true }) }}>
         {FILTERS.map((f) => (
-          <Pilula key={f.key} pequena on={statusFilter === f.key} onPress={() => setStatusFilter(f.key)}
+          <Pilula key={f.key} pequena role="radio" semTab={statusFilter !== f.key} on={statusFilter === f.key} onPress={() => setStatusFilter(f.key)}
             style={f.key === "precisa_humano" && needsHuman > 0 && statusFilter !== f.key ? { borderColor: "rgba(252,211,77,.55)" } : undefined}>
             {f.label}
           </Pilula>
         ))}
-      </ScrollView>
+      </LinhaFiltros>
       {(etiquetas?.labels || []).length > 0 && (
-        <ScrollView testID="hub-filtro-etiquetas" horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
-          {(etiquetas?.labels || []).map((l) => {
+        <LinhaFiltros largo={IS_WIDE} testID="hub-filtro-etiquetas"
+          aria={{ role: "radiogroup", "aria-label": "Etiquetas", onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="radio"]', seleciona: true, circular: true, horizontal: true }) }}>
+          {(etiquetas?.labels || []).map((l, i) => {
             const on = etiquetaFiltro === l.id;
             return (
-              <Pilula key={l.id} testID={`hub-filtro-etiqueta-${l.id}`} pequena on={on} onPress={() => setEtiquetaFiltro(on ? null : l.id)}>
+              <Pilula key={l.id} testID={`hub-filtro-etiqueta-${l.id}`} pequena role="radio" semTab={etiquetaFiltro ? !on : i !== 0} on={on} onPress={() => setEtiquetaFiltro(on ? null : l.id)}>
                 <Ponto cor={l.color} />
                 <Tx style={{ fontSize: 13, fontWeight: "600", lineHeight: 18, color: on ? K.pillOnInk : K.ink }}>{l.name}</Tx>
               </Pilula>
             );
           })}
-        </ScrollView>
+        </LinhaFiltros>
       )}
       {convite}
       {isLoading && <View style={{ alignItems: "center", paddingVertical: 30 }}><ActivityIndicator color={K.acc} /></View>}
-      {!isLoading && todas.length === 0 && (
+      {!isLoading && todas.length === 0 && numeroConectado === false && (
+        <View testID="hub-sem-numero" style={[superficie.seca(24), { padding: 20, gap: 12 }]}>
+          <Tx style={{ fontSize: 18, fontWeight: "800", lineHeight: 24 }}>Conecte o número da loja para começar</Tx>
+          <Tx style={{ fontSize: 14, color: K.ink2, lineHeight: 20 }}>Quando o número estiver conectado, as conversas dos clientes aparecem aqui.</Tx>
+          <BtnPrimario testID="hub-conectar-whatsapp" onPress={aoConectarNumero}>Conectar WhatsApp</BtnPrimario>
+        </View>
+      )}
+      {!isLoading && todas.length === 0 && numeroConectado !== false && (
         <EmptyState icon="star" iconColor={Colors.violet3}
           title="Nenhuma conversa ainda"
           subtitle={enabled ? "Quando alguém mandar mensagem no Instagram da loja, a conversa aparece aqui — e a Aurinha já começa a atender." : ""} />
@@ -218,9 +290,14 @@ export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conv
         <Tx style={{ fontSize: 14, color: K.ink2, paddingHorizontal: 6 }}>Nenhuma conversa encontrada para essa busca.</Tx>
       )}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 4 }}>
-        {conversations.map((c) => (
-          <ConversationRow key={c.id} conv={c} selected={c.id === selectedId} onPress={() => setSelectedId(c.id)} aurinhaLigada={enabled} />
-        ))}
+        <View testID="hub-lista" accessibilityLabel="Conversas" style={{ gap: 4, paddingHorizontal: 3 }}
+          {...({ role: "listbox", onKeyDown: (e: any) => tratarSetas(e, { selector: '[role="option"]' }) } as any)}>
+          {conversations.map((c, i) => (
+            <ConversationRow key={c.id} conv={c} selected={c.id === selectedId}
+              tabbable={c.id === selectedId || (!conversations.some((x) => x.id === selectedId) && i === 0)}
+              onPress={() => setSelectedId(c.id)} onAbrirTeclado={() => abrirPorTeclado(c.id)} aurinhaLigada={enabled} />
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
