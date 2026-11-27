@@ -238,7 +238,7 @@ export function PreviaCorteView({ corte, substantivo, dono, reserva, trazer, onT
       {corte.alemDaLista > 0 && <Text style={t(14, V.ink2)}>e mais {corte.alemDaLista} {substantivo}</Text>}
 
       {trazer > 0 && !!onTrazer && (
-        <Pilula ligada onPress={onTrazer} desabilitado={trazendo} testID={`${idBase}-trazer`}>
+        <Pilula ligada onPress={onTrazer} desabilitado={trazendo} testID={`${idBase}-trazer`} style={{ alignSelf: "flex-start" }}>
           {trazendo && <ActivityIndicator size="small" color={V.acc} />}
           <Text style={t(14, V.onTxt, "600")}>{trazer === 1 ? "Trazer 1 do Venda+" : `Trazer ${trazer} do Venda+`}</Text>
         </Pilula>

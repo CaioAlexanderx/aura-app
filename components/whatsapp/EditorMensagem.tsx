@@ -251,7 +251,7 @@ export function EditorMensagem({ companyId, modelo, clientes, onFechar, onMudou 
               {!!limite ? (
                 <Text style={s.aviso} testID="wa-editor-limite">{limite}</Text>
               ) : !v.ok ? (
-                <Text style={s.aviso} testID="wa-editor-ajuste">Ajuste o item amarelo para mandar</Text>
+                <Text style={t(13, V.ink3)} testID="wa-editor-ajuste">O WhatsApp confere todo texto novo. Costuma levar algumas horas; até lá vai o texto atual.</Text>
               ) : (
                 <Text style={t(13, V.ink3)}>O WhatsApp confere todo texto novo. Costuma levar algumas horas; até lá vai o texto atual.</Text>
               )}

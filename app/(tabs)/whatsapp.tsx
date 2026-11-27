@@ -57,7 +57,7 @@ import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
-import { Pilula, Spots, Titulo, Voltar, V, t, useWaFontes, useWaKeyframes } from "@/components/whatsapp/waVidro";
+import { Meta, Pilula, Spots, Titulo, Voltar, V, t, useWaFontes, useWaKeyframes } from "@/components/whatsapp/waVidro";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -207,6 +207,7 @@ export default function WhatsAppScreen() {
         {CABECALHO[chave].voltar && (
           <Voltar rotulo="Automáticas" onPress={() => irPara("automaticas")} testID="wa-varejo-voltar-automaticas" />
         )}
+        <Meta>{`WhatsApp da ${lojaNome || "loja"}`}</Meta>
         <Titulo tamanho={IS_WIDE ? 52 : 36}>{CABECALHO[chave].titulo}</Titulo>
         <Text style={t(18, V.ink2, "400", { lineHeight: 26 })}>{CABECALHO[chave].sub}</Text>
       </View>
