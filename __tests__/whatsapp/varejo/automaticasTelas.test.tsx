@@ -6,6 +6,7 @@
 // contrato do agente B e a ausência da Reativação no bloco Conexão.
 // ============================================================
 import React from "react";
+import { Linking } from "react-native";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -484,7 +485,8 @@ describe("QA real: Venda+", () => {
     expect(x).toContain("Como chega (cliente de exemplo)");
     expect(x).toContain("na Lume: o vestido verde.");
     expect(x).not.toContain("Vestido Verde");
-  });  it("de 2 em diante: Mandar para as N que mais compravam", () => {
+  });
+  it("de 2 em diante: Mandar para as N que mais compravam", () => {
     mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4, vao: ["Ana", "Marta", "Cris", "Bia"].map((n) => ({ nome: n, detalhe: "", ultima_peca: "o vestido", ultima_compra: "2026-08-12" })) }));
     mockModelos.current = modelosHook([vendaModelo]);
     const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
@@ -549,5 +551,130 @@ describe("QA real: Aniversário no singular", () => {
     expect(x).toContain("Cabe 1 de 3.");
     expect(x).toContain("Como chega para Armand");
     expect(x).not.toContain("Como a Armand vê");
+  });
+});
+// ── Venda+, caminho grátis: as novidades acabaram e a loja não tem o adicional ──
+import { linkWaMe, TEXTO_OFERTA_UMA_LINHA } from "@/components/whatsapp/waGratis";
+
+describe("waGratis", () => {
+  it("wa.me com texto codificado; telefone sem DDI ganha 55; sem telefone válido, null", () => {
+    expect(linkWaMe("(11) 98765-0000", "Oi, Ana")).toBe("https://wa.me/5511987650000?text=Oi%2C%20Ana");
+    expect(linkWaMe("+55 11 98765-0000", "x")).toBe("https://wa.me/5511987650000?text=x");
+    expect(linkWaMe("12345", "x")).toBeNull();
+    expect(linkWaMe(null, "x")).toBeNull();
+    expect(TEXTO_OFERTA_UMA_LINHA).toContain("R$ 29/mês");
+  });
+});
+
+describe("Venda+ caminho grátis", () => {
+  const sd = (renova: boolean, usadasNov: number) => waSaldoInfo({
+    ativo: true, mes: "2026-12", plano: { renova }, numero: { em_atencao: false },
+    saldos: { novidades: bk("novidades", 10, usadasNov), avisos: bk("avisos", 30, 0), aurinha: bk("aurinha", 50, 0) },
+  } as any, new Date(2026, 11, 1));
+  const modeloV = { key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Sua última compra na {Nome da loja}: {Última compra}. Use até {Validade}." };
+  const clientes = (extra: any = {}) => [
+    { nome: "Armand Silva", detalhe: "R$ 100", telefone: "(11) 98765-0000", ultima_peca: "o vestido verde", ...extra },
+    { nome: "Bia Torres", detalhe: "R$ 80", telefone: "11 91234-5678", ultima_peca: "a blusa de linho" },
+  ];
+  const pubSemSaldo = (vao: any[]) => pubHook(publico({ elegiveis: vao.length, cabem: 0, vao: [], guardados: vao, ficam_guardados: vao.length, falta_para_todos: vao.length }));
+  let abrir: jest.SpyInstance;
+  beforeEach(() => { abrir = jest.spyOn(Linking, "openURL").mockResolvedValue(true as any); mockModelos.current = modelosHook([modeloV]); });
+  afterEach(() => abrir.mockRestore());
+
+  it("esgotado e sem adicional: um toque por cliente abre o wa.me com o nome e a peça; a oferta em uma linha", async () => {
+    mockPub.current = pubSemSaldo(clientes());
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(tem(t, "wa-venda-gratis")).toBe(true);
+    expect(tem(t, "wa-venda-enviar")).toBe(false);
+    expect(textos(t)).toContain("Chamar pelo meu WhatsApp");
+    expect(textos(t)).toContain(TEXTO_OFERTA_UMA_LINHA);
+    await act(async () => { achar(t, "wa-venda-chamar-0").props.onPress(); });
+    expect(abrir).toHaveBeenCalledTimes(1);
+    const url = String(abrir.mock.calls[0][0]);
+    expect(url.startsWith("https://wa.me/5511987650000?text=")).toBe(true);
+    const texto = decodeURIComponent(url.split("?text=")[1]);
+    expect(texto).toMatch(/^Oi, Armand\. Sua última compra na Lume: o vestido verde\. Use até \d{2}\/\d{2}\.$/);
+    await act(async () => { achar(t, "wa-venda-chamar-1").props.onPress(); });
+    expect(decodeURIComponent(String(abrir.mock.calls[1][0]).split("?text=")[1])).toContain("Oi, Bia.");
+  });
+
+  it("sem a peça, a cliente NÃO entra na lista (o texto nunca perde o trecho) e conta no motivo; sem telefone, sem botão", async () => {
+    mockPub.current = pubSemSaldo([
+      { nome: "Armand Silva", detalhe: "R$ 100", telefone: "(11) 98765-0000" }, // sem a peça
+      { nome: "Bia Torres", detalhe: "R$ 80", telefone: "11 91234-5678", ultima_peca: "a blusa de linho" },
+      { nome: "Duda Reis", detalhe: "R$ 60", ultima_peca: "a saia midi" }, // sem telefone
+    ]);
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(textos(t)).not.toContain("Armand");
+    expect(textos(t)).toContain("1 sem a peça da última compra");
+    expect(tem(t, "wa-venda-chamar-0")).toBe(true); // Bia
+    expect(tem(t, "wa-venda-chamar-1")).toBe(false); // Duda: sem telefone
+    expect(textos(t)).toContain("Sem telefone");
+    await act(async () => { achar(t, "wa-venda-chamar-0").props.onPress(); });
+    const texto = decodeURIComponent(String(abrir.mock.calls[0][0]).split("?text=")[1]);
+    expect(texto).toContain("Oi, Bia.");
+    expect(texto).toContain("a blusa de linho"); // o trecho nunca sai
+  });
+
+  it("esgotado: some a linha 'Vão as 0...'; o cartão diz quantos podem receber quando houver novidade (singular certo)", () => {
+    mockPub.current = pubSemSaldo(clientes());
+    let x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("2 podem receber quando houver novidade");
+    expect(x).not.toContain("Vão as 0");
+    expect(x).not.toContain("ficam guardadas");
+    mockPub.current = pubSemSaldo([clientes()[0]]);
+    x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(true, 10)} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("1 pode receber quando houver novidade");
+    expect(x).not.toContain("Vão as 0");
+  });
+
+  it("Essencial (presente acabou): a oferta com o texto exato e SEM o link do pacote", () => {
+    mockPub.current = pubSemSaldo(clientes());
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(TEXTO_OFERTA_UMA_LINHA).toBe("Ou assine + R$ 29/mês: 10 novidades todo mês.");
+    expect(textos(t)).toContain("Ou assine + R$ 29/mês: 10 novidades todo mês.");
+    expect(tem(t, "wa-pacote-novidades")).toBe(false);
+  });
+
+  it("Negócio (o saldo renova): só 'Adicionar 100 novidades por R$ 69'; nada de oferta nem do caminho grátis", () => {
+    mockPub.current = pubSemSaldo(clientes());
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(true, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(tem(t, "wa-venda-gratis")).toBe(false);
+    expect(tem(t, "wa-pacote-novidades")).toBe(true);
+    expect(textos(t)).toContain("Adicionar 100 novidades por R$ 69");
+    expect(textos(t)).not.toContain("assine + R$ 29");
+  });
+  it("fora_lista (opt-out, recentes) NUNCA ganha o botão, mesmo com telefone; vao e guardados ganham (telefone com 55 só dígitos)", async () => {
+    mockPub.current = pubHook(publico({
+      elegiveis: 2, cabem: 1, vao: [{ nome: "Ana Lima", detalhe: "R$ 90", telefone: "5511987650000", ultima_peca: "a saia" }],
+      guardados: [{ nome: "Bia Torres", detalhe: "R$ 80", telefone: "5511912345678", ultima_peca: "a blusa" }], ficam_guardados: 1, falta_para_todos: 2,
+      fora_lista: [
+        { nome: "Cris Opt-out", motivo: "OPT_OUT", telefone: "5511999990001", ultima_peca: "o vestido" },
+        { nome: "Duda Recente", motivo: "RECEBEU_HA_MENOS_DE_7_DIAS", telefone: "5511999990002", ultima_peca: "a calça" },
+      ],
+    }));
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(tem(t, "wa-venda-chamar-0")).toBe(true); // Ana (vao)
+    expect(tem(t, "wa-venda-chamar-1")).toBe(true); // Bia (guardados)
+    expect(tem(t, "wa-venda-chamar-2")).toBe(false);
+    expect(textos(t)).not.toContain("Cris Opt-out");
+    expect(textos(t)).not.toContain("Duda Recente");
+    await act(async () => { achar(t, "wa-venda-chamar-0").props.onPress(); });
+    expect(String(abrir.mock.calls[0][0]).startsWith("https://wa.me/5511987650000?text=")).toBe(true); // sem 55 duplicado
+    for (const c of abrir.mock.calls) expect(String(c[0])).not.toContain("5511999990");
+  });
+  it("com saldo, nada muda: o botão de mandar fica e não há caminho grátis nem oferta", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4 }));
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 0)} status={statusOk} lojaNome="Lume" />);
+    expect(tem(t, "wa-venda-gratis")).toBe(false);
+    expect(tem(t, "wa-venda-enviar")).toBe(true);
+    expect(textos(t)).not.toContain(TEXTO_OFERTA_UMA_LINHA);
+  });
+
+  it("esgotado mas COM o adicional (o saldo renova): nada de oferta nem do caminho grátis", () => {
+    mockPub.current = pubSemSaldo(clientes());
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(true, 10)} status={statusOk} lojaNome="Lume" />);
+    expect(tem(t, "wa-venda-gratis")).toBe(false);
+    expect(textos(t)).not.toContain(TEXTO_OFERTA_UMA_LINHA);
   });
 });

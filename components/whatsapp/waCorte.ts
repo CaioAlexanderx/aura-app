@@ -20,6 +20,8 @@ export interface PessoaPrevia {
   limiteLivre?: number;
   /** Venda+: a peça da última compra (`ultima_peca`), quando o servidor manda. */
   ultimaPeca?: string;
+  /** Telefone da cliente (`telefone`), quando o servidor manda: o caminho grátis abre o wa.me com ele. */
+  telefone?: string;
   /** Venda+: data da última compra (`ultima_compra`, ISO) ou o mês já por extenso (`mes_ultima_compra`). Só serve para o nome do mês. */
   ultimaCompra?: string;
   mesUltimaCompra?: string;
@@ -58,7 +60,7 @@ function limiteDe(p: any): { limiteLivre?: number } {
 function pessoas(l: WaPublicoRaw["vao"]): PessoaPrevia[] {
   return (Array.isArray(l) ? l : [])
     .filter((p) => p && typeof p.nome === "string" && p.nome)
-    .map((p) => ({ nome: String(p.nome), detalhe: typeof p.detalhe === "string" ? p.detalhe : "", ...limiteDe(p), ...(typeof (p as any).ultima_peca === "string" && (p as any).ultima_peca ? { ultimaPeca: (p as any).ultima_peca } : {}), ...(typeof (p as any).ultima_compra === "string" && (p as any).ultima_compra ? { ultimaCompra: (p as any).ultima_compra } : {}), ...(typeof (p as any).mes_ultima_compra === "string" && (p as any).mes_ultima_compra ? { mesUltimaCompra: (p as any).mes_ultima_compra } : {}) }));
+    .map((p) => ({ nome: String(p.nome), detalhe: typeof p.detalhe === "string" ? p.detalhe : "", ...limiteDe(p), ...(typeof (p as any).ultima_peca === "string" && (p as any).ultima_peca ? { ultimaPeca: (p as any).ultima_peca } : {}), ...(typeof (p as any).telefone === "string" && (p as any).telefone ? { telefone: (p as any).telefone } : {}), ...(typeof (p as any).ultima_compra === "string" && (p as any).ultima_compra ? { ultimaCompra: (p as any).ultima_compra } : {}), ...(typeof (p as any).mes_ultima_compra === "string" && (p as any).mes_ultima_compra ? { mesUltimaCompra: (p as any).mes_ultima_compra } : {}) }));
 }
 
 /**
