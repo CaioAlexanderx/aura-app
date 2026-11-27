@@ -56,8 +56,9 @@ import { AniversarioConfig } from "@/components/whatsapp/AniversarioConfig";
 import { VendaMaisConfig } from "@/components/whatsapp/VendaMaisConfig";
 import { CrediarioConfig } from "@/components/whatsapp/CrediarioConfig";
 import type { WaAutoKey } from "@/services/waConfigApi";
-import { MedidorSaldoCard } from "@/components/whatsapp/MedidorSaldoCard";
-import { IconeAjuda, Meta, Pilula, Spots, Titulo, Voltar, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
+import { MedidorSaldoCard, SaldosApagados } from "@/components/whatsapp/MedidorSaldoCard";
+import { Pilula, Spots, V, t, useWaFontes, useWaKeyframes, useWaQuedas } from "@/components/whatsapp/waVidro";
+import { CabecalhoWa } from "@/components/whatsapp/CabecalhoWa";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -166,24 +167,24 @@ export default function WhatsAppScreen() {
 
   const hero = <ScreenHero eyebrow="Canal oficial da loja" title="WhatsApp" subtitle={heroSub} />;
 
-  // As abas do topo + o botão "Guias" (alvo de tour wa.guias). O botão só
-  // existe com as telas novas; os guias em si vêm depois.
-  const abasTopo = (ativaKey: string, onSelect: (k: string) => void) => (
-    <View style={s.abasLinha}>
-      <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
-        <ScreenTabs tabs={tabsHero} active={ativaKey} onSelect={onSelect} quebraNoCelular />
-      </View>
-      {novas && !demo && (
-        <Pilula
-          onPress={() => { /* os guias entram no próximo PR: aqui só o botão e o alvo do tour */ }}
-          testID="wa-varejo-guias"
-          tour="wa.guias"
-        >
-          <IconeAjuda tamanho={17} />
-          <Text style={t(14, V.ink, "600")}>Guias</Text>
-        </Pilula>
-      )}
-    </View>
+  const irPara = (k: AbaReal) => { setAbaReal(k); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
+
+  // Aba destacada: Aniversário e Crediário moram sob "Automáticas" (o voltar diz "← Automáticas").
+  const abaDestaque: AbaReal = abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? "automaticas" : abaAtiva;
+  const chaveCab = abaAtiva === "automaticas" ? "automaticas" : abaAtiva === "venda_mais" ? "venda_mais"
+    : abaAtiva === "config" && (secao === "aniversario" || secao === "crediario") ? secao : null;
+
+  // Cabeçalho das telas novas (artboards Main e GuiaCentral): título à esquerda; abas
+  // (pílulas translúcidas) e o botão "Guias" à direita, na mesma linha. No celular, uma
+  // linha só, rolável, com o Guias só em ícone.
+  const cabecalhoNovo = () => (
+    <CabecalhoWa
+      largo={IS_WIDE} lojaNome={lojaNome} tabs={tabsHero} ativa={abaDestaque}
+      titulo={chaveCab ? CABECALHO[chaveCab].titulo : abaAtiva === "conversas" ? "Conversas" : "Configurações"}
+      sub={chaveCab ? CABECALHO[chaveCab].sub : undefined}
+      voltar={chaveCab ? !!CABECALHO[chaveCab].voltar : false}
+      onSelect={(k) => irPara(k as AbaReal)} onVoltar={() => irPara("automaticas")}
+    />
   );
 
   // Conversas: container próprio — o HubView tem os seus ScrollViews
@@ -193,27 +194,13 @@ export default function WhatsAppScreen() {
     return (
       <View style={s.screen} testID="wa-varejo-conversas">
         <View style={[s.content, { flex: 1 }]}>
-          {hero}
-          {abasTopo("conversas", (k) => setAbaReal(k as AbaReal))}
+          {novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>)}
           <HubView />
         </View>
       </View>
     );
   }
 
-  const irPara = (k: AbaReal) => { setAbaReal(k); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); };
-  const cabecalho = (chave: string) => (
-    novas && !consolidatedView && CABECALHO[chave] ? (
-      <View style={{ gap: 10, marginTop: 6 }} testID="wa-varejo-cabecalho">
-        {CABECALHO[chave].voltar && (
-          <Voltar rotulo="Automáticas" onPress={() => irPara("automaticas")} testID="wa-varejo-voltar-automaticas" />
-        )}
-        <Meta>{`WhatsApp da ${lojaNome || "loja"}`}</Meta>
-        <Titulo tamanho={IS_WIDE ? 52 : 36}>{CABECALHO[chave].titulo}</Titulo>
-        <Text style={t(18, V.ink2, "400", { lineHeight: 26 })}>{CABECALHO[chave].sub}</Text>
-      </View>
-    ) : null
-  );
   const medidor = !novas ? null : consolidatedView ? (
     <View style={s.linkCard} testID="wa-varejo-escolha-loja">
       <Icon name="alert" size={14} color={Colors.violet3} />
@@ -235,17 +222,20 @@ export default function WhatsAppScreen() {
   return (
     <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={[s.content, novas && !demo && { maxWidth: 1360 }]}>
       {novas && !demo && <Spots />}
-      {hero}
-
-      {demo ? (
-        <ScreenTabs
-          tabs={tabsHero}
-          active={String(ativa)}
-          onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
-        />
-      ) : tabsHero.length > 1 ? (
-        abasTopo(abaAtiva, (k) => irPara(k as AbaReal))
-      ) : null}
+      {novas && !demo ? cabecalhoNovo() : (
+        <>
+          {hero}
+          {demo ? (
+            <ScreenTabs
+              tabs={tabsHero}
+              active={String(ativa)}
+              onSelect={(k) => { setTab(Number(k)); scrollRef.current?.scrollTo?.({ y: 0, animated: true }); }}
+            />
+          ) : tabsHero.length > 1 ? (
+            <ScreenTabs tabs={tabsHero} active={abaAtiva} onSelect={(k) => irPara(k as AbaReal)} quebraNoCelular />
+          ) : null}
+        </>
+      )}
 
       {demo ? (
         <View testID="wa-varejo-maquete">
@@ -257,7 +247,6 @@ export default function WhatsAppScreen() {
         </View>
       ) : abaAtiva === "automaticas" ? (
         <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
-          {cabecalho("automaticas")}
           {medidor}
           {!consolidatedView && (
             <View testID="wa-varejo-bloco-automaticas">
@@ -275,7 +264,6 @@ export default function WhatsAppScreen() {
         </View>
       ) : abaAtiva === "venda_mais" ? (
         <View style={{ gap: 24, zIndex: 1 }} testID="wa-varejo-real">
-          {cabecalho("venda_mais")}
           {!consolidatedView && (
             <View testID="wa-varejo-bloco-venda-mais">
               <VendaMaisConfig companyId={companyId} auto={auto} saldo={saldo.saldo} status={wa.status} lojaNome={lojaNome} />
@@ -300,8 +288,6 @@ export default function WhatsAppScreen() {
             ))}
           </View>
 
-          {cabecalho(secao)}
-
           {wa.statusLoading && !wa.status && (
             <View style={s.loadingBox} testID="wa-varejo-carregando">
               <ActivityIndicator size="small" color={Colors.violet3} />
@@ -316,7 +302,7 @@ export default function WhatsAppScreen() {
                   <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>
                     <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} vidro />
                   </View>
-                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>{medidor}</View>
+                  <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 480, minWidth: 0 }}>{wa.status?.connected === true ? medidor : <SaldosApagados />}</View>
                 </View>
               ) : (
                 <ConexaoCard companyId={companyId} status={wa.status} onChanged={wa.reloadAll} />

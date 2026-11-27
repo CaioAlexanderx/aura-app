@@ -169,6 +169,8 @@ export interface WaModeloRaw {
   /** O que VAI no envio (último aprovado; ou o padrão). */
   texto_em_uso?: string | null;
   texto_novo?: string | null;
+  /** Botões do modelo (ex.: [{ tipo: "QUICK_REPLY", texto: "Quero o Pix" }]); vazio = sem botão. */
+  botoes?: { tipo?: string | null; texto: string }[] | null;
   estado?: WaModeloEstado | null;
   motivo?: string | null;
   edicao?: { pode?: boolean | null; proxima_em?: string | null; restam_30_dias?: number | null } | null;

@@ -92,7 +92,7 @@ export function Titulo({ children, tamanho = 52, ponto = true, testID, style }: 
 }) {
   const fonte = WEB && tamanho >= 36 ? tamanho : tamanho;
   const gradiente: any = WEB
-    ? { backgroundImage: GRAD_TITULO, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent" }
+    ? { backgroundImage: GRAD_TITULO, ...(tamanho >= 40 ? { backgroundSize: "100% 220%" } : {}), WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent" }
     : { color: V.ink };
   return (
     <Text
@@ -129,7 +129,7 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
 }) {
   const off = !!(desabilitado || disabled);
   const { width } = useWindowDimensions();
-  const umaLinha = WEB && width >= 700; // no celular o rótulo pode quebrar
+  const estreito = width < 700; // no celular o botão ocupa a largura toda; o rótulo nunca quebra
   return (
     <Pressable
       onPress={onPress}
@@ -140,9 +140,9 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
       {...(tour ? tourTarget(tour) : {})}
       style={[{
         flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 12, minHeight: 50,
-        paddingLeft: 22, paddingRight: semSeta ? 22 : 8, borderRadius: 999, backgroundColor: "#7c3aed",
+        paddingLeft: 22, paddingRight: semSeta || estreito ? 22 : 8, borderRadius: 999, backgroundColor: "#7c3aed",
         opacity: off ? 0.45 : 1,
-      } as any, WEB ? {
+      } as any, estreito && !semSeta ? { alignSelf: "stretch", paddingLeft: 18, paddingRight: 18, gap: 8, justifyContent: "center" } : null, WEB ? {
         isolation: "isolate",
         backgroundImage: GRAD_BTN,
         boxShadow: "0 0 0 1.5px rgba(236,228,255,.8), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.25), 0 12px 28px rgba(60,20,140,.5)",
@@ -155,8 +155,8 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
         />
       )}
       {carregando && <ActivityIndicator size="small" color="#fff" />}
-      <Text numberOfLines={umaLinha ? 1 : undefined} style={t(15, "#fff", "700", umaLinha ? { flexShrink: 0 } : { flexShrink: 1 })}>{children}</Text>
-      {!semSeta && (
+      <Text numberOfLines={1} style={t(estreito ? 13 : 15, "#fff", "700", estreito ? { flexShrink: 1, flexGrow: 1 } : { flexShrink: 0 })}>{children}</Text>
+      {!semSeta && !estreito && (
         <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(9,9,11,.28)" }}>
           <Icon name="arrow_right" size={16} color="#fff" />
         </View>
@@ -177,15 +177,16 @@ export function BtnTracejado({ children, testID, disabled = true, onPress }: { c
   );
 }
 /** Pílula (.pill): `ligada` pinta a escolhida; `peq` é a .pill.sm. */
-export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour }: {
+export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq, testID, role = "button", estado, style, tour, label }: {
   children?: React.ReactNode; ligada?: boolean; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; peq?: boolean; testID?: string;
-  role?: "button" | "checkbox" | "radio"; estado?: any; style?: any; tour?: string;
+  role?: "button" | "checkbox" | "radio"; estado?: any; style?: any; tour?: string; label?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={desabilitado || disabled}
       accessibilityRole={role as any}
+      accessibilityLabel={label}
       {...(tour ? tourTarget(tour) : {})}
       accessibilityState={estado || { selected: !!ligada, disabled: !!(desabilitado || disabled) }}
       testID={testID}

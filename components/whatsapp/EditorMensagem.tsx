@@ -60,7 +60,8 @@ export function EditorMensagem({ companyId, modelo, clientes, onFechar, onMudou 
   const [erro, setErro] = useState<string | null>(null);
   const [enviado, setEnviado] = useState(false);
 
-  const v = useMemo(() => validar({ campos, categoria }, texto), [campos, categoria, texto]);
+  const botoes = modelo.botoes;
+  const v = useMemo(() => validar({ campos, categoria, botoes }, texto), [campos, categoria, botoes, texto]);
   const limite = limiteDeEdicao(modelo);
   const semMudanca = texto.trim() === emUso.trim();
   const travado = enviado || enviando;

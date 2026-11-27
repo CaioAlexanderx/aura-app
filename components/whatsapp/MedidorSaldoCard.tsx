@@ -191,3 +191,13 @@ const s = StyleSheet.create({
   avisoTxt: { flex: 1, fontSize: 14, fontWeight: "600", color: V.warn, lineHeight: 20 },
   erro: { fontSize: 13, fontWeight: "600", color: V.bad, lineHeight: 18 },
 } as any);
+/** Número ainda não conectado: os saldos aparecem apagados (artboard GuiaExecucao, guia 1). */
+export function SaldosApagados() {
+  return (
+    <Superficie variante="dry" raio={22} padding={{ h: 20, v: 18 }} gap={8} style={{ opacity: 0.6 }} testID="wa-saldo-apagado">
+      <Meta>Saldos do mês</Meta>
+      <Text style={t(15, V.ink)}>Avisos · Novidades · Conversas da Aurinha</Text>
+      <Text style={t(13, V.ink3)}>Aparecem quando o número estiver ligado.</Text>
+    </Superficie>
+  );
+}

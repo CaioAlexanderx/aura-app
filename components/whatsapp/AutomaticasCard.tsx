@@ -171,11 +171,13 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
           })}
         </View>
         {livres <= 0 && (
-          <Text style={t(14, V.ink2)}>
-            <Text style={t(14, V.warn, "700")}>As {total} já têm dono.</Text> Para dar mais a um, tire de outro.
-          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 14, rowGap: 0 }}>
+            <Text style={t(14, V.ink2)}>
+              <Text style={t(14, V.warn, "700")}>As {total} já têm dono.</Text> Para dar mais a um, tire de outro.
+            </Text>
+            {!!companyId && <LinkPacote companyId={companyId} />}
+          </View>
         )}
-        {livres <= 0 && !!companyId && <LinkPacote companyId={companyId} />}
         {!!auto.erro && ultimo === "divisao" && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
       </Superficie>
 

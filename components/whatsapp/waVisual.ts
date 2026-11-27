@@ -178,7 +178,7 @@ const KEYFRAMES = `
 @keyframes wa-fio{0%{opacity:0;transform:scaleX(.2)}60%{opacity:1;transform:none}100%{opacity:.6;transform:none}}
 @keyframes wa-pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
 @keyframes wa-rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@keyframes wa-brilho{from{opacity:.4}to{opacity:1}}
+@keyframes wa-brilho{from{background-position:0 100%}to{background-position:0 0}}
 @keyframes wa-cai{from{opacity:0;transform:translateY(-14px) scaleY(.6)}to{opacity:1;transform:none}}
 @keyframes wa-pousa{from{opacity:0}to{opacity:1}}
 @keyframes wa-traca{from{transform:scaleX(0)}to{transform:none}}
