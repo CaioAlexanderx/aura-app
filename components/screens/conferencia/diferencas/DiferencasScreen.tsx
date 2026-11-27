@@ -152,7 +152,10 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   var podeAjustar = rascunho && ctx.podeEditar;
 
   var comDiferenca = grupos.faltam.concat(grupos.sobram);
-  var paraAjustar = comDiferenca.filter(function (it) { return !naoAjustar[it.item_id]; });
+  // Item com aviso (sistema menor que o que está com clientes, ou contagem de antes
+  // da condicional) nunca é ajustado: o servidor recusa e a tela já o deixa de fora.
+  var avisados = (dif ? dif.itens : []).filter(function (it) { return !!it.aviso && status === "rascunho"; });
+  var paraAjustar = comDiferenca.filter(function (it) { return !naoAjustar[it.item_id] && !it.aviso; });
   var desmarcados = comDiferenca.filter(function (it) { return !!naoAjustar[it.item_id]; });
   var aAjustar = paraAjustar.length + (zerar ? zeraveis.length : 0);
 
@@ -168,7 +171,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     setErroAplicar(null);
     conferenciaEstoqueResultadoApi.aplicar(companyId, countId, {
       zerar_nao_contados: zerar,
-      ignorar_item_ids: desmarcados.map(function (it) { return it.item_id; }),
+      ignorar_item_ids: desmarcados.concat(avisados.filter(function (it) { return !naoAjustar[it.item_id] && desmarcados.indexOf(it) < 0; })).map(function (it) { return it.item_id; }),
       motivo: motivo,
     })
       .then(function (r) {
@@ -225,8 +228,9 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     var k = chaveDoItem(it);
     var mudou = avisoDeEstoqueQueMudou(it, status);
     var cor = it.diferenca < 0 ? Colors.red : it.diferenca > 0 ? Colors.green : Colors.ink3;
-    var ajustavel = podeAjustar && !escolhendo && it.diferenca !== 0;
-    var fora = !!naoAjustar[it.item_id] && rascunho && it.diferenca !== 0;
+    var comAviso = !!it.aviso && rascunho;
+    var ajustavel = podeAjustar && !escolhendo && it.diferenca !== 0 && !comAviso;
+    var fora = rascunho && (comAviso || (!!naoAjustar[it.item_id] && it.diferenca !== 0));
     var vai = !!escolhidos[k];
     var info = (
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -238,6 +242,9 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           <View style={{ alignSelf: "flex-start", marginTop: 4 }}>
             <SeloComClientes quantidade={it.com_clientes} testID={"dif-com-clientes-" + k} />
           </View>
+        ) : null}
+        {comAviso ? (
+          <Text style={[ui.nota, { color: Colors.amber }]} testID={"dif-aviso-" + k}>{(it.inconsistente ? "Sistema com " + qtd(it.estoque_atual + (it.com_clientes || 0)) + ", com clientes " + qtd(it.com_clientes) + ". " : "") + it.aviso + " Este item não será ajustado: corrija o cadastro ou conte de novo."}</Text>
         ) : null}
         {mudou ? (
           <Text style={ui.nota} testID={"dif-mudou-" + k}>{mudou}</Text>

@@ -23,7 +23,7 @@
 // Crediário — não aqui. Aqui é onde se prepara e se audita. Um único
 // lugar de ligar evita a tela dizer "ligado" e a régua dizer "desligado".
 // ============================================================
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions, ActivityIndicator } from "react-native";
 import { router, Redirect, useLocalSearchParams } from "expo-router";
 import { empresaSandbox, whatsappOficialLiberadoPara, whatsappOficialVisivel } from "@/utils/whatsappOficialLiberado";
@@ -98,6 +98,20 @@ export default function WhatsAppScreen() {
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
   const { company, isDemo, user, consolidatedView } = useAuthStore();
+  // Rota direta (endereço, sino, e-mail): a tela abre com o que o JWT/último
+  // /me guardou (sem is_sandbox, sem is_staff) e o guard abaixo redirecionava
+  // ao Painel antes de o /auth/me chegar. Só decide com o /me confirmado.
+  const [meConfirmado, setMeConfirmado] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const fim = () => { if (vivo) setMeConfirmado(true); };
+    try {
+      const refresh = (useAuthStore as any)?.getState?.()?.refreshMe;
+      if (typeof refresh === "function") Promise.resolve(refresh()).catch(() => {}).then(fim);
+      else fim();
+    } catch { fim(); }
+    return () => { vivo = false; };
+  }, []);
   const companyId = company?.id || "";
   const demo = isDemo === true;
 
@@ -161,7 +175,9 @@ export default function WhatsAppScreen() {
   // depois de o status responder (sem status, a tela fica vazia).
   // 26/11/2026 — a equipe Aura abre sempre: conecta o número da própria Aura.
   if (!whatsappOficialVisivel(wa.status, user, undefined, empresaSandbox(company, consolidatedView === true))) {
-    if (!demo && wa.statusLoading) return null;
+    // Sem a decisão completa (usuário, empresa, /me, status) não redireciona.
+    const semDados = (!company && consolidatedView !== true) || !meConfirmado;
+    if (!demo && (wa.statusLoading || semDados)) return null;
     return <Redirect href={"/" as any} />;
   }
 

@@ -90,6 +90,12 @@ export type ItemDiferenca = {
   grupo: GrupoDiferenca;
   /** Opcional: "un", "kg"... Sem ela, conta como peça. */
   unidade?: string | null;
+  /** Sistema menor que as peças com clientes (esperado negativo). Só vem com a trava e nesse caso. */
+  inconsistente?: boolean;
+  /** Contado antes das peças com clientes entrarem na conferência (rascunho antigo). */
+  contagem_antiga?: boolean;
+  /** Texto do aviso do servidor (inconsistente ou contagem_antiga). */
+  aviso?: string;
 };
 
 export type NaoContado = {
