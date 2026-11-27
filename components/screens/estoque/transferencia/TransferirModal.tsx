@@ -43,6 +43,7 @@ import {
 } from "@/utils/transferenciaEstoque";
 import { productMatchesSearch } from "@/utils/productSearch";
 import { fmtQty } from "@/utils/matconUnits";
+import { comClientesDoProduto } from "@/utils/comClientes";
 
 var IS_WEB = Platform.OS === "web";
 var POR_PAGINA = 50;
@@ -59,6 +60,9 @@ export type ProdutoParaTransferir = {
   code?: string | null;
   barcode?: string | null;
   category?: string | null;
+  /** Venda condicional (GET /products, só com a trava): peças com clientes, que não estão na loja. */
+  outQty?: number;
+  outByVariant?: Record<string, number>;
 };
 
 export type LojaOpcao = { id: string; nome: string };
@@ -84,6 +88,12 @@ type Props = {
    * tem variante preenchida abre sozinho. Sem a prop, nada muda.
    */
   quantidadesIniciais?: Record<string, string>;
+  /**
+   * Venda condicional liberada (trava): só se transfere o que está livre,
+   * estoque menos o que está com clientes, por variante. O servidor confere
+   * de novo. Sem a prop, nada muda.
+   */
+  comClientesLiberado?: boolean;
   /** p-108: liga a transferência à conferência (vai como stock_count_id). */
   stockCountId?: string | null;
 };
@@ -97,7 +107,7 @@ function unidadeDe(p: ProdutoParaTransferir): string {
   return String(p.unit || "un");
 }
 
-export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqueMudou, onConcluido, buscarVariantes, quantidadesIniciais, stockCountId }: Props) {
+export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqueMudou, onConcluido, buscarVariantes, quantidadesIniciais, stockCountId, comClientesLiberado }: Props) {
   var largura = useWindowDimensions().width;
   var estreito = largura < 640;
   var vivo = useRef(true);
@@ -138,6 +148,10 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
   // ITEM_NAO_ENCONTRADO/informe_a_variante: o produto tem grade mesmo sem
   // has_variants na lista local; passa a ir por variante.
   var [forcarGrade, setForcarGrade] = useState<Record<string, boolean>>({});
+  // Sem grade: o que está na loja = estoque menos o que está com clientes.
+  function livreDoProduto(p: ProdutoParaTransferir): number {
+    return Math.max(0, (Number(p.stock) || 0) - comClientesDoProduto(p, comClientesLiberado === true));
+  }
   function emGrade(p: ProdutoParaTransferir): boolean { return !!p.has_variants || !!forcarGrade[p.id]; }
 
   var destino = destinos.find(function (d) { return d.id === destinoId; }) || null;
@@ -152,9 +166,10 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
         var vs = todas.filter(function (v) { return v.ativa !== false; });
         var inativas = todas.length - vs.length;
         var linhas: LinhaTransferencia[] = vs.map(function (v) {
+          var fora = comClientesDoProduto(p, comClientesLiberado === true, v.id);
           return {
             chave: chaveDaLinha(p.id, v.id), product_id: p.id, variant_id: v.id, nome: p.name,
-            rotulo: v.rotulo, disponivel: v.estoque, unidade: unidadeDe(p),
+            rotulo: v.rotulo, disponivel: Math.max(0, v.estoque - fora), unidade: unidadeDe(p), comClientes: fora || undefined,
           };
         });
         setGrades(function (g) { return { ...g, [p.id]: { estado: "ok", linhas: linhas, inativas: inativas } }; });
@@ -236,7 +251,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
       } else {
         var chave = chaveDaLinha(p.id, null);
         if (!enviadas[chave]) {
-          out.push({ chave: chave, product_id: p.id, variant_id: null, nome: p.name, rotulo: null, disponivel: Number(p.stock) || 0, unidade: unidadeDe(p) });
+          out.push({ chave: chave, product_id: p.id, variant_id: null, nome: p.name, rotulo: null, disponivel: livreDoProduto(p), unidade: unidadeDe(p), comClientes: comClientesDoProduto(p, comClientesLiberado === true) || undefined });
         }
       }
     });
@@ -245,7 +260,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
       var d = dispServidor[l.chave];
       return d != null ? { ...l, disponivel: d } : l;
     });
-  }, [produtos, grades, enviadas, dispServidor, forcarGrade]);
+  }, [produtos, grades, enviadas, dispServidor, forcarGrade, comClientesLiberado]);
 
   var validacao = useMemo(function () { return validar(linhas, quantidades); }, [linhas, quantidades]);
   var nItens = validacao.itens.length;
@@ -429,7 +444,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
           {erro ? <Text style={s.linhaErroTxt} testID={"transferir-erro-" + l.chave}>{erro}</Text> : null}
         </View>
         <View style={[s.linhaAcoes, estreito && { alignSelf: "stretch", justifyContent: "space-between" }]}>
-          <Text style={s.disp} testID={"transferir-disp-" + l.chave}>Tem {fmtQty(l.disponivel)}</Text>
+          <Text style={s.disp} testID={"transferir-disp-" + l.chave}>Tem {fmtQty(l.disponivel)}{l.comClientes ? <Text style={s.linhaSub}>{" · " + fmtQty(l.comClientes) + " com clientes"}</Text> : null}</Text>
           <TextInput
             value={quantidades[l.chave] || ""}
             onChangeText={function (v) { digitar(l.chave, v); }}
@@ -467,7 +482,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     }
     var aberto = !!abertos[p.id];
     var linhasDaGrade = linhas.filter(function (x) { return x.product_id === p.id; });
-    var naGrade = g && g.estado === "ok" ? linhasDaGrade.reduce(function (a, x) { return a + x.disponivel; }, 0) : Number(p.stock) || 0;
+    var naGrade = g && g.estado === "ok" ? linhasDaGrade.reduce(function (a, x) { return a + x.disponivel; }, 0) : livreDoProduto(p);
     return (
       <View key={p.id} style={[s.grade, !!problemas[chaveDaLinha(p.id, null)] && s.linhaErro]} testID={"transferir-produto-" + p.id}>
         <Pressable onPress={function () { abrir(p); }} style={s.gradeHead} accessibilityRole="button"
