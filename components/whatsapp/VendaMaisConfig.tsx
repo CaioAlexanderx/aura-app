@@ -21,6 +21,8 @@ import {
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
 import { useSetas } from "./waTeclado";
+import { mesPorExtenso, textoSemCampo } from "./waRotulos";
+import { pluralize } from "@/utils/plural";
 import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
 
@@ -77,12 +79,20 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   // O presente vale 15 dias a partir do envio.
   const hoje = new Date();
   const validade = (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 15); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+  // `{Última compra}` é a peça (`ultima_peca`); sem ela o modelo sai sem o trecho, nunca com a data.
+  // `{Mês da última compra}` é o nome do mês ("agosto").
+  const primeiraPessoa = corte?.recebem[0];
+  const peca = primeiraPessoa?.ultimaPeca;
+  const mesCompra = mesPorExtenso(primeiraPessoa?.mesUltimaCompra) || mesPorExtenso(primeiraPessoa?.ultimaCompra);
+  let textoModelo = modelo?.texto_em_uso || "";
+  if (primeira && !peca) textoModelo = textoSemCampo(textoModelo, "Última compra");
+  if (primeira && !mesCompra) textoModelo = textoSemCampo(textoModelo, "Mês da última compra");
   const mensagem = modelo?.texto_em_uso
-    ? renderizar(modelo.texto_em_uso, {
+    ? renderizar(textoModelo, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
         "Validade": validade,
-        "Última compra": corte?.recebem[0]?.ultimaCompra,
-        "Mês da última compra": corte?.recebem[0]?.mesUltimaCompra,
+        "Última compra": peca,
+        "Mês da última compra": mesCompra || undefined,
       }, !primeira)
     : null;
 
@@ -140,9 +150,9 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         <Superficie variante="dry" raio={24} padding={{ h: 20, v: 18 }} gap={14}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <Text style={t(15, V.ink2)}>
-              <Text style={t(15, V.ink, "700")}>{corte ? `${corte.total} podem receber` : "Quem recebe"}</Text>
+              <Text style={t(15, V.ink, "700")}>{corte ? (corte.total === 1 ? "1 pode receber" : `${corte.total} podem receber`) : "Quem recebe"}</Text>
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }} accessibilityLabel={`${livresVenda} novidades do Venda+ livres`}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }} accessibilityLabel={`${pluralize(livresVenda, "novidade")} do Venda+ ${livresVenda === 1 ? "livre" : "livres"}`}>
               <View style={{ flexDirection: "row", gap: 4 }}>
                 {Array.from({ length: Math.max(0, totalVenda) }).map((_, i) => {
                   const usada = i < usadasVenda;
@@ -157,7 +167,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                   );
                 })}
               </View>
-              <Text style={t(14, V.ink2)} testID="wa-venda-livres">{livresVenda} livres</Text>
+              <Text style={t(14, V.ink2)} testID="wa-venda-livres">{livresVenda === 1 ? "1 livre" : `${livresVenda} livres`}</Text>
             </View>
           </View>
 
@@ -175,7 +185,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
           )}
           {!!corte && (
             <>
-              <Text style={t(15, V.ink, "700")}>{livresVenda} novidades do Venda+ livres</Text>
+              <Text style={t(15, V.ink, "700")}>{pluralize(livresVenda, "novidade")} do Venda+ {livresVenda === 1 ? "livre" : "livres"}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {corte.recebem.map((p) => (
                   <View
@@ -214,7 +224,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
 
       <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
         <BolhaExemplo
-          titulo={primeira ? `Como a ${primeira} vê` : "Como chega (cliente de exemplo)"} mensagem={mensagem} loja={lojaNome}
+          titulo={primeira ? `Como chega para ${primeira}` : "Como chega (cliente de exemplo)"} mensagem={mensagem} loja={lojaNome}
         />
 
         {!!pub.enviado && (pub.enviado.enfileiradas ?? 0) > 0 ? (
@@ -232,17 +242,17 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         ) : (
           <View style={{ gap: 10, alignItems: "flex-start" }}>
             <BtnPrimario
-              rotuloCurto={corte ? `Mandar para as ${corte.cabem}` : undefined}
+              rotuloCurto={corte ? (corte.cabem === 1 ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem}`) : undefined}
               onPress={() => { pub.enviarAgora(); }}
               disabled={!pode.pode || pub.enviando || travado}
               carregando={pub.enviando}
               testID="wa-venda-enviar"
             >
-              {corte ? `Mandar para as ${corte.cabem} que mais compravam` : "Mandar agora"}
+              {corte ? (corte.cabem === 1 && primeira ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem} que mais compravam`) : "Mandar agora"}
             </BtnPrimario>
             <Text style={t(13, V.ink3)} testID="wa-venda-enviar-nota">
               {pode.pode
-                ? `Usa ${corte!.cabem} das novidades do Venda+. O botão nunca manda para mais gente do que cabe.`
+                ? `Usa ${pluralize(corte!.cabem, "novidade")} do Venda+. O botão nunca manda para mais gente do que cabe.`
                 : pode.motivo}
             </Text>
           </View>

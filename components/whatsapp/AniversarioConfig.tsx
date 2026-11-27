@@ -127,7 +127,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
 
         <CaixaPrevia
           meta={nomeDoMes(null)}
-          direita={pub.corte ? `${pub.corte.total} aniversariantes com WhatsApp · 1 mensagem cada` : undefined}
+          direita={pub.corte ? `${pub.corte.total === 1 ? "1 aniversariante" : `${pub.corte.total} aniversariantes`} com WhatsApp · 1 mensagem cada` : undefined}
         >
           <PreviaCorteView
             idBase="wa-aniv" companyId={companyId} corte={pub.corte} substantivo="aniversariantes" dono="o Aniversário" estilo="avatares"
@@ -144,7 +144,7 @@ export function AniversarioConfig({ companyId, auto, lojaNome }: Props) {
 
       <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 360, maxWidth: 420, minWidth: 0, gap: 18 }}>
         <BolhaExemplo
-          titulo={primeira ? `Como a ${primeira} vê · ${diaMes(hoje)}, 10h` : "Como chega (cliente de exemplo)"} mensagem={mensagem}
+          titulo={primeira ? `Como chega para ${primeira} · ${diaMes(hoje)}, 10h` : "Como chega (cliente de exemplo)"} mensagem={mensagem}
           loja={lojaNome} presente={presente}
         />
 

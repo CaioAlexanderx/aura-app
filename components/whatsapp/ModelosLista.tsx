@@ -11,6 +11,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Lnk, Selo, Superficie, V, t } from "./waVidro";
+import { renderizar } from "./waMensagem";
 import type { WaModeloRaw } from "@/services/waConfigApi";
 
 export function rotuloEstadoModelo(estado: string | null | undefined): { texto: string; tom: "ok" | "warn" | "danger" } {
@@ -57,10 +58,10 @@ export function ModelosLista({ automatica, modelos, carregando, onEditar, onRest
                 <Text style={t(15, V.ink, "700")}>{m.titulo}</Text>
                 <Selo texto={est.texto} tom={est.tom} testID={`wa-modelo-${m.key}-estado`} />
               </View>
-              <Text style={t(14, V.ink2)}>{m.texto_em_uso}</Text>
+              <Text style={t(14, V.ink2)} testID={`wa-modelo-${m.key}-texto`}>{renderizar(String(m.texto_em_uso))}</Text>
               {emAprovacao && (
                 <>
-                  {!!m.texto_novo && <Text style={t(14, V.ink2, "400", { opacity: 0.45 })}>{m.texto_novo}</Text>}
+                  {!!m.texto_novo && <Text style={t(14, V.ink2, "400", { opacity: 0.45 })}>{renderizar(String(m.texto_novo))}</Text>}
                   <Text style={t(13, V.ink3)}>Costuma sair em algumas horas; a Aura avisa no sino. Até lá vai o texto anterior.</Text>
                 </>
               )}

@@ -285,11 +285,12 @@ describe("VendaMaisConfig", () => {
   it("bolha com nome real: campo sem valor sai como [Campo], nunca exemplo de outra pessoa", () => {
     mockModelos.current = modelosHook([{ key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Sua última compra: {Última compra}. Use até {Validade}." }]);
     const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
-    // A validade é calculada (envio + 15 dias); o que a Aura não sabe daquela cliente continua [Campo].
-    expect(textos(t)).toMatch(/Oi, Ana\. Sua última compra: \[Última compra\]\. Use até \d{2}\/\d{2}\./);
+    // A validade é calculada (envio + 15 dias); sem a peça da última compra, o modelo sai sem o trecho.
+    expect(textos(t)).toMatch(/Oi, Ana\. Sua última compra\. Use até \d{2}\/\d{2}\./);
+    expect(textos(t)).not.toContain("[Última compra]");
     expect(textos(t)).not.toContain("[Validade]");
     expect(textos(t)).not.toContain("Vestido Verde");
-    expect(textos(t)).toContain("Como a Ana vê");
+    expect(textos(t)).toContain("Como chega para Ana");
   });
 
   it("sem nome real, diz que é cliente de exemplo", () => {
@@ -332,7 +333,8 @@ describe("CrediarioConfig", () => {
   it("cobrar, vender e mensagens", () => {
     const t = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
     const x = textos(t);
-    expect(x).toContain("Amanhã, às 9h, saem 3 avisos");
+    // régua desligada: "Se ligar, ..."; ligada: "Amanhã, às 9h, ..."
+    expect(x).toContain("Se ligar, amanhã às 9h saem 3 avisos");
     expect(x).toContain("1 cliente fica de fora: Duda Reis (sem telefone)");
     expect(x).toContain("11 clientes pagam em dia e têm limite livre");
     expect(x).toContain("Cabem 2 de 11.");
@@ -367,5 +369,135 @@ describe("CrediarioConfig", () => {
     expect(tem(t2, "wa-modelo-cred_oferta-restaurar")).toBe(true);
     expect(textos(t2)).toContain("Ajustar para mim");
     expect(textos(t2)).toContain("Ficar com o da Aura");
+  });
+});
+
+// ── QA com dados reais (27/11): singular, nomes dos pontos, mês, zero aptos, texto de exemplo ──
+import { nomeDoPonto, mesPorExtenso, textoSemCampo } from "@/components/whatsapp/waRotulos";
+
+describe("waRotulos", () => {
+  it("pontos da régua: o código vira frase, para qualquer número", () => {
+    expect(nomeDoPonto("depois1")).toBe("1 dia depois");
+    expect(nomeDoPonto("depois7")).toBe("7 dias depois");
+    expect(nomeDoPonto("antes3")).toBe("3 dias antes");
+    expect(nomeDoPonto("antes1")).toBe("1 dia antes");
+    expect(nomeDoPonto("depois30")).toBe("30 dias depois");
+    expect(nomeDoPonto("dia")).toBe("no dia");
+    expect(nomeDoPonto("3 dias antes")).toBe("3 dias antes");
+    expect(nomeDoPonto("coisa9")).toBe(""); // código desconhecido nunca aparece cru
+    expect(nomeDoPonto(undefined)).toBe("");
+  });
+  it("mês por extenso, nunca a data ISO", () => {
+    expect(mesPorExtenso("2026-08-12")).toBe("agosto");
+    expect(mesPorExtenso("2026-08-12T10:00:00Z")).toBe("agosto");
+    expect(mesPorExtenso("2026-12")).toBe("dezembro");
+    expect(mesPorExtenso("Agosto")).toBe("agosto");
+    expect(mesPorExtenso("12/08")).toBeNull();
+    expect(mesPorExtenso(null)).toBeNull();
+  });
+  it("tira o campo sem valor junto com a pontuação que o puxa", () => {
+    expect(textoSemCampo("Oi. Sua última compra na Lume: {Última compra}. Chegou novidade.", "Última compra"))
+      .toBe("Oi. Sua última compra na Lume. Chegou novidade.");
+    expect(textoSemCampo("Foi em agosto: {Última compra}. Muita coisa chegou.", "Última compra")).toBe("Foi em agosto. Muita coisa chegou.");
+  });
+});
+
+describe("QA real: Venda+", () => {
+  const vendaModelo = { key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Faz um mês da sua última compra na {Nome da loja}: {Última compra}. Foi em {Mês da última compra}. Use até {Validade}." };
+  const um = (extra: any = {}) => pubHook(publico({ elegiveis: 1, cabem: 1, vao: [{ nome: "Armand Silva", detalhe: "R$ 100", ...extra }], guardados: [], ficam_guardados: 0, falta_para_todos: 0 }));
+  it("usa ultima_peca e o mês por extenso (a data ISO nunca aparece)", () => {
+    mockPub.current = um({ ultima_peca: "o vestido verde", ultima_compra: "2026-08-12" });
+    mockModelos.current = modelosHook([vendaModelo]);
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    const x = textos(t);
+    expect(x).toContain("Oi, Armand. Faz um mês da sua última compra na Lume: o vestido verde. Foi em agosto.");
+    expect(x).not.toContain("2026-08");
+  });
+  it("sem ultima_peca, o modelo sai sem o trecho (nada de [Última compra] nem data)", () => {
+    mockPub.current = um({ ultima_compra: "2026-08-12" });
+    mockModelos.current = modelosHook([vendaModelo]);
+    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("Oi, Armand. Faz um mês da sua última compra na Lume. Foi em agosto.");
+    expect(x).not.toContain("[Última compra]");
+    expect(x).not.toContain("2026-08");
+  });
+  it("singular: 1 pode receber, Mandar para Armand, Usa 1 novidade, Como chega para Armand", () => {
+    mockPub.current = um({ ultima_peca: "a blusa" });
+    mockModelos.current = modelosHook([vendaModelo]);
+    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("1 pode receber");
+    expect(x).not.toContain("1 podem receber");
+    expect(x).toContain("Mandar para Armand");
+    expect(x).not.toContain("Mandar para as 1");
+    expect(x).toContain("Usa 1 novidade do Venda+");
+    expect(x).not.toContain("1 novidades");
+    expect(x).toContain("Como chega para Armand");
+    expect(x).not.toContain("Como a Armand vê");
+  });
+  it("de 2 em diante: Mandar para as N que mais compravam", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4 }));
+    mockModelos.current = modelosHook([vendaModelo]);
+    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("Mandar para as 4 que mais compravam");
+    expect(x).toContain("Usa 4 novidades do Venda+");
+  });
+});
+
+describe("QA real: Crediário", () => {
+  const pub0 = (over: any = {}) => pubHook(publico({ elegiveis: 0, cabem: 0, vao: [], guardados: [], ficam_guardados: 0, falta_para_todos: 0, ...over }));
+  beforeEach(() => {
+    mockModelos.current = modelosHook([
+      { key: "cred_antes", automatica: "crediario", titulo: "Antes do vencimento", texto_em_uso: "Oi, {Nome}. A parcela {Parcela} vence {Vencimento}: {Valor}.", estado: "PRONTA" },
+      { key: "cred_oferta", automatica: "crediario", titulo: "Oferta", texto_em_uso: "Oi, {Nome}. Você tem {Limite livre} livres.", estado: "PRONTA" },
+    ]);
+  });
+  it("Cobrar: 'depois1' vira '1 dia depois'; régua desligada fala 'Se ligar', ligada fala 'Amanhã'", () => {
+    mockPub.current = pub0({ amanha: { saem: 1, itens: [{ nome: "Marta Lins", detalhe: "parcela 2 de 10", ponto: "depois1" }] } });
+    const off = textos(renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(off).toContain("Se ligar, amanhã às 9h sai 1 aviso");
+    expect(off).toContain("parcela 2 de 10 · 1 dia depois");
+    expect(off).not.toContain("· depois1");
+    const ligada = auto(respostaAuto({ automaticas: respostaAuto().automaticas.map((x: any) => x.key === "crediario_cobrar" ? { ...x, ligada: true } : x) }));
+    const on = textos(renderer.create(<CrediarioConfig companyId="c" auto={ligada} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(on).toContain("Amanhã, às 9h, sai 1 aviso");
+    expect(on).not.toContain("Se ligar");
+  });
+  it("Vender com 0 aptos: sem botão, sem 'Cabe todo mundo', exemplo marcado como exemplo", () => {
+    mockPub.current = pub0();
+    const t = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    const x = textos(t);
+    expect(x).toContain("Nenhum cliente com limite livre agora");
+    expect(x).not.toContain("Cabe todo mundo");
+    expect(x).not.toContain("Mandar para as 0");
+    expect(tem(t, "wa-cred-enviar")).toBe(false);
+    expect(x).toContain("Como chega (cliente de exemplo)");
+  });
+  it("Vender com 1 apto: título e botão no singular, prévia com o primeiro apto real", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 1, cabem: 1, vao: [{ nome: "Armand Silva", detalhe: "paga em dia", limite_livre: 480 }], guardados: [], ficam_guardados: 0, falta_para_todos: 0 }));
+    const x = textos(renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("1 cliente paga em dia e tem limite livre");
+    expect(x).toContain("Mandar para Armand agora");
+    expect(x).toContain("Como chega para Armand");
+    expect(x).toContain("Oi, Armand. Você tem R$ 480 livres.");
+    expect(x).toContain("R$ 480 livres"); // selo
+  });
+  it("Mensagens: a lista mostra o texto preenchido com exemplo, sem {Campo} cru", () => {
+    mockPub.current = pub0();
+    const t = renderer.create(<CrediarioConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    const lista = textos(t);
+    expect(lista).toContain("Oi, Marta. A parcela 2 de 4 vence no sábado, 30/11: R$ 120,00.");
+    expect(lista).not.toContain("{Nome}");
+    expect(lista).not.toContain("{Parcela}");
+  });
+});
+
+describe("QA real: Aniversário no singular", () => {
+  it("1 aniversariante, Cabe 1 de 1... e Como chega para", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 3, cabem: 1, vao: [{ nome: "Armand Silva", detalhe: "R$ 100" }], guardados: [{ nome: "Lia", detalhe: "" }], ficam_guardados: 2, falta_para_todos: 2 }));
+    mockModelos.current = modelosHook([{ key: "aniv_carinhoso_com", automatica: "aniversario", titulo: "x", texto_em_uso: "Feliz aniversário, {Nome}." }]);
+    const x = textos(renderer.create(<AniversarioConfig companyId="c" auto={auto()} lojaNome="Lume" />));
+    expect(x).toContain("Cabe 1 de 3.");
+    expect(x).toContain("Como chega para Armand");
+    expect(x).not.toContain("Como a Armand vê");
   });
 });
