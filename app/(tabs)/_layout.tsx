@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "
 import { Slot, usePathname, useRouter } from "expo-router";
 // 05/10/2026: tour dos primeiros passos (spotlight no botao da tela alvo).
 import { PendingTourHost } from "@/components/onboarding/PendingTourHost";
+// 27/11/2026: anúncio do WhatsApp no Painel (alvo nav.whatsapp), atrás da trava da tela nova.
+import { GuiaAnuncio } from "@/components/whatsapp/guias/GuiaAnuncio";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts, GOOGLE_FONTS_CSS, cssDeExcecaoDeFonte } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
@@ -25,6 +27,7 @@ import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
 import { SuporteButton } from "@/components/SuporteButton";
+import { tourTarget } from "@/utils/tourTarget";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean; personalizadosToggle?: boolean; temporada?: boolean };
@@ -388,7 +391,7 @@ function BrandGlyph({ collapsed }: { collapsed: boolean }) {
 // `pl` = plano EXIGIDO pelo modulo quando ele esta acima do plano da
 // empresa (null quando liberado). Ver planoExigidoSeBloqueado.
 // ============================================================
-function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string | null; isDark: boolean }) {
+function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark, tour, badge }: { l: string; ic: string; a: boolean; onP: () => void; soon?: boolean; C: ReturnType<typeof useColors>; collapsed: boolean; pl?: string | null; isDark: boolean; tour?: string; badge?: string }) {
   if (Platform.OS !== "web") {
     // Native fallback
     return (
@@ -422,6 +425,7 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
     <a
       onClick={(e: any) => { e.preventDefault(); if (!soon) onP(); }}
       title={tituloItem}
+      {...(tour ? { "data-tour": tour } : {})}
       className={"aura-nav-item" + (a ? " is-active" : "")}
       style={{
         display: "flex",
@@ -466,6 +470,10 @@ function NavItemRow({ l, ic, a, onP, soon, C, collapsed, pl, isDark }: { l: stri
           letterSpacing: "-0.1px",
           color: a ? C.ink : "inherit",
         } as any}>{l}</span>
+      )}
+      {!collapsed && !!badge && (
+        // pílula "novo" do artboard GuiaAnuncio (item WhatsApp, atrás da trava da tela nova: o próprio item só aparece para quem passa por ela)
+        <span data-testid="nav-badge-novo" style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(167,139,250,.3)", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 } as any}>{badge}</span>
       )}
       {!collapsed && soon && (
         <span style={{ background: C.bg4, borderRadius: 4, padding: "1px 5px", fontSize: 8, color: C.ink3, fontWeight: 600, letterSpacing: "0.3px" } as any}>Em breve</span>
@@ -748,7 +756,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
               )}
               {collapsed && <div style={{ height: 1, background: C.border, margin: "8px 4px" } as any} />}
               {s.i.map(i => (
-                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={planoExigidoSeBloqueado(i.mod, planoAtual)} isDark={isDark} />
+                <NavItemRow key={i.r} l={i.l} ic={i.ic} a={isA(p, i.r)} onP={() => ro.push(i.r as any)} soon={i.soon} C={C} collapsed={collapsed} pl={planoExigidoSeBloqueado(i.mod, planoAtual)} isDark={isDark} tour={i.r === "/whatsapp" ? "nav.whatsapp" : undefined} badge={i.r === "/whatsapp" ? "novo" : undefined} />
               ))}
             </div>
           ))}
@@ -926,7 +934,7 @@ function MBar() {
               {filteredMore.map(item => {
                 const active = isA(p, item.r);
                 return (
-                  <div key={item.r} onClick={() => { ro.push(item.r as any); setShowMore(false); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 12, borderRadius: 12, cursor: "pointer", background: active ? C.violetD : "transparent", border: active ? "1px solid " + C.border2 : "1px solid transparent" } as any}>
+                  <div key={item.r} {...(item.r === "/whatsapp" ? { "data-tour": "nav.whatsapp" } : {})} onClick={() => { ro.push(item.r as any); setShowMore(false); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 12, borderRadius: 12, cursor: "pointer", background: active ? C.violetD : "transparent", border: active ? "1px solid " + C.border2 : "1px solid transparent" } as any}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: active ? C.violet + "22" : C.bg4 } as any}><Icon name={item.ic as any} size={18} color={active ? C.violet3 : C.ink3} /></div>
                     <span style={{ fontSize: 10, color: active ? C.violet3 : C.ink3, fontWeight: active ? "600" : "500", textAlign: "center" } as any}>{item.l}</span>
                   </div>
@@ -951,7 +959,7 @@ function MBar() {
             </Pressable>
           );
         })}
-        <Pressable style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => setShowMore(!showMore)}>
+        <Pressable {...tourTarget("nav.mais")} style={{ flex: 1, alignItems: "center", gap: 3 }} onPress={() => setShowMore(!showMore)}>
           <View style={[{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" }, showMore && { backgroundColor: C.violetD }]}>
             <Icon name="grid" size={18} color={showMore ? C.violet3 : C.ink3} />
           </View>
@@ -1002,6 +1010,7 @@ export default function TabsLayout() {
       </div>
       <ToastContainer />
       <PendingTourHost />
+      <GuiaAnuncio />
       <div style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0, minWidth: 0 } as any}>
         <PageTransition><Slot /></PageTransition>
       </div>
@@ -1021,6 +1030,7 @@ export default function TabsLayout() {
         </div>
         <ToastContainer />
         <PendingTourHost />
+      <GuiaAnuncio />
         <PageTransition><Slot /></PageTransition>
       </div>
     </div>
@@ -1038,6 +1048,7 @@ export default function TabsLayout() {
         <View key={themeKey} style={{ flex: 1 }}>
           <ToastContainer />
           <PendingTourHost />
+      <GuiaAnuncio />
           <PageTransition><Slot /></PageTransition>
         </View>
         <MBar />

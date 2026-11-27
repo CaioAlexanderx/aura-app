@@ -17,6 +17,7 @@ import { fmt } from "@/constants/helpers";
 import { Lnk, Sw } from "@/components/whatsapp/waVidro";
 import { K, Tx, Meta, Pilula, BotaoPrincipal, superficie, anima, web, WEB } from "./conversasUi";
 import { escolherArquivo, prepararFoto } from "./midiaWeb";
+import { useWaGuias } from "@/stores/waGuias";
 import {
   contadorFotos, coresDoPainel, fotosDaCor, hexValido, marcadasIniciais, notaDoTamanho, rotuloEnviar, subtituloDoProduto, tamanhosDoPainel, temCor,
 } from "./produtoGrade";
@@ -66,7 +67,11 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
       type: "produto_grade", product_id: productId, ...(comCor && cor?.chave ? { cor: cor.chave } : {}),
       fotos: fotosMarcadas.map((f) => f.id), perguntar_tamanho: perguntar,
     }),
-    onSuccess: () => onSent(),
+    onSuccess: () => {
+      // O guia 3 do WhatsApp espera por isto: o produto saiu de verdade na conversa.
+      useWaGuias.getState().sinalizarProdutoEnviado();
+      onSent();
+    },
     onError: (e: any) => onError(e?.message || "Não foi possível enviar."),
   });
 

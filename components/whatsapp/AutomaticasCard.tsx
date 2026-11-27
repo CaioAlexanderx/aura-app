@@ -20,6 +20,7 @@ import { animCai, Lnk, Meta, Passo44, Superficie, Sw, V, t } from "./waVidro";
 import { LinkPacote } from "./configUi";
 import { nomeDoMes } from "./waAutomaticaConfig";
 import { Icon } from "@/components/Icon";
+import { tourTarget } from "@/utils/tourTarget";
 import type { WaAutoKey } from "@/services/waConfigApi";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
@@ -195,7 +196,7 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
         {!!auto.erro && ultimo === "divisao" && <Text style={s.erro} testID="wa-auto-erro">{auto.erro}</Text>}
       </Superficie>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 18 }}>
+      <View {...tourTarget("wa.auto.cartoes")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 18 }}>
         {cartoes.map((k) => <CartaoAuto key={k} k={k} />)}
       </View>
 
@@ -217,7 +218,7 @@ export function AutomaticasCard({ auto, companyId, onAjustar }: Props) {
     const sw = (
       <Sw
         ligado={ligada} desabilitado={travado || !lida}
-        rotulo={(ligada ? "Desligar " : "Ligar ") + d.titulo} testID={`wa-auto-liga-${k}`} tour={k === "aniversario" ? "wa.auto.aniversario" : undefined}
+        rotulo={(ligada ? "Desligar " : "Ligar ") + d.titulo} testID={`wa-auto-liga-${k}`} tour={k === "aniversario" ? "wa.auto.aniversario" : k === "venda_mais" ? "wa.auto.venda_mais" : undefined}
         onPress={() => { setUltimo(k); alt.alternar(k); }}
       />
     );

@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import type { ScreenTabItem } from "@/components/ScreenHero";
 import { IconeAjuda, Meta, Pilula, Titulo, Voltar, V, t } from "./waVidro";
+import { useWaGuias } from "@/stores/waGuias";
 import { useSetas } from "./waTeclado";
 import { mascaraDasBordas, xParaCentralizar } from "./waAbas";
 import { WEB } from "./waVisual";
@@ -59,8 +60,9 @@ export function ListaAbas({ abas, ativa, onSelect, rotulo, testIDLista, antes, d
 }
 
 /** As abas do topo: pílulas translúcidas (a ativa NÃO é sólida) e o botão Guias (só ícone no celular). */
-export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabItem[]; ativa: string; onSelect: (k: string) => void; estreito?: boolean }) {
+export function AbasWa({ tabs, ativa, onSelect, estreito, onGuias }: { tabs: ScreenTabItem[]; ativa: string; onSelect: (k: string) => void; estreito?: boolean; onGuias?: () => void }) {
   const rolagem = useRef<any>(null);
+  const menuAberto = useWaGuias((s) => s.aberto === "menu");
   // No celular a fila rola: ao abrir, a aba ativa vai para o centro; só o lado com mais conteúdo ganha o esmaecido.
   const [rolado, setRolado] = useState(0);
   const [visivel, setVisivel] = useState(0);
@@ -71,9 +73,9 @@ export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabIte
     try { rolagem.current?.scrollTo?.({ x: xParaCentralizar(ativaLay.x, ativaLay.w, visivel, total), animated: false }); } catch { /* sem rolagem */ }
   }, [estreito, ativaLay, visivel, total, ativa]);
   const mascara = estreito && WEB ? mascaraDasBordas(rolado, visivel, total) : null;  const abas = tabs.map((tb) => ({ key: tb.key, label: tb.label, testID: tb.testID }));
-  // Os guias entram no próximo PR: aqui só o botão e o alvo do tour.
+  // O botão Guias abre o menu dos guias (components/whatsapp/guias): a tela nova só, atrás da trava.
   const guias = (
-    <Pilula onPress={() => {}} testID="wa-varejo-guias" tour="wa.guias" label="Guias">
+    <Pilula onPress={onGuias || (() => {})} testID="wa-varejo-guias" tour="wa.guias" label="Guias" estado={{ expanded: menuAberto }}>
       <IconeAjuda tamanho={17} />
       {!estreito && <Text style={t(14, V.ink, "600")}>Guias</Text>}
     </Pilula>
@@ -113,22 +115,24 @@ interface Props {
   voltar?: boolean;
   onSelect: (k: string) => void;
   onVoltar: () => void;
+  /** Abre o menu de guias (botão "Guias"). */
+  onGuias?: () => void;
   /** Peça a mais ao lado das abas (ex.: o medidor das Conversas, como no artboard Main). Só no desktop. */
   extra?: React.ReactNode;
 }
 
-export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar, onSelect, onVoltar, extra }: Props) {
+export function CabecalhoWa({ largo, lojaNome, tabs, ativa, titulo, sub, voltar, onSelect, onVoltar, onGuias, extra }: Props) {
   // As abas ficam sempre na linha do topo, à direita, em TODAS as telas; o título vem embaixo e
   // quebra à vontade. Trocar de aba não mexe nas abas de lugar.
   return (
     <View style={{ gap: 18 }} testID="wa-varejo-cabecalho">
       {largo ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 10 }} testID="wa-varejo-abas-topo">
-          <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} />
+          <AbasWa tabs={tabs} ativa={ativa} onSelect={onSelect} onGuias={onGuias} />
           {extra}
         </View>
       ) : (
-        <AbasWa tabs={tabs} ativa={ativa} estreito onSelect={onSelect} />
+        <AbasWa tabs={tabs} ativa={ativa} estreito onSelect={onSelect} onGuias={onGuias} />
       )}
       <View style={{ gap: 10, minWidth: 0 }}>
         {!!voltar && <Voltar rotulo="Automáticas" onPress={onVoltar} testID="wa-varejo-voltar-automaticas" />}
