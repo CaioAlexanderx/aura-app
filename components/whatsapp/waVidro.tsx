@@ -222,12 +222,14 @@ export function Pilula({ children, ligada, onPress, desabilitado, disabled, peq,
 }
 
 /** Link (.lnk). */
-export function Lnk({ children, onPress, testID, style, desabilitado, tour }: {
+export function Lnk({ children, onPress, testID, style, desabilitado, tour, label }: {
   children?: React.ReactNode; onPress?: () => void; testID?: string; style?: any; desabilitado?: boolean; tour?: string;
+  /** Nome para leitor de tela quando o texto visível é curto (ex.: "Chamar"). */
+  label?: string;
 }) {
   return (
     <Pressable
-      onPress={onPress} disabled={desabilitado} accessibilityRole="button" testID={testID} {...(tour ? tourTarget(tour) : {})}
+      onPress={onPress} disabled={desabilitado} accessibilityRole="button" accessibilityLabel={label} testID={testID} {...(tour ? tourTarget(tour) : {})}
       style={[{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-start", opacity: desabilitado ? 0.5 : 1 }, style]}
     >
       <Text style={t(14, V.acc, "600")}>{children}</Text>

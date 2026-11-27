@@ -12,11 +12,11 @@
 import { createElement, useEffect, type ReactNode } from "react";
 import { View, Text, Pressable, type TextProps, type ViewStyle, type StyleProp } from "react-native";
 import {
-  ANIM_FIO, ANIM_POP, ANIM_RISE, ESCURO, GRAD_BTN, MONO, SANS, SERIF, V, WEB, estiloSuperficie, modoLeve,
+  ANIM_FIO, ANIM_POP, ANIM_RISE, ESCURO, GRAD_BTN, MONO, SANS, SERIF, V, WEB, estiloSuperficie, fundoGaveta, modoLeve,
 } from "@/components/whatsapp/waVisual";
 import { Meta, Pilula as PilulaWa, t } from "@/components/whatsapp/waVidro";
 
-export { MONO, SANS, SERIF, WEB, Meta };
+export { MONO, SANS, SERIF, WEB, Meta, fundoGaveta };
 
 /**
  * Foco visível de 2 px #c4b5fd (linguagem de vidro) nas áreas marcadas com data-wa-foco.
@@ -56,7 +56,7 @@ export const K = {
   bolhaInBorda: ESCURO ? "rgba(255,255,255,.12)" : "rgba(109,40,217,.2)",
   bolhaOut: `linear-gradient(160deg,${V.bolhaA},${V.bolhaB})`, bolhaOutFb: V.bolhaA, bolhaOutBorda: V.bolhaLine,
   campo: V.campoBg, convSel: V.on, convSelBorda: V.lineOn, tag: V.fill2, tagOn: V.on,
-  scrim: ESCURO ? "rgba(4,2,15,.45)" : "rgba(24,23,43,.4)", sheetMobile: V.solid,
+  scrim: ESCURO ? "rgba(4,2,15,.45)" : "rgba(24,23,43,.4)",
 };
 
 // Receita do vidro: a mesma de Configurações (estiloSuperficie), com o raio do artboard.
@@ -64,6 +64,16 @@ export const superficie = {
   vidro: (r = 30): ViewStyle => estiloSuperficie("glass", r),
   seca: (r = 999): ViewStyle => estiloSuperficie("dry", r),
   solida: (r = 30): ViewStyle => estiloSuperficie("solid", r),
+  /**
+   * Placa da conversa: o vidro do artboard Main, branco 13% -> 4% direto sobre o fundo escuro (sem base roxa por baixo).
+   * No modo leve (sem desfoque) vale o token unico V.solidLeve (estiloSuperficie).
+   */
+  placa: (r = 30): ViewStyle => {
+    const v: any = estiloSuperficie("glass", r);
+    if (!ESCURO) return v;
+    if (modoLeve()) return v; // o ramo leve do vidro ja usa V.solidLeve
+    return { ...v, backgroundColor: "transparent" };
+  },
 };
 
 /** Animação de entrada do artboard (rise, pop, fio); `abre` usa o pop. Some no modo leve e com movimento reduzido. */

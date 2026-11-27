@@ -402,7 +402,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
 
   return (
     <View testID="hub-thread-regiao" accessibilityLabel="Conversa" {...({ role: "region", tabIndex: -1, dataSet: { waFoco: "1" } } as any)}
-      style={compacto ? { flex: 1 } : [superficie.vidro(30), { flex: 1, minHeight: 560, position: "relative" }]}>
+      style={compacto ? { flex: 1 } : [superficie.placa(30), { flex: 1, minHeight: 560, position: "relative" }]}>
       {!compacto && <Fio />}
       {cabecalho}
       {acoes}

@@ -280,11 +280,16 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                 <View key={`${p.nome}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 10 }} testID={`wa-venda-gratis-cliente-${i}`}>
                   <Avatar nome={p.nome} cor="#f9d0e6" />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={t(14, V.ink, "700")}>{p.nome}</Text>
+                    <Text style={t(14, V.ink, "700")} numberOfLines={1} testID={`wa-venda-gratis-nome-${i}`}>{p.nome}</Text>
                     {!link && <Text style={t(12, V.ink3)}>Sem telefone</Text>}
                   </View>
                   {!!link && (
-                    <Lnk onPress={() => { Linking.openURL(link).catch(() => {}); }} testID={`wa-venda-chamar-${i}`}>Chamar pelo meu WhatsApp</Lnk>
+                    <Lnk
+                      onPress={() => { Linking.openURL(link).catch(() => {}); }} testID={`wa-venda-chamar-${i}`}
+                      label={`Chamar ${p.nome} pelo meu WhatsApp`} style={{ alignSelf: "center", flexShrink: 0 }}
+                    >
+                      Chamar
+                    </Lnk>
                   )}
                 </View>
               );
