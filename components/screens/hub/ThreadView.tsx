@@ -332,6 +332,8 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
   const placeholder = conv.status === "ia"
     ? "Digitar aqui assume a conversa…"
     : whatsapp && (conv.customer_name || ligado) ? `Escreva para ${nomeCurto === "o cliente" ? "o cliente" : `a ${nomeCurto}`}…` : "Escreva uma mensagem…";
+  // Celular: o campo é estreito e o placeholder não reticencia; cabe só "Mensagem…".
+  const placeholderCampo = compacto ? "Mensagem…" : placeholder;
   const podeEnviar = !!draft.trim() && !mReply.isPending;
   // Celular: "+" redondo à esquerda do campo reabre a gaveta (como o de anexar do WhatsApp).
   const linhaEscrever = (abrirGaveta?: () => void) => (
@@ -342,7 +344,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         </BotaoRedondo>
       )}
       <View style={[superficie.seca(999), { flex: 1, minWidth: 0, minHeight: compacto ? 46 : 52, paddingHorizontal: 18, justifyContent: "center" }]}>
-        <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholder} placeholderTextColor={K.ink3}
+        <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholderCampo} placeholderTextColor={K.ink3}
           onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
           style={[{ fontSize: 15, color: K.ink, fontFamily: SANS, minWidth: 0 }, web({ outlineStyle: "none" })]} />
       </View>

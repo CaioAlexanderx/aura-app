@@ -8,8 +8,8 @@
 // sólido. Sem foto: o aviso e "Tirar foto agora" (sobe pela rota de imagens do
 // produto). Os dados e o envio vêm do servidor (hubProdutoGradeApi).
 // ============================================================
-import { useState } from "react";
-import { View, Pressable, Image, ActivityIndicator } from "react-native";
+import React, { useState } from "react";
+import { View, Pressable, Image, ActivityIndicator, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hubProdutoGradeApi, type GradeCor } from "@/services/hubProdutoGradeApi";
 import { productImagesApi } from "@/services/productImagesApi";
@@ -23,13 +23,23 @@ import {
 
 const LARGURA_FOTO: any = WEB ? "calc((100% - 24px) / 4)" : "23%";
 
-export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onSent, onError, onSemGrade }: {
+// Celular: só o conteúdo de cima rola (altura limitada à tela); desktop: tudo no fluxo, como antes.
+// Fora do componente do painel para não remontar (e perder a rolagem) a cada render.
+function Corpo({ compacto, children }: { compacto: boolean; children: React.ReactNode }) {
+  return compacto
+    ? <ScrollView testID="hub-grade-corpo" style={{ maxHeight: (WEB ? "calc(100dvh - 300px)" : 420) as any }} contentContainerStyle={{ gap: 16 }} showsVerticalScrollIndicator={false}>{children}</ScrollView>
+    : <View style={{ gap: 16 }}>{children}</View>;
+}
+
+export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onSent, onError, onSemGrade, compacto = false }: {
   companyId: string; convId: string; productId: string;
   onTrocar: () => void;
   onSent: () => void;
   onError: (mensagem: string) => void;
   /** O servidor ainda não conhece a grade: manda o produto do jeito antigo (foto e preço). */
   onSemGrade: () => void;
+  /** Celular: o rodapé (grátis + botão) fica fixo e só o conteúdo de cima rola. */
+  compacto?: boolean;
 }) {
   const qc = useQueryClient();
   const chave = ["hub-produto-grade", companyId, productId];
@@ -104,6 +114,7 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
 
   return (
     <View testID="hub-grade-painel" style={{ gap: 16 }}>
+      <Corpo compacto={compacto}>
       {/* O produto escolhido */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         {capa
@@ -197,8 +208,10 @@ export function ProdutoGradePainel({ companyId, convId, productId, onTrocar, onS
         <Sw testID="hub-grade-perguntar" rotulo="Perguntar o tamanho com botões" ligado={perguntar} onToggle={() => setPerguntar((v) => !v)} />
       </View>
 
-      {/* Rodapé: grátis + o único botão sólido */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      </Corpo>
+
+      {/* Rodapé: grátis + o único botão sólido (fixo no celular, com a área segura embaixo) */}
+      <View testID="hub-grade-rodape" style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }, compacto ? ({ paddingBottom: WEB ? "env(safe-area-inset-bottom)" : 0 } as any) : null]}>
         <Tx style={{ fontSize: 13, color: K.ok, lineHeight: 18 }}>Grátis: a conversa está aberta</Tx>
         <BotaoPrincipal testID="hub-grade-enviar" disabled={mEnviar.isPending} onPress={() => mEnviar.mutate()}>
           {rotuloEnviar(fotosMarcadas.length)}

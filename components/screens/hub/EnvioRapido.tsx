@@ -192,7 +192,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
             onTrocar={() => setEscolhido(null)}
             onSent={() => { setPainel(null); setEscolhido(null); setBusca(""); onSent(); }}
             onError={onError}
-            onSemGrade={() => mSend.mutate({ type: "produto", product_id: escolhido })} />
+            onSemGrade={() => mSend.mutate({ type: "produto", product_id: escolhido })} compacto={compacto} />
         </Folha>
       )}
 
