@@ -229,7 +229,7 @@ export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conv
 
   if (IS_WIDE) {
     return (
-      <View testID="hub-conversas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 20, alignItems: "stretch", minHeight: 640, flex: 1 }}>
+      <View testID="hub-conversas" style={{ flexDirection: "row", gap: 20, alignItems: "stretch", minHeight: 640, flex: 1 }}>
         {list}
         <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 560, minWidth: 0, minHeight: 560 }}>
           {selectedId
