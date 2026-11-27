@@ -43,7 +43,8 @@ import {
   specDaFotoDoProdutoMedida,
   versaoDoMockupFoto,
 } from "./specDaFotoDoProduto";
-import { createMugViewer, MIME_DO_VIDEO } from "./compose3dMug";
+import { MIME_DO_VIDEO } from "./compose3dMug";
+import { abrirPalco, gravarGiro, type MarcaDoVideo } from "@/components/studio/orcamentoVideo/gravarGiro";
 
 export type RenderGerado = {
   url: string;
@@ -57,6 +58,16 @@ export type RenderGerado = {
 /** Etapas que o botão do modal mostra enquanto gera. */
 export type EtapaDoRender = "pedido" | "mockup" | "video" | "arquivo" | "envio";
 export type AoAvancar = (etapa: EtapaDoRender) => void;
+
+/**
+ * Opções do vídeo (27/11/2026, "Pedir aprovação da arte"): a marca da loja
+ * entra no selo do vídeo e o progresso da gravação (0 a 1) alimenta a barra
+ * da tela. Sem opções, o vídeo sai sem logo e sem barra, como antes.
+ */
+export type OpcoesDoRender = {
+  marca?: MarcaDoVideo;
+  aoProgredir?: (fracao: number) => void;
+};
 
 /** Formato do mockup estático: JPEG 0,9 — nítido na prova e bem menor que o PNG. */
 const TIPO_DO_MOCKUP = "image/jpeg" as const;
@@ -137,7 +148,8 @@ async function arquivoDoMockup(tela: HTMLCanvasElement | null, aoAvancar?: AoAva
 export async function gerarRenderDoPedido(
   companyId: string,
   orderId: string,
-  aoAvancar?: AoAvancar
+  aoAvancar?: AoAvancar,
+  opcoes: OpcoesDoRender = {}
 ): Promise<RenderGerado> {
   aoAvancar?.("pedido");
   const detail = await studioApi.getOrder(companyId, orderId);
@@ -207,9 +219,6 @@ export async function gerarRenderDoPedido(
 
   // ── F5: template 3D → vídeo turntable ──────────────────────
   if (template.kind === "model3d") {
-    const cv = document.createElement("canvas");
-    cv.width = 1280;
-    cv.height = 1000;
     // Frente e verso na mesma textura: o vídeo dá a volta e mostra os dois.
     const frente3d = valoresDoMotor(cfgT, customization, "front", { peca: pecaT });
     const verso3d = temVerso(cfgT, customization);
@@ -221,25 +230,30 @@ export async function gerarRenderDoPedido(
     const valores3d = cfgT ? { ...frente3d.values, __artePorArea: porArea } : customization;
     aoAvancar?.("video");
     await cederAVez();
-    // pixelRatio 1: o canvas fora da tela já tem 1280 × 1000; com o dpr 2
-    // de um notebook ele virava 2560 × 2000 (4× o trabalho por quadro) e o
-    // gravador perdia quadros.
-    const viewer = await createMugViewer(cv, template.spec, valores3d, {
-      ...(cfgT ? { artColor: frente3d.artColor, font: frente3d.font } : {}),
-      pixelRatio: 1,
-    });
-    let blob: Blob | null = null;
+    // O mesmo gravador do orçamento em vídeo (gravarGiro, 7 s, 720 × 900,
+    // MP4 por WebCodecs quando existe), com o palco fora da tela.
+    const palco = await abrirPalco(
+      template.spec,
+      valores3d,
+      cfgT ? { artColor: frente3d.artColor, font: frente3d.font } : {},
+    );
+    let gravado: Awaited<ReturnType<typeof gravarGiro>> = null;
     try {
-      blob = await viewer.recordTurntable(3600);
+      gravado = await gravarGiro(palco, opcoes.marca || { nome: "" }, !!(opcoes.marca && opcoes.marca.logoUrl), opcoes.aoProgredir);
     } finally {
-      viewer.dispose();
+      palco.fechar();
     }
+    const blob = gravado ? gravado.blob : null;
     if (!blob || !blob.size) {
       throw new Error("Navegador sem suporte à gravação de vídeo — envie um snapshot ou mockup manual.");
     }
-    const contentType = blob.type && blob.type.indexOf("video/") === 0 ? blob.type.split(";")[0] : MIME_DO_VIDEO;
+    const contentType = gravado && gravado.contentType ? gravado.contentType : MIME_DO_VIDEO;
     aoAvancar?.("arquivo");
     const b64 = await blobToBase64(blob);
+    // O servidor aceita até 5 MB de JSON; o base64 incha um terço.
+    if (b64.length > 4_900_000) {
+      throw new Error("O vídeo ficou grande demais para enviar. Grave de novo ou use outro arquivo.");
+    }
     aoAvancar?.("envio");
     const up = await uploadStudioMockup(companyId, {
       content_base64: b64,

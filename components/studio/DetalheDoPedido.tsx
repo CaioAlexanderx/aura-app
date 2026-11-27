@@ -857,7 +857,8 @@ export function DetalheDoPedido({
 
       <Modal
         visible={aprovacaoAberta}
-        animationType="slide"
+        transparent
+        animationType="fade"
         onRequestClose={() => setAprovacaoAberta(false)}
       >
         {aprovacaoAberta && (

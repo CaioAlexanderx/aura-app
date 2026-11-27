@@ -836,7 +836,8 @@ export default function StudioProducao() {
 
       <Modal
         visible={!!approvalFor}
-        animationType="slide"
+        transparent
+        animationType="fade"
         onRequestClose={() => setApprovalFor(null)}
       >
         {approvalFor && (

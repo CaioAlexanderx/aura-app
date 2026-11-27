@@ -775,7 +775,9 @@ function estilos(t: StudioPalette) {
 
     // O contêiner do WebPortal é um <div> fixo, sem flex: o overlay se
     // estica por conta própria.
-    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.bg },
+    // Transparente: a folha do pedido de aprovação traz o próprio pano escuro
+    // e a Produção aparece atrás, como no mockup (27/11/2026).
+    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "transparent" },
   });
 }
 
