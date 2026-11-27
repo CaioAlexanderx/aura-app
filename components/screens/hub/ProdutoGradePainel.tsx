@@ -27,7 +27,7 @@ const LARGURA_FOTO: any = WEB ? "calc((100% - 24px) / 4)" : "23%";
 // Fora do componente do painel para não remontar (e perder a rolagem) a cada render.
 function Corpo({ compacto, children }: { compacto: boolean; children: React.ReactNode }) {
   return compacto
-    ? <ScrollView testID="hub-grade-corpo" style={{ maxHeight: (WEB ? "calc(100dvh - 300px)" : 420) as any }} contentContainerStyle={{ gap: 16 }} showsVerticalScrollIndicator={false}>{children}</ScrollView>
+    ? <ScrollView testID="hub-grade-corpo" style={{ maxHeight: (WEB ? "calc(100dvh - 450px)" : 420) as any }} contentContainerStyle={{ gap: 16 }} showsVerticalScrollIndicator={false}>{children}</ScrollView>
     : <View style={{ gap: 16 }}>{children}</View>;
 }
 
