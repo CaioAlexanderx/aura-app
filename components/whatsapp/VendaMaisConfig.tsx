@@ -8,8 +8,8 @@
 // "Todo dia 1º, sozinho" é a automática do mês.
 // ============================================================
 import React from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
-import { animVai, Avatar, Meta, Superficie, BtnPrimario, V, WEB, t } from "./waVidro";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from "react-native";
+import { animVai, Avatar, Lnk, Meta, Superficie, BtnPrimario, V, WEB, t } from "./waVidro";
 import type { UseWaAutomaticas } from "@/hooks/useWaAutomaticas";
 import { useWaPublico, useWaModelos } from "@/hooks/useWaAutomatica";
 import { AceiteNovidadesPergunta, useAlternarAutomatica } from "@/hooks/useAlternarAutomatica";
@@ -22,6 +22,7 @@ import {
 import { renderizar } from "./waMensagem";
 import { useSetas } from "./waTeclado";
 import { mesPorExtenso } from "./waRotulos";
+import { TEXTO_OFERTA_UMA_LINHA, linkWaMe } from "./waGratis";
 import { pluralize } from "@/utils/plural";
 import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
@@ -102,7 +103,19 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
   const primeiraPessoa = corte?.recebem[0];
   const peca = primeiraPessoa?.ultimaPeca;
   const mesCompra = primeiraPessoa ? mesDe(primeiraPessoa) : null;
-  const mensagem = modelo?.texto_em_uso
+  // Texto do Venda+ para UMA cliente (nome e peça dela); o mesmo da prévia. A lista já só tem clientes completas.
+  const textoPara = (p: { nome: string; ultimaPeca?: string; mesUltimaCompra?: string; ultimaCompra?: string }) =>
+    renderizar(textoDoModelo, {
+      "Nome": p.nome.split(" ")[0], "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
+      "Validade": validade, "Última compra": p.ultimaPeca, "Mês da última compra": mesDe(p) || undefined,
+    }, false);
+  // Caminho grátis: as novidades acabaram e a loja não tem o adicional (o saldo não renova; o medidor lê o plano assim).
+  const novidadesEsgotadas = !!saldo?.baldes.find((b) => b.key === "novidades")?.esgotado;
+  const gratis = !!saldo && saldo.mostrarOferta === true && novidadesEsgotadas;
+  const chamar = corte ? [...corte.recebem, ...corte.ficam] : [];
+  // Sem novidade neste mês (Negócio ou Essencial): o painel "As novidades acabaram" ou o link do pacote respondem pelo corte;
+  // o cartão só diz quantos poderão receber quando houver novidade.
+  const semNovidade = novidadesEsgotadas || (!!corte && corte.cabem <= 0 && lida.livres === 0);  const mensagem = modelo?.texto_em_uso
     ? renderizar(textoDoModelo, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
         "Validade": validade,
@@ -172,7 +185,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         <Superficie variante="dry" raio={24} padding={{ h: 20, v: 18 }} gap={14}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <Text style={t(15, V.ink2)}>
-              <Text style={t(15, V.ink, "700")}>{corte ? (corte.total === 1 ? "1 pode receber" : `${corte.total} podem receber`) : "Quem recebe"}</Text>
+              <Text style={t(15, V.ink, "700")}>{corte ? `${corte.total === 1 ? "1 pode" : `${corte.total} podem`} receber${semNovidade ? " quando houver novidade" : ""}` : "Quem recebe"}</Text>
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }} accessibilityLabel={`${pluralize(livresVenda, "novidade")} do Venda+ ${livresVenda === 1 ? "livre" : "livres"}`}>
               <View style={{ flexDirection: "row", gap: 4 }}>
@@ -225,8 +238,8 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
                   </View>
                 ))}
               </View>
-              {corte.total > corte.cabem && !!companyId && <LinkPacote companyId={companyId} />}
-              {corte.total > corte.cabem && (
+              {corte.total > corte.cabem && !gratis && !!companyId && <LinkPacote companyId={companyId} />}
+              {corte.total > corte.cabem && !semNovidade && (
                 <Text style={t(14, V.ink2)} testID="wa-venda-resto">
                   {corte.cabem === 0
                     ? (corte.total === 1 ? "A cliente fica guardada" : `As ${corte.total} ficam guardadas`)
@@ -256,7 +269,30 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
             <Text style={t(17, V.ok, "700")} testID="wa-venda-enviado">Pronto. Saem hoje entre 10h e 12h.</Text>
           </Superficie>
         ) : null}
-        {acabou ? (
+        {gratis && !!corte ? (
+          <Superficie variante="dry" raio={24} padding={{ h: 18, v: 16 }} gap={10} testID="wa-venda-gratis">
+            <Text style={t(17, V.ink, "700")}>As novidades acabaram.</Text>
+            <Text style={t(14, V.ink2)}>Você pode chamar pelo seu WhatsApp, de graça: um toque por cliente, com o texto pronto.</Text>
+            {chamar.length === 0 && <Text style={t(14, V.ink2)} testID="wa-venda-gratis-ninguem">Nenhum cliente para chamar agora.</Text>}
+            {chamar.slice(0, 10).map((p, i) => {
+              const link = linkWaMe(p.telefone, textoPara(p));
+              return (
+                <View key={`${p.nome}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 10 }} testID={`wa-venda-gratis-cliente-${i}`}>
+                  <Avatar nome={p.nome} cor="#f9d0e6" />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={t(14, V.ink, "700")}>{p.nome}</Text>
+                    {!link && <Text style={t(12, V.ink3)}>Sem telefone</Text>}
+                  </View>
+                  {!!link && (
+                    <Lnk onPress={() => { Linking.openURL(link).catch(() => {}); }} testID={`wa-venda-chamar-${i}`}>Chamar pelo meu WhatsApp</Lnk>
+                  )}
+                </View>
+              );
+            })}
+            {chamar.length > 10 && <Text style={t(13, V.ink3)}>e mais {chamar.length - 10} {chamar.length - 10 === 1 ? "cliente" : "clientes"}</Text>}
+            <Text style={t(13, V.ink2)} testID="wa-venda-oferta">{TEXTO_OFERTA_UMA_LINHA}</Text>
+          </Superficie>
+        ) : acabou ? (
           <Superficie variante="dry" raio={24} padding={{ h: 18, v: 16 }} gap={6}>
             <Text style={t(14, V.ink2)} testID="wa-venda-acabou">
               O Venda+ deste mês acabou: nada mais sai até 1º de {proximoMes}. Quem voltar a comprar aparece em Clientes com a
