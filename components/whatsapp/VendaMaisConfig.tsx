@@ -21,7 +21,7 @@ import {
 } from "./waAutomaticaConfig";
 import { renderizar } from "./waMensagem";
 import { useSetas } from "./waTeclado";
-import { mesPorExtenso, textoSemCampo } from "./waRotulos";
+import { mesPorExtenso } from "./waRotulos";
 import { pluralize } from "@/utils/plural";
 import { waMesDoSaldo, type SaldoInfo } from "./waSaldo";
 import type { WaStatus } from "@/services/waApi";
@@ -69,26 +69,40 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
 
   const travado = auto.salvando;
   const salvar = (patch: Record<string, any>) => auto.salvarConfig("venda_mais", patch);
-  const corte = pub.corte;
-  const pode = podeMandarNovidades({ aceiteEm: info.aceiteEm, saldo, status, corte });
-  const fora = pub.publico?.fora;
+  const corteBruto = pub.corte;
+  const fora: any = pub.publico?.fora;
 
   const comPresente = presenteChave != null && presenteChave !== "nenhum";
   const modelo = segmento ? (modelos.modelos || []).find((m) => m.key === modeloDaVenda(segmento, comPresente)) : null;
+  // O texto aprovado nunca perde o trecho da última compra: quem não tem a peça (e o mês) não entra na lista
+  // e conta em "ficam de fora · sem a peça da última compra" (o servidor manda o motivo SEM_PECA_ULTIMA_COMPRA).
+  const textoDoModelo = modelo?.texto_em_uso || "";
+  const exigePeca = /\{Última compra\}/.test(textoDoModelo);
+  const exigeMes = /\{Mês da última compra\}/.test(textoDoModelo);
+  const mesDe = (p: { mesUltimaCompra?: string; ultimaCompra?: string }) => mesPorExtenso(p.mesUltimaCompra) || mesPorExtenso(p.ultimaCompra);
+  const completa = (p: { ultimaPeca?: string; mesUltimaCompra?: string; ultimaCompra?: string }) => (!exigePeca || !!p.ultimaPeca) && (!exigeMes || !!mesDe(p));
+  const semPecaLocal = corteBruto ? [...corteBruto.recebem, ...corteBruto.ficam].filter((p) => !completa(p)).length : 0;
+  const foraSemPeca = (Number(fora?.sem_peca_ultima_compra) || 0) + semPecaLocal;
+  const corte = corteBruto
+    ? (() => {
+        const ok = corteBruto.recebem.filter(completa);
+        return { ...corteBruto, recebem: ok, ficam: corteBruto.ficam.filter(completa), total: Math.max(0, corteBruto.total - semPecaLocal), cabem: Math.min(corteBruto.cabem, ok.length) };
+      })()
+    : corteBruto;
+  const pode = corte && corte.cabem <= 0 && semPecaLocal > 0
+    ? { pode: false, motivo: "Nenhuma cliente com a peça da última compra para mandar agora." }
+    : podeMandarNovidades({ aceiteEm: info.aceiteEm, saldo, status, corte });
   const primeira = corte?.recebem[0]?.nome.split(" ")[0] || undefined;
   // O presente vale 15 dias a partir do envio.
   const hoje = new Date();
   const validade = (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 15); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; })();
-  // `{Última compra}` é a peça (`ultima_peca`); sem ela o modelo sai sem o trecho, nunca com a data.
-  // `{Mês da última compra}` é o nome do mês ("agosto").
+  // `{Última compra}` é a peça (`ultima_peca`) e `{Mês da última compra}` o nome do mês ("agosto").
+  // A prévia usa a primeira cliente completa; sem nenhuma, o exemplo (marcado como exemplo).
   const primeiraPessoa = corte?.recebem[0];
   const peca = primeiraPessoa?.ultimaPeca;
-  const mesCompra = mesPorExtenso(primeiraPessoa?.mesUltimaCompra) || mesPorExtenso(primeiraPessoa?.ultimaCompra);
-  let textoModelo = modelo?.texto_em_uso || "";
-  if (primeira && !peca) textoModelo = textoSemCampo(textoModelo, "Última compra");
-  if (primeira && !mesCompra) textoModelo = textoSemCampo(textoModelo, "Mês da última compra");
+  const mesCompra = primeiraPessoa ? mesDe(primeiraPessoa) : null;
   const mensagem = modelo?.texto_em_uso
-    ? renderizar(textoModelo, {
+    ? renderizar(textoDoModelo, {
         "Nome": primeira, "Nome da loja": lojaNome || undefined, "Presente": rotuloDoPresente(cfg.presente) || undefined,
         "Validade": validade,
         "Última compra": peca,
@@ -171,10 +185,10 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
             </View>
           </View>
 
-          {!!fora && (
+          {(!!fora || foraSemPeca > 0) && (
             <Text style={t(14, V.ink2)} testID="wa-venda-fora">
-              {plural(fora.recebeu_ha_menos_de_7_dias ?? 0, "recebeu", "receberam")} novidade há menos de 7 dias · {plural(fora.pediu_para_nao_receber ?? 0, "pediu", "pediram")}{" "}
-              para não receber · {fora.sem_telefone ?? 0} sem telefone
+              {plural(fora?.recebeu_ha_menos_de_7_dias ?? 0, "recebeu", "receberam")} novidade há menos de 7 dias · {plural(fora?.pediu_para_nao_receber ?? 0, "pediu", "pediram")}{" "}
+              para não receber · {fora?.sem_telefone ?? 0} sem telefone{foraSemPeca > 0 ? ` · ${foraSemPeca} sem a peça da última compra` : ""}
             </Text>
           )}
           {pub.carregando && !pub.publico && <ActivityIndicator size="small" color={V.acc} />}
@@ -206,8 +220,10 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
               {corte.total > corte.cabem && !!companyId && <LinkPacote companyId={companyId} />}
               {corte.total > corte.cabem && (
                 <Text style={t(14, V.ink2)} testID="wa-venda-resto">
-                  Vão as {corte.cabem} que mais compravam. As outras {corte.total - corte.cabem} ficam guardadas para o mês
-                  que vem, ou para quando sobrarem novidades.
+                  {corte.cabem === 0
+                    ? (corte.total === 1 ? "A cliente fica guardada" : `As ${corte.total} ficam guardadas`)
+                    : `${corte.cabem === 1 ? "Vai 1 cliente, a que mais comprava." : `Vão as ${corte.cabem} que mais compravam.`} ${corte.total - corte.cabem === 1 ? "A outra fica guardada" : `As outras ${corte.total - corte.cabem} ficam guardadas`}`}{" "}
+                  para o mês que vem, ou para quando sobrarem novidades.
                 </Text>
               )}
             </>
@@ -242,13 +258,13 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         ) : (
           <View style={{ gap: 10, alignItems: "flex-start" }}>
             <BtnPrimario
-              rotuloCurto={corte ? (corte.cabem === 1 ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem}`) : undefined}
+              rotuloCurto={corte && corte.cabem > 0 ? (corte.cabem === 1 ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem}`) : undefined}
               onPress={() => { pub.enviarAgora(); }}
               disabled={!pode.pode || pub.enviando || travado}
               carregando={pub.enviando}
               testID="wa-venda-enviar"
             >
-              {corte ? (corte.cabem === 1 && primeira ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem} que mais compravam`) : "Mandar agora"}
+              {corte && corte.cabem > 0 ? (corte.cabem === 1 && primeira ? `Mandar para ${primeira}` : `Mandar para as ${corte.cabem} que mais compravam`) : "Mandar agora"}
             </BtnPrimario>
             <Text style={t(13, V.ink3)} testID="wa-venda-enviar-nota">
               {pode.pode

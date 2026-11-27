@@ -284,9 +284,10 @@ describe("VendaMaisConfig", () => {
 
   it("bolha com nome real: campo sem valor sai como [Campo], nunca exemplo de outra pessoa", () => {
     mockModelos.current = modelosHook([{ key: "venda_sumindo_com", automatica: "venda_mais", titulo: "x", texto_em_uso: "Oi, {Nome}. Sua última compra: {Última compra}. Use até {Validade}." }]);
+    mockPub.current = pubHook(publico({ vao: ["Ana", "Marta", "Cris", "Bia"].map((n) => ({ ...pessoa(n), ultima_peca: "o vestido verde" })) }));
     const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
-    // A validade é calculada (envio + 15 dias); sem a peça da última compra, o modelo sai sem o trecho.
-    expect(textos(t)).toMatch(/Oi, Ana\. Sua última compra\. Use até \d{2}\/\d{2}\./);
+    // A validade é calculada (envio + 15 dias); o trecho da última compra é a peça da cliente, nunca removido.
+    expect(textos(t)).toMatch(/Oi, Ana\. Sua última compra: o vestido verde\. Use até \d{2}\/\d{2}\./);
     expect(textos(t)).not.toContain("[Última compra]");
     expect(textos(t)).not.toContain("[Validade]");
     expect(textos(t)).not.toContain("Vestido Verde");
@@ -413,16 +414,37 @@ describe("QA real: Venda+", () => {
     expect(x).toContain("Oi, Armand. Faz um mês da sua última compra na Lume: o vestido verde. Foi em agosto.");
     expect(x).not.toContain("2026-08");
   });
-  it("sem ultima_peca, o modelo sai sem o trecho (nada de [Última compra] nem data)", () => {
+  it("sem ultima_peca, a cliente NÃO entra (o texto aprovado nunca perde o trecho): fica fora e conta no motivo", () => {
     mockPub.current = um({ ultima_compra: "2026-08-12" });
     mockModelos.current = modelosHook([vendaModelo]);
-    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
-    expect(x).toContain("Oi, Armand. Faz um mês da sua última compra na Lume. Foi em agosto.");
-    expect(x).not.toContain("[Última compra]");
+    const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />);
+    const x = textos(t);
+    expect(tem(t, "wa-venda-recebe")).toBe(false);
+    expect(x).toContain("1 sem a peça da última compra");
+    expect(x).not.toContain("Oi, Armand");
     expect(x).not.toContain("2026-08");
+    expect(x).toContain("Como chega (cliente de exemplo)"); // sem ninguém completa, o exemplo, marcado como exemplo
+    expect(achar(t, "wa-venda-enviar").props.disabled).toBe(true);
+  });
+  it("o motivo do servidor (sem_peca_ultima_compra) também entra na conta", () => {
+    mockPub.current = pubHook(publico({ elegiveis: 2, cabem: 1, vao: [{ nome: "Bia Torres", detalhe: "", ultima_peca: "a blusa", ultima_compra: "2026-08-12" }], guardados: [], ficam_guardados: 1, falta_para_todos: 1, fora: { recebeu_ha_menos_de_7_dias: 0, pediu_para_nao_receber: 0, sem_telefone: 0, sem_peca_ultima_compra: 3 } }));
+    mockModelos.current = modelosHook([vendaModelo]);
+    const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("3 sem a peça da última compra");
+    expect(x).toContain("Oi, Bia.");
+  });
+  it("o texto do que fica guardado respeita o singular e o zero", () => {
+    mockModelos.current = modelosHook([{ ...vendaModelo, texto_em_uso: "Oi, {Nome}." }]);
+    mockPub.current = pubHook(publico({ elegiveis: 2, cabem: 1, vao: [{ nome: "Armand Silva", detalhe: "" }], guardados: [], ficam_guardados: 1, falta_para_todos: 1 }));
+    let x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).toContain("Vai 1 cliente, a que mais comprava. A outra fica guardada");
+    mockPub.current = pubHook(publico({ elegiveis: 3, cabem: 0, vao: [], guardados: [], ficam_guardados: 3, falta_para_todos: 3 }));
+    x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
+    expect(x).not.toContain("Vão as 0");
+    expect(x).toContain("As 3 ficam guardadas");
   });
   it("singular: 1 pode receber, Mandar para Armand, Usa 1 novidade, Como chega para Armand", () => {
-    mockPub.current = um({ ultima_peca: "a blusa" });
+    mockPub.current = um({ ultima_peca: "a blusa", ultima_compra: "2026-08-12" });
     mockModelos.current = modelosHook([vendaModelo]);
     const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
     expect(x).toContain("1 pode receber");
@@ -435,7 +457,7 @@ describe("QA real: Venda+", () => {
     expect(x).not.toContain("Como a Armand vê");
   });
   it("de 2 em diante: Mandar para as N que mais compravam", () => {
-    mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4 }));
+    mockPub.current = pubHook(publico({ elegiveis: 6, cabem: 4, vao: ["Ana", "Marta", "Cris", "Bia"].map((n) => ({ nome: n, detalhe: "", ultima_peca: "o vestido", ultima_compra: "2026-08-12" })) }));
     mockModelos.current = modelosHook([vendaModelo]);
     const x = textos(renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={saldo} status={statusOk} lojaNome="Lume" />));
     expect(x).toContain("Mandar para as 4 que mais compravam");
