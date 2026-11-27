@@ -7,20 +7,31 @@
 // único sólido da tela é a ação). No celular, uma linha só, rolável na
 // horizontal, com o Guias só em ícone (aria-label="Guias").
 // ============================================================
-import React from "react";
+import React, { useRef } from "react";
 import { View, Text, ScrollView } from "react-native";
 import type { ScreenTabItem } from "@/components/ScreenHero";
 import { IconeAjuda, Meta, Pilula, Titulo, Voltar, V, t } from "./waVidro";
 /** As abas do topo: pílulas translúcidas (a ativa NÃO é sólida) e o botão Guias (só ícone no celular). */
 export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabItem[]; ativa: string; onSelect: (k: string) => void; estreito?: boolean }) {
-  const pilulas = tabs.map((tb) => (
-    <Pilula
-      key={tb.key} ligada={tb.key === ativa} onPress={() => onSelect(tb.key)} testID={tb.testID}
-      estado={{ selected: tb.key === ativa }}
-    >
-      <Text style={t(14, tb.key === ativa ? V.onTxt : V.ink, "600")}>{tb.label}</Text>
-    </Pilula>
-  ));
+  const rolagem = useRef<any>(null);
+  // No celular a linha rola: ao abrir, leva a aba ativa inteira para dentro da tela.
+  const levaAteAAtiva = (x: number, largura: number) => {
+    try { rolagem.current?.scrollTo?.({ x: Math.max(0, x - 12), animated: false }); } catch { /* sem rolagem */ }
+    void largura;
+  };
+  const pilulas = tabs.map((tb) => {
+    const p = (
+      <Pilula
+        key={tb.key} ligada={tb.key === ativa} onPress={() => onSelect(tb.key)} testID={tb.testID}
+        estado={{ selected: tb.key === ativa }}
+      >
+        <Text style={t(14, tb.key === ativa ? V.onTxt : V.ink, "600")}>{tb.label}</Text>
+      </Pilula>
+    );
+    return estreito && tb.key === ativa
+      ? <View key={tb.key} onLayout={(e) => levaAteAAtiva(e.nativeEvent.layout.x, e.nativeEvent.layout.width)}>{p}</View>
+      : p;
+  });
   // Os guias entram no próximo PR: aqui só o botão e o alvo do tour.
   const guias = (
     <Pilula onPress={() => {}} testID="wa-varejo-guias" tour="wa.guias" label="Guias">
@@ -31,7 +42,7 @@ export function AbasWa({ tabs, ativa, onSelect, estreito }: { tabs: ScreenTabIte
   if (estreito) {
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0, width: "100%" }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, minWidth: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 6 }}>
+        <ScrollView ref={rolagem} horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1, minWidth: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 12 }}>
           {pilulas}
         </ScrollView>
         {guias}

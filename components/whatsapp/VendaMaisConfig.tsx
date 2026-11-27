@@ -222,6 +222,7 @@ export function VendaMaisConfig({ companyId, auto, saldo, status, lojaNome }: Pr
         ) : (
           <View style={{ gap: 10, alignItems: "flex-start" }}>
             <BtnPrimario
+              rotuloCurto={corte ? `Mandar para as ${corte.cabem}` : undefined}
               onPress={() => { pub.enviarAgora(); }}
               disabled={!pode.pode || pub.enviando || travado}
               carregando={pub.enviando}

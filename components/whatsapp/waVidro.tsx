@@ -124,12 +124,16 @@ export function Voltar({ rotulo, onPress, testID }: { rotulo: string; onPress: (
 
 // ── Botões ───────────────────────────────────────────────────────────
 /** Botão principal: gradiente violeta, anel claro e a bolinha com a seta. */
-export function BtnPrimario({ children, onPress, desabilitado, disabled, carregando, testID, semSeta, tour }: {
-  children?: React.ReactNode; onPress?: () => void; desabilitado?: boolean; disabled?: boolean; carregando?: boolean; testID?: string; semSeta?: boolean; tour?: string;
+export function BtnPrimario({ children, rotuloCurto, onPress, desabilitado, disabled, carregando, testID, semSeta, tour }: {
+  children?: React.ReactNode;
+  /** Celular (até 400 px): rótulo mais curto, para o botão manter a seta e ficar em uma linha. */
+  rotuloCurto?: string;
+  onPress?: () => void; desabilitado?: boolean; disabled?: boolean; carregando?: boolean; testID?: string; semSeta?: boolean; tour?: string;
 }) {
   const off = !!(desabilitado || disabled);
   const { width } = useWindowDimensions();
-  const estreito = width < 700; // no celular o botão ocupa a largura toda; o rótulo nunca quebra
+  const larguraReal = WEB && typeof window !== "undefined" && window.innerWidth ? window.innerWidth : width; // o hook só faz repintar no resize
+  const estreito = larguraReal <= 400; // celular: rótulo curto; o botão (.btn1) é o mesmo do desktop, com a seta
   return (
     <Pressable
       onPress={onPress}
@@ -140,9 +144,9 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
       {...(tour ? tourTarget(tour) : {})}
       style={[{
         flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 12, minHeight: 50,
-        paddingLeft: 22, paddingRight: semSeta || estreito ? 22 : 8, borderRadius: 999, backgroundColor: "#7c3aed",
+        paddingLeft: 22, paddingRight: semSeta ? 22 : 8, borderRadius: 999, backgroundColor: "#7c3aed",
         opacity: off ? 0.45 : 1,
-      } as any, estreito && !semSeta ? { alignSelf: "stretch", paddingLeft: 18, paddingRight: 18, gap: 8, justifyContent: "center" } : null, WEB ? {
+      } as any, WEB ? {
         isolation: "isolate",
         backgroundImage: GRAD_BTN,
         boxShadow: "0 0 0 1.5px rgba(236,228,255,.8), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(0,0,0,.25), 0 12px 28px rgba(60,20,140,.5)",
@@ -155,8 +159,8 @@ export function BtnPrimario({ children, onPress, desabilitado, disabled, carrega
         />
       )}
       {carregando && <ActivityIndicator size="small" color="#fff" />}
-      <Text numberOfLines={1} style={t(estreito ? 13 : 15, "#fff", "700", estreito ? { flexShrink: 1, flexGrow: 1 } : { flexShrink: 0 })}>{children}</Text>
-      {!semSeta && !estreito && (
+      <Text numberOfLines={1} style={t(15, "#fff", "700", { flexShrink: 0 })}>{estreito && rotuloCurto ? rotuloCurto : children}</Text>
+      {!semSeta && (
         <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(9,9,11,.28)" }}>
           <Icon name="arrow_right" size={16} color="#fff" />
         </View>
