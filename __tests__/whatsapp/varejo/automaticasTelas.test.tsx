@@ -586,7 +586,13 @@ describe("Venda+ caminho grátis", () => {
     const t = renderer.create(<VendaMaisConfig companyId="c" auto={auto()} saldo={sd(false, 10)} status={statusOk} lojaNome="Lume" />);
     expect(tem(t, "wa-venda-gratis")).toBe(true);
     expect(tem(t, "wa-venda-enviar")).toBe(false);
-    expect(textos(t)).toContain("Chamar pelo meu WhatsApp");
+    // o botão é só "Chamar"; o nome para leitor de tela leva o nome da cliente e "pelo meu WhatsApp"
+    expect(achar(t, "wa-venda-chamar-0").props.label).toBe("Chamar Armand Silva pelo meu WhatsApp");
+    expect(achar(t, "wa-venda-chamar-1").props.label).toBe("Chamar Bia Torres pelo meu WhatsApp");
+    // o texto visível do botão é só "Chamar"; o rótulo longo fica no aria-label (a tela mostra "Chamar")
+    expect(t.root.findAllByProps({ testID: "wa-venda-chamar-0" }).some((n: any) => n.props.accessibilityLabel === "Chamar Armand Silva pelo meu WhatsApp")).toBe(true);
+    // o nome fica numa linha só (reticências se não couber), sem quebrar "Armand / Silva"
+    expect(achar(t, "wa-venda-gratis-nome-0").props.numberOfLines).toBe(1);
     expect(textos(t)).toContain(TEXTO_OFERTA_UMA_LINHA);
     await act(async () => { achar(t, "wa-venda-chamar-0").props.onPress(); });
     expect(abrir).toHaveBeenCalledTimes(1);
