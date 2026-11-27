@@ -73,7 +73,24 @@ export interface HubConversation {
 
 export interface HubCount { channel: HubChannel; status: HubStatus; n: number }
 
+/** Dados do cartão da thread (Aura-backend: metadata.cartao). Ausente em mensagens antigas. */
+export interface HubCartao {
+  numero?: number | null;
+  itens?: { nome: string; qtd: number; valor: number }[];
+  total?: number | null;
+  validade?: string | null;
+  url?: string | null;
+  valor?: number | null;
+  loja?: string | null;
+  chave?: string | null;
+  codigo?: string | null;
+  imagem?: string | null;
+  descricao?: string | null;
+}
+
 export interface HubMessage {
+  /** Cartão estruturado de orçamento, Pix ou link da loja. */
+  cartao?: HubCartao | null;
   id: string;
   direction: "inbound" | "outbound";
   content: string;

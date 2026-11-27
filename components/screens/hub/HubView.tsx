@@ -10,7 +10,7 @@
 //     "Ativar a Aurinha" fica como ação secundária, só para dono/admin
 //     (o PUT /hub/settings recusa membro), e abre o card de ativação.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, ScrollView, Pressable, Switch, ActivityIndicator, TextInput } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -53,7 +53,7 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
         </View>
         <Tx numberOfLines={1} style={{ fontSize: 13, color: K.ink2, lineHeight: 18 }}>{conv.last_message_preview || "—"}</Tx>
         <View style={{ flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-          {(aurinhaLigada || conv.status !== "ia") && (
+          {conv.status !== "humano" && (aurinhaLigada || conv.status !== "ia") && (
             <View style={tag}><Ponto cor={st.color} /><Tx style={tagTx}>{st.label}</Tx></View>
           )}
           {cat && <View style={tag}><Ponto cor={cat.color} /><Tx style={tagTx}>{cat.label}</Tx></View>}
@@ -69,7 +69,7 @@ function ConversationRow({ conv, selected, onPress, aurinhaLigada }: {
     </Pressable>
   );
 }
-export function HubView() {
+export function HubView({ onConversaAberta }: { /** Avisa a tela quando há conversa aberta (no celular o cabeçalho da tela some). */ onConversaAberta?: (aberta: boolean) => void } = {}) {
   const { company } = useAuthStore();
   const papel: string = (company as any)?.member_role || "owner";
   const podeConfigurar = papel === "owner" || papel === "admin";
@@ -80,6 +80,7 @@ export function HubView() {
   const [conviteAberto, setConviteAberto] = useState(false);
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
+  useEffect(() => { onConversaAberta?.(!!selectedId); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: settings } = useQuery({
     queryKey: ["hub-settings", companyId],
@@ -179,21 +180,23 @@ export function HubView() {
           placeholder="Buscar nome, telefone ou produto" placeholderTextColor={K.ink3} autoCapitalize="none"
           style={[{ flex: 1, minWidth: 0, fontSize: 14, color: K.ink, fontFamily: SANS }, web({ outlineStyle: "none" })]} />
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+      {settings && !enabled && podeConfigurar && (
+        <Pressable testID="hub-ativar-aurinha" onPress={() => setConviteAberto((v) => !v)} accessibilityRole="button"
+          style={{ alignSelf: "flex-end", minHeight: 28, justifyContent: "center", marginBottom: -6 }}>
+          <Tx style={{ fontSize: 13, fontWeight: "600", color: K.acc, lineHeight: 18 }}>Ativar a Aurinha</Tx>
+        </Pressable>
+      )}
+      {/* Estados numa linha só; se faltar largura, a linha rola de lado. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
         {FILTERS.map((f) => (
           <Pilula key={f.key} pequena on={statusFilter === f.key} onPress={() => setStatusFilter(f.key)}
             style={f.key === "precisa_humano" && needsHuman > 0 && statusFilter !== f.key ? { borderColor: "rgba(252,211,77,.55)" } : undefined}>
             {f.label}
           </Pilula>
         ))}
-        {settings && !enabled && podeConfigurar && (
-          <Pilula testID="hub-ativar-aurinha" pequena onPress={() => setConviteAberto((v) => !v)} style={{ borderColor: "rgba(196,181,253,.45)" }}>
-            Ativar a Aurinha
-          </Pilula>
-        )}
-      </View>
+      </ScrollView>
       {(etiquetas?.labels || []).length > 0 && (
-        <View testID="hub-filtro-etiquetas" style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        <ScrollView testID="hub-filtro-etiquetas" horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
           {(etiquetas?.labels || []).map((l) => {
             const on = etiquetaFiltro === l.id;
             return (
@@ -203,7 +206,7 @@ export function HubView() {
               </Pilula>
             );
           })}
-        </View>
+        </ScrollView>
       )}
       {convite}
       {isLoading && <View style={{ alignItems: "center", paddingVertical: 30 }}><ActivityIndicator color={K.acc} /></View>}

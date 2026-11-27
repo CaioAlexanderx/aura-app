@@ -95,6 +95,7 @@ export default function WhatsAppScreen() {
   useWaKeyframes();
   useWaQuedas();
   const [tab, setTab] = useState(0);
+  const [emConversa, setEmConversa] = useState(false);
   const [abaReal, setAbaReal] = useState<AbaReal>("conversas");
   const [secaoSel, setSecao] = useState<SecaoKey>("conexao");
   const scrollRef = useRef<any>(null);
@@ -195,10 +196,11 @@ export default function WhatsAppScreen() {
   if (!demo && abaAtiva === "conversas") {
     return (
       <View style={s.screen} testID="wa-varejo-conversas">
-        <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }]}>
+        {/* Celular, dentro de uma conversa: sem título e abas; a conversa ocupa a tela, só com o cabeçalho de vidro (artboard Celular). */}
+        <View style={[s.content, { flex: 1 }, novas && { maxWidth: 1360 }, !IS_WIDE && emConversa && { padding: 0 }]}>
           {novas && <Spots />}
-          {novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>)}
-          <HubView />
+          {!(IS_WIDE === false && emConversa) && (novas ? cabecalhoNovo() : (<>{hero}<ScreenTabs tabs={tabsHero} active="conversas" onSelect={(k) => setAbaReal(k as AbaReal)} /></>))}
+          <HubView onConversaAberta={setEmConversa} />
         </View>
       </View>
     );

@@ -22,7 +22,7 @@ import { FaixaEhEla, useClienteDaConversa, mesAno, reais } from "./ClienteConver
 import { PainelCliente } from "./PainelCliente";
 import { CartaoOrcamento, CartaoPix, CartaoLinkLoja, CARTAO_TIPOS } from "./CartoesDaThread";
 import { tourTarget } from "@/utils/tourTarget";
-import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
+import { K, Tx, Meta, Ico, Avatar, Pilula, Ponto, BotaoPrincipal, BotaoRedondo, Barra, Fio, superficie, web, WEB, SANS } from "./conversasUi";
 import { ConversaFechada } from "./ConversaFechada";
 
 export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, podeConfigurar = false }: {
@@ -233,9 +233,9 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
                   <Image testID={`hub-msg-foto-${m.id}`} source={{ uri: m.image_url! }} style={{ width: "100%", height: 150, borderRadius: 14, backgroundColor: K.trilho, marginBottom: 6 }} resizeMode="cover" />
                 )}
                 {m.media?.url ? <BolhaDeMidia testID={`hub-msg-midia-${m.id}`} media={{ ...m.media, url: urlEstavel(m.id, m.media.url) }} /> : null}
-                {m.tipo === "orcamento" && <CartaoOrcamento content={m.content} />}
-                {m.tipo === "pix" && <CartaoPix content={m.content} />}
-                {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} />}
+                {m.tipo === "orcamento" && <CartaoOrcamento content={m.content} cartao={m.cartao} />}
+                {m.tipo === "pix" && <CartaoPix content={m.content} cartao={m.cartao} />}
+                {m.tipo === "link_loja" && <CartaoLinkLoja content={m.content} cartao={m.cartao} />}
                 {!cartao && textoDaBolha(m) != null && (
                   <Tx style={{ fontSize: 15, lineHeight: 22, paddingHorizontal: produto ? 6 : 0 }}>{textoDaBolha(m)}</Tx>
                 )}
@@ -286,8 +286,14 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
     ? "Digitar aqui assume a conversa…"
     : whatsapp && (conv.customer_name || ligado) ? `Escreva para ${nomeCurto === "o cliente" ? "o cliente" : `a ${nomeCurto}`}…` : "Escreva uma mensagem…";
   const podeEnviar = !!draft.trim() && !mReply.isPending;
-  const linhaEscrever = (
+  // Celular: "+" redondo à esquerda do campo reabre a gaveta (como o de anexar do WhatsApp).
+  const linhaEscrever = (abrirGaveta?: () => void) => (
     <View style={{ flexDirection: "row", gap: compacto ? 8 : 10, alignItems: "center" }}>
+      {compacto && abrirGaveta && (
+        <BotaoRedondo testID="hub-envio-barra" dataSet={tourTarget("wa.acoes").dataSet} size={44} acessLabel={`Mandar para ${nomeCurto}`} onPress={abrirGaveta}>
+          <Ico nome="mais" size={20} cor={K.acc} traco={2} />
+        </BotaoRedondo>
+      )}
       <View style={[superficie.seca(999), { flex: 1, minWidth: 0, minHeight: compacto ? 46 : 52, paddingHorizontal: 18, justifyContent: "center" }]}>
         <TextInput accessibilityLabel="Mensagem" value={draft} onChangeText={setDraft} placeholder={placeholder} placeholderTextColor={K.ink3}
           onSubmitEditing={() => draft.trim() && mReply.mutate(draft.trim())}
@@ -323,7 +329,7 @@ export function ThreadView({ companyId, convId, onBack, aurinhaLigada = true, po
         <ConversaFechada companyId={companyId} convId={convId} nome={nomeCurto} podeConfigurar={podeConfigurar}
           onSent={invalidate} onError={(msg) => setFeedback(msg)} />
       )}
-      {!fechada && !abertaAte && linhaEscrever}
+      {!fechada && !abertaAte && linhaEscrever()}
       {!abertaAte && !fechada && (
         <Tx style={{ fontSize: 12, color: K.ink3, lineHeight: 16 }}>
           {hoursLeft != null

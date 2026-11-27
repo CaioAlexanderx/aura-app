@@ -96,8 +96,8 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
   etiquetaOn: boolean;
   /** Folha das etiquetas (aberta pelo botão Etiqueta). */
   painelEtiqueta?: ReactNode;
-  /** A linha de escrever (campo, microfone, Enviar), logo abaixo dos atalhos. */
-  children?: ReactNode;
+  /** A linha de escrever (campo, microfone, Enviar), logo abaixo dos atalhos. No celular recebe a função que abre a gaveta (o "+"). */
+  children?: ReactNode | ((abrirGaveta: () => void) => ReactNode);
 }) {
   const [painel, setPainel] = useState<Painel>(null);
   // Celular: como no artboard, a gaveta "Mandar na conversa" já nasce aberta; toque no fundo ou na alça fecha.
@@ -282,13 +282,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
       <View testID="hub-envio-rapido" style={{ gap: 8 }}>
         {paineis}
         {midia.painel}
-        <Pressable testID="hub-envio-barra" {...tourTarget("wa.acoes")} onPress={() => setFolhaAberta(true)} accessibilityRole="button" accessibilityLabel={`Mandar para ${primeiro}`}
-          style={[superficie.seca(999), { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, paddingHorizontal: 16 }, web({ cursor: "pointer" })]}>
-          <Ico nome="mais" size={18} cor={K.acc} traco={2} />
-          <Tx style={{ flex: 1, fontSize: 14, fontWeight: "600", lineHeight: 18 }}>{`Mandar para ${primeiro}`}</Tx>
-          <Tx style={{ fontSize: 12, color: K.ok, lineHeight: 16 }}>tudo grátis agora</Tx>
-        </Pressable>
-        {children}
+        {typeof children === "function" ? children(() => setFolhaAberta(true)) : children}
         {/* Fechada, a grade fica montada e escondida (os atalhos seguem no lugar); aberta, vira a folha de baixo. */}
         {!folhaAberta && <View style={{ display: "none" }}>{cabecalhoFolha}{grade}</View>}
         {EM_TESTE ? (folhaAberta ? (<>
@@ -348,7 +342,7 @@ export function EnvioRapido({ companyId, convId, onSent, onError, midia, compact
         </Pilula>
       </View>
       {midia.painel}
-      {children}
+      {typeof children === "function" ? children(() => {}) : children}
     </View>
   );
 }
